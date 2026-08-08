@@ -12,6 +12,8 @@ use App\Services\Imports\PurchaseExcelImport;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\Supplier;
+use Illuminate\Validation\Rule;
 
 
 class PurchaseImportController extends Controller
@@ -132,11 +134,20 @@ public function supplierCreated(Request $request)
 {
     $validation = session('purchase_import_validation');
 
+    $request->validate([
+        'id' => ['required', 'integer'],
+    ]);
+
+    $companyId = session('active_company_id');
+
+    $supplier = Supplier::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->findOrFail($request->integer('id'));
 
     $validation['supplier'] = [
         'found' => true,
-        'id' => $request->id,
-        'name' => $request->name,
+        'id' => $supplier->id,
+        'name' => $supplier->name,
     ];
 
 
@@ -196,14 +207,32 @@ public function confirm()
         $subtotal = 0;
         $tax = 0;
         $total = 0;
+        $items = [];
 
 
         foreach ($validation['found'] as $item) {
 
+            $product = Product::where('company_id', $companyId)
+                ->findOrFail($item['product_id']);
+
             $lineSubtotal =
                 $item['quantity'] * $item['cost'];
 
+            $lineTax =
+                $lineSubtotal *
+                ((float) $product->tax_rate / 100);
+
             $subtotal += $lineSubtotal;
+            $tax += $lineTax;
+            $total += $lineSubtotal + $lineTax;
+
+            $items[] = [
+                'product' => $product,
+                'quantity' => $item['quantity'],
+                'cost' => $item['cost'],
+                'subtotal' => $lineSubtotal,
+                'tax' => $lineTax,
+            ];
 
         }
 
@@ -228,13 +257,13 @@ public function confirm()
 
             'payment_type' => 'cash',
 
-            'subtotal' => $subtotal,
+            'subtotal' => round($subtotal, 2),
 
             'discount' => 0,
 
-            'tax' => 0,
+            'tax' => round($tax, 2),
 
-            'total' => $subtotal,
+            'total' => round($total, 2),
 
             'status' => 'posted',
 
@@ -245,12 +274,10 @@ public function confirm()
 
 
 
-        foreach ($validation['found'] as $item) {
+        foreach ($items as $item) {
 
 
-            $product = Product::find(
-                $item['product_id']
-            );
+            $product = $item['product'];
 
 
             PurchaseItem::create([
@@ -266,20 +293,19 @@ public function confirm()
                 'previous_sale_price' =>
                     $product->sale_price,
 
-                'subtotal' =>
-                    $item['quantity'] *
-                    $item['cost'],
+                'subtotal' => round($item['subtotal'], 2),
 
                 'discount' => 0,
 
                 'tax_rate' =>
                     $product->tax_rate,
 
-                'tax' => 0,
+                'tax' => round($item['tax'], 2),
 
-                'total' =>
-                    $item['quantity'] *
-                    $item['cost'],
+                'total' => round(
+                    $item['subtotal'] + $item['tax'],
+                    2
+                ),
 
             ]);
 
@@ -406,9 +432,21 @@ public function storeProduct(Request $request)
 
     $request->validate([
 
-        'category_id' => 'required',
+        'category_id' => [
+            'required',
+            'integer',
+            Rule::exists('product_categories', 'id')
+                ->where('company_id', $companyId)
+                ->where('is_active', true),
+        ],
 
-        'unit_id' => 'required',
+        'unit_id' => [
+            'required',
+            'integer',
+            Rule::exists('units', 'id')
+                ->where('company_id', $companyId)
+                ->where('is_active', true),
+        ],
 
         'name' => 'required',
 
