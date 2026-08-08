@@ -39,11 +39,14 @@ class PurchaseExcelImport
     'code' =>
         trim($row[1]),
 
+    'name' =>
+        trim($row[2]),
+
     'quantity' =>
-        (float) $row[2],
+        (float) $row[3],
 
     'cost' =>
-        (float) $row[3],
+        (float) $row[4],
 
 ];
 

@@ -289,6 +289,17 @@ Route::resource('transferencias', TransferController::class)
 | Compras
 |--------------------------------------------------------------------------
 */
+
+Route::get(
+    '/compras/importacion/producto-nuevo',
+    [PurchaseImportController::class, 'createProduct']
+)->name('compras.import.product.create');
+
+Route::post(
+    '/compras/importacion/producto-nuevo',
+    [PurchaseImportController::class, 'storeProduct']
+)->name('compras.import.product.store');
+
 Route::post(
     '/compras/importacion/confirmar',
     [PurchaseImportController::class, 'confirm']

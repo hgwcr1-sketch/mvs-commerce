@@ -91,14 +91,44 @@ class PurchaseImportManager
                 ];
 
 
-            } else {
+            } 
+            
+            else {
+
+    $possible = Product::where(
+        'company_id',
+        $companyId
+    )
+    ->where(
+        'name',
+        'like',
+        '%' . $item['name'] . '%'
+    )
+    ->limit(5)
+    ->get([
+        'id',
+        'name',
+        'internal_code',
+        'barcode',
+        'sale_price'
+    ]);
 
 
-                $result['missing'][] = $item;
+    $result['missing'][] = [
 
+        'code' => $item['code'] ?? null,
 
-            }
+        'name' => $item['name'] ?? null,
 
+        'quantity' => $item['quantity'],
+
+        'cost' => $item['cost'],
+
+        'possible_matches' => $possible
+
+    ];
+
+}
 
         }
 

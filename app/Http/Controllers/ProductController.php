@@ -403,4 +403,32 @@ if ($branchId) {
 
         return response()->json($products);
     }
+
+    public function createProduct(Request $request)
+{
+
+    $companyId = session('active_company_id');
+
+
+    return view('compras.product-create-import', [
+
+        'code' => $request->code,
+
+        'name' => $request->name,
+
+        'cost' => $request->cost,
+
+
+        'categories' => \App\Models\ProductCategory::where(
+            'company_id',
+            $companyId
+        )
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get(),
+
+    ]);
+
+}
+
 }

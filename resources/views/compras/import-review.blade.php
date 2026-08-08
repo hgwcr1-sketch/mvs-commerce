@@ -136,28 +136,128 @@
 
     @if(count($validation['missing']))
 
-        <div class="mt-8">
+<div class="mt-8">
 
-            <h3 class="font-semibold text-red-700">
-                Productos pendientes
-            </h3>
+    <h3 class="mb-4 font-semibold text-red-700">
+        Productos pendientes de revisión
+    </h3>
 
 
-            @foreach($validation['missing'] as $item)
+    @foreach($validation['missing'] as $item)
 
-                <div class="mt-3 rounded-lg border p-3">
+    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4">
 
-                    {{ $item['name'] ?? $item['code'] }}
 
-                </div>
+        <div class="grid gap-2">
 
-            @endforeach
+            <div>
+                <strong>Código:</strong>
+                {{ $item['code'] }}
+            </div>
+
+
+            <div>
+                <strong>Producto:</strong>
+                {{ $item['name'] }}
+            </div>
+
+
+            <div>
+                <strong>Cantidad:</strong>
+                {{ $item['quantity'] }}
+            </div>
+
+
+            <div>
+                <strong>Costo:</strong>
+                ₡{{ number_format($item['cost'],2,',','.') }}
+            </div>
 
 
         </div>
 
-    @endif
 
+
+        @if(count($item['possible_matches']))
+
+            <div class="mt-4 rounded-lg border bg-white p-3">
+
+                <h4 class="mb-3 font-semibold text-slate-700">
+                    Posibles coincidencias
+                </h4>
+
+
+                @foreach($item['possible_matches'] as $match)
+
+                    <div class="mb-2 flex items-center justify-between rounded border p-3">
+
+
+                        <div>
+
+                            <div class="font-semibold">
+                                {{ $match->name }}
+                            </div>
+
+                            <div class="text-sm text-slate-500">
+
+                                Código:
+                                {{ $match->internal_code }}
+
+                                |
+                                Barra:
+                                {{ $match->barcode }}
+
+                            </div>
+
+                        </div>
+
+
+                        <button
+                            class="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white">
+
+                            Usar este producto
+
+                        </button>
+
+
+                    </div>
+
+
+                @endforeach
+
+
+            </div>
+
+        @else
+
+            <div class="mt-4">
+
+                <button
+onclick="crearProducto(
+'{{ $item['code'] }}',
+'{{ $item['name'] }}',
+'{{ $item['cost'] }}'
+)"
+class="rounded-lg bg-red-600 px-4 py-2 text-white">
+
+Crear producto nuevo
+
+</button>
+
+            </div>
+
+        @endif
+
+
+    </div>
+
+
+    @endforeach
+
+
+</div>
+
+@endif
 
 
     <div class="mt-6 flex justify-end">
@@ -321,6 +421,23 @@ location.reload();
         alert('Error creando proveedor');
 
     });
+}
+
+</script>
+
+<script>
+
+function crearProducto(code,name,cost)
+{
+
+window.location.href =
+"/compras/importacion/producto-nuevo?code="
++ code
++ "&name="
++ encodeURIComponent(name)
++ "&cost="
++ cost;
+
 }
 
 </script>
