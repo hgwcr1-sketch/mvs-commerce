@@ -4,12 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseItem extends Model
 {
     protected $fillable = [
         'purchase_id',
         'product_id',
+        'lot_number',
+        'expires_at',
         'quantity',
         'unit_cost',
         'previous_sale_price',
@@ -24,6 +27,7 @@ class PurchaseItem extends Model
     protected function casts(): array
     {
         return [
+            'expires_at' => 'date',
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'previous_sale_price' => 'decimal:2',
@@ -44,5 +48,10 @@ class PurchaseItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function inventoryLots(): HasMany
+    {
+        return $this->hasMany(InventoryLot::class);
     }
 }

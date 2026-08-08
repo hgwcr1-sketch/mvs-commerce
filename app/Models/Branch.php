@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Branch extends Model
 {
@@ -38,5 +39,13 @@ class Branch extends Model
                 'maximum_stock',
             ])
             ->withTimestamps();
+    }
+
+    /**
+     * Lotes almacenados en esta sucursal.
+     */
+    public function inventoryLots(): HasMany
+    {
+        return $this->hasMany(InventoryLot::class);
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
@@ -101,5 +102,13 @@ class Product extends Model
     public function barcodes()
     {
         return $this->hasMany(ProductBarcode::class);
+    }
+
+    /**
+     * Lotes de inventario del producto por sucursal.
+     */
+    public function inventoryLots(): HasMany
+    {
+        return $this->hasMany(InventoryLot::class);
     }
 }
