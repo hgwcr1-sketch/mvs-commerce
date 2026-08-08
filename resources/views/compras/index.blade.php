@@ -36,6 +36,12 @@
             + Nueva Compra
         </a>
 
+        <a
+            href="{{ route('compras.import.template') }}"
+            class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+            ↓ Descargar plantilla
+        </a>
+
 
         <form action="{{ route('compras.import.excel') }}"
               method="POST"

@@ -106,4 +106,12 @@ class Company extends Model
     {
         return $this->hasMany(Unit::class);
     }
+
+    /**
+     * Configuración de compras de la empresa.
+     */
+    public function purchaseSetting()
+    {
+        return $this->hasOne(CompanyPurchaseSetting::class);
+    }
 }

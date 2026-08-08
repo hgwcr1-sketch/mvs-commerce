@@ -14,10 +14,41 @@ use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\Supplier;
 use Illuminate\Validation\Rule;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 
 class PurchaseImportController extends Controller
 {
+
+    public function downloadTemplate()
+    {
+        $spreadsheet = new Spreadsheet();
+
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Compras');
+
+        $sheet->fromArray([
+            'Proveedor',
+            'Código',
+            'Producto',
+            'Cantidad',
+            'Costo',
+        ], null, 'A1');
+
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(
+            function () use ($writer) {
+                $writer->save('php://output');
+            },
+            'plantilla_importacion_compras.xlsx',
+            [
+                'Content-Type' =>
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]
+        );
+    }
 
     public function store(Request $request)
     {

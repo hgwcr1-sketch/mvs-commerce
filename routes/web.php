@@ -319,6 +319,10 @@ Route::middleware(['active.branch', 'permission:compras.crear'])->group(function
     Route::post('/compras/importar-excel',
         [PurchaseImportController::class, 'store']
     )->name('compras.import.excel');
+
+    Route::get('/compras/importar-excel/plantilla',
+        [PurchaseImportController::class, 'downloadTemplate']
+    )->name('compras.import.template');
 });
 
 Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
