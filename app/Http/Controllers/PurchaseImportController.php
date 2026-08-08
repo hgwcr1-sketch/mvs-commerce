@@ -285,13 +285,55 @@ public function confirm()
 
 
 
-            DB::table('branch_product')
+            $branchProduct = DB::table('branch_product')
                 ->where('branch_id',$branchId)
                 ->where('product_id',$product->id)
-                ->increment(
-                    'stock',
-                    $item['quantity']
-                );
+                ->first();
+
+            $previousStock = $branchProduct
+                ? (float) $branchProduct->stock
+                : 0;
+
+            $newStock = $previousStock + $item['quantity'];
+
+            if ($branchProduct) {
+
+                DB::table('branch_product')
+                    ->where('id', $branchProduct->id)
+                    ->update([
+                        'stock' => $newStock,
+                        'updated_at' => now(),
+                    ]);
+
+            } else {
+
+                DB::table('branch_product')->insert([
+                    'branch_id' => $branchId,
+                    'product_id' => $product->id,
+                    'stock' => $newStock,
+                    'minimum_stock' => null,
+                    'maximum_stock' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            \App\Models\InventoryMovement::create([
+                'company_id' => $companyId,
+                'branch_id' => $branchId,
+                'product_id' => $product->id,
+                'user_id' => Auth::id(),
+
+                'type' => 'purchase',
+                'quantity' => $item['quantity'],
+                'previous_stock' => $previousStock,
+                'new_stock' => $newStock,
+
+                'reason' => 'Entrada por compra',
+                'reference_type' => Purchase::class,
+                'reference_id' => $purchase->id,
+                'notes' => 'Compra ' . $purchase->number,
+            ]);
 
         }
 
@@ -352,6 +394,14 @@ public function createProduct(Request $request)
 public function storeProduct(Request $request)
 {
     $companyId = session('active_company_id');
+    $branchId = session('active_branch_id');
+
+    $branchId = \App\Models\Branch::where('id', $branchId)
+        ->where('company_id', $companyId)
+        ->where('is_active', true)
+        ->value('id');
+
+    abort_unless($branchId, 403, 'No tiene una sucursal activa válida.');
 
 
     $request->validate([
@@ -389,6 +439,14 @@ public function storeProduct(Request $request)
 
         'is_active' => true,
 
+    ]);
+
+    DB::table('branch_product')->insert([
+        'branch_id' => $branchId,
+        'product_id' => $product->id,
+        'stock' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
     ]);
 
 
