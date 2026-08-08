@@ -101,178 +101,6 @@ session([
 
 return redirect()
     ->route('compras.import.review');
-
-        try {
-
-
-            $purchase = DB::transaction(function () use (
-                $rows,
-                $companyId,
-                $branchId
-            ) {
-
-
-                $subtotal = 0;
-                $tax = 0;
-                $total = 0;
-
-
-                $items = [];
-
-
-                foreach ($rows as $row) {
-
-
-                    $product = Product::where(
-                        'internal_code',
-                        $row['code']
-                    )
-                    ->where('company_id',$companyId)
-                    ->firstOrFail();
-
-
-                    $quantity = (float)$row['quantity'];
-                    $cost = (float)$row['cost'];
-
-
-                    $lineSubtotal = $quantity * $cost;
-
-                    $lineTax =
-                        $lineSubtotal *
-                        ($product->tax_rate / 100);
-
-
-                    $subtotal += $lineSubtotal;
-                    $tax += $lineTax;
-                    $total += $lineSubtotal + $lineTax;
-
-
-                    $items[] = [
-                        'product'=>$product,
-                        'quantity'=>$quantity,
-                        'cost'=>$cost,
-                        'tax'=>$lineTax
-                    ];
-
-                }
-
-
-
-                $purchase = Purchase::create([
-
-                    'company_id'=>$companyId,
-                    'branch_id'=>$branchId,
-                    'supplier_id'=>1,
-                    'user_id'=>Auth::id(),
-
-                    'number'=>
-                        'CP-'.
-                        now()->format('YmdHis').
-                        '-'.
-                        random_int(100,999),
-
-                    'purchase_date'=>now(),
-
-                    'payment_type'=>'cash',
-
-                    'subtotal'=>round($subtotal,2),
-                    'discount'=>0,
-                    'tax'=>round($tax,2),
-                    'total'=>round($total,2),
-
-                    'status'=>'posted',
-
-                    'notes'=>'Compra importada desde Excel'
-
-                ]);
-
-
-
-
-                foreach($items as $item){
-
-
-                    $product=$item['product'];
-
-                    PurchaseItem::create([
-
-                        'purchase_id'=>$purchase->id,
-
-                        'product_id'=>$product->id,
-
-                        'quantity'=>$item['quantity'],
-
-                        'unit_cost'=>$item['cost'],
-
-                        'previous_sale_price'=>$product->sale_price,
-
-                        'subtotal'=>
-                            $item['quantity'] *
-                            $item['cost'],
-
-                        'discount'=>0,
-
-                        'tax_rate'=>$product->tax_rate,
-
-                        'tax'=>$item['tax'],
-
-                        'total'=>
-                            ($item['quantity'] *
-                            $item['cost'])
-                            +
-                            $item['tax']
-
-                    ]);
-
-
-
-                    DB::table('branch_product')
-                    ->where('branch_id',$branchId)
-                    ->where('product_id',$product->id)
-                    ->increment(
-                        'stock',
-                        $item['quantity']
-                    );
-
-
-                }
-
-
-                return $purchase;
-
-
-            });
-
-
-
-            return response()->json([
-
-                'message'=>'Compra importada correctamente',
-
-                'purchase_id'=>$purchase->id,
-
-                'redirect'=>route(
-                    'compras.show',
-                    $purchase->id
-                )
-
-            ]);
-
-
-
-        } catch(\Throwable $e){
-
-
-            return response()->json([
-
-                'message'=>$e->getMessage()
-
-            ],500);
-
-
-        }
-
-
     }
 
 /**
@@ -335,6 +163,17 @@ public function confirm()
         return redirect()
             ->route('compras.index')
             ->with('error','No existe importación pendiente.');
+
+    }
+
+    if (!empty($validation['missing'])) {
+
+        return redirect()
+            ->route('compras.import.review')
+            ->with(
+                'error',
+                'Debe resolver todos los productos pendientes antes de confirmar.'
+            );
 
     }
 
