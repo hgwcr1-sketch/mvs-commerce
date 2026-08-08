@@ -1,0 +1,493 @@
+CÓDIGO PROVINCIA	PROVINCIA	CÓDIGO CANTÓN	CANTÓN	CÓDIGO DISTRITO	DISTRITO
+1	San José	101	San José	10101	Carmen
+1	San José	101	San José	10102	Merced
+1	San José	101	San José	10103	Hospital
+1	San José	101	San José	10104	Catedral
+1	San José	101	San José	10105	Zapote
+1	San José	101	San José	10106	San Francisco de Dos Ríos
+1	San José	101	San José	10107	Uruca
+1	San José	101	San José	10108	Mata Redonda
+1	San José	101	San José	10109	Pavas
+1	San José	101	San José	10110	Hatillo
+1	San José	101	San José	10111	San Sebastián
+1	San José	102	Escazú	10201	Escazú
+1	San José	102	Escazú	10202	San Antonio
+1	San José	102	Escazú	10203	San Rafael
+1	San José	103	Desamparados	10301	Desamparados
+1	San José	103	Desamparados	10302	San Miguel
+1	San José	103	Desamparados	10303	San Juan de Dios
+1	San José	103	Desamparados	10304	San Rafael Arriba
+1	San José	103	Desamparados	10305	San Antonio
+1	San José	103	Desamparados	10306	Frailes
+1	San José	103	Desamparados	10307	Patarrá
+1	San José	103	Desamparados	10308	San Cristobal
+1	San José	103	Desamparados	10309	Rosario
+1	San José	103	Desamparados	10310	Damas
+1	San José	103	Desamparados	10311	San Rafael Abajo
+1	San José	103	Desamparados	10312	Gravilias
+1	San José	103	Desamparados	10313	Los Guido
+1	San José	104	Puriscal	10401	Santiago
+1	San José	104	Puriscal	10402	Mercedes Sur
+1	San José	104	Puriscal	10403	Barbacoas
+1	San José	104	Puriscal	10404	Grifo Alto
+1	San José	104	Puriscal	10405	San Rafael
+1	San José	104	Puriscal	10406	Candelarita
+1	San José	104	Puriscal	10407	Desamparaditos
+1	San José	104	Puriscal	10408	San Antonio
+1	San José	104	Puriscal	10409	Chires
+1	San José	105	Tarrazú	10501	San Marcos
+1	San José	105	Tarrazú	10502	San Lorenzo
+1	San José	105	Tarrazú	10503	San Carlos
+1	San José	106	Aserrí	10601	Aserrí
+1	San José	106	Aserrí	10602	Tarbaca
+1	San José	106	Aserrí	10603	Vuelta de Jorco
+1	San José	106	Aserrí	10604	San Gabriel
+1	San José	106	Aserrí	10605	Legua
+1	San José	106	Aserrí	10606	Monterrey
+1	San José	106	Aserrí	10607	Salitrillos
+1	San José	107	Mora	10701	Colón
+1	San José	107	Mora	10702	Guayabo
+1	San José	107	Mora	10703	Tabarcia
+1	San José	107	Mora	10704	Piedras Negras
+1	San José	107	Mora	10705	Picagres
+1	San José	107	Mora	10706	Jaris
+1	San José	107	Mora	10707	Quitirrisí
+1	San José	108	Goicoechea	10801	Guadalupe
+1	San José	108	Goicoechea	10802	San Francisco
+1	San José	108	Goicoechea	10803	Calle Blancos
+1	San José	108	Goicoechea	10804	Mata de Plátano
+1	San José	108	Goicoechea	10805	Ipís
+1	San José	108	Goicoechea	10806	Rancho Redondo
+1	San José	108	Goicoechea	10807	Purral
+1	San José	109	Santa Ana	10901	Santa Ana
+1	San José	109	Santa Ana	10902	Salitral
+1	San José	109	Santa Ana	10903	Pozos
+1	San José	109	Santa Ana	10904	Uruca
+1	San José	109	Santa Ana	10905	Piedades
+1	San José	109	Santa Ana	10906	Brasil
+1	San José	110	Alajuelita	11001	Alajuelita
+1	San José	110	Alajuelita	11002	San Josecito
+1	San José	110	Alajuelita	11003	San Antonio
+1	San José	110	Alajuelita	11004	Concepción
+1	San José	110	Alajuelita	11005	San Felipe
+1	San José	111	Vázquez de Coronado	11101	San Isidro
+1	San José	111	Vázquez de Coronado	11102	San Rafael
+1	San José	111	Vázquez de Coronado	11103	Dulce Nombre de Jesús
+1	San José	111	Vázquez de Coronado	11104	Patalillo
+1	San José	111	Vázquez de Coronado	11105	Cascajal
+1	San José	112	Acosta	11201	San Ignacio
+1	San José	112	Acosta	11202	Guaitil
+1	San José	112	Acosta	11203	Palmichal
+1	San José	112	Acosta	11204	Cangrejal
+1	San José	112	Acosta	11205	Sabanillas
+1	San José	113	Tibás	11301	San Juan
+1	San José	113	Tibás	11302	Cinco Esquinas
+1	San José	113	Tibás	11303	Anselmo Llorente
+1	San José	113	Tibás	11304	León XIII
+1	San José	113	Tibás	11305	Colima
+1	San José	114	Moravia	11401	San Vicente
+1	San José	114	Moravia	11402	San Jerónimo
+1	San José	114	Moravia	11403	La Trinidad
+1	San José	115	Montes de Oca	11501	San Pedro
+1	San José	115	Montes de Oca	11502	Sabanilla
+1	San José	115	Montes de Oca	11503	Mercedes
+1	San José	115	Montes de Oca	11504	San Rafael
+1	San José	116	Turrubares	11601	San Pablo
+1	San José	116	Turrubares	11602	San Pedro
+1	San José	116	Turrubares	11603	San Juan de Mata
+1	San José	116	Turrubares	11604	San Luis
+1	San José	116	Turrubares	11605	Carara
+1	San José	117	Dota	11701	Santa María
+1	San José	117	Dota	11702	Jardín
+1	San José	117	Dota	11703	Copey
+1	San José	118	Curridabat	11801	Curridabat
+1	San José	118	Curridabat	11802	Granadilla
+1	San José	118	Curridabat	11803	Sánchez
+1	San José	118	Curridabat	11804	Tirrases
+1	San José	119	Pérez Zeledón	11901	San Isidro de El General
+1	San José	119	Pérez Zeledón	11902	El General
+1	San José	119	Pérez Zeledón	11903	Daniel Flores
+1	San José	119	Pérez Zeledón	11904	Rivas
+1	San José	119	Pérez Zeledón	11905	San Pedro
+1	San José	119	Pérez Zeledón	11906	Platanares
+1	San José	119	Pérez Zeledón	11907	Pejibaye
+1	San José	119	Pérez Zeledón	11908	Cajón
+1	San José	119	Pérez Zeledón	11909	Barú
+1	San José	119	Pérez Zeledón	11910	Río Nuevo
+1	San José	119	Pérez Zeledón	11911	Páramo
+1	San José	119	Pérez Zeledón	11912	La  Amistad
+1	San José	120	León Cortés Castro	12001	San Pablo
+1	San José	120	León Cortés Castro	12002	San Andrés
+1	San José	120	León Cortés Castro	12003	Llano Bonito
+1	San José	120	León Cortés Castro	12004	San Isidro
+1	San José	120	León Cortés Castro	12005	Santa Cruz
+1	San José	120	León Cortés Castro	12006	San Antonio
+2	Alajuela	201	Alajuela	20101	Alajuela
+2	Alajuela	201	Alajuela	20102	San José
+2	Alajuela	201	Alajuela	20103	Carrizal
+2	Alajuela	201	Alajuela	20104	San Antonio
+2	Alajuela	201	Alajuela	20105	Guácima
+2	Alajuela	201	Alajuela	20106	San Isidro
+2	Alajuela	201	Alajuela	20107	Sabanilla
+2	Alajuela	201	Alajuela	20108	San Rafael
+2	Alajuela	201	Alajuela	20109	Río Segundo
+2	Alajuela	201	Alajuela	20110	Desamparados
+2	Alajuela	201	Alajuela	20111	Turrúcares
+2	Alajuela	201	Alajuela	20112	Tambor
+2	Alajuela	201	Alajuela	20113	Garita
+2	Alajuela	201	Alajuela	20114	Sarapiquí
+2	Alajuela	202	San Ramón	20201	San Ramón
+2	Alajuela	202	San Ramón	20202	Santiago
+2	Alajuela	202	San Ramón	20203	San Juan
+2	Alajuela	202	San Ramón	20204	Piedades Norte
+2	Alajuela	202	San Ramón	20205	Piedades Sur
+2	Alajuela	202	San Ramón	20206	San Rafael
+2	Alajuela	202	San Ramón	20207	San Isidro
+2	Alajuela	202	San Ramón	20208	Ángeles
+2	Alajuela	202	San Ramón	20209	Alfaro
+2	Alajuela	202	San Ramón	20210	Volio
+2	Alajuela	202	San Ramón	20211	Concepción
+2	Alajuela	202	San Ramón	20212	Zapotal
+2	Alajuela	202	San Ramón	20213	Peñas Blancas
+2	Alajuela	202	San Ramón	20214	San Lorenzo
+2	Alajuela	203	Grecia	20301	Grecia
+2	Alajuela	203	Grecia	20302	San Isidro
+2	Alajuela	203	Grecia	20303	San José
+2	Alajuela	203	Grecia	20304	San Roque
+2	Alajuela	203	Grecia	20305	Tacares
+2	Alajuela	203	Grecia	20307	Puente de Piedra
+2	Alajuela	203	Grecia	20308	Bolivar
+2	Alajuela	204	San Mateo	20401	San Mateo
+2	Alajuela	204	San Mateo	20402	Desmonte
+2	Alajuela	204	San Mateo	20403	Jesús María
+2	Alajuela	204	San Mateo	20404	Labrador
+2	Alajuela	205	Atenas	20501	Atenas
+2	Alajuela	205	Atenas	20502	Jesús
+2	Alajuela	205	Atenas	20503	Mercedes
+2	Alajuela	205	Atenas	20504	San Isidro
+2	Alajuela	205	Atenas	20505	Concepción
+2	Alajuela	205	Atenas	20506	San José
+2	Alajuela	205	Atenas	20507	Santa Eulalia
+2	Alajuela	205	Atenas	20508	Escobal
+2	Alajuela	206	Naranjo	20601	Naranjo
+2	Alajuela	206	Naranjo	20602	San Miguel
+2	Alajuela	206	Naranjo	20603	San José
+2	Alajuela	206	Naranjo	20604	Cirrí Sur
+2	Alajuela	206	Naranjo	20605	San Jerónimo
+2	Alajuela	206	Naranjo	20606	San Juan
+2	Alajuela	206	Naranjo	20607	El Rosario
+2	Alajuela	206	Naranjo	20608	Palmitos
+2	Alajuela	207	Palmares	20701	Palmares
+2	Alajuela	207	Palmares	20702	Zaragoza
+2	Alajuela	207	Palmares	20703	Buenos Aires
+2	Alajuela	207	Palmares	20704	Santiago
+2	Alajuela	207	Palmares	20705	Candelaria
+2	Alajuela	207	Palmares	20706	Esquipulas
+2	Alajuela	207	Palmares	20707	La Granja
+2	Alajuela	208	Poás	20801	San Pedro
+2	Alajuela	208	Poás	20802	San Juan
+2	Alajuela	208	Poás	20803	San Rafael
+2	Alajuela	208	Poás	20804	Carrillos
+2	Alajuela	208	Poás	20805	Sabana Redonda
+2	Alajuela	209	Orotina	20901	Orotina
+2	Alajuela	209	Orotina	20902	El Mastate
+2	Alajuela	209	Orotina	20903	Hacienda Vieja
+2	Alajuela	209	Orotina	20904	Coyolar
+2	Alajuela	209	Orotina	20905	La Ceiba
+2	Alajuela	210	San Carlos	21001	Quesada
+2	Alajuela	210	San Carlos	21002	Florencia
+2	Alajuela	210	San Carlos	21003	Buenavista
+2	Alajuela	210	San Carlos	21004	Aguas Zarcas
+2	Alajuela	210	San Carlos	21005	Venecia
+2	Alajuela	210	San Carlos	21006	Pital
+2	Alajuela	210	San Carlos	21007	La Fortuna
+2	Alajuela	210	San Carlos	21008	La Tigra
+2	Alajuela	210	San Carlos	21009	La Palmera
+2	Alajuela	210	San Carlos	21010	Venado
+2	Alajuela	210	San Carlos	21011	Cutris
+2	Alajuela	210	San Carlos	21012	Monterrey
+2	Alajuela	210	San Carlos	21013	Pocosol
+2	Alajuela	211	Zarcero	21101	Zarcero
+2	Alajuela	211	Zarcero	21102	Laguna
+2	Alajuela	211	Zarcero	21103	Tapesco
+2	Alajuela	211	Zarcero	21104	Guadalupe
+2	Alajuela	211	Zarcero	21105	Palmira
+2	Alajuela	211	Zarcero	21106	Zapote
+2	Alajuela	211	Zarcero	21107	Brisas
+2	Alajuela	212	Sarchí	21201	Sarchí Norte
+2	Alajuela	212	Sarchí	21202	Sarchí Sur
+2	Alajuela	212	Sarchí	21203	Toro Amarillo
+2	Alajuela	212	Sarchí	21204	San Pedro
+2	Alajuela	212	Sarchí	21205	Rodríguez
+2	Alajuela	213	Upala	21301	Upala
+2	Alajuela	213	Upala	21302	Aguas Claras
+2	Alajuela	213	Upala	21303	San José O Pizote
+2	Alajuela	213	Upala	21304	Bijagua
+2	Alajuela	213	Upala	21305	Delicias
+2	Alajuela	213	Upala	21306	Dos Ríos
+2	Alajuela	213	Upala	21307	Yolillal
+2	Alajuela	213	Upala	21308	Canalete
+2	Alajuela	214	Los Chiles	21401	Los Chiles
+2	Alajuela	214	Los Chiles	21402	Caño Negro
+2	Alajuela	214	Los Chiles	21403	El Amparo
+2	Alajuela	214	Los Chiles	21404	San Jorge
+2	Alajuela	215	Guatuso	21501	San Rafael
+2	Alajuela	215	Guatuso	21502	Buenavista
+2	Alajuela	215	Guatuso	21503	Cote
+2	Alajuela	215	Guatuso	21504	Katira
+2	Alajuela	216	Río Cuarto	21601	Río Cuarto
+2	Alajuela	216	Río Cuarto	21602	Santa Rita
+2	Alajuela	216	Río Cuarto	21603	Santa Isabel
+3	Cartago	301	Cartago	30101	Oriental
+3	Cartago	301	Cartago	30102	Occidental
+3	Cartago	301	Cartago	30103	Carmen
+3	Cartago	301	Cartago	30104	San Nicolás
+3	Cartago	301	Cartago	30105	Aguacaliente o San Francisco
+3	Cartago	301	Cartago	30106	Guadalupe o Arenilla
+3	Cartago	301	Cartago	30107	Corralillo
+3	Cartago	301	Cartago	30108	Tierra Blanca
+3	Cartago	301	Cartago	30109	Dulce Nombre
+3	Cartago	301	Cartago	30110	Llano Grande
+3	Cartago	301	Cartago	30111	Quebradilla
+3	Cartago	302	Paraíso	30201	Paraíso
+3	Cartago	302	Paraíso	30202	Santiago
+3	Cartago	302	Paraíso	30203	Orosi
+3	Cartago	302	Paraíso	30204	Cachí
+3	Cartago	302	Paraíso	30205	Llanos de Santa Lucía
+3	Cartago	302	Paraíso	30206	Birrisito
+3	Cartago	303	La Unión	30301	Tres Ríos
+3	Cartago	303	La Unión	30302	San Diego
+3	Cartago	303	La Unión	30303	San Juan
+3	Cartago	303	La Unión	30304	San Rafael
+3	Cartago	303	La Unión	30305	Concepción
+3	Cartago	303	La Unión	30306	Dulce Nombre
+3	Cartago	303	La Unión	30307	San Ramón
+3	Cartago	303	La Unión	30308	Río Azul
+3	Cartago	304	Jiménez	30401	Juan Viñas
+3	Cartago	304	Jiménez	30402	Tucurrique
+3	Cartago	304	Jiménez	30403	Pejibaye
+3	Cartago	304	Jiménez	30404	La Victoria
+3	Cartago	305	Turrialba	30501	Turrialba
+3	Cartago	305	Turrialba	30502	La Suiza
+3	Cartago	305	Turrialba	30503	Peralta
+3	Cartago	305	Turrialba	30504	Santa Cruz
+3	Cartago	305	Turrialba	30505	Santa Teresita
+3	Cartago	305	Turrialba	30506	Pavones
+3	Cartago	305	Turrialba	30507	Tuis
+3	Cartago	305	Turrialba	30508	Tayutic
+3	Cartago	305	Turrialba	30509	Santa Rosa
+3	Cartago	305	Turrialba	30510	Tres Equis
+3	Cartago	305	Turrialba	30511	La Isabel
+3	Cartago	305	Turrialba	30512	Chirripó
+3	Cartago	306	Alvarado	30601	Pacayas
+3	Cartago	306	Alvarado	30602	Cervantes
+3	Cartago	306	Alvarado	30603	Capellades
+3	Cartago	307	Oreamuno	30701	San Rafael
+3	Cartago	307	Oreamuno	30702	Cot
+3	Cartago	307	Oreamuno	30703	Potrero Cerrado
+3	Cartago	307	Oreamuno	30704	Cipreses
+3	Cartago	307	Oreamuno	30705	Santa Rosa
+3	Cartago	308	El Guarco	30801	El Tejar
+3	Cartago	308	El Guarco	30802	San Isidro
+3	Cartago	308	El Guarco	30803	Tobosi
+3	Cartago	308	El Guarco	30804	Patio de Agua
+4	Heredia	401	Heredia	40101	Heredia
+4	Heredia	401	Heredia	40102	Mercedes
+4	Heredia	401	Heredia	40103	San Francisco
+4	Heredia	401	Heredia	40104	Ulloa
+4	Heredia	401	Heredia	40105	Varablanca
+4	Heredia	402	Barva	40201	Barva
+4	Heredia	402	Barva	40202	San Pedro
+4	Heredia	402	Barva	40203	San Pablo
+4	Heredia	402	Barva	40204	San Roque
+4	Heredia	402	Barva	40205	Santa Lucía
+4	Heredia	402	Barva	40206	San José de la Montaña
+4	Heredia	402	Barva	40207	Puente Salas
+4	Heredia	403	Santo Domingo	40301	Santo Domingo
+4	Heredia	403	Santo Domingo	40302	San Vicente
+4	Heredia	403	Santo Domingo	40303	San Miguel
+4	Heredia	403	Santo Domingo	40304	Paracito
+4	Heredia	403	Santo Domingo	40305	Santo Tomás
+4	Heredia	403	Santo Domingo	40306	Santa Rosa
+4	Heredia	403	Santo Domingo	40307	Tures
+4	Heredia	403	Santo Domingo	40308	Pará
+4	Heredia	404	Santa Bárbara	40401	Santa Bárbara
+4	Heredia	404	Santa Bárbara	40402	San Pedro
+4	Heredia	404	Santa Bárbara	40403	San Juan
+4	Heredia	404	Santa Bárbara	40404	Jesús
+4	Heredia	404	Santa Bárbara	40405	Santo Domingo
+4	Heredia	404	Santa Bárbara	40406	Purabá
+4	Heredia	405	San Rafael	40501	San Rafael
+4	Heredia	405	San Rafael	40502	San Josecito
+4	Heredia	405	San Rafael	40503	Santiago
+4	Heredia	405	San Rafael	40504	Ángeles
+4	Heredia	405	San Rafael	40505	Concepción
+4	Heredia	406	San Isidro	40601	San Isidro
+4	Heredia	406	San Isidro	40602	San José
+4	Heredia	406	San Isidro	40603	Concepción
+4	Heredia	406	San Isidro	40604	San Francisco
+4	Heredia	407	Belén	40701	San Antonio
+4	Heredia	407	Belén	40702	La Ribera
+4	Heredia	407	Belén	40703	La Asunción
+4	Heredia	408	Flores	40801	San Joaquín
+4	Heredia	408	Flores	40802	Barrantes
+4	Heredia	408	Flores	40803	Llorente
+4	Heredia	409	San Pablo	40901	San Pablo
+4	Heredia	409	San Pablo	40902	Rincón de Sabanilla
+4	Heredia	410	Sarapiquí	41001	Puerto Viejo
+4	Heredia	410	Sarapiquí	41002	La Virgen
+4	Heredia	410	Sarapiquí	41003	Las Horquetas
+4	Heredia	410	Sarapiquí	41004	Llanuras del Gaspar
+4	Heredia	410	Sarapiquí	41005	Cureña
+5	Guanacaste	501	Liberia	50101	Liberia
+5	Guanacaste	501	Liberia	50102	Cañas Dulces
+5	Guanacaste	501	Liberia	50103	Mayorga
+5	Guanacaste	501	Liberia	50104	Nacascolo
+5	Guanacaste	501	Liberia	50105	Curubandé
+5	Guanacaste	502	Nicoya	50201	Nicoya
+5	Guanacaste	502	Nicoya	50202	Mansión
+5	Guanacaste	502	Nicoya	50203	San Antonio
+5	Guanacaste	502	Nicoya	50204	Quebrada Honda
+5	Guanacaste	502	Nicoya	50205	Sámara
+5	Guanacaste	502	Nicoya	50206	Nosara
+5	Guanacaste	502	Nicoya	50207	Belén de Nosarita
+5	Guanacaste	503	Santa Cruz	50301	Santa Cruz
+5	Guanacaste	503	Santa Cruz	50302	Bolsón
+5	Guanacaste	503	Santa Cruz	50303	Veintisiete de Abril
+5	Guanacaste	503	Santa Cruz	50304	Tempate
+5	Guanacaste	503	Santa Cruz	50305	Cartagena
+5	Guanacaste	503	Santa Cruz	50306	Cuajiniquil
+5	Guanacaste	503	Santa Cruz	50307	Diriá
+5	Guanacaste	503	Santa Cruz	50308	Cabo Velas
+5	Guanacaste	503	Santa Cruz	50309	Tamarindo
+5	Guanacaste	504	Bagaces	50401	Bagaces
+5	Guanacaste	504	Bagaces	50402	La Fortuna
+5	Guanacaste	504	Bagaces	50403	Mogote
+5	Guanacaste	504	Bagaces	50404	Río Naranjo
+5	Guanacaste	505	Carrillo	50501	Filadelfia
+5	Guanacaste	505	Carrillo	50502	Palmira
+5	Guanacaste	505	Carrillo	50503	Sardinal
+5	Guanacaste	505	Carrillo	50504	Belén
+5	Guanacaste	506	Cañas	50601	Cañas
+5	Guanacaste	506	Cañas	50602	Palmira
+5	Guanacaste	506	Cañas	50603	San Miguel
+5	Guanacaste	506	Cañas	50604	Bebedero
+5	Guanacaste	506	Cañas	50605	Porozal
+5	Guanacaste	507	Abangares	50701	Las Juntas
+5	Guanacaste	507	Abangares	50702	Sierra
+5	Guanacaste	507	Abangares	50703	San Juan
+5	Guanacaste	507	Abangares	50704	Colorado
+5	Guanacaste	508	Tilarán	50801	Tilarán
+5	Guanacaste	508	Tilarán	50802	Quebrada Grande
+5	Guanacaste	508	Tilarán	50803	Tronadora
+5	Guanacaste	508	Tilarán	50804	Santa Rosa
+5	Guanacaste	508	Tilarán	50805	Líbano
+5	Guanacaste	508	Tilarán	50806	Tierras Morenas
+5	Guanacaste	508	Tilarán	50807	Arenal
+5	Guanacaste	508	Tilarán	50808	Cabeceras
+5	Guanacaste	509	Nandayure	50901	Carmona
+5	Guanacaste	509	Nandayure	50902	Santa Rita
+5	Guanacaste	509	Nandayure	50903	Zapotal
+5	Guanacaste	509	Nandayure	50904	San Pablo
+5	Guanacaste	509	Nandayure	50905	Porvenir
+5	Guanacaste	509	Nandayure	50906	Bejuco
+5	Guanacaste	510	La Cruz	51001	La Cruz
+5	Guanacaste	510	La Cruz	51002	Santa Cecilia
+5	Guanacaste	510	La Cruz	51003	La Garita
+5	Guanacaste	510	La Cruz	51004	Santa Elena
+5	Guanacaste	511	Hojancha	51101	Hojancha
+5	Guanacaste	511	Hojancha	51102	Monte Romo
+5	Guanacaste	511	Hojancha	51103	Puerto Carrillo
+5	Guanacaste	511	Hojancha	51104	Huacas
+5	Guanacaste	511	Hojancha	51105	Matambú
+6	Puntarenas	601	Puntarenas	60101	Puntarenas
+6	Puntarenas	601	Puntarenas	60102	Pitahaya
+6	Puntarenas	601	Puntarenas	60103	Chomes
+6	Puntarenas	601	Puntarenas	60104	Lepanto
+6	Puntarenas	601	Puntarenas	60105	Paquera
+6	Puntarenas	601	Puntarenas	60106	Manzanillo
+6	Puntarenas	601	Puntarenas	60107	Guacimal
+6	Puntarenas	601	Puntarenas	60108	Barranca
+6	Puntarenas	601	Puntarenas	60110	Isla del Coco
+6	Puntarenas	601	Puntarenas	60111	Cóbano
+6	Puntarenas	601	Puntarenas	60112	Chacarita
+6	Puntarenas	601	Puntarenas	60113	Chira
+6	Puntarenas	601	Puntarenas	60114	Acapulco
+6	Puntarenas	601	Puntarenas	60115	El Roble
+6	Puntarenas	601	Puntarenas	60116	Arancibia
+6	Puntarenas	602	Esparza	60201	Espíritu Santo
+6	Puntarenas	602	Esparza	60202	San Juan Grande
+6	Puntarenas	602	Esparza	60203	Macacona
+6	Puntarenas	602	Esparza	60204	San Rafael
+6	Puntarenas	602	Esparza	60205	San Jerónimo
+6	Puntarenas	602	Esparza	60206	Caldera
+6	Puntarenas	603	Buenos Aires	60301	Buenos Aires
+6	Puntarenas	603	Buenos Aires	60302	Volcán
+6	Puntarenas	603	Buenos Aires	60303	Potrero Grande
+6	Puntarenas	603	Buenos Aires	60304	Boruca
+6	Puntarenas	603	Buenos Aires	60305	Pilas
+6	Puntarenas	603	Buenos Aires	60306	Colinas
+6	Puntarenas	603	Buenos Aires	60307	Chánguena
+6	Puntarenas	603	Buenos Aires	60308	Biolley
+6	Puntarenas	603	Buenos Aires	60309	Brunka
+6	Puntarenas	604	Montes de Oro	60401	Miramar
+6	Puntarenas	604	Montes de Oro	60402	La Unión
+6	Puntarenas	604	Montes de Oro	60403	San Isidro
+6	Puntarenas	605	Osa	60501	Puerto Cortés
+6	Puntarenas	605	Osa	60502	Palmar
+6	Puntarenas	605	Osa	60503	Sierpe
+6	Puntarenas	605	Osa	60504	Bahía Ballena
+6	Puntarenas	605	Osa	60505	Piedras Blancas
+6	Puntarenas	605	Osa	60506	Bahía Drake
+6	Puntarenas	606	Quepos	60601	Quepos
+6	Puntarenas	606	Quepos	60602	Savegre
+6	Puntarenas	606	Quepos	60603	Naranjito
+6	Puntarenas	607	Golfito	60701	Golfito
+6	Puntarenas	607	Golfito	60703	Guaycará
+6	Puntarenas	607	Golfito	60704	Pavón
+6	Puntarenas	608	Coto Brus	60801	San Vito
+6	Puntarenas	608	Coto Brus	60802	Sabalito
+6	Puntarenas	608	Coto Brus	60803	Aguabuena
+6	Puntarenas	608	Coto Brus	60804	Limoncito
+6	Puntarenas	608	Coto Brus	60805	Pittier
+6	Puntarenas	608	Coto Brus	60806	Gutiérrez Braun
+6	Puntarenas	609	Parrita	60901	Parrita
+6	Puntarenas	610	Corredores	61001	Corredor
+6	Puntarenas	610	Corredores	61002	La Cuesta
+6	Puntarenas	610	Corredores	61003	Canoas
+6	Puntarenas	610	Corredores	61004	Laurel
+6	Puntarenas	611	Garabito	61101	Jacó
+6	Puntarenas	611	Garabito	61102	Tárcoles
+6	Puntarenas	611	Garabito	61103	Lagunillas
+6	Puntarenas	612	Monteverde	61201	Monteverde
+6	Puntarenas	613	Puerto Jiménez	61301	Puerto Jiménez
+7	Limón	701	Limón	70101	Limón
+7	Limón	701	Limón	70102	Valle La Estrella
+7	Limón	701	Limón	70103	Río Blanco
+7	Limón	701	Limón	70104	Matama
+7	Limón	702	Pococí	70201	Guápiles
+7	Limón	702	Pococí	70202	Jiménez
+7	Limón	702	Pococí	70203	Rita
+7	Limón	702	Pococí	70204	Roxana
+7	Limón	702	Pococí	70205	Cariari
+7	Limón	702	Pococí	70206	Colorado
+7	Limón	702	Pococí	70207	La Colonia
+7	Limón	703	Siquirres	70301	Siquirres
+7	Limón	703	Siquirres	70302	Pacuarito
+7	Limón	703	Siquirres	70303	Florida
+7	Limón	703	Siquirres	70304	Germania
+7	Limón	703	Siquirres	70305	El Cairo
+7	Limón	703	Siquirres	70306	Alegría
+7	Limón	703	Siquirres	70307	Reventazón
+7	Limón	704	Talamanca	70401	Bratsi
+7	Limón	704	Talamanca	70402	Sixaola
+7	Limón	704	Talamanca	70403	Cahuita
+7	Limón	704	Talamanca	70404	Telire
+7	Limón	705	Matina	70501	Matina
+7	Limón	705	Matina	70502	Batán
+7	Limón	705	Matina	70503	Carrandí
+7	Limón	706	Guácimo	70601	Guácimo
+7	Limón	706	Guácimo	70602	Mercedes
+7	Limón	706	Guácimo	70603	Pocora
+7	Limón	706	Guácimo	70604	Río Jiménez
+7	Limón	706	Guácimo	70605	Duacarí

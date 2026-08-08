@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@source "../views";
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+
+/* ==========================================================
+   MVS COMMERCE - DESIGN SYSTEM v1.0
+========================================================== */
+
+@theme {
+
+    --color-primary: #D4AF37;
+    --color-primary-hover: #B1922D;
+
+    --color-success: #22C55E;
+    --color-danger: #EF4444;
+    --color-warning: #F59E0B;
+    --color-info: #3B82F6;
+
+    --color-border: #D1D5DB;
+    --color-background: #FFFFFF;
+    --color-muted: #F8FAFC;
+
+    --radius-sm: .375rem;
+    --radius-md: .50rem;
+    --radius-lg: .75rem;
+}
+
+/* ===========================
+   INPUTS
+=========================== */
+
+.form-input,
+.form-select,
+.form-textarea{
+
+    width:100%;
+    background:#fff;
+    border:1px solid #D1D5DB;
+    border-radius:.65rem;
+    padding:.70rem .90rem;
+    font-size:.95rem;
+    transition:.20s;
+    outline:none;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+
+}
+
+.form-input:hover,
+.form-select:hover,
+.form-textarea:hover{
+
+    border-color:#B1922D;
+
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus{
+
+    border-color:#D4AF37;
+
+    box-shadow:0 0 0 4px rgba(212,175,55,.15);
+
+}
+
+/* ===========================
+   LABEL
+=========================== */
+
+.form-label{
+
+    display:block;
+    margin-bottom:.45rem;
+    font-size:.90rem;
+    font-weight:600;
+    color:#334155;
+
+}
+
+/* ===========================
+   CHECKBOX
+=========================== */
+
+.form-checkbox{
+
+    width:18px;
+    height:18px;
+    accent-color:#D4AF37;
+
+}
+
+/* ===========================
+   BOTONES
+=========================== */
+
+.btn-primary{
+
+    background:#D4AF37;
+    color:white;
+    border-radius:.70rem;
+    padding:.75rem 1.4rem;
+    font-weight:600;
+    transition:.2s;
+
+}
+
+.btn-primary:hover{
+
+    background:#B1922D;
+
+}
+
+.btn-secondary{
+
+    border:1px solid #D1D5DB;
+    background:white;
+    border-radius:.70rem;
+    padding:.75rem 1.4rem;
+
+}
+
+.btn-secondary:hover{
+
+    background:#F8FAFC;
+
+}
+
+/* ===========================
+   CARD
+=========================== */
+
+.card{
+
+    background:white;
+    border:1px solid #E5E7EB;
+    border-radius:16px;
+    box-shadow:0 4px 10px rgba(0,0,0,.04);
+
+}
+/* ===========================
+   SIDEBAR
+=========================== */
+
+#sidebar{
+
+    width:260px;
+    transition:.25s;
+
+}
+
+.sidebar-logo{
+
+    width:70px;
+    transition:.25s;
+
+}
+
+.sidebar-text{
+
+    opacity:1;
+
+}
+
+[x-cloak] {
+    display: none !important;
+}
