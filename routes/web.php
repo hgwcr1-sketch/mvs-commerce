@@ -290,39 +290,40 @@ Route::resource('transferencias', TransferController::class)
 |--------------------------------------------------------------------------
 */
 
-Route::get(
-    '/compras/importacion/producto-nuevo',
-    [PurchaseImportController::class, 'createProduct']
-)->name('compras.import.product.create');
+Route::middleware(['active.branch', 'permission:compras.crear'])->group(function () {
 
-Route::post(
-    '/compras/importacion/producto-nuevo',
-    [PurchaseImportController::class, 'storeProduct']
-)->name('compras.import.product.store');
+    Route::get(
+        '/compras/importacion/producto-nuevo',
+        [PurchaseImportController::class, 'createProduct']
+    )->name('compras.import.product.create');
 
-Route::post(
-    '/compras/importacion/confirmar',
-    [PurchaseImportController::class, 'confirm']
-)->name('compras.import.confirm');
+    Route::post(
+        '/compras/importacion/producto-nuevo',
+        [PurchaseImportController::class, 'storeProduct']
+    )->name('compras.import.product.store');
 
-Route::post(
-    '/compras/importacion/proveedor-creado',
-    [PurchaseImportController::class, 'supplierCreated']
-)->name('compras.import.supplier.created');
+    Route::post(
+        '/compras/importacion/confirmar',
+        [PurchaseImportController::class, 'confirm']
+    )->name('compras.import.confirm');
 
-Route::get('/compras/importacion/revision',
-    [PurchaseImportController::class, 'review']
-)->name('compras.import.review');
+    Route::post(
+        '/compras/importacion/proveedor-creado',
+        [PurchaseImportController::class, 'supplierCreated']
+    )->name('compras.import.supplier.created');
+
+    Route::get('/compras/importacion/revision',
+        [PurchaseImportController::class, 'review']
+    )->name('compras.import.review');
+
+    Route::post('/compras/importar-excel',
+        [PurchaseImportController::class, 'store']
+    )->name('compras.import.excel');
+});
 
 Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
     ->middleware(['active.branch', 'permission:compras.ver'])
     ->name('compras.search-products');
-
-    
-Route::post('/compras/importar-excel',
-    [PurchaseImportController::class, 'store']
-)->name('compras.import.excel');
-
 
 Route::post('/compras/importar-xml',
     [PurchaseXmlImportController::class, 'store']
