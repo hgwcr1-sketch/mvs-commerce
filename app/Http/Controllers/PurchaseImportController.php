@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ProductBarcode;
 use App\Services\Imports\Managers\PurchaseImportManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +58,46 @@ session([
     'purchase_import_validation' => $validation
 ]);
 
+$validation = session('purchase_import_validation');
+
+
+foreach ($validation['missing'] as $key => $item) {
+
+
+    if (trim((string)$item['code']) == trim((string)$request->code)) {
+
+
+        $validation['found'][] = [
+
+            'product_id' => $product->id,
+
+            'product' => $product->name,
+
+            'quantity' => $item['quantity'],
+
+            'cost' => $item['cost'],
+
+        ];
+
+
+        unset($validation['missing'][$key]);
+
+
+        break;
+
+    }
+
+}
+
+
+$validation['missing'] = array_values($validation['missing']);
+
+
+session([
+
+    'purchase_import_validation' => $validation
+
+]);
 
 return redirect()
     ->route('compras.import.review');
@@ -430,6 +471,160 @@ public function confirm()
         ->with(
             'success',
             'Compra importada correctamente.'
+        );
+}
+
+public function createProduct(Request $request)
+{
+    $companyId = session('active_company_id');
+
+
+    return view('compras.product-create-import', [
+
+        'code' => $request->code,
+
+        'name' => $request->name,
+
+        'cost' => $request->cost,
+
+
+        'categories' => \App\Models\ProductCategory::where(
+            'company_id',
+            $companyId
+        )
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get(),
+
+
+        'units' => \App\Models\Unit::where(
+            'company_id',
+            $companyId
+        )
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get(),
+
+    ]);
+
+}
+
+
+public function storeProduct(Request $request)
+{
+    $companyId = session('active_company_id');
+
+
+    $request->validate([
+
+        'category_id' => 'required',
+
+        'unit_id' => 'required',
+
+        'name' => 'required',
+
+        'code' => 'required',
+
+        'cost' => 'required',
+
+    ]);
+
+
+    $product = Product::create([
+
+        'company_id' => $companyId,
+
+        'category_id' => $request->category_id,
+
+        'unit_id' => $request->unit_id,
+
+        'name' => $request->name,
+
+        'internal_code' => $request->code,
+
+        'cost' => $request->cost,
+
+        'sale_price' => 0,
+
+        'tax_rate' => 13,
+
+        'is_active' => true,
+
+    ]);
+
+
+    ProductBarcode::create([
+
+        'product_id' => $product->id,
+
+        'barcode' => $request->code,
+
+        'barcode_type' => 'supplier',
+
+        'is_primary' => true,
+
+        'is_active' => true,
+
+    ]);
+
+    $validation = session('purchase_import_validation');
+
+
+if ($validation) {
+
+
+    foreach ($validation['missing'] as $key => $item) {
+
+
+        if (
+            trim((string)$item['code']) ==
+            trim((string)$request->code)
+        ) {
+
+
+            $validation['found'][] = [
+
+                'product_id' => $product->id,
+
+                'product' => $product->name,
+
+                'quantity' => $item['quantity'],
+
+                'cost' => $item['cost'],
+
+            ];
+
+
+            unset($validation['missing'][$key]);
+
+
+            break;
+
+        }
+
+    }
+
+
+    $validation['missing'] =
+        array_values($validation['missing']);
+
+
+    session([
+
+        'purchase_import_validation' => $validation
+
+    ]);
+
+}
+
+
+    return redirect()
+
+        ->route('compras.import.review')
+
+        ->with(
+            'success',
+            'Producto creado correctamente'
         );
 }
 
