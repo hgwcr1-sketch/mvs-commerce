@@ -9,6 +9,7 @@ use App\Models\Country;
 use App\Models\Province;
 use App\Models\Canton;
 use App\Models\District;
+use App\Services\CompanyProvisioner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -81,21 +82,11 @@ class CompanyController extends Controller
 
     $data = $request->validated();
 
-    DB::transaction(function () use ($request, $user, &$data) {
+    if ($request->hasFile('logo')) {
+        $data['logo'] = $request->file('logo')->store('companies', 'public');
+    }
 
-        if ($request->hasFile('logo')) {
-            $data['logo'] = $request->file('logo')->store('companies', 'public');
-        }
-
-        $data['owner_user_id'] = $user->id;
-        $data['is_active'] = true;
-
-        $company = Company::create($data);
-
-        $company->users()->syncWithoutDetaching([
-            $user->id
-        ]);
-    });
+    app(CompanyProvisioner::class)->provision($user, $data);
 
     return redirect()
         ->route('empresa.index')

@@ -9,10 +9,19 @@ use Illuminate\Support\Facades\Hash;
 class AdminUserSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Seeder exclusivo para desarrollo o demostraciones locales.
+     *
+     * Las instalaciones reales deben usar mvs:install para crear el
+     * administrador inicial con credenciales proporcionadas en ese momento.
      */
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn('AdminUserSeeder solo está disponible en entornos local o testing.');
+
+            return;
+        }
+
         User::updateOrCreate(
 
             [

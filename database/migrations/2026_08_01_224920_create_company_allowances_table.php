@@ -1,22 +1,26 @@
 <?php
 
-namespace App\Models;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
-
-#[Fillable([
-    'user_id',
-    'allowed_companies',
-])]
-
-class CompanyAllowance extends Model
+return new class extends Migration
 {
-    /**
-     * Usuario propietario de esta autorización.
-     */
-    public function user()
+    public function up(): void
     {
-        return $this->belongsTo(User::class);
+        Schema::create('company_allowances', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')
+                ->unique()
+                ->constrained()
+                ->cascadeOnDelete();
+            $table->unsignedInteger('allowed_companies')->default(1);
+            $table->timestamps();
+        });
     }
-}
+
+    public function down(): void
+    {
+        Schema::dropIfExists('company_allowances');
+    }
+};

@@ -137,6 +137,10 @@ public function create()
 
     $data = $request->validated();
 
+    $branchIds = $data['branches'];
+
+    unset($data['branches']);
+
     /**
      * Verificar que el rol seleccionado pertenece
      * a la empresa activa.
