@@ -28,6 +28,20 @@
 
 <x-card>
 
+    @if($validation['supplier_summary']['multiple'] ?? false)
+        <div class="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 text-red-800">
+            <div class="font-semibold">El archivo contiene proveedores diferentes</div>
+            <div class="mt-1 text-sm">
+                {{ collect($validation['supplier_summary']['names'])
+                    ->map(fn ($name) => $name ?? '(vacío)')
+                    ->implode(', ') }}
+            </div>
+            <p class="mt-2 text-sm">
+                Debe separar las compras en archivos distintos antes de confirmar.
+            </p>
+        </div>
+    @endif
+
     {{-- PROVEEDOR --}}
 
     <h3 class="mb-4 font-semibold text-slate-700">
@@ -212,12 +226,14 @@
                         </div>
 
 
-                        <button
-                            class="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white">
-
-                            Usar este producto
-
-                        </button>
+                        <form method="POST" action="{{ route('compras.import.product.store') }}">
+                            @csrf
+                            <input type="hidden" name="row_key" value="{{ $item['_row_key'] }}">
+                            <input type="hidden" name="existing_product_id" value="{{ $match->id }}">
+                            <button class="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white">
+                                Usar este producto
+                            </button>
+                        </form>
 
 
                     </div>
@@ -234,9 +250,7 @@
 
                 <button
 onclick="crearProducto(
-'{{ $item['code'] }}',
-'{{ $item['name'] }}',
-'{{ $item['cost'] }}'
+'{{ $item['_row_key'] }}'
 )"
 class="rounded-lg bg-red-600 px-4 py-2 text-white">
 
@@ -267,6 +281,7 @@ Crear producto nuevo
     @csrf
 
     <button
+        @disabled($validation['supplier_summary']['multiple'] ?? false)
         class="rounded-lg bg-amber-500 px-5 py-2 font-semibold text-white">
         Confirmar compra
     </button>
@@ -427,16 +442,12 @@ location.reload();
 
 <script>
 
-function crearProducto(code,name,cost)
+function crearProducto(rowKey)
 {
 
 window.location.href =
-"/compras/importacion/producto-nuevo?code="
-+ code
-+ "&name="
-+ encodeURIComponent(name)
-+ "&cost="
-+ cost;
+"/compras/importacion/producto-nuevo?row_key="
++ encodeURIComponent(rowKey);
 
 }
 
