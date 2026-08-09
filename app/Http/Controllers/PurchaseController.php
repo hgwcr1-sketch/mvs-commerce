@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Data\Purchases\PurchaseData;
+use App\Data\Purchases\PurchaseLineData;
 use App\Models\InventoryMovement;
 use App\Models\PurchaseItem;
 use Illuminate\Support\Facades\Auth;
@@ -11,8 +13,11 @@ use App\Models\Supplier;
 use App\Models\ProductCategory;
 use App\Models\Brand;
 use App\Models\Unit;
+use App\Services\Purchases\PurchaseProcessor;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PurchaseController extends Controller
 {
@@ -168,7 +173,10 @@ class PurchaseController extends Controller
     /**
      * Guardar compra.
      */
-   public function store(Request $request)
+   public function store(
+    Request $request,
+    PurchaseProcessor $purchaseProcessor,
+)
 {
     $companyId = session('active_company_id');
     $branchId = session('active_branch_id');
@@ -197,208 +205,50 @@ class PurchaseController extends Controller
         ], 422);
     }
 
-    $supplierExists = Supplier::query()
-        ->where('id', $data['supplier_id'])
-        ->where('company_id', $companyId)
-        ->exists();
-
-    if (!$supplierExists) {
-        return response()->json([
-            'message' => 'El proveedor no pertenece a la empresa activa.',
-        ], 422);
-    }
-
     try {
+        $lines = collect($data['items'])
+            ->map(fn (array $item) => new PurchaseLineData(
+                product_id: (int) $item['product_id'],
+                quantity: (float) $item['quantity'],
+                unit_cost: (float) $item['unit_cost'],
+                new_sale_price: array_key_exists('new_sale_price', $item)
+                    && $item['new_sale_price'] !== null
+                    ? (float) $item['new_sale_price']
+                    : null,
+            ))
+            ->all();
 
-        $purchase = DB::transaction(function () use (
-            $data,
-            $companyId,
-            $branchId
-        ) {
-
-            $subtotalPurchase = 0;
-            $taxPurchase = 0;
-            $totalPurchase = 0;
-
-            /*
-             * Primero calculamos los totales reales en servidor.
-             */
-            foreach ($data['items'] as $item) {
-
-                $product = Product::query()
-                    ->where('id', $item['product_id'])
-                    ->where('company_id', $companyId)
-                    ->firstOrFail();
-
-                $quantity = (float) $item['quantity'];
-                $unitCost = (float) $item['unit_cost'];
-                $taxRate = (float) $product->tax_rate;
-
-                $subtotal = $quantity * $unitCost;
-                $tax = $subtotal * ($taxRate / 100);
-                $total = $subtotal + $tax;
-
-                $subtotalPurchase += $subtotal;
-                $taxPurchase += $tax;
-                $totalPurchase += $total;
-            }
-
-            /*
-             * Crear encabezado de compra.
-             */
-            $purchase = Purchase::create([
-                'company_id' => $companyId,
-                'branch_id' => $branchId,
-                'supplier_id' => $data['supplier_id'],
-                'user_id' => Auth::id(),
-
-                'number' =>
-                    'CP-' .
-                    now()->format('YmdHis') .
-                    '-' .
-                    random_int(100, 999),
-
-                'supplier_invoice_number' =>
-                    $data['supplier_invoice_number'] ?? null,
-
-                'purchase_date' => $data['purchase_date'],
-                'payment_type' => $data['payment_type'],
-
-                'due_date' =>
-                    $data['payment_type'] === 'credit'
-                        ? ($data['due_date'] ?? null)
-                        : null,
-
-                'subtotal' => round($subtotalPurchase, 2),
-                'discount' => 0,
-                'tax' => round($taxPurchase, 2),
-                'total' => round($totalPurchase, 2),
-
-                'status' => 'posted',
-                'notes' => $data['notes'] ?? null,
-            ]);
-
-            /*
-             * Detalle + inventario + movimiento.
-             */
-            foreach ($data['items'] as $item) {
-
-                $product = Product::query()
-                    ->where('id', $item['product_id'])
-                    ->where('company_id', $companyId)
-                    ->firstOrFail();
-
-                $quantity = (float) $item['quantity'];
-                $unitCost = (float) $item['unit_cost'];
-                $taxRate = (float) $product->tax_rate;
-
-                $subtotal = $quantity * $unitCost;
-                $tax = $subtotal * ($taxRate / 100);
-                $total = $subtotal + $tax;
-
-                $previousSalePrice = (float) $product->sale_price;
-
-                $newSalePrice =
-                    array_key_exists('new_sale_price', $item) &&
-                    $item['new_sale_price'] !== null
-                        ? (float) $item['new_sale_price']
-                        : null;
-
-                PurchaseItem::create([
-                    'purchase_id' => $purchase->id,
-                    'product_id' => $product->id,
-                    'quantity' => $quantity,
-                    'unit_cost' => $unitCost,
-
-                    'previous_sale_price' => $previousSalePrice,
-                    'new_sale_price' => $newSalePrice,
-
-                    'subtotal' => round($subtotal, 2),
-                    'discount' => 0,
-                    'tax_rate' => $taxRate,
-                    'tax' => round($tax, 2),
-                    'total' => round($total, 2),
-                ]);
-
-                /*
-                 * Obtener o crear inventario de la sucursal.
-                 */
-                $branchProduct = DB::table('branch_product')
-                    ->where('branch_id', $branchId)
-                    ->where('product_id', $product->id)
-                    ->first();
-
-                $previousStock = $branchProduct
-                    ? (float) $branchProduct->stock
-                    : 0;
-
-                $newStock = $previousStock + $quantity;
-
-                if ($branchProduct) {
-
-                    DB::table('branch_product')
-                        ->where('id', $branchProduct->id)
-                        ->update([
-                            'stock' => $newStock,
-                            'updated_at' => now(),
-                        ]);
-
-                } else {
-
-                    DB::table('branch_product')->insert([
-                        'branch_id' => $branchId,
-                        'product_id' => $product->id,
-                        'stock' => $newStock,
-                        'minimum_stock' => null,
-                        'maximum_stock' => null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-
-                /*
-                 * Actualizar costo y, si se indicó,
-                 * el nuevo precio de venta.
-                 */
-                $product->cost = $unitCost;
-
-                if ($newSalePrice !== null) {
-                    $product->sale_price = $newSalePrice;
-                }
-
-                $product->save();
-
-                /*
-                 * Historial de inventario.
-                 */
-                InventoryMovement::create([
-                    'company_id' => $companyId,
-                    'branch_id' => $branchId,
-                    'product_id' => $product->id,
-                    'user_id' => Auth::id(),
-
-                    'type' => 'purchase',
-                    'quantity' => $quantity,
-                    'previous_stock' => $previousStock,
-                    'new_stock' => $newStock,
-
-                    'reason' => 'Entrada por compra',
-                    'reference_type' => Purchase::class,
-                    'reference_id' => $purchase->id,
-
-                    'notes' =>
-                        'Compra ' . $purchase->number,
-                ]);
-            }
-
-            return $purchase;
-        });
+        $purchase = $purchaseProcessor->process(new PurchaseData(
+            company_id: (int) $companyId,
+            branch_id: (int) $branchId,
+            supplier_id: (int) $data['supplier_id'],
+            user_id: Auth::id(),
+            purchase_date: $data['purchase_date'],
+            payment_type: $data['payment_type'],
+            supplier_invoice_number: $data['supplier_invoice_number'] ?? null,
+            due_date: $data['due_date'] ?? null,
+            notes: $data['notes'] ?? null,
+            lines: $lines,
+        ));
 
         return response()->json([
             'message' => 'Compra guardada correctamente.',
             'purchase_id' => $purchase->id,
             'number' => $purchase->number,
         ]);
+
+    } catch (ValidationException $e) {
+
+        return response()->json([
+            'message' => collect($e->errors())->flatten()->first()
+                ?? 'La compra contiene datos inválidos.',
+        ], 422);
+
+    } catch (ModelNotFoundException) {
+
+        return response()->json([
+            'message' => 'No se encontró un recurso válido para registrar la compra.',
+        ], 422);
 
     } catch (\Throwable $e) {
 

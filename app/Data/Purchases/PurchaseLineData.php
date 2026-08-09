@@ -15,6 +15,7 @@ final readonly class PurchaseLineData
         public ?string $unit = null,
         public ?float $quantity = null,
         public ?float $unit_cost = null,
+        public ?float $new_sale_price = null,
         public ?float $tax_rate = null,
         public ?float $discount_percent = null,
         public ?string $lot_number = null,

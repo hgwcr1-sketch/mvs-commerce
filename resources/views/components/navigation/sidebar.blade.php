@@ -168,6 +168,17 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     @endcan
 
+    {{-- COMPRAS --}}
+    @can('compras.ver')
+
+        <x-navigation.item
+            route="compras.index"
+            icon="tag"
+            label="Compras"
+            :active="request()->routeIs('compras.*')" />
+
+    @endcan
+
 
     {{-- ADMINISTRACIÓN --}}
     @canany(['usuarios.ver', 'roles.ver'])
