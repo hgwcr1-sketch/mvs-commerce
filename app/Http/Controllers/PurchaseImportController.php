@@ -32,11 +32,11 @@ class PurchaseImportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Compras');
         $sheet->fromArray([
-            'Código', 'Código Barra', 'Producto', 'Descripción', 'Categoría',
-            'Marca', 'Proveedor', 'Unidad de medida', 'Tipo Artículo',
-            'Cantidad', 'Costo', 'Precio Venta', 'Impuesto %', 'Descuento %',
-            'CABYS', 'Mínimo Stock', 'Máximo Stock', 'Lote', 'Fecha Vencimiento',
-        ], null, 'A1');
+    'Código *', 'Código Barra', 'Producto *', 'Descripción', 'Categoría',
+    'Marca', 'Proveedor *', 'Unidad de medida *', 'Tipo Artículo',
+    'Cantidad *', 'Costo *', 'Precio Venta', 'Impuesto %', 'Descuento %',
+    'CABYS', 'Mínimo Stock', 'Máximo Stock', 'Lote', 'Fecha Vencimiento',
+], null, 'A1');
 
         $writer = new Xlsx($spreadsheet);
 

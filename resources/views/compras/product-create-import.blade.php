@@ -13,6 +13,58 @@
     <form method="POST" action="{{ route('compras.import.product.store') }}">
         @csrf
         <input type="hidden" name="row_key" value="{{ $rowKey }}">
+        <input
+            type="hidden"
+            name="barcode"
+            value="{{ $sourceItem['barcode'] ?? '' }}">
+        <input
+            type="hidden"
+            name="cabys"
+            value="{{ $sourceItem['cabys'] ?? '' }}">
+        <input
+            type="hidden"
+            name="brand"
+            value="{{ $sourceItem['brand'] ?? '' }}">
+        <input
+            type="hidden"
+            name="category"
+            value="{{ $sourceItem['category'] ?? '' }}">
+        <input
+            type="hidden"
+            name="unit"
+            value="{{ $sourceItem['unit'] ?? '' }}">
+        <input
+            type="hidden"
+            name="product_type"
+            value="{{ $sourceItem['product_type'] ?? '' }}">
+        <input
+            type="hidden"
+            name="new_sale_price"
+            value="{{ $sourceItem['new_sale_price'] ?? '' }}">
+        <input
+            type="hidden"
+            name="tax_rate"
+            value="{{ $sourceItem['tax_rate'] ?? '' }}">
+        <input
+            type="hidden"
+            name="minimum_stock"
+            value="{{ $sourceItem['minimum_stock'] ?? '' }}">
+        <input
+            type="hidden"
+            name="maximum_stock"
+            value="{{ $sourceItem['maximum_stock'] ?? '' }}">
+        <input
+            type="hidden"
+            name="lot_number"
+            value="{{ $sourceItem['lot_number'] ?? '' }}">
+        <input
+            type="hidden"
+            name="expires_at"
+            value="{{ $sourceItem['expires_at'] ?? '' }}">
+        <input
+            type="hidden"
+            name="description"
+            value="{{ $sourceItem['description'] ?? '' }}">
 
         <div class="grid gap-4">
             <div>
