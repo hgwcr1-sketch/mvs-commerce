@@ -240,11 +240,12 @@ class PurchaseImportController extends Controller
                 ? Unit::query()
                     ->where('company_id', $companyId)
                     ->where('is_active', true)
-                    ->where(
-                        fn ($query) => $query
-                            ->where('name', trim($unitName))
-                            ->orWhere('abbreviation', trim($unitName)),
-                    )
+                    ->where(function ($query) use ($unitName) {
+                        $normalizedUnit = Str::lower(trim($unitName));
+
+                        $query->whereRaw('LOWER(name) = ?', [$normalizedUnit])
+                            ->orWhereRaw('LOWER(abbreviation) = ?', [$normalizedUnit]);
+                    })
                     ->value('id')
                 : null;
             $unitId ??= $this->resolveImportUnitId(null, $companyId);
