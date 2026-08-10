@@ -235,7 +235,19 @@ class PurchaseImportController extends Controller
                 ? (int) $sourceItem['category_resolution']['category_id']
                 : $this->resolveImportCategoryId($sourceItem['category'] ?? null, $companyId);
             $brandId = $this->resolveImportBrandId($sourceItem['brand'] ?? null, $companyId);
-            $unitId = $this->resolveImportUnitId($sourceItem['unit'] ?? null, $companyId);
+            $unitName = $sourceItem['unit'] ?? null;
+            $unitId = $this->hasValue($unitName)
+                ? Unit::query()
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)
+                    ->where(
+                        fn ($query) => $query
+                            ->where('name', trim($unitName))
+                            ->orWhere('abbreviation', trim($unitName)),
+                    )
+                    ->value('id')
+                : null;
+            $unitId ??= $this->resolveImportUnitId(null, $companyId);
             $productType = $this->resolveProductType($sourceItem['product_type'] ?? null);
 
             $attributes = [
