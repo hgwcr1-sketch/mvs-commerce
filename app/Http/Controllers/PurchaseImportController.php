@@ -208,9 +208,13 @@ class PurchaseImportController extends Controller
                 ->findOrFail($request->integer('existing_product_id'));
             $this->moveImportRowToFound($validation, $missingKey, $sourceItem, $product);
 
-            return redirect()->route('compras.import.review')
+            return redirect()->route('compras.import.review', [], 303)
                 ->with('success', 'Producto asignado correctamente.');
         }
+
+        $request->merge([
+            'cost' => str_replace(',', '.', (string) $request->input('cost')),
+        ]);
 
         $request->validate([
             'name' => ['required', 'string', 'max:150'],
@@ -282,7 +286,7 @@ class PurchaseImportController extends Controller
             $this->moveImportRowToFound($validation, $missingKey, $sourceItem, $product);
         });
 
-        return redirect()->route('compras.import.review')
+        return redirect()->route('compras.import.review', [], 303)
             ->with('success', 'Producto creado correctamente.');
     }
 
@@ -432,6 +436,7 @@ class PurchaseImportController extends Controller
         unset($validation['missing'][$missingKey]);
         $validation['missing'] = array_values($validation['missing']);
         session(['purchase_import_validation' => $validation]);
+        session()->save();
     }
 
     private function nullableFloat(mixed $value): ?float

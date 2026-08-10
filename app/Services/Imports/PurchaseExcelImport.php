@@ -120,6 +120,7 @@ class PurchaseExcelImport
             ->ascii()
             ->lower()
             ->replaceMatches('/\s+/', ' ')
+            ->replaceMatches('/\s*\*+\s*$/', '')
             ->trim()
             ->toString();
     }
