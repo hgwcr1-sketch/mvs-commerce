@@ -3,13 +3,23 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use App\Services\Imports\Managers\PurchaseImportManager;
 use App\Services\Imports\Xml\PurchaseXmlImport;
 
 
 class PurchaseXmlImportController extends Controller
 {
 
-    public function store(Request $request)
+    public function create()
+    {
+        return view('compras.import-xml');
+    }
+
+    public function store(
+        Request $request,
+        PurchaseImportManager $manager,
+    )
     {
 
         $request->validate([
@@ -30,14 +40,48 @@ class PurchaseXmlImportController extends Controller
             $request->file('file')->getRealPath()
         );
 
+        $supplierName = $data['proveedor']['nombre'] ?? null;
 
-        return response()->json([
+        $items = array_map(
+            function (array $line, int $index) use ($supplierName) {
+                $sourceCode = trim((string) ($line['code'] ?? ''));
+                $cabys = trim((string) ($line['cabys'] ?? ''));
+                $normalizedName = Str::upper(
+                    Str::slug((string) ($line['name'] ?? '')),
+                );
 
-            'message' => 'XML leído correctamente',
+                $code = $sourceCode !== ''
+                    ? $sourceCode
+                    : 'XML-' . ($cabys !== '' ? $cabys : $normalizedName);
 
-            'data' => $data
+                return [
+                    'code' => $code,
+                    'barcode' => null,
+                    'cabys' => $line['cabys'] ?? null,
+                    'name' => $line['name'] ?? null,
+                    'quantity' => $line['quantity'] ?? null,
+                    'cost' => $line['unit_cost'] ?? null,
+                    'unit' => $line['unit'] ?? null,
+                    'tax_rate' => $line['tax_rate'] ?? null,
+                    'supplier' => $supplierName,
+                    '_row_key' => 'xml-' . ($index + 1),
+                ];
+            },
+            $data['lineas'] ?? [],
+            array_keys($data['lineas'] ?? []),
+        );
 
-        ]);
+        $companyId = (int) session('active_company_id');
+        $validation = $manager->validateProducts($items, $companyId);
+        $validation['supplier_summary'] = $manager->supplierSummary($items);
+        $validation['supplier'] = $manager->validateSupplier(
+            $validation['supplier_summary']['name'],
+            $companyId,
+        );
+
+        session(['purchase_import_validation' => $validation]);
+
+        return redirect()->route('compras.import.review');
 
     }
 

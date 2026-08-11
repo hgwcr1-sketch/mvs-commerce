@@ -298,9 +298,9 @@ Route::middleware(['active.branch', 'permission:compras.crear'])->group(function
     )->name('compras.import.product.create');
 
     Route::post(
-        '/compras/importacion/producto-nuevo',
-        [PurchaseImportController::class, 'storeProduct']
-    )->name('compras.import.product.store');
+    '/compras/importacion/producto-nuevo',
+    [PurchaseImportController::class, 'storeProduct']
+)->name('compras.import.product.store');
 
     Route::post(
         '/compras/importacion/confirmar',
@@ -328,6 +328,11 @@ Route::middleware(['active.branch', 'permission:compras.crear'])->group(function
 Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
     ->middleware(['active.branch', 'permission:compras.ver'])
     ->name('compras.search-products');
+
+Route::get('/compras/importar-xml',
+    [PurchaseXmlImportController::class, 'create'])
+    ->middleware(['active.branch', 'permission:compras.crear'])
+    ->name('compras.import.xml.create');
 
 Route::post('/compras/importar-xml',
     [PurchaseXmlImportController::class, 'store']

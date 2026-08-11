@@ -184,8 +184,8 @@ class PurchaseImportController extends Controller
     }
 
     public function storeProduct(Request $request)
-    {
-        $companyId = (int) session('active_company_id');
+{
+    $companyId = (int) session('active_company_id');
         $branchId = Branch::query()
             ->whereKey(session('active_branch_id'))
             ->where('company_id', $companyId)
@@ -248,7 +248,33 @@ class PurchaseImportController extends Controller
                     })
                     ->value('id')
                 : null;
-            $unitId ??= $this->resolveImportUnitId(null, $companyId);
+
+            if ($unitId === null) {
+                $company = Company::query()
+                    ->where('is_active', true)
+                    ->findOrFail($companyId);
+                $defaultUnitId = app(CompanyPurchaseSettingsResolver::class)
+                    ->resolveUnitId($company, null);
+
+                $unitId = Unit::query()
+                    ->where('company_id', $companyId)
+                    ->where('is_active', true)
+                    ->whereKey($defaultUnitId)
+                    ->value('id');
+            }
+
+            $unitId ??= Unit::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->value('id');
+
+            if ($unitId === null) {
+                throw ValidationException::withMessages([
+                    'unit' => 'La empresa no tiene ninguna unidad activa.',
+                ]);
+            }
+
             $productType = $this->resolveProductType($sourceItem['product_type'] ?? null);
 
             $attributes = [

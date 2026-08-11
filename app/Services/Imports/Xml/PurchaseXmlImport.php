@@ -21,6 +21,40 @@ class PurchaseXmlImport
 
         }
 
+        $lines = [];
+
+        if (isset($xml->DetalleServicio->LineaDetalle)) {
+
+            foreach ($xml->DetalleServicio->LineaDetalle as $line) {
+
+                $lines[] = [
+
+                    'cabys' =>
+                        (string) ($line->CodigoCABYS ?? null),
+
+                    'name' =>
+                        (string) ($line->Detalle ?? null),
+
+                    'quantity' =>
+                        (float) ($line->Cantidad ?? 0),
+
+                    'unit' =>
+                        (string) ($line->UnidadMedida ?? null),
+
+                    'unit_cost' =>
+                        (float) ($line->PrecioUnitario ?? 0),
+
+                    'tax_rate' =>
+                        isset($line->Impuesto->Tarifa)
+                            ? (float) $line->Impuesto->Tarifa
+                            : null,
+
+                ];
+
+            }
+
+        }
+
 
         return [
 
@@ -43,7 +77,7 @@ class PurchaseXmlImport
             ],
 
 
-            'lineas' => []
+            'lineas' => $lines
 
         ];
 
