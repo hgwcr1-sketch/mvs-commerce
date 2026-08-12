@@ -14,6 +14,11 @@ use Illuminate\Validation\ValidationException;
 
 class CompanyProvisioner
 {
+    public function __construct(
+        private readonly PaymentMethodProvisioner $paymentMethodProvisioner,
+    ) {
+    }
+
     /**
      * Crea la cuenta administradora y su primera empresa en una transacción.
      */
@@ -91,6 +96,8 @@ class CompanyProvisioner
                 'owner_user_id' => $owner->id,
                 'is_active' => true,
             ]);
+
+            $this->paymentMethodProvisioner->provision($company);
 
             $administratorRole = Role::create([
                 'company_id' => $company->id,

@@ -125,6 +125,7 @@ class PermissionSeeder extends Seeder
             // Configuración
             ['name' => 'configuracion.ver', 'label' => 'Ver configuración', 'module' => 'Configuración'],
             ['name' => 'configuracion.editar', 'label' => 'Modificar configuración', 'module' => 'Configuración'],
+            ['name' => 'formas_pago.administrar', 'label' => 'Administrar formas de pago', 'module' => 'Configuración'],
 
             // Agenda
             ['name' => 'agenda.ver', 'label' => 'Ver agenda', 'module' => 'Agenda'],
