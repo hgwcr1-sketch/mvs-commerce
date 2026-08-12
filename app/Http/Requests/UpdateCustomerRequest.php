@@ -20,6 +20,8 @@ class UpdateCustomerRequest extends FormRequest
      */
     public function rules(): array
     {
+        $customer = $this->route('cliente');
+
         return [
 
             'customer_type' => ['required', Rule::in(['individual', 'company'])],
@@ -30,7 +32,9 @@ class UpdateCustomerRequest extends FormRequest
     'nullable',
     'string',
     'max:50',
-    Rule::unique('customers', 'identification')->ignore($this->route('cliente')),
+    Rule::unique('customers', 'identification')
+        ->where('company_id', session('active_company_id'))
+        ->ignore($customer),
 ],
 
             'name' => 'required|string|max:150',

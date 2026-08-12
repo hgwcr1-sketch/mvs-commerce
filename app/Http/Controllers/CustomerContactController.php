@@ -10,6 +10,8 @@ class CustomerContactController extends Controller
 {
     public function store(Request $request, Customer $cliente)
     {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+
         $validated = $request->validate([
             'name' => 'required|string|max:150',
             'position' => 'nullable|string|max:100',
@@ -38,9 +40,8 @@ CustomerContact::create($validated);
 
     public function destroy(Customer $cliente, CustomerContact $contacto)
     {
-        if ($contacto->customer_id !== $cliente->id) {
-            abort(404);
-        }
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $this->ensureContactBelongsToCustomer($contacto, $cliente);
 
         $contacto->delete();
 
@@ -51,9 +52,8 @@ CustomerContact::create($validated);
 
     public function setPrimary(Customer $cliente, CustomerContact $contacto)
 {
-    if ($contacto->customer_id !== $cliente->id) {
-        abort(404);
-    }
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+    $this->ensureContactBelongsToCustomer($contacto, $cliente);
 
     CustomerContact::where('customer_id', $cliente->id)
         ->update(['is_primary' => false]);
@@ -65,5 +65,20 @@ CustomerContact::create($validated);
     return redirect()
         ->route('clientes.show', ['cliente' => $cliente->id])
         ->with('success', 'Contacto principal actualizado correctamente.');
+}
+
+private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
+{
+    abort_unless(
+        (int) $customer->company_id === (int) session('active_company_id'),
+        404
+    );
+}
+
+private function ensureContactBelongsToCustomer(
+    CustomerContact $contact,
+    Customer $customer
+): void {
+    abort_unless($contact->customer_id === $customer->id, 404);
 }
 }

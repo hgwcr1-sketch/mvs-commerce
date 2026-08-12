@@ -13,6 +13,8 @@ class CustomerAddressController extends Controller
      */
     public function store(Request $request, Customer $cliente)
     {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'country_id' => 'nullable|exists:countries,id',
@@ -44,9 +46,8 @@ class CustomerAddressController extends Controller
      */
     public function setPrimary(Customer $cliente, CustomerAddress $direccion)
     {
-        if ($direccion->customer_id !== $cliente->id) {
-            abort(404);
-        }
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $this->ensureAddressBelongsToCustomer($direccion, $cliente);
 
         CustomerAddress::where('customer_id', $cliente->id)
             ->update(['is_primary' => false]);
@@ -65,14 +66,28 @@ class CustomerAddressController extends Controller
      */
     public function destroy(Customer $cliente, CustomerAddress $direccion)
     {
-        if ($direccion->customer_id !== $cliente->id) {
-            abort(404);
-        }
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $this->ensureAddressBelongsToCustomer($direccion, $cliente);
 
         $direccion->delete();
 
         return redirect()
             ->route('clientes.show', ['cliente' => $cliente->id])
             ->with('success', 'Dirección eliminada correctamente.');
+    }
+
+    private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
+    {
+        abort_unless(
+            (int) $customer->company_id === (int) session('active_company_id'),
+            404
+        );
+    }
+
+    private function ensureAddressBelongsToCustomer(
+        CustomerAddress $address,
+        Customer $customer
+    ): void {
+        abort_unless($address->customer_id === $customer->id, 404);
     }
 }

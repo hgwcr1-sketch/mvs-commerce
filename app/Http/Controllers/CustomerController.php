@@ -18,11 +18,12 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
+        $companyId = $this->activeCompanyId();
         $search = $request->search;
         $status = $request->status;
 $type = $request->type;
 
-        $customers = Customer::query()
+        $customers = Customer::forCompany($companyId)
 
             ->when($search, function ($query) use ($search) {
 
@@ -56,13 +57,13 @@ $type = $request->type;
 
         $stats = [
 
-            'total' => Customer::count(),
+            'total' => Customer::forCompany($companyId)->count(),
 
-            'active' => Customer::where('is_active', true)->count(),
+            'active' => Customer::forCompany($companyId)->where('is_active', true)->count(),
 
-            'companies' => Customer::where('customer_type', 'company')->count(),
+            'companies' => Customer::forCompany($companyId)->where('customer_type', 'company')->count(),
 
-            'individuals' => Customer::where('customer_type', 'individual')->count(),
+            'individuals' => Customer::forCompany($companyId)->where('customer_type', 'individual')->count(),
 
         ];
 
@@ -112,6 +113,7 @@ $type = $request->type;
 
     $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
     $data['is_active'] = $request->boolean('is_active');
+    $data['company_id'] = $this->activeCompanyId();
 
     Customer::create($data);
 
@@ -124,8 +126,10 @@ $type = $request->type;
      * Mostrar cliente.
      */
 
-    public function show(Customer $cliente)
+public function show(Customer $cliente)
 {
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+
     $cliente->load([
         'country',
         'province',
@@ -163,8 +167,10 @@ $type = $request->type;
     /**
      * Mostrar formulario de edición.
      */
-    public function edit(Customer $cliente)
+public function edit(Customer $cliente)
 {
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+
     return view('clientes.edit', [
 
         'customer' => $cliente,
@@ -193,6 +199,8 @@ $type = $request->type;
      */
    public function update(UpdateCustomerRequest $request, Customer $cliente)
 {
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+
     $data = $request->validated();
 
     $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
@@ -210,6 +218,8 @@ $type = $request->type;
      */
 public function toggleStatus(Customer $cliente)
 {
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+
     $cliente->update([
         'is_active' => !$cliente->is_active
     ]);
@@ -221,6 +231,8 @@ public function toggleStatus(Customer $cliente)
 
     public function destroy(Customer $cliente)
 {
+    $this->ensureCustomerBelongsToActiveCompany($cliente);
+
     $cliente->delete();
 
     return redirect()
@@ -279,7 +291,7 @@ public function search(Request $request)
         return response()->json([]);
     }
 
-    $customers = Customer::query()
+    $customers = Customer::forCompany($this->activeCompanyId())
         ->where(function ($query) use ($search) {
             $query->where('name', 'like', "%{$search}%")
                 ->orWhere('identification', 'like', "%{$search}%")
@@ -299,5 +311,22 @@ public function search(Request $request)
         ]);
 
     return response()->json($customers);
+}
+
+private function activeCompanyId(): int
+{
+    $companyId = session('active_company_id');
+
+    abort_unless($companyId, 403, 'No hay una empresa activa.');
+
+    return (int) $companyId;
+}
+
+private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
+{
+    abort_unless(
+        (int) $customer->company_id === $this->activeCompanyId(),
+        404
+    );
 }
 }

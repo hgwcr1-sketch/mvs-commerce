@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCustomerRequest extends FormRequest
 {
@@ -25,7 +26,13 @@ class StoreCustomerRequest extends FormRequest
 
             'identification_type' => 'nullable|in:01,02,03,04,05',
 
-            'identification' => 'nullable|string|max:50|unique:customers,identification',
+            'identification' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('customers', 'identification')
+                    ->where('company_id', session('active_company_id')),
+            ],
 
             'name' => 'required|string|max:150',
 
