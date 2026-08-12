@@ -9,41 +9,11 @@ use App\Models\Role;
 use App\Models\Branch;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
-
-public static function middleware(): array
-{
-    return [
-        'permission:usuarios.ver' => [
-            'only' => [
-                'index',
-                'show',
-            ],
-        ],
-
-        'permission:usuarios.crear' => [
-            'only' => [
-                'create',
-                'store',
-            ],
-        ],
-
-        'permission:usuarios.editar' => [
-            'only' => [
-                'edit',
-                'update',
-            ],
-        ],
-
-        'permission:usuarios.desactivar' => [
-            'only' => [
-                'destroy',
-            ],
-        ],
-    ];
-}
 
     /**
      * Mostrar listado de usuarios.
@@ -301,6 +271,12 @@ public function update(UpdateUserRequest $request, User $usuario)
 
     $data = $request->validated();
 
+    $belongsToMultipleCompanies = $usuario->companies()->count() > 1;
+
+    if ($belongsToMultipleCompanies) {
+        $this->ensureGlobalUserDataIsUnchanged($request, $usuario);
+    }
+
     $branchIds = $data['branches'];
 
     unset($data['branches']);
@@ -312,6 +288,27 @@ public function update(UpdateUserRequest $request, User $usuario)
     $roleId = $role->id;
 
     unset($data['role_id']);
+
+    $currentRole = $usuario->roleInCompany(
+        \App\Models\Company::findOrFail($companyId)
+    );
+
+    if (
+        $currentRole?->name === 'Administrador'
+        && (
+            $role->id !== $currentRole->id
+            || ! $request->boolean('is_active')
+        )
+        && $this->activeAdministratorCount($companyId) <= 1
+    ) {
+        throw ValidationException::withMessages([
+            'role_id' => 'No puede dejar sin acceso al último Administrador activo de la empresa.',
+        ]);
+    }
+
+    if ($belongsToMultipleCompanies) {
+        $data = [];
+    }
 
     if ($request->hasFile('photo')) {
 
@@ -328,23 +325,28 @@ public function update(UpdateUserRequest $request, User $usuario)
         unset($data['password']);
     }
 
-    $usuario->update($data);
-
-    $usuario->companies()->updateExistingPivot(
+    DB::transaction(function () use (
+        $usuario,
+        $data,
         $companyId,
-        [
-            'role_id' => $roleId,
-        ]
-    );
+        $roleId,
+        $branchIds,
+    ) {
+        if ($data !== []) {
+            $usuario->update($data);
+        }
 
-    $companyBranchIds = Branch::where('company_id', $companyId)
-        ->pluck('id');
+        $usuario->companies()->updateExistingPivot(
+            $companyId,
+            ['role_id' => $roleId]
+        );
 
-    $usuario->branches()
-        ->detach($companyBranchIds);
+        $companyBranchIds = Branch::where('company_id', $companyId)
+            ->pluck('id');
 
-    $usuario->branches()
-        ->attach($branchIds);
+        $usuario->branches()->detach($companyBranchIds);
+        $usuario->branches()->attach($branchIds);
+    });
 
     return redirect()
         ->route('usuarios.index')
@@ -383,6 +385,22 @@ public function update(UpdateUserRequest $request, User $usuario)
             );
     }
 
+    $role = $usuario->roleInCompany(
+        \App\Models\Company::findOrFail($companyId)
+    );
+
+    if (
+        $role?->name === 'Administrador'
+        && $this->activeAdministratorCount($companyId) <= 1
+    ) {
+        return redirect()
+            ->route('usuarios.index')
+            ->with(
+                'error',
+                'No puede retirar al último Administrador activo de la empresa.'
+            );
+    }
+
     /**
      * Quitar solamente la relación con la empresa activa.
      *
@@ -390,7 +408,13 @@ public function update(UpdateUserRequest $request, User $usuario)
      * porque el mismo usuario podría pertenecer
      * a otras empresas.
      */
-    $usuario->companies()->detach($companyId);
+    DB::transaction(function () use ($usuario, $companyId) {
+        $companyBranchIds = Branch::where('company_id', $companyId)
+            ->pluck('id');
+
+        $usuario->branches()->detach($companyBranchIds);
+        $usuario->companies()->detach($companyId);
+    });
 
     return redirect()
         ->route('usuarios.index')
@@ -398,6 +422,38 @@ public function update(UpdateUserRequest $request, User $usuario)
             'success',
             'Usuario eliminado de la empresa correctamente.'
         );
+}
+
+private function ensureGlobalUserDataIsUnchanged(
+    UpdateUserRequest $request,
+    User $user
+): void {
+    $changed = collect(['name', 'email', 'phone', 'is_active'])
+        ->contains(function (string $field) use ($request, $user) {
+            return (string) $request->input($field) !== (string) $user->{$field};
+        });
+
+    if (
+        $changed
+        || $request->filled('password')
+        || $request->hasFile('photo')
+    ) {
+        throw ValidationException::withMessages([
+            'user' => 'Los datos globales de un usuario multiempresa no pueden modificarse desde una empresa individual.',
+        ]);
+    }
+}
+
+private function activeAdministratorCount(int $companyId): int
+{
+    return User::query()
+        ->where('users.is_active', true)
+        ->whereHas('roles', function ($query) use ($companyId) {
+            $query->where('roles.company_id', $companyId)
+                ->where('roles.name', 'Administrador')
+                ->where('roles.is_active', true);
+        })
+        ->count();
 }
 
 }

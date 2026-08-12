@@ -58,7 +58,11 @@ class UpdateUserRequest extends FormRequest
             'role_id' => [
                 'required',
                 'integer',
-                'exists:roles,id',
+                Rule::exists('roles', 'id')->where(
+                    fn ($query) => $query
+                        ->where('company_id', session('active_company_id'))
+                        ->where('is_active', true)
+                ),
             ],
 
             'branches' => [
@@ -69,7 +73,11 @@ class UpdateUserRequest extends FormRequest
 
             'branches.*' => [
                 'integer',
-                'exists:branches,id',
+                Rule::exists('branches', 'id')->where(
+                    fn ($query) => $query
+                        ->where('company_id', session('active_company_id'))
+                        ->where('is_active', true)
+                ),
             ],
         ];
     }

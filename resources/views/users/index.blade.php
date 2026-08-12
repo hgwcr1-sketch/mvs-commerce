@@ -203,7 +203,7 @@
         @endcan
 
 
-        @can('usuarios.desactivar')
+        @can('usuarios.eliminar')
 
         <form
             action="{{ route('usuarios.destroy', $user) }}"
