@@ -53,6 +53,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -416,6 +417,19 @@ Route::resource('sucursales', BranchController::class)
 Route::resource('empresa', CompanyController::class);
 
 Route::resource('configuracion', SettingController::class);
+
+Route::prefix('configuracion/pos/formas-pago')
+    ->name('settings.pos.payment-methods.')
+    ->middleware('permission:formas_pago.administrar')
+    ->group(function () {
+        Route::get('/', [PaymentMethodController::class, 'index'])->name('index');
+        Route::get('/crear', [PaymentMethodController::class, 'create'])->name('create');
+        Route::post('/', [PaymentMethodController::class, 'store'])->name('store');
+        Route::get('/{payment_method}/editar', [PaymentMethodController::class, 'edit'])->name('edit');
+        Route::put('/{payment_method}', [PaymentMethodController::class, 'update'])->name('update');
+        Route::patch('/{payment_method}/estado', [PaymentMethodController::class, 'toggleStatus'])->name('toggle-status');
+        Route::delete('/{payment_method}', [PaymentMethodController::class, 'destroy'])->name('destroy');
+    });
 
 Route::resource('agenda', AgendaController::class);
 
