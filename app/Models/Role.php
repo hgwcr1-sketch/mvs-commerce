@@ -48,6 +48,7 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class, 'company_user')
             ->withPivot('company_id')
+            ->wherePivot('company_id', $this->company_id)
             ->withTimestamps();
     }
 }

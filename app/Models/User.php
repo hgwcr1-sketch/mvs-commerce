@@ -121,7 +121,8 @@ class User extends Authenticatable
             return null;
         }
 
-        return Role::find($companyAccess->pivot->role_id);
+        return Role::where('company_id', $company->id)
+            ->find($companyAccess->pivot->role_id);
     }
 
     public function hasPermission(string $permission, Company $company): bool

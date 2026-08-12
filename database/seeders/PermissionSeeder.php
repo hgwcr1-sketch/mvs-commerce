@@ -109,6 +109,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'usuarios.crear', 'label' => 'Crear usuarios', 'module' => 'Usuarios'],
             ['name' => 'usuarios.editar', 'label' => 'Editar usuarios', 'module' => 'Usuarios'],
             ['name' => 'usuarios.desactivar', 'label' => 'Activar o desactivar usuarios', 'module' => 'Usuarios'],
+            ['name' => 'usuarios.eliminar', 'label' => 'Retirar usuarios de la empresa', 'module' => 'Usuarios'],
 
             // Roles y permisos
             ['name' => 'roles.ver', 'label' => 'Ver roles', 'module' => 'Roles y Permisos'],
@@ -148,5 +149,19 @@ class PermissionSeeder extends Seeder
                 ]
             );
         }
+
+        $administratorPermissionIds = Permission::query()
+            ->where('is_active', true)
+            ->pluck('id')
+            ->all();
+
+        \App\Models\Role::query()
+            ->where('name', 'Administrador')
+            ->where('is_active', true)
+            ->each(function (\App\Models\Role $role) use ($administratorPermissionIds) {
+                $role->permissions()->syncWithoutDetaching(
+                    $administratorPermissionIds
+                );
+            });
     }
 }

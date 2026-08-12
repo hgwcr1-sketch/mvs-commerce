@@ -390,9 +390,24 @@ Route::resource('cuentas-por-pagar', AccountsPayableController::class);
 */
 
 Route::resource('usuarios', UserController::class)
-    ->middleware('permission:usuarios.ver');
-    
-Route::resource('roles', RoleController::class);
+    ->middlewareFor(['index', 'show'], 'permission:usuarios.ver')
+    ->middlewareFor(['create', 'store'], 'permission:usuarios.crear')
+    ->middlewareFor(['edit', 'update'], 'permission:usuarios.editar')
+    ->middlewareFor(['destroy'], 'permission:usuarios.eliminar');
+
+Route::resource('roles', RoleController::class)
+    ->middlewareFor(['index', 'show'], 'permission:roles.ver')
+    ->middlewareFor(['create'], 'permission:roles.crear')
+    ->middlewareFor(['store'], [
+        'permission:roles.crear',
+        'permission:roles.permisos',
+    ])
+    ->middlewareFor(['edit'], 'permission:roles.editar')
+    ->middlewareFor(['update'], [
+        'permission:roles.editar',
+        'permission:roles.permisos',
+    ])
+    ->middlewareFor(['destroy'], 'permission:roles.eliminar');
 
 Route::resource('sucursales', BranchController::class)
     ->parameters(['sucursales' => 'branch'])

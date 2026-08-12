@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 use App\Models\Role; use App\Models\Permission;
+use App\Models\User;
 
 use Illuminate\Http\Request;
 
@@ -216,7 +217,11 @@ public function edit(string $id)
     $role->update([
         'name' => $validated['name'],
         'description' => $validated['description'] ?? null,
-        'is_active' => $request->boolean('is_active'),
+        'is_active' => $this->safeRoleStatus(
+            $role,
+            $validated['name'],
+            $request->boolean('is_active')
+        ),
     ]);
 
     $role->permissions()->sync(
@@ -258,5 +263,31 @@ public function destroy(string $id)
     return redirect()
         ->route('roles.index')
         ->with('success', 'Rol eliminado correctamente.');
+}
+
+private function safeRoleStatus(
+    Role $role,
+    string $requestedName,
+    bool $requestedStatus
+): bool
+{
+    if (
+        $role->name === 'Administrador'
+        && (
+            $requestedName !== 'Administrador'
+            || ! $requestedStatus
+        )
+        && User::query()
+            ->where('users.is_active', true)
+            ->whereHas('roles', function ($query) use ($role) {
+                $query->where('roles.id', $role->id)
+                    ->where('roles.company_id', $role->company_id);
+            })
+            ->exists()
+    ) {
+        abort(422, 'No puede renombrar ni desactivar el rol Administrador mientras tenga usuarios activos.');
+    }
+
+    return $requestedStatus;
 }
 }
