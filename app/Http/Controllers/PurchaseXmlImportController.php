@@ -27,7 +27,7 @@ class PurchaseXmlImportController extends Controller
             'file' => [
                 'required',
                 'file',
-                'mimes:xml'
+                'extensions:xml'
             ]
 
         ]);

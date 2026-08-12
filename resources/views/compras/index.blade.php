@@ -10,96 +10,105 @@
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-    <div>
-        <h2 class="text-xl font-semibold text-slate-800">
-            Compras
-        </h2>
+        <div>
+            <h2 class="text-xl font-semibold text-slate-800">
+                Compras
+            </h2>
 
-        <p class="text-sm text-slate-500">
-            Consulte y registre las compras de la sucursal activa.
-        </p>
+            <p class="text-sm text-slate-500">
+                Consulte y registre las compras de la sucursal activa.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4">
+
+            <a
+                href="{{ route('dashboard') }}"
+                class="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-100">
+                Volver
+            </a>
+
+            <a
+                href="{{ route('compras.create') }}"
+                class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-white hover:bg-amber-600">
+                + Nueva Compra
+            </a>
+
+            <a
+                href="{{ route('compras.import.template') }}"
+                class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                ↓ Descargar plantilla
+            </a>
+
+            <form
+                action="{{ route('compras.import.excel') }}"
+                method="POST"
+                enctype="multipart/form-data">
+
+                @csrf
+
+                <input
+                    type="file"
+                    name="file"
+                    id="archivoExcel"
+                    accept=".xlsx,.xls"
+                    class="hidden"
+                    onchange="if (this.files.length > 0) this.form.submit()">
+
+                <label
+                    for="archivoExcel"
+                    class="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700">
+                    Importar Excel
+                </label>
+
+            </form>
+
+            <form
+                action="{{ route('compras.import.xml') }}"
+                method="POST"
+                enctype="multipart/form-data">
+
+                @csrf
+
+                <input
+                    type="file"
+                    name="file"
+                    id="archivoXml"
+                    accept=".xml,text/xml,application/xml"
+                    class="hidden"
+                    onchange="if (this.files.length > 0) this.form.submit()">
+
+                <label
+                    for="archivoXml"
+                    class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                    Importar XML
+                </label>
+
+            </form>
+
+        </div>
+
     </div>
 
+    @if(session('success'))
+        <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+            {{ session('success') }}
+        </div>
+    @endif
 
-    <div class="flex flex-wrap items-center gap-4">
+    @if(session('error'))
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+            {{ session('error') }}
+        </div>
+    @endif
 
-        <a
-            href="{{ route('dashboard') }}"
-            class="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-100">
-            Volver
-        </a>
+    @error('file')
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+            {{ $message }}
+        </div>
+    @enderror
 
-
-        <a
-            href="{{ route('compras.create') }}"
-            class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-white hover:bg-amber-600">
-            + Nueva Compra
-        </a>
-
-        <a
-            href="{{ route('compras.import.template') }}"
-            class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
-            ↓ Descargar plantilla
-        </a>
-
-
-        <form action="{{ route('compras.import.excel') }}"
-              method="POST"
-              enctype="multipart/form-data">
-
-            @csrf
-
-            <input
-                type="file"
-                name="file"
-                id="archivoExcel"
-                accept=".xlsx,.xls"
-                class="hidden"
-                onchange="this.form.submit()">
-
-            <label
-                for="archivoExcel"
-                class="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700">
-                Importar Excel
-            </label>
-
-        </form>
-
-
-        <form action="{{ route('compras.import.xml') }}"
-              method="POST"
-              enctype="multipart/form-data">
-
-            @csrf
-
-            <input
-                type="file"
-                name="file"
-                id="archivoXml"
-                accept=".xml"
-                class="hidden"
-                onchange="this.form.submit()">
-
-            <label
-                for="archivoXml"
-                class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
-                Importar XML
-            </label>
-
-        </form>
-
-
-    </div>
-
-</div>
-
-        @if(session('success'))
-            <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        <x-card>
+    <x-card>
 
         @if($purchases->count())
 
@@ -134,9 +143,8 @@
                             </th>
 
                             <th class="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-600">
-    Acciones
-</th>
-
+                                Acciones
+                            </th>
                         </tr>
                     </thead>
 
@@ -168,51 +176,52 @@
 
                                 <td class="px-4 py-3 text-center text-sm">
 
-    @if($purchase->status === 'posted')
+                                    @if($purchase->status === 'posted')
 
-        <span class="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-            Registrada
-        </span>
+                                        <span class="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                            Registrada
+                                        </span>
 
-    @elseif($purchase->status === 'cancelled')
+                                    @elseif($purchase->status === 'cancelled')
 
-        <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-            Anulada
-        </span>
+                                        <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                            Anulada
+                                        </span>
 
-    @else
+                                    @else
 
-        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-            {{ ucfirst($purchase->status) }}
-        </span>
+                                        <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                            {{ ucfirst($purchase->status) }}
+                                        </span>
 
-    @endif
+                                    @endif
 
-</td>
+                                </td>
 
-<td class="px-4 py-3 text-center">
+                                <td class="px-4 py-3 text-center">
 
-    <div class="flex justify-center gap-2">
+                                    <div class="flex justify-center gap-2">
 
-    <a
-        href="{{ route('compras.show', $purchase->id) }}"
-        class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100">
-        Ver
-    </a>
+                                        <a
+                                            href="{{ route('compras.show', $purchase->id) }}"
+                                            class="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100">
+                                            Ver
+                                        </a>
 
-    @if($purchase->status === 'posted')
+                                        @if($purchase->status === 'posted')
 
-        <a
-            href="{{ route('compras.edit', $purchase->id) }}"
-            class="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600">
-            Editar
-        </a>
+                                            <a
+                                                href="{{ route('compras.edit', $purchase->id) }}"
+                                                class="rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600">
+                                                Editar
+                                            </a>
 
-    @endif
+                                        @endif
 
-</div>
+                                    </div>
 
-</td>
+                                </td>
+
                             </tr>
 
                         @endforeach

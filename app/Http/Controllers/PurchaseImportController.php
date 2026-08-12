@@ -283,7 +283,9 @@ class PurchaseImportController extends Controller
                 'brand_id' => $brandId,
                 'unit_id' => $unitId,
                 'name' => trim($request->name),
-                'internal_code' => trim($request->code),
+                'internal_code' => $this->uniqueProductCode(
+    trim($request->code),
+),
                 'cost' => (float) $request->cost,
                 'is_active' => true,
             ];
@@ -329,6 +331,29 @@ class PurchaseImportController extends Controller
             ->with('success', 'Producto creado correctamente.');
     }
 
+    private function uniqueProductCode(string $code): string
+{
+    $baseCode = mb_substr(trim($code), 0, 50);
+    $candidate = $baseCode;
+    $suffix = 2;
+
+    while (
+        Product::withTrashed()
+            ->where('internal_code', $candidate)
+            ->exists()
+    ) {
+        $suffixText = '-' . $suffix;
+        $candidate = mb_substr(
+            $baseCode,
+            0,
+            50 - mb_strlen($suffixText),
+        ) . $suffixText;
+
+        $suffix++;
+    }
+
+    return $candidate;
+}
     private function resolveImportCategoryId(?string $path, int $companyId): int
     {
         if (!$this->hasValue($path)) {
