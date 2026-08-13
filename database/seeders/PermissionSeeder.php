@@ -17,6 +17,9 @@ class PermissionSeeder extends Seeder
             // Dashboard
             ['name' => 'dashboard.ver', 'label' => 'Ver dashboard', 'module' => 'Dashboard'],
 
+            // POS
+            ['name' => 'pos.acceder', 'label' => 'Acceder al POS', 'module' => 'POS'],
+
             // Clientes
             ['name' => 'clientes.ver', 'label' => 'Ver clientes', 'module' => 'Clientes'],
             ['name' => 'clientes.crear', 'label' => 'Crear clientes', 'module' => 'Clientes'],
@@ -54,6 +57,7 @@ class PermissionSeeder extends Seeder
 
             // Inventario
             ['name' => 'inventario.ver', 'label' => 'Ver inventario', 'module' => 'Inventario'],
+            ['name' => 'inventario.ver_otras_sucursales', 'label' => 'Ver inventario de otras sucursales', 'module' => 'Inventario'],
             ['name' => 'inventario.ajustar', 'label' => 'Realizar ajustes de inventario', 'module' => 'Inventario'],
             ['name' => 'inventario.kardex', 'label' => 'Ver Kardex', 'module' => 'Inventario'],
             ['name' => 'inventario.transferir', 'label' => 'Realizar transferencias', 'module' => 'Inventario'],

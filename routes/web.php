@@ -13,6 +13,7 @@ use App\Http\Controllers\ActiveBranchController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\BranchController;
 
 // Catálogos
@@ -106,6 +107,12 @@ Route::redirect('/', '/dashboard');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->name('dashboard');
+
+Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
+    Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
+    Route::get('/pos/productos/buscar', [PosController::class, 'searchProducts'])
+        ->name('pos.products.search');
+});
 
 /*
 |--------------------------------------------------------------------------

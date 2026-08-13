@@ -1,0 +1,183 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Branch;
+use App\Models\Company;
+use App\Models\PaymentMethod;
+use App\Models\Product;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
+
+class PosController extends Controller
+{
+    public function index(Request $request): View
+    {
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
+
+        $company = Company::query()->findOrFail($companyId);
+        $branch = Branch::query()
+            ->where('company_id', $companyId)
+            ->findOrFail($branchId);
+        $paymentMethods = PaymentMethod::forCompany($companyId)
+            ->active()
+            ->ordered()
+            ->get(['id', 'code', 'name', 'type']);
+
+        return view('pos.index', [
+            'company' => $company,
+            'branch' => $branch,
+            'cashier' => $request->user(),
+            'paymentMethods' => $paymentMethods,
+        ]);
+    }
+
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        $search = mb_substr($search, 0, 100);
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
+        $like = '%'.$search.'%';
+        $canViewOtherBranches = $request->user()->hasPermission(
+            'inventario.ver_otras_sucursales',
+            Company::query()->findOrFail($companyId),
+        );
+
+        $products = Product::query()
+            ->where('products.company_id', $companyId)
+            ->where('products.is_active', true)
+            ->where(function ($query) use ($like) {
+                $query->where('products.name', 'like', $like)
+                    ->orWhere('products.internal_code', 'like', $like)
+                    ->orWhere('products.barcode', 'like', $like)
+                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($like) {
+                        $barcodeQuery
+                            ->where('is_active', true)
+                            ->where('barcode', 'like', $like);
+                    });
+            })
+            ->with(['barcodes' => function ($query) use ($like) {
+                $query
+                    ->where('is_active', true)
+                    ->where('barcode', 'like', $like)
+                    ->select(['id', 'product_id', 'barcode']);
+            }])
+            ->select([
+                'products.id',
+                'products.name',
+                'products.internal_code',
+                'products.barcode',
+                'products.image',
+                'products.sale_price',
+                'products.tax_rate',
+                'products.track_inventory',
+            ])
+            ->addSelect([
+                'available_stock' => DB::table('branch_product')
+                    ->select('stock')
+                    ->whereColumn('branch_product.product_id', 'products.id')
+                    ->where('branch_product.branch_id', $branchId)
+                    ->limit(1),
+            ])
+            ->orderByRaw(
+                'CASE WHEN products.track_inventory = ? OR COALESCE((SELECT branch_product.stock FROM branch_product WHERE branch_product.product_id = products.id AND branch_product.branch_id = ? LIMIT 1), 0) > 0 THEN 0 ELSE 1 END',
+                [false, $branchId],
+            )
+            ->orderByRaw(
+                'CASE WHEN products.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes WHERE product_barcodes.product_id = products.id AND product_barcodes.is_active = ? AND product_barcodes.barcode = ?) THEN 0 ELSE 1 END',
+                [$search, true, $search],
+            )
+            ->orderBy('products.name')
+            ->limit(10)
+            ->get();
+
+        $otherBranchStock = collect();
+
+        if ($canViewOtherBranches && $products->isNotEmpty()) {
+            $otherBranchStock = DB::table('branch_product')
+                ->join('branches', 'branches.id', '=', 'branch_product.branch_id')
+                ->whereIn('branch_product.product_id', $products->pluck('id'))
+                ->where('branches.company_id', $companyId)
+                ->where('branches.is_active', true)
+                ->where('branches.id', '!=', $branchId)
+                ->where('branch_product.stock', '>', 0)
+                ->orderBy('branches.name')
+                ->get([
+                    'branch_product.product_id',
+                    'branches.id as branch_id',
+                    'branches.name as branch_name',
+                    'branch_product.stock as available_stock',
+                ])
+                ->groupBy('product_id');
+        }
+
+        return response()->json($products->map(function (Product $product) use (
+            $search,
+            $canViewOtherBranches,
+            $otherBranchStock,
+        ) {
+            $matchedBarcode = null;
+
+            if ($product->barcode !== null && str_contains(mb_strtolower($product->barcode), mb_strtolower($search))) {
+                $matchedBarcode = $product->barcode;
+            } elseif ($product->barcodes->isNotEmpty()) {
+                $matchedBarcode = $product->barcodes->first()->barcode;
+            }
+
+            $availableStock = (float) ($product->available_stock ?? 0);
+            $imagePath = $this->safeProductImagePath($product->image);
+            $hasImage = $imagePath !== null && Storage::disk('public')->exists($imagePath);
+            $result = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'matched_barcode' => $matchedBarcode,
+                'sale_price' => (float) $product->sale_price,
+                'tax_rate' => (float) ($product->tax_rate ?? 0),
+                'controls_inventory' => (bool) $product->track_inventory,
+                'available_stock' => $availableStock,
+                'can_add_to_cart' => !$product->track_inventory || $availableStock > 0,
+                'has_image' => $hasImage,
+                'image_url' => $hasImage ? Storage::disk('public')->url($imagePath) : null,
+            ];
+
+            if ($canViewOtherBranches) {
+                $result['other_branch_stock'] = collect($otherBranchStock->get($product->id, []))
+                    ->map(fn ($stock) => [
+                        'branch_id' => (int) $stock->branch_id,
+                        'branch_name' => $stock->branch_name,
+                        'available_stock' => (float) $stock->available_stock,
+                    ])
+                    ->values()
+                    ->all();
+            }
+
+            return $result;
+        })->values());
+    }
+
+    private function safeProductImagePath(?string $image): ?string
+    {
+        if ($image === null) {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', trim($image));
+
+        if ($path === '' || !str_starts_with($path, 'products/') || str_contains($path, '..')) {
+            return null;
+        }
+
+        return $path;
+    }
+}

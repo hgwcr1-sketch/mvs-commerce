@@ -48,6 +48,15 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
 @endif
 
+    {{-- POS --}}
+    @can('pos.acceder')
+        <x-navigation.item
+            route="pos.index"
+            icon="tag"
+            label="POS"
+            :active="request()->routeIs('pos.*')" />
+    @endcan
+
     {{-- USUARIOS --}}
     @can('usuarios.ver')
 
