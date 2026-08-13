@@ -56,6 +56,7 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\CashRegisterController;
+use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -441,6 +442,14 @@ Route::resource('sucursales', BranchController::class)
     ->names('branches');
 
 Route::resource('empresa', CompanyController::class);
+
+Route::prefix('configuracion/caja')
+    ->name('settings.cash.')
+    ->middleware('permission:caja.administrar')
+    ->group(function () {
+        Route::get('/', [CompanyCashSettingController::class, 'edit'])->name('edit');
+        Route::match(['put', 'patch'], '/', [CompanyCashSettingController::class, 'update'])->name('update');
+    });
 
 Route::resource('configuracion', SettingController::class);
 

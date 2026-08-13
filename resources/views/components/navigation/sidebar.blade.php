@@ -248,11 +248,12 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
         <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="transition">▼</span>
     </button>
     <div x-cloak x-show="open" x-transition class="mt-2 space-y-1 pl-5">
+        @can('caja.administrar')
+            <a href="{{ route('settings.cash.edit') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash.edit', 'settings.cash.update') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración de Caja</a>
+            <a href="{{ route('settings.cash-registers.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash-registers.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Cajas</a>
+        @endcan
         @can('formas_pago.administrar')
             <a href="{{ route('settings.pos.payment-methods.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.pos.payment-methods.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Formas de pago</a>
-        @endcan
-        @can('caja.administrar')
-            <a href="{{ route('settings.cash-registers.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash-registers.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Cajas</a>
         @endcan
     </div>
 </div>
