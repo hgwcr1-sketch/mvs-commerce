@@ -144,9 +144,56 @@
         </div>
 
         <aside class="space-y-5">
-            <section class="rounded-2xl bg-white p-5 shadow-sm">
-                <p class="text-xs font-semibold uppercase text-slate-500">Cliente</p>
-                <p class="mt-1 text-lg font-bold text-slate-800">Consumidor Final</p>
+            <section class="relative rounded-2xl bg-white p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-slate-500">Cliente</p>
+                        <p class="mt-1 text-lg font-bold text-slate-800" x-text="selectedCustomer ? selectedCustomer.name : 'Consumidor Final'"></p>
+                        <p x-show="selectedCustomer" class="text-sm text-slate-500">
+                            Identificación: <span x-text="selectedCustomer?.identification || '—'"></span>
+                        </p>
+                    </div>
+                    <button x-show="selectedCustomer" type="button" @click="clearCustomer"
+                            class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                        Quitar cliente
+                    </button>
+                </div>
+
+                <input type="hidden" name="customer_id" :value="customerId ?? ''">
+
+                <div class="mt-4">
+                    <label for="pos-customer-search" class="mb-2 block text-sm font-semibold text-slate-700">Buscar cliente</label>
+                    <input id="pos-customer-search"
+                           x-ref="customerSearchInput"
+                           x-model="customerQuery"
+                           @input.debounce.180ms="searchCustomers"
+                           @keydown.down.prevent="moveCustomerSelection(1)"
+                           @keydown.up.prevent="moveCustomerSelection(-1)"
+                           @keydown.enter.prevent="selectMarkedCustomer"
+                           @keydown.escape="closeCustomerResults"
+                           type="search"
+                           autocomplete="off"
+                           placeholder="Nombre, identificación, teléfono o correo…"
+                           class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0">
+                </div>
+
+                <div x-show="customerResultsOpen"
+                     class="absolute left-5 right-5 z-40 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+                    <template x-for="(customer, index) in customerResults" :key="customer.id">
+                        <button type="button"
+                                @click="selectCustomer(customer)"
+                                @mouseenter="customerSelectedIndex = index"
+                                :class="customerSelectedIndex === index ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : 'hover:bg-slate-50'"
+                                class="block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0">
+                            <p class="font-semibold text-slate-800" x-text="customer.name"></p>
+                            <p class="text-xs text-slate-500">
+                                <span x-text="customer.identification || 'Sin identificación'"></span>
+                                <span x-show="customer.phone || customer.mobile"> · <span x-text="customer.phone || customer.mobile"></span></span>
+                            </p>
+                        </button>
+                    </template>
+                    <p x-show="!customerLoading && customerResults.length === 0" class="px-4 py-5 text-center text-sm text-slate-500">No se encontraron clientes activos.</p>
+                </div>
             </section>
 
             <section class="rounded-2xl bg-white p-5 shadow-sm">
@@ -215,6 +262,13 @@ document.addEventListener('alpine:init', () => {
         requestNumber: 0,
         notice: '',
         imageModal: { open: false, url: null, name: '' },
+        customerId: null,
+        selectedCustomer: null,
+        customerQuery: '',
+        customerResults: [],
+        customerSelectedIndex: 0,
+        customerLoading: false,
+        customerRequestNumber: 0,
 
         get resultsOpen() {
             return this.query.trim().length > 0 && (this.loading || this.results.length >= 0);
@@ -227,6 +281,9 @@ document.addEventListener('alpine:init', () => {
         },
         get grandTotal() {
             return this.subtotal + this.taxTotal;
+        },
+        get customerResultsOpen() {
+            return this.customerQuery.trim().length > 0;
         },
         async searchProducts() {
             const term = this.query.trim();
@@ -307,6 +364,54 @@ document.addEventListener('alpine:init', () => {
             this.imageModal = { open: true, url: product.image_url, name: product.name };
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
+        async searchCustomers() {
+            const term = this.customerQuery.trim();
+            const currentRequest = ++this.customerRequestNumber;
+            if (!term) {
+                this.customerResults = [];
+                this.customerLoading = false;
+                return;
+            }
+            this.customerLoading = true;
+            try {
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.customers.search')) }}, window.location.origin);
+                url.searchParams.set('q', term);
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                if (!response.ok) throw new Error('No fue posible buscar clientes.');
+                const customers = await response.json();
+                if (currentRequest !== this.customerRequestNumber) return;
+                this.customerResults = customers;
+                this.customerSelectedIndex = 0;
+            } catch (error) {
+                if (currentRequest === this.customerRequestNumber) this.customerResults = [];
+            } finally {
+                if (currentRequest === this.customerRequestNumber) this.customerLoading = false;
+            }
+        },
+        moveCustomerSelection(direction) {
+            if (!this.customerResults.length) return;
+            this.customerSelectedIndex = (this.customerSelectedIndex + direction + this.customerResults.length) % this.customerResults.length;
+        },
+        selectMarkedCustomer() {
+            if (this.customerResults[this.customerSelectedIndex]) this.selectCustomer(this.customerResults[this.customerSelectedIndex]);
+        },
+        selectCustomer(customer) {
+            this.customerId = customer.id;
+            this.selectedCustomer = customer;
+            this.closeCustomerResults();
+        },
+        clearCustomer() {
+            this.customerId = null;
+            this.selectedCustomer = null;
+            this.closeCustomerResults();
+            this.$nextTick(() => this.$refs.customerSearchInput.focus());
+        },
+        closeCustomerResults() {
+            this.customerQuery = '';
+            this.customerResults = [];
+            this.customerSelectedIndex = 0;
+            this.customerRequestNumber += 1;
+        },
     }));
 });
 </script>

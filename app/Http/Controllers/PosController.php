@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
@@ -164,6 +165,54 @@ class PosController extends Controller
 
             return $result;
         })->values());
+    }
+
+    public function searchCustomers(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        $search = mb_substr($search, 0, 100);
+        $like = '%'.$search.'%';
+
+        $customers = Customer::forCompany((int) session('active_company_id'))
+            ->where('is_active', true)
+            ->where(function ($query) use ($like) {
+                $query->where('name', 'like', $like)
+                    ->orWhere('identification', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('mobile', 'like', $like)
+                    ->orWhere('email', 'like', $like);
+            })
+            ->orderByRaw('CASE WHEN identification = ? THEN 0 ELSE 1 END', [$search])
+            ->orderBy('name')
+            ->limit(10)
+            ->get([
+                'id',
+                'name',
+                'identification',
+                'phone',
+                'mobile',
+                'email',
+                'customer_type',
+                'credit_limit',
+                'credit_days',
+            ]);
+
+        return response()->json($customers->map(fn (Customer $customer) => [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'identification' => $customer->identification,
+            'phone' => $customer->phone,
+            'mobile' => $customer->mobile,
+            'email' => $customer->email,
+            'customer_type' => $customer->customer_type,
+            'credit_limit' => (float) $customer->credit_limit,
+            'credit_days' => (int) ($customer->credit_days ?? 0),
+        ])->values());
     }
 
     private function safeProductImagePath(?string $image): ?string

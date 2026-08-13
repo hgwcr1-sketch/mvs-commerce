@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
@@ -320,6 +321,97 @@ class PosAccessAndSearchTest extends TestCase
             ->assertDontSee('/storage/products/private.jpg');
     }
 
+    public function test_pos_defaults_to_final_consumer_and_contains_customer_selector_without_losing_existing_features(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $this->paymentMethod($company, 'PayPal', 'paypal', true);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('Consumidor Final')
+            ->assertSee('Buscar cliente')
+            ->assertSee('Quitar cliente')
+            ->assertSee('name="customer_id"', false)
+            ->assertSee('customerId: null', false)
+            ->assertSee('Carrito temporal')
+            ->assertSee('PayPal')
+            ->assertSee('role="dialog"', false);
+    }
+
+    public function test_customer_search_finds_name_identification_phone_mobile_and_email(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $customer = $this->customer($company, [
+            'name' => 'María Selector',
+            'identification' => '1-1111-1111',
+            'phone' => '2222-3333',
+            'mobile' => '8888-9999',
+            'email' => 'maria.selector@example.test',
+        ]);
+
+        foreach (['María Selector', '1-1111-1111', '2222-3333', '8888-9999', 'maria.selector@example.test'] as $term) {
+            $this->searchCustomers($user, $company, $branch, $term)
+                ->assertOk()
+                ->assertJsonPath('0.id', $customer->id);
+        }
+    }
+
+    public function test_exact_customer_identification_has_priority(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $partial = $this->customer($company, ['name' => 'A primero', 'identification' => 'XX-123-YY']);
+        $exact = $this->customer($company, ['name' => 'Z último', 'identification' => '123']);
+
+        $response = $this->searchCustomers($user, $company, $branch, '123');
+
+        $response->assertJsonPath('0.id', $exact->id);
+        $this->assertSame($partial->id, $response->json('1.id'));
+    }
+
+    public function test_customer_search_excludes_other_company_inactive_and_deleted_customers(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        [$otherCompany] = $this->context(false);
+        $visible = $this->customer($company, ['name' => 'Cliente coincidencia visible']);
+        $this->customer($company, ['name' => 'Cliente coincidencia inactivo', 'is_active' => false]);
+        $deleted = $this->customer($company, ['name' => 'Cliente coincidencia eliminado']);
+        $deleted->delete();
+        $this->customer($otherCompany, ['name' => 'Cliente coincidencia ajeno']);
+
+        $response = $this->searchCustomers($user, $company, $branch, 'Cliente coincidencia');
+
+        $response->assertJsonCount(1)->assertJsonPath('0.id', $visible->id);
+    }
+
+    public function test_customer_search_returns_only_the_authorized_minimal_fields(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $this->customer($company, ['name' => 'Cliente JSON']);
+
+        $response = $this->searchCustomers($user, $company, $branch, 'Cliente JSON');
+
+        $this->assertEqualsCanonicalizing([
+            'id', 'name', 'identification', 'phone', 'mobile', 'email',
+            'customer_type', 'credit_limit', 'credit_days',
+        ], array_keys($response->json('0')));
+        $this->assertArrayNotHasKey('notes', $response->json('0'));
+        $this->assertArrayNotHasKey('address', $response->json('0'));
+        $this->assertArrayNotHasKey('current_balance', $response->json('0'));
+    }
+
+    public function test_customer_search_route_requires_pos_permission(): void
+    {
+        [$company, $branch, $user] = $this->context(false);
+        $this->customer($company, ['name' => 'Cliente privado']);
+
+        $this->actingAs($user)
+            ->withSession($this->activeSession($company, $branch))
+            ->getJson(route('pos.customers.search', ['q' => 'Cliente privado']))
+            ->assertForbidden()
+            ->assertDontSee('Cliente privado');
+    }
+
     private function context(bool $withPermission): array
     {
         $company = Company::create(['trade_name' => 'Empresa '.uniqid(), 'is_active' => true]);
@@ -358,6 +450,13 @@ class PosAccessAndSearchTest extends TestCase
         return $this->actingAs($user)
             ->withSession($this->activeSession($company, $branch))
             ->getJson(route('pos.products.search', ['q' => $query]));
+    }
+
+    private function searchCustomers(User $user, Company $company, Branch $branch, string $query)
+    {
+        return $this->actingAs($user)
+            ->withSession($this->activeSession($company, $branch))
+            ->getJson(route('pos.customers.search', ['q' => $query]));
     }
 
     private function product(Company $company, array $attributes = []): Product
@@ -413,5 +512,24 @@ class PosAccessAndSearchTest extends TestCase
             ['label' => $name, 'module' => 'Inventario', 'is_active' => true],
         );
         $user->roleInCompany($company)->permissions()->syncWithoutDetaching($permission);
+    }
+
+    private function customer(Company $company, array $attributes = []): Customer
+    {
+        $suffix = uniqid();
+
+        return Customer::create(array_merge([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => 'physical',
+            'identification' => 'ID-'.$suffix,
+            'name' => 'Cliente '.$suffix,
+            'phone' => null,
+            'mobile' => null,
+            'email' => null,
+            'credit_limit' => 0,
+            'credit_days' => 0,
+            'is_active' => true,
+        ], $attributes));
     }
 }

@@ -112,6 +112,8 @@ Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function (
     Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
     Route::get('/pos/productos/buscar', [PosController::class, 'searchProducts'])
         ->name('pos.products.search');
+    Route::get('/pos/clientes/buscar', [PosController::class, 'searchCustomers'])
+        ->name('pos.customers.search');
 });
 
 /*
