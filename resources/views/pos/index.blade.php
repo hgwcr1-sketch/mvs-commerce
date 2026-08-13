@@ -145,6 +145,7 @@
 
         <aside class="space-y-5">
             <section class="relative rounded-2xl bg-white p-5 shadow-sm">
+                <p x-show="successMessage" x-text="successMessage" class="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"></p>
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold uppercase text-slate-500">Cliente</p>
@@ -153,10 +154,18 @@
                             Identificación: <span x-text="selectedCustomer?.identification || '—'"></span>
                         </p>
                     </div>
-                    <button x-show="selectedCustomer" type="button" @click="clearCustomer"
-                            class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
-                        Quitar cliente
-                    </button>
+                    <div class="flex flex-col gap-2">
+                        @can('clientes.crear')
+                            <button type="button" @click="openQuickCustomer"
+                                    class="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600">
+                                + Nuevo cliente
+                            </button>
+                        @endcan
+                        <button x-show="selectedCustomer" type="button" @click="clearCustomer"
+                                class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                            Quitar cliente
+                        </button>
+                    </div>
                 </div>
 
                 <input type="hidden" name="customer_id" :value="customerId ?? ''">
@@ -247,6 +256,98 @@
                  style="max-width: min(640px, 80vw); max-height: min(600px, 68vh);">
         </div>
     </div>
+
+    @can('clientes.crear')
+        <div x-show="quickCustomer.open"
+             x-cloak
+             @keydown.escape.window="closeQuickCustomer"
+             @click.self="closeQuickCustomer"
+             class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/75 p-4"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Crear cliente rápido">
+            <form @submit.prevent="storeQuickCustomer"
+                  class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">Nuevo cliente</h2>
+                        <p class="text-sm text-slate-500">Registro básico para seleccionarlo en el POS.</p>
+                    </div>
+                    <button type="button" @click="closeQuickCustomer"
+                            class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-900 text-2xl text-white"
+                            aria-label="Cerrar nuevo cliente">×</button>
+                </div>
+
+                <input type="hidden" name="_token" value="{{ csrf_token() }}">
+
+                <p x-show="quickCustomer.message" x-text="quickCustomer.message"
+                   class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></p>
+
+                <div class="mt-5 grid gap-5 md:grid-cols-2">
+                    <div class="md:col-span-2">
+                        <label for="quick-customer-name" class="mb-1 block text-sm font-semibold text-slate-700">Nombre completo o razón social *</label>
+                        <input id="quick-customer-name" x-ref="quickCustomerName" x-model="quickCustomer.form.name" required maxlength="150"
+                               class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0">
+                        <p x-show="quickCustomer.errors.name" x-text="quickCustomer.errors.name?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Tipo de cliente *</label>
+                        <select x-model="quickCustomer.form.customer_type" required class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                            <option value="individual">Persona física</option>
+                            <option value="company">Empresa</option>
+                        </select>
+                        <p x-show="quickCustomer.errors.customer_type" x-text="quickCustomer.errors.customer_type?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Tipo de identificación</label>
+                        <select x-model="quickCustomer.form.identification_type" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                            <option value="">Seleccione…</option>
+                            <option value="01">Cédula física</option>
+                            <option value="02">Cédula jurídica</option>
+                            <option value="03">DIMEX</option>
+                            <option value="04">NITE</option>
+                            <option value="05">Extranjero no domiciliado</option>
+                        </select>
+                        <p x-show="quickCustomer.errors.identification_type" x-text="quickCustomer.errors.identification_type?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Identificación</label>
+                        <input x-model="quickCustomer.form.identification" maxlength="50" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <p x-show="quickCustomer.errors.identification" x-text="quickCustomer.errors.identification?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Teléfono</label>
+                        <input x-model="quickCustomer.form.phone" maxlength="30" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <p x-show="quickCustomer.errors.phone" x-text="quickCustomer.errors.phone?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Celular</label>
+                        <input x-model="quickCustomer.form.mobile" maxlength="30" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <p x-show="quickCustomer.errors.mobile" x-text="quickCustomer.errors.mobile?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-slate-700">Correo</label>
+                        <input type="email" x-model="quickCustomer.form.email" maxlength="150" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <p x-show="quickCustomer.errors.email" x-text="quickCustomer.errors.email?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="closeQuickCustomer" class="rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700">Cancelar</button>
+                    <button type="submit" :disabled="quickCustomer.saving || !quickCustomer.form.name.trim()"
+                            class="rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                        <span x-text="quickCustomer.saving ? 'Guardando…' : 'Guardar cliente'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endcan
 </div>
 @endsection
 
@@ -269,6 +370,14 @@ document.addEventListener('alpine:init', () => {
         customerSelectedIndex: 0,
         customerLoading: false,
         customerRequestNumber: 0,
+        successMessage: '',
+        quickCustomer: {
+            open: false,
+            saving: false,
+            errors: {},
+            message: '',
+            form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' },
+        },
 
         get resultsOpen() {
             return this.query.trim().length > 0 && (this.loading || this.results.length >= 0);
@@ -411,6 +520,55 @@ document.addEventListener('alpine:init', () => {
             this.customerResults = [];
             this.customerSelectedIndex = 0;
             this.customerRequestNumber += 1;
+        },
+        openQuickCustomer() {
+            this.quickCustomer.open = true;
+            this.quickCustomer.errors = {};
+            this.quickCustomer.message = '';
+            this.$nextTick(() => this.$refs.quickCustomerName?.focus());
+        },
+        closeQuickCustomer() {
+            if (this.quickCustomer.saving) return;
+            this.quickCustomer.open = false;
+            this.quickCustomer.errors = {};
+            this.quickCustomer.message = '';
+        },
+        resetQuickCustomer() {
+            this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' };
+            this.quickCustomer.errors = {};
+            this.quickCustomer.message = '';
+        },
+        async storeQuickCustomer() {
+            if (this.quickCustomer.saving || !this.quickCustomer.form.name.trim()) return;
+            this.quickCustomer.saving = true;
+            this.quickCustomer.errors = {};
+            this.quickCustomer.message = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.customers.quick-store')) }}, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify(this.quickCustomer.form),
+                });
+                const payload = await response.json();
+                if (response.status === 422) {
+                    this.quickCustomer.errors = payload.errors || {};
+                    this.quickCustomer.message = payload.message || 'Revise la información ingresada.';
+                    return;
+                }
+                if (!response.ok) throw new Error('No fue posible crear el cliente.');
+                this.selectCustomer(payload.customer);
+                this.successMessage = payload.message;
+                this.quickCustomer.open = false;
+                this.resetQuickCustomer();
+            } catch (error) {
+                this.quickCustomer.message = 'No fue posible crear el cliente. Intente nuevamente.';
+            } finally {
+                this.quickCustomer.saving = false;
+            }
         },
     }));
 });

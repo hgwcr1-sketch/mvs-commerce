@@ -412,6 +412,141 @@ class PosAccessAndSearchTest extends TestCase
             ->assertDontSee('Cliente privado');
     }
 
+    public function test_user_with_both_permissions_can_create_quick_customer_with_safe_defaults(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $this->grantPermission($user, $company, 'clientes.crear');
+
+        $response = $this->quickStoreCustomer($user, $company, $branch, [
+            'name' => 'Cliente rápido',
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => 'RAP-001',
+            'phone' => '2222-0000',
+            'mobile' => '8888-0000',
+            'email' => 'RAPIDO@EXAMPLE.TEST',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('customer.name', 'Cliente rápido')
+            ->assertJsonPath('customer.email', 'rapido@example.test');
+        $customer = Customer::where('identification', 'RAP-001')->firstOrFail();
+        $this->assertSame($company->id, $customer->company_id);
+        $this->assertTrue($customer->is_active);
+        $this->assertSame(0, $customer->points);
+        $this->assertSame('0.00', $customer->credit_limit);
+        $this->assertSame(0, $customer->credit_days);
+    }
+
+    public function test_quick_customer_rejects_manipulated_administrative_fields(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        [$otherCompany] = $this->context(false);
+        $this->grantPermission($user, $company, 'clientes.crear');
+
+        $response = $this->quickStoreCustomer($user, $company, $branch, [
+            'name' => 'Cliente manipulado',
+            'company_id' => $otherCompany->id,
+            'is_active' => false,
+            'points' => 999,
+            'credit_limit' => 500000,
+            'credit_days' => 90,
+        ]);
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $response->assertJsonValidationErrors(['company_id', 'is_active', 'points', 'credit_limit', 'credit_days']);
+
+        $this->assertDatabaseMissing('customers', ['name' => 'Cliente manipulado']);
+    }
+
+    public function test_quick_customer_identification_is_unique_per_company_but_reusable_in_another_company(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        [$otherCompany, $otherBranch, $otherUser] = $this->context(true);
+        $this->grantPermission($user, $company, 'clientes.crear');
+        $this->grantPermission($otherUser, $otherCompany, 'clientes.crear');
+        $this->customer($company, ['identification' => 'SHARED-001']);
+
+        $duplicateResponse = $this->quickStoreCustomer($user, $company, $branch, [
+            'name' => 'Duplicado local',
+            'identification' => 'SHARED-001',
+        ]);
+        $this->assertSame(422, $duplicateResponse->status(), $duplicateResponse->getContent());
+        $duplicateResponse->assertJsonValidationErrors('identification');
+
+        $this->quickStoreCustomer($otherUser, $otherCompany, $otherBranch, [
+            'name' => 'Permitido externo',
+            'identification' => 'SHARED-001',
+        ])->assertCreated();
+
+        $this->assertSame(2, Customer::where('identification', 'SHARED-001')->count());
+    }
+
+    public function test_quick_customer_requires_both_pos_and_customer_create_permissions(): void
+    {
+        [$company, $branch, $posOnlyUser] = $this->context(true);
+        $this->quickStoreCustomer($posOnlyUser, $company, $branch, ['name' => 'Sin crear'])
+            ->assertForbidden();
+
+        [$otherCompany, $otherBranch, $createOnlyUser] = $this->context(false);
+        $this->grantPermission($createOnlyUser, $otherCompany, 'clientes.crear');
+        $this->quickStoreCustomer($createOnlyUser, $otherCompany, $otherBranch, ['name' => 'Sin POS'])
+            ->assertForbidden();
+    }
+
+    public function test_invalid_quick_customer_returns_json_validation_errors(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $this->grantPermission($user, $company, 'clientes.crear');
+
+        $response = $this->quickStoreCustomer($user, $company, $branch, [
+            'name' => '',
+            'customer_type' => 'invalid',
+            'email' => 'correo-invalido',
+        ]);
+        $this->assertSame(422, $response->status(), $response->getContent());
+        $response->assertJsonValidationErrors(['name', 'customer_type', 'email']);
+    }
+
+    public function test_created_quick_customer_is_available_in_pos_search_without_modifying_other_companies(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        [$otherCompany] = $this->context(false);
+        $this->grantPermission($user, $company, 'clientes.crear');
+        $otherCustomer = $this->customer($otherCompany, ['name' => 'Cliente ajeno intacto']);
+
+        $created = $this->quickStoreCustomer($user, $company, $branch, [
+            'name' => 'Cliente buscable POS',
+            'identification' => 'SEARCH-001',
+        ])->json('customer');
+
+        $this->searchCustomers($user, $company, $branch, 'SEARCH-001')
+            ->assertJsonPath('0.id', $created['id']);
+        $this->assertSame('Cliente ajeno intacto', $otherCustomer->fresh()->name);
+        $this->assertSame($otherCompany->id, $otherCustomer->company_id);
+    }
+
+    public function test_quick_customer_button_and_modal_are_visible_only_with_customer_create_permission(): void
+    {
+        [$company, $branch, $allowedUser] = $this->context(true);
+        $this->grantPermission($allowedUser, $company, 'clientes.crear');
+
+        $this->actingAs($allowedUser)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index'))
+            ->assertOk()
+            ->assertSee('+ Nuevo cliente')
+            ->assertSee('aria-label="Crear cliente rápido"', false)
+            ->assertSee('name="_token"', false)
+            ->assertSee('selectCustomer(payload.customer)', false);
+
+        [$otherCompany, $otherBranch, $deniedUser] = $this->context(true);
+        $this->actingAs($deniedUser)->withSession($this->activeSession($otherCompany, $otherBranch))
+            ->get(route('pos.index'))
+            ->assertOk()
+            ->assertDontSee('+ Nuevo cliente')
+            ->assertDontSee('aria-label="Crear cliente rápido"', false);
+    }
+
     private function context(bool $withPermission): array
     {
         $company = Company::create(['trade_name' => 'Empresa '.uniqid(), 'is_active' => true]);
@@ -457,6 +592,13 @@ class PosAccessAndSearchTest extends TestCase
         return $this->actingAs($user)
             ->withSession($this->activeSession($company, $branch))
             ->getJson(route('pos.customers.search', ['q' => $query]));
+    }
+
+    private function quickStoreCustomer(User $user, Company $company, Branch $branch, array $payload)
+    {
+        return $this->actingAs($user)
+            ->withSession($this->activeSession($company, $branch))
+            ->postJson(route('pos.customers.quick-store'), $payload);
     }
 
     private function product(Company $company, array $attributes = []): Product

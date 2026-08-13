@@ -114,6 +114,9 @@ Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function (
         ->name('pos.products.search');
     Route::get('/pos/clientes/buscar', [PosController::class, 'searchCustomers'])
         ->name('pos.customers.search');
+    Route::post('/pos/clientes/rapido', [PosController::class, 'storeQuickCustomer'])
+        ->middleware('permission:clientes.crear')
+        ->name('pos.customers.quick-store');
 });
 
 /*

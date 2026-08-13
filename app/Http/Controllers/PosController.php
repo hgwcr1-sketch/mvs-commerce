@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\QuickStoreCustomerRequest;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
@@ -213,6 +214,41 @@ class PosController extends Controller
             'credit_limit' => (float) $customer->credit_limit,
             'credit_days' => (int) ($customer->credit_days ?? 0),
         ])->values());
+    }
+
+    public function storeQuickCustomer(QuickStoreCustomerRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $customer = Customer::create([
+            'company_id' => (int) session('active_company_id'),
+            'name' => $data['name'],
+            'customer_type' => $data['customer_type'],
+            'identification_type' => $data['identification_type'] ?? null,
+            'identification' => $data['identification'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'mobile' => $data['mobile'] ?? null,
+            'email' => $data['email'] ?? null,
+            'accepts_email_invoice' => false,
+            'credit_limit' => 0,
+            'credit_days' => 0,
+            'points' => 0,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cliente creado correctamente.',
+            'customer' => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'identification' => $customer->identification,
+                'phone' => $customer->phone,
+                'mobile' => $customer->mobile,
+                'email' => $customer->email,
+                'customer_type' => $customer->customer_type,
+            ],
+        ], 201);
     }
 
     private function safeProductImagePath(?string $image): ?string
