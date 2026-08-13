@@ -55,6 +55,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -454,6 +455,18 @@ Route::prefix('configuracion/pos/formas-pago')
         Route::put('/{payment_method}', [PaymentMethodController::class, 'update'])->name('update');
         Route::patch('/{payment_method}/estado', [PaymentMethodController::class, 'toggleStatus'])->name('toggle-status');
         Route::delete('/{payment_method}', [PaymentMethodController::class, 'destroy'])->name('destroy');
+    });
+
+Route::prefix('configuracion/caja/cajas')
+    ->name('settings.cash-registers.')
+    ->middleware('permission:caja.administrar')
+    ->group(function () {
+        Route::get('/', [CashRegisterController::class, 'index'])->name('index');
+        Route::get('/crear', [CashRegisterController::class, 'create'])->name('create');
+        Route::post('/', [CashRegisterController::class, 'store'])->name('store');
+        Route::get('/{cashRegister}/editar', [CashRegisterController::class, 'edit'])->name('edit');
+        Route::match(['put', 'patch'], '/{cashRegister}', [CashRegisterController::class, 'update'])->name('update');
+        Route::patch('/{cashRegister}/estado', [CashRegisterController::class, 'toggleStatus'])->name('toggle-status');
     });
 
 Route::resource('agenda', AgendaController::class);

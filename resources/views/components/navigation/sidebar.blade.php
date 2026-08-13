@@ -225,7 +225,10 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     {{-- FOOTER --}}
 
-    <a href="#" class="mb-2 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
+@canany(['formas_pago.administrar', 'caja.administrar'])
+<div x-data="{ open: false }" class="mb-2 px-3">
+    <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-xs text-slate-400 transition hover:text-white {{ request()->routeIs('settings.pos.payment-methods.*', 'settings.cash-registers.*') ? 'text-amber-400' : '' }}">
+        <span class="flex items-center gap-2">
 
     <svg xmlns="http://www.w3.org/2000/svg"
         class="h-3.5 w-3.5"
@@ -240,9 +243,20 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     </svg>
 
-    <span>Configuración</span>
-
-</a>
+            <span>Configuración</span>
+        </span>
+        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="transition">▼</span>
+    </button>
+    <div x-cloak x-show="open" x-transition class="mt-2 space-y-1 pl-5">
+        @can('formas_pago.administrar')
+            <a href="{{ route('settings.pos.payment-methods.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.pos.payment-methods.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Formas de pago</a>
+        @endcan
+        @can('caja.administrar')
+            <a href="{{ route('settings.cash-registers.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash-registers.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Cajas</a>
+        @endcan
+    </div>
+</div>
+@endcanany
 <a href="#" class="mb-3 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
 
     <svg xmlns="http://www.w3.org/2000/svg"
