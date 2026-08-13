@@ -117,6 +117,11 @@ Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function (
     Route::post('/pos/clientes/rapido', [PosController::class, 'storeQuickCustomer'])
         ->middleware('permission:clientes.crear')
         ->name('pos.customers.quick-store');
+    Route::post('/pos/cobrar', [PosController::class, 'checkout'])
+        ->middleware('permission:ventas.crear')
+        ->name('pos.checkout');
+    Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])
+        ->name('pos.receipt');
 });
 
 /*

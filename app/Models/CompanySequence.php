@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 class CompanySequence extends Model
 {
-    public const POS = 'pos';
+    public const POS_SALE = 'pos_sale';
+    public const POS = self::POS_SALE;
 
     protected $fillable = [
         'company_id',

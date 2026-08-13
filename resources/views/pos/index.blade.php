@@ -3,14 +3,14 @@
 @section('title', 'Punto de venta')
 
 @section('content')
-<div x-data="posTerminal" x-cloak class="space-y-5">
+<div x-data="posTerminal" x-cloak @keydown.enter.window="handleGlobalEnter($event)" class="space-y-5">
     <section class="rounded-2xl bg-slate-900 p-4 text-white shadow-lg">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div class="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4">
                 <div><p class="text-xs uppercase text-slate-400">Empresa</p><p class="font-semibold">{{ $company->trade_name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Sucursal</p><p class="font-semibold">{{ $branch->name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Cajero</p><p class="font-semibold">{{ $cashier->name }}</p></div>
-                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">Sin apertura</p></div>
+                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">Sin apertura de caja</p></div>
             </div>
             <a href="{{ route('dashboard') }}"
                class="self-end rounded-xl border border-slate-600 px-5 py-2 font-medium hover:bg-slate-800 xl:self-auto">
@@ -219,12 +219,17 @@
             <section class="rounded-2xl bg-slate-900 p-5 text-white shadow-lg">
                 <div class="space-y-3 text-sm">
                     <div class="flex justify-between"><span class="text-slate-300">Subtotal</span><strong x-text="money(subtotal)"></strong></div>
-                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong>₡0,00</strong></div>
+                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong>₡0</strong></div>
                     <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
                 </div>
                 <div class="my-5 border-t border-slate-700"></div>
                 <div class="flex items-end justify-between"><span class="text-lg">Total</span><strong class="text-3xl text-amber-400" x-text="money(grandTotal)"></strong></div>
-                <button type="button" disabled class="mt-5 w-full cursor-not-allowed rounded-2xl bg-slate-700 px-5 py-4 text-lg font-bold text-slate-400">Cobrar · Próximamente</button>
+                @can('ventas.crear')
+                    <button type="button" @click="openCheckout" :disabled="!canCheckout"
+                            class="mt-5 w-full rounded-2xl bg-amber-500 px-5 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
+                        Cobrar
+                    </button>
+                @endcan
             </section>
         </aside>
     </div>
@@ -237,6 +242,61 @@
             @endforeach
         </div>
     </section>
+
+    <div x-show="checkout.open" x-cloak @click.self="closeCheckout"
+         class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4"
+         role="dialog" aria-modal="true" aria-label="Cobro en efectivo">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <template x-if="!checkout.result">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div><h2 class="text-2xl font-bold text-slate-900">Cobro en efectivo</h2><p class="text-sm text-amber-700">Sin apertura de caja</p></div>
+                        <button type="button" @click="closeCheckout" :disabled="checkout.processing" class="text-3xl text-slate-500">×</button>
+                    </div>
+                    <div class="mt-5 space-y-2 rounded-xl bg-slate-100 p-4">
+                        <div class="flex justify-between"><span>Subtotal</span><strong x-text="money(subtotal)"></strong></div>
+                        <div class="flex justify-between"><span>Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
+                        <div x-show="roundingTotal !== 0" class="flex justify-between"><span>Ajuste por redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
+                        <div class="flex justify-between border-t border-slate-300 pt-2 text-xl"><span>Total</span><strong x-text="money(grandTotal)"></strong></div>
+                    </div>
+                    <label class="mt-5 block text-sm font-semibold">Método</label>
+                    <select x-model.number="checkout.paymentMethodId" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <template x-for="method in cashMethods" :key="method.id"><option :value="method.id" x-text="method.name"></option></template>
+                    </select>
+                    <label for="received-amount" class="mt-5 block text-sm font-semibold">Monto recibido</label>
+                    <input id="received-amount" x-ref="receivedAmount" x-model="checkout.receivedAmount" inputmode="numeric" pattern="[0-9]*"
+                           @keydown.enter.prevent="confirmCheckout" class="mt-1 w-full rounded-xl border-2 border-slate-300 px-4 py-4 text-3xl font-bold focus:border-amber-500">
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <template x-for="amount in suggestedAmounts" :key="amount">
+                            <button type="button" @click="checkout.receivedAmount = amount" class="rounded-lg bg-slate-200 px-3 py-2 font-semibold" x-text="money(amount)"></button>
+                        </template>
+                    </div>
+                    <p x-show="checkoutError" x-text="checkoutError" class="mt-4 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
+                    <div class="mt-5 rounded-xl bg-slate-900 p-4 text-white">
+                        <div x-show="receivedNumber >= grandTotal" class="flex justify-between text-xl"><span>Vuelto</span><strong class="text-green-400" x-text="money(changeAmount)"></strong></div>
+                        <div x-show="receivedNumber < grandTotal" class="flex justify-between"><span>Faltante</span><strong class="text-red-400" x-text="money(grandTotal - receivedNumber)"></strong></div>
+                    </div>
+                    <button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm"
+                            class="mt-5 w-full rounded-xl bg-amber-500 px-5 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            x-text="checkout.processing ? 'Procesando…' : 'Confirmar cobro'"></button>
+                </div>
+            </template>
+            <template x-if="checkout.result">
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-green-700">Venta completada</h2>
+                    <p class="mt-2 text-xl font-bold" x-text="checkout.result.sale_number"></p>
+                    <p class="mt-4">Total: <strong x-text="money(checkout.result.total)"></strong></p>
+                    <p>Recibido: <strong x-text="money(checkout.result.received_amount)"></strong></p>
+                    <p>Vuelto: <strong x-text="money(checkout.result.change_amount)"></strong></p>
+                    <p x-show="checkout.result.duplicate" class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p>
+                    <div class="mt-6 flex justify-center gap-3">
+                        <a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white">Imprimir comprobante</a>
+                        <button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-bold text-white">Nueva venta</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
 
     <div x-show="imageModal.open"
          x-cloak
@@ -371,6 +431,9 @@ document.addEventListener('alpine:init', () => {
         customerLoading: false,
         customerRequestNumber: 0,
         successMessage: '',
+        checkoutToken: crypto.randomUUID(),
+        cashMethods: @json($paymentMethods->where('type', 'cash')->where('allows_change', true)->values()),
+        checkout: { open: false, processing: false, paymentMethodId: null, receivedAmount: '', error: '', result: null },
         quickCustomer: {
             open: false,
             saving: false,
@@ -389,7 +452,17 @@ document.addEventListener('alpine:init', () => {
             return this.cart.reduce((sum, item) => sum + this.lineTax(item), 0);
         },
         get grandTotal() {
-            return this.subtotal + this.taxTotal;
+            return Math.round(this.subtotal + this.taxTotal);
+        },
+        get roundingTotal() { return this.grandTotal - (this.subtotal + this.taxTotal); },
+        get canCheckout() { return this.cart.length > 0 && !this.cart.some(item => this.exceedsStock(item)) && this.cashMethods.length > 0; },
+        get receivedNumber() { return Number(this.checkout.receivedAmount) || 0; },
+        get changeAmount() { return Math.max(0, this.receivedNumber - this.grandTotal); },
+        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.paymentMethodId && /^\d+$/.test(String(this.checkout.receivedAmount)) && this.receivedNumber >= this.grandTotal; },
+        get checkoutError() { return this.checkout.error || (this.checkout.receivedAmount !== '' && this.receivedNumber < this.grandTotal ? 'El monto recibido es insuficiente.' : ''); },
+        get suggestedAmounts() {
+            const total = this.grandTotal;
+            return [...new Set([total, 1000, 2000, 5000, 10000, 20000, 50000].filter(value => value >= total))].slice(0, 4);
         },
         get customerResultsOpen() {
             return this.customerQuery.trim().length > 0;
@@ -464,7 +537,7 @@ document.addEventListener('alpine:init', () => {
         exceedsStock(item) { return item.controls_inventory && item.quantity > item.available_stock; },
         lineTax(item) { return item.sale_price * item.quantity * (item.tax_rate / 100); },
         lineTotal(item) { return (item.sale_price * item.quantity) + this.lineTax(item); },
-        money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC' }).format(Number(value) || 0); },
+        money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value) || 0); },
         formatQuantity(value) { return new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4 }).format(Number(value) || 0); },
         otherStockLabel(product) { return product.other_branch_stock.map(stock => `${stock.branch_name} ${this.formatQuantity(stock.available_stock)}`).join(', '); },
         showStockLimit(item) { this.notice = `Existencia máxima disponible: ${this.formatQuantity(item.available_stock)}`; },
@@ -473,6 +546,56 @@ document.addEventListener('alpine:init', () => {
             this.imageModal = { open: true, url: product.image_url, name: product.name };
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
+        handleGlobalEnter(event) {
+            if (event.defaultPrevented || this.checkout.open || this.quickCustomer.open || this.resultsOpen || this.customerResultsOpen) return;
+            if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
+            if (this.canCheckout) { event.preventDefault(); this.openCheckout(); }
+        },
+        openCheckout() {
+            if (!this.canCheckout || this.checkout.processing) return;
+            this.checkout.open = true;
+            this.checkout.error = '';
+            this.checkout.result = null;
+            this.checkout.paymentMethodId = this.cashMethods.length === 1 ? this.cashMethods[0].id : this.checkout.paymentMethodId;
+            this.checkout.receivedAmount = String(this.grandTotal);
+            this.$nextTick(() => this.$refs.receivedAmount?.focus());
+        },
+        closeCheckout() { if (!this.checkout.processing) this.checkout.open = false; },
+        async confirmCheckout() {
+            if (!this.checkoutCanConfirm) return;
+            this.checkout.processing = true;
+            this.checkout.error = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout')) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({
+                        checkout_token: this.checkoutToken,
+                        customer_id: this.customerId,
+                        payment_method_id: this.checkout.paymentMethodId,
+                        received_amount: Number(this.checkout.receivedAmount),
+                        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
+                    }),
+                });
+                const payload = await response.json();
+                if (!response.ok) { this.checkout.error = payload.message || 'No fue posible completar el cobro.'; return; }
+                this.checkout.result = payload;
+                this.cart = [];
+                this.customerId = null;
+                this.selectedCustomer = null;
+                this.successMessage = payload.message;
+            } catch (error) {
+                this.checkout.error = 'No fue posible completar el cobro. Intente nuevamente.';
+            } finally {
+                this.checkout.processing = false;
+            }
+        },
+        newSale() {
+            this.checkoutToken = crypto.randomUUID();
+            this.checkout = { open: false, processing: false, paymentMethodId: null, receivedAmount: '', error: '', result: null };
+            this.successMessage = '';
+            this.$nextTick(() => this.$refs.searchInput.focus());
+        },
         async searchCustomers() {
             const term = this.customerQuery.trim();
             const currentRequest = ++this.customerRequestNumber;

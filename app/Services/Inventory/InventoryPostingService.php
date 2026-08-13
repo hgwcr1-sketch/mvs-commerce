@@ -8,11 +8,58 @@ use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\Sale;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class InventoryPostingService
 {
+    public function postSale(Sale $sale, Product $product, float $quantity): InventoryMovement
+    {
+        if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La línea de inventario de la venta no es válida.',
+            ]);
+        }
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $sale->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        $previousStock = $branchProduct === null ? 0.0 : (float) $branchProduct->stock;
+
+        if ($branchProduct === null || $previousStock < $quantity) {
+            throw ValidationException::withMessages([
+                'items' => "Stock insuficiente para {$product->name}. Disponible: ".number_format($previousStock, 4, '.', ''),
+            ]);
+        }
+
+        $newStock = round($previousStock - $quantity, 4);
+
+        DB::table('branch_product')->where('id', $branchProduct->id)->update([
+            'stock' => $newStock,
+            'updated_at' => now(),
+        ]);
+
+        return InventoryMovement::create([
+            'company_id' => $sale->company_id,
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $sale->user_id,
+            'type' => 'sale',
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Salida por venta',
+            'reference_type' => Sale::class,
+            'reference_id' => $sale->id,
+            'notes' => 'Venta '.$sale->sale_number,
+        ]);
+    }
+
     /**
      * Registra la entrada únicamente en la sucursal receptora de la compra.
      */

@@ -3,15 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\QuickStoreCustomerRequest;
+use App\Http\Requests\StorePosSaleRequest;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Sale;
+use App\Services\Sales\PosSaleProcessor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PosController extends Controller
@@ -28,7 +32,7 @@ class PosController extends Controller
         $paymentMethods = PaymentMethod::forCompany($companyId)
             ->active()
             ->ordered()
-            ->get(['id', 'code', 'name', 'type']);
+            ->get(['id', 'code', 'name', 'type', 'allows_change']);
 
         return view('pos.index', [
             'company' => $company,
@@ -249,6 +253,60 @@ class PosController extends Controller
                 'customer_type' => $customer->customer_type,
             ],
         ], 201);
+    }
+
+    public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse
+    {
+        try {
+            $result = $processor->process(
+                $request->validated(),
+                $request->user(),
+                (int) session('active_company_id'),
+                (int) session('active_branch_id'),
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => collect($exception->errors())->flatten()->first() ?? 'El cobro contiene datos inválidos.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+        $sale = $result['sale']->load('payments');
+        $payment = $sale->payments->first();
+
+        return response()->json([
+            'success' => true,
+            'duplicate' => $result['duplicate'],
+            'message' => $result['duplicate'] ? 'Esta venta ya había sido procesada.' : 'Venta cobrada correctamente.',
+            'sale_id' => $sale->id,
+            'sale_number' => $sale->sale_number,
+            'subtotal' => $sale->subtotal,
+            'tax_total' => $sale->tax_total,
+            'rounding_total' => $sale->rounding_total,
+            'total' => $sale->total,
+            'received_amount' => $payment?->received_amount,
+            'change_amount' => $payment?->change_amount,
+            'receipt_url' => route('pos.receipt', $sale),
+        ]);
+    }
+
+    public function receipt(Request $request, Sale $sale): View
+    {
+        $companyId = (int) session('active_company_id');
+
+        if ((int) $sale->company_id !== $companyId) {
+            abort(404);
+        }
+
+        $company = Company::query()->findOrFail($companyId);
+        $isCreator = (int) $sale->user_id === (int) $request->user()->id;
+
+        if (!$isCreator && !$request->user()->hasPermission('ventas.ver', $company)) {
+            abort(403);
+        }
+
+        $sale->load(['branch', 'user', 'customer', 'items', 'payments.paymentMethod']);
+
+        return view('pos.receipt', compact('sale', 'company'));
     }
 
     private function safeProductImagePath(?string $image): ?string
