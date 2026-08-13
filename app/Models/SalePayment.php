@@ -12,11 +12,14 @@ class SalePayment extends Model
 
     protected $fillable = [
         'sale_id',
+        'cash_session_id',
         'payment_method_id',
+        'affects_cash_snapshot',
         'created_by',
         'amount',
         'received_amount',
         'change_amount',
+        'cash_effect_amount',
         'reference',
         'status',
         'voided_by',
@@ -30,6 +33,8 @@ class SalePayment extends Model
             'amount' => 'decimal:4',
             'received_amount' => 'decimal:4',
             'change_amount' => 'decimal:4',
+            'affects_cash_snapshot' => 'boolean',
+            'cash_effect_amount' => 'decimal:4',
             'voided_at' => 'datetime',
         ];
     }
@@ -42,6 +47,11 @@ class SalePayment extends Model
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 
     public function createdBy(): BelongsTo

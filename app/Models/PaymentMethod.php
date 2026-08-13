@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PaymentMethod extends Model
 {
@@ -44,6 +45,11 @@ class PaymentMethod extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function cashPaymentReconciliations(): HasMany
+    {
+        return $this->hasMany(CashPaymentReconciliation::class);
     }
 
     public function scopeForCompany(Builder $query, int $companyId): Builder

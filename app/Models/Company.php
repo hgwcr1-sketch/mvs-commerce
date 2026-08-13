@@ -119,4 +119,24 @@ class Company extends Model
     {
         return $this->hasOne(CompanyPurchaseSetting::class);
     }
+
+    public function cashSetting()
+    {
+        return $this->hasOne(CompanyCashSetting::class);
+    }
+
+    public function cashRegisters()
+    {
+        return $this->hasMany(CashRegister::class);
+    }
+
+    public function cashSessions()
+    {
+        return $this->hasMany(CashSession::class);
+    }
+
+    public function cashDenominations()
+    {
+        return $this->hasMany(CashDenomination::class);
+    }
 }

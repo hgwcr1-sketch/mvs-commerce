@@ -26,6 +26,7 @@ class Sale extends Model
         'company_id',
         'branch_id',
         'user_id',
+        'cash_session_id',
         'customer_id',
         'checkout_token',
         'request_fingerprint',
@@ -82,6 +83,11 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
     }
 
     public function customer(): BelongsTo

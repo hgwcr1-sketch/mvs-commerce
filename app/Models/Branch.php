@@ -48,4 +48,14 @@ class Branch extends Model
     {
         return $this->hasMany(InventoryLot::class);
     }
+
+    public function cashRegisters(): HasMany
+    {
+        return $this->hasMany(CashRegister::class);
+    }
+
+    public function cashSessions(): HasMany
+    {
+        return $this->hasMany(CashSession::class);
+    }
 }

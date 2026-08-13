@@ -75,6 +75,15 @@ class PermissionSeeder extends Seeder
             ['name' => 'ventas.editar', 'label' => 'Editar ventas', 'module' => 'Ventas'],
             ['name' => 'ventas.anular', 'label' => 'Anular ventas', 'module' => 'Ventas'],
 
+            // Caja
+            ['name' => 'caja.abrir', 'label' => 'Abrir caja', 'module' => 'Caja'],
+            ['name' => 'caja.ver', 'label' => 'Ver caja', 'module' => 'Caja'],
+            ['name' => 'caja.movimientos', 'label' => 'Registrar movimientos de caja', 'module' => 'Caja'],
+            ['name' => 'caja.cerrar', 'label' => 'Cerrar caja', 'module' => 'Caja'],
+            ['name' => 'caja.ver_todas', 'label' => 'Ver todas las cajas', 'module' => 'Caja'],
+            ['name' => 'caja.autorizar_diferencia', 'label' => 'Autorizar diferencias de caja', 'module' => 'Caja'],
+            ['name' => 'caja.administrar', 'label' => 'Administrar cajas y configuración', 'module' => 'Caja'],
+
             // Cotizaciones
             ['name' => 'cotizaciones.ver', 'label' => 'Ver cotizaciones', 'module' => 'Cotizaciones'],
             ['name' => 'cotizaciones.crear', 'label' => 'Crear cotizaciones', 'module' => 'Cotizaciones'],

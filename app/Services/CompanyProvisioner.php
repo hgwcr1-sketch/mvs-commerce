@@ -16,6 +16,8 @@ class CompanyProvisioner
 {
     public function __construct(
         private readonly PaymentMethodProvisioner $paymentMethodProvisioner,
+        private readonly CompanyCashSettingsProvisioner $companyCashSettingsProvisioner,
+        private readonly CashDenominationProvisioner $cashDenominationProvisioner,
     ) {
     }
 
@@ -98,6 +100,8 @@ class CompanyProvisioner
             ]);
 
             $this->paymentMethodProvisioner->provision($company);
+            $this->companyCashSettingsProvisioner->provision($company);
+            $this->cashDenominationProvisioner->provision($company);
 
             $administratorRole = Role::create([
                 'company_id' => $company->id,

@@ -138,4 +138,14 @@ class User extends Authenticatable
             ->where('permissions.is_active', true)
             ->exists();
     }
+
+    public function openedCashSessions()
+    {
+        return $this->hasMany(CashSession::class, 'opened_by');
+    }
+
+    public function cashMovements()
+    {
+        return $this->hasMany(CashMovement::class, 'created_by');
+    }
 }
