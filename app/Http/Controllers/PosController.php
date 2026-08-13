@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\QuickStoreCustomerRequest;
+use App\Http\Requests\ResuspendSaleRequest;
 use App\Http\Requests\StorePosSaleRequest;
+use App\Http\Requests\StoreSuspendedSaleRequest;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\SuspendedSale;
 use App\Services\Sales\PosSaleProcessor;
+use App\Services\Sales\SuspendedSaleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +43,7 @@ class PosController extends Controller
             'branch' => $branch,
             'cashier' => $request->user(),
             'paymentMethods' => $paymentMethods,
+            'canCancelSuspended' => $request->user()->hasPermission('ventas.anular', $company),
         ]);
     }
 
@@ -296,6 +301,59 @@ class PosController extends Controller
             'received_amount' => $firstPayment?->received_amount,
             'change_amount' => $firstPayment?->change_amount,
             'receipt_url' => route('pos.receipt', $sale),
+        ]);
+    }
+
+    public function storeSuspended(StoreSuspendedSaleRequest $request, SuspendedSaleService $service): JsonResponse
+    {
+        $sale = $service->suspend($request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+        return response()->json(['success' => true, 'message' => "Venta {$sale->suspension_number} suspendida correctamente.", 'suspended_sale' => $sale], 201);
+    }
+
+    public function suspendedIndex(Request $request, SuspendedSaleService $service): JsonResponse
+    {
+        $sales = $service->list($request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+        return response()->json($sales->map(fn (SuspendedSale $sale) => [
+            'id' => $sale->id, 'suspension_number' => $sale->suspension_number,
+            'suspended_at' => $sale->suspended_at?->toIso8601String(), 'cashier' => $sale->user->name,
+            'customer' => $sale->customer?->name ?? 'Consumidor Final', 'items_count' => $sale->items_count,
+            'estimated_total' => $sale->estimated_total, 'status' => $sale->status,
+        ])->values());
+    }
+
+    public function recoverSuspended(Request $request, SuspendedSale $suspendedSale, SuspendedSaleService $service): JsonResponse
+    {
+        $data = $request->validate(['recovery_token' => ['nullable', 'uuid']]);
+        return response()->json($service->claimForRecovery($suspendedSale, $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'), $data['recovery_token'] ?? null));
+    }
+
+    public function cancelSuspended(Request $request, SuspendedSale $suspendedSale, SuspendedSaleService $service): JsonResponse
+    {
+        $validator = validator($request->all(), ['reason' => ['required', 'string', 'max:255']]);
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first(), 'errors' => $validator->errors()], 422);
+        }
+        $data = $validator->validated();
+        $service->cancel($suspendedSale, $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'), $data['reason']);
+        return response()->json(['success' => true, 'message' => 'Venta suspendida cancelada correctamente.']);
+    }
+
+    public function releaseSuspended(Request $request, SuspendedSale $suspendedSale, SuspendedSaleService $service): JsonResponse
+    {
+        $data = $request->validate(['recovery_token' => ['required', 'uuid']]);
+        $service->release($suspendedSale, $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'), $data['recovery_token']);
+
+        return response()->json(['success' => true, 'message' => 'La venta suspendida volvió a quedar disponible.']);
+    }
+
+    public function resuspendSale(ResuspendSaleRequest $request, SuspendedSale $suspendedSale, SuspendedSaleService $service): JsonResponse
+    {
+        $sale = $service->resuspend($suspendedSale, $request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+
+        return response()->json([
+            'success' => true,
+            'message' => "Venta {$sale->suspension_number} actualizada y suspendida nuevamente.",
+            'suspended_sale' => $sale,
         ]);
     }
 

@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\SuspendedSale;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Database\QueryException;
@@ -35,6 +36,7 @@ class PosSaleProcessor
         $existing = $this->existingSale($companyId, $data['checkout_token'], $fingerprint);
 
         if ($existing !== null) {
+            $this->verifyRecoveredSuspension($data, $existing, $user, $companyId, $branchId);
             return ['sale' => $existing, 'duplicate' => true];
         }
 
@@ -58,6 +60,8 @@ class PosSaleProcessor
                 if ($branch === null || !$user->branches()->whereKey($branchId)->exists()) {
                     throw ValidationException::withMessages(['branch' => 'La sucursal activa ya no está autorizada.']);
                 }
+
+                $suspendedSale = $this->lockSuspensionForCheckout($data, $user, $companyId, $branchId);
 
                 $customerId = $data['customer_id'] ?? null;
                 if ($customerId !== null && !Customer::query()
@@ -190,11 +194,20 @@ class PosSaleProcessor
                     ]);
                 }
 
+                if ($suspendedSale !== null) {
+                    $suspendedSale->update([
+                        'status' => SuspendedSale::STATUS_RECOVERED,
+                        'recovered_sale_id' => $sale->id,
+                        'recovered_at' => now(),
+                    ]);
+                }
+
                 return $sale;
             }, 3);
         } catch (QueryException $exception) {
             $existing = $this->existingSale($companyId, $data['checkout_token'], $fingerprint);
             if ($existing !== null) {
+                $this->verifyRecoveredSuspension($data, $existing, $user, $companyId, $branchId);
                 return ['sale' => $existing, 'duplicate' => true];
             }
 
@@ -312,7 +325,46 @@ class PosSaleProcessor
             'customer_id' => isset($data['customer_id']) ? (int) $data['customer_id'] : null,
             'payments' => $payments,
             'items' => array_map(fn ($quantity) => number_format($quantity, 4, '.', ''), $items),
+            'suspended_sale_id' => isset($data['suspended_sale_id']) ? (int) $data['suspended_sale_id'] : null,
+            'recovery_token' => $data['recovery_token'] ?? null,
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function lockSuspensionForCheckout(array $data, User $user, int $companyId, int $branchId): ?SuspendedSale
+    {
+        if (!isset($data['suspended_sale_id'], $data['recovery_token'])) {
+            return null;
+        }
+
+        $suspended = SuspendedSale::query()->lockForUpdate()->find($data['suspended_sale_id']);
+        if (!$suspended || (int) $suspended->company_id !== $companyId || (int) $suspended->branch_id !== $branchId) {
+            throw ValidationException::withMessages(['suspended_sale_id' => 'La venta suspendida no pertenece al contexto activo.']);
+        }
+        if ($suspended->status !== SuspendedSale::STATUS_RECOVERING
+            || (int) $suspended->recovery_by !== (int) $user->id
+            || $suspended->recovery_token === null
+            || !hash_equals($suspended->recovery_token, $data['recovery_token'])) {
+            throw new ConflictHttpException('La concesión de recuperación no es válida.');
+        }
+        if (!$suspended->recovery_started_at || $suspended->recovery_started_at->lte(now()->subMinutes(SuspendedSaleService::RECOVERY_LEASE_MINUTES))) {
+            throw new ConflictHttpException('La concesión de recuperación venció. Recupere nuevamente la venta.');
+        }
+
+        return $suspended;
+    }
+
+    private function verifyRecoveredSuspension(array $data, Sale $sale, User $user, int $companyId, int $branchId): void
+    {
+        if (!isset($data['suspended_sale_id'], $data['recovery_token'])) {
+            return;
+        }
+        $linked = SuspendedSale::query()->whereKey($data['suspended_sale_id'])
+            ->where('company_id', $companyId)->where('branch_id', $branchId)
+            ->where('recovery_by', $user->id)->where('recovery_token', $data['recovery_token'])
+            ->where('status', SuspendedSale::STATUS_RECOVERED)->where('recovered_sale_id', $sale->id)->exists();
+        if (!$linked) {
+            throw new ConflictHttpException('La venta suspendida no coincide con el cobro ya procesado.');
+        }
     }
 
     private function existingSale(int $companyId, string $token, string $fingerprint): ?Sale

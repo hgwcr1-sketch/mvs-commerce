@@ -151,6 +151,42 @@ class PosAccessAndSearchTest extends TestCase
             ->assertDontSee('Método ajeno');
     }
 
+    public function test_checkout_modal_has_responsive_permanent_summary_and_dynamic_direct_payment_flow(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $this->paymentMethod($company, 'PayPal', 'paypal-visual', true);
+        $this->paymentMethod($company, 'Oculto inactivo', 'inactive-visual', false);
+        $credit = $this->paymentMethod($company, 'Crédito futuro', 'credit-visual', true);
+        $credit->update(['type' => PaymentMethod::TYPE_CREDIT]);
+        $points = $this->paymentMethod($company, 'Puntos futuros', 'points-visual', true);
+        $points->update(['type' => PaymentMethod::TYPE_LOYALTY_POINTS]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.index'))
+            ->assertOk()->assertSee('Cobrar venta')->assertSee('Resumen permanente')
+            ->assertSee('Total aplicado')->assertSee('Saldo pendiente')->assertSee('Vuelto total')
+            ->assertSee('Monto a aplicar')->assertSee('Usar saldo pendiente')
+            ->assertSee('Seleccione una forma de pago para comenzar')->assertSee('Pago mixto')
+            ->assertSee('Referencia *')->assertSee('Monto recibido')->assertSee('Vuelto')
+            ->assertSee('Limpiar pagos')->assertSee('Confirmar cobro —')
+            ->assertSee('PayPal')->assertSee('Crédito futuro')->assertSee('Puntos futuros')->assertSee('Próximamente')
+            ->assertDontSee('Oculto inactivo')->assertSee('x-for="method in paymentMethods"', false)
+            ->assertSee('lg:grid-cols-[0.9fr_1.1fr]', false)->assertSee('max-w-[1120px]', false)
+            ->assertSee('selectPaymentMethod(method)', false)->assertSee('method.requires_reference', false)
+            ->assertSee('method.allows_change', false)->assertSee('handleCheckoutEnter($event)', false)
+            ->assertSee('this.checkout.payments = []', false)
+            ->assertSee("this.checkout.draft.amount = String(this.pendingBalance)", false)
+            ->assertSee("['credit', 'loyalty_points'].includes(method.type)", false)
+            ->assertSee("Number(this.checkout.draft.receivedAmount) < amount", false)
+            ->assertSee("amount > this.pendingBalance", false)
+            ->assertSee("change_amount: method.allows_change ? received - amount : 0", false)
+            ->assertSee("received_amount: received", false)
+            ->assertDontSee("Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance", false)
+            ->assertSee("border-amber-500 bg-amber-500 text-white hover:bg-amber-600", false)
+            ->assertSee("disabled:bg-slate-100 disabled:text-slate-500", false)
+            ->assertSee("text-xl font-extrabold sm:text-2xl", false)
+            ->assertSee("text-2xl font-extrabold text-emerald-400 sm:text-3xl", false);
+    }
+
     public function test_exact_barcode_match_has_priority(): void
     {
         [$company, $branch, $user] = $this->context(true);

@@ -120,6 +120,14 @@ Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function (
     Route::post('/pos/cobrar', [PosController::class, 'checkout'])
         ->middleware('permission:ventas.crear')
         ->name('pos.checkout');
+    Route::middleware('permission:ventas.crear')->group(function () {
+        Route::post('/pos/suspender', [PosController::class, 'storeSuspended'])->name('pos.suspended.store');
+        Route::get('/pos/suspendidas', [PosController::class, 'suspendedIndex'])->name('pos.suspended.index');
+        Route::post('/pos/suspendidas/{suspendedSale}/recuperar', [PosController::class, 'recoverSuspended'])->name('pos.suspended.recover');
+        Route::post('/pos/suspendidas/{suspendedSale}/liberar', [PosController::class, 'releaseSuspended'])->name('pos.suspended.release');
+        Route::post('/pos/suspendidas/{suspendedSale}/volver-a-suspender', [PosController::class, 'resuspendSale'])->name('pos.suspended.resuspend');
+        Route::post('/pos/suspendidas/{suspendedSale}/cancelar', [PosController::class, 'cancelSuspended'])->middleware('permission:ventas.anular')->name('pos.suspended.cancel');
+    });
     Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])
         ->name('pos.receipt');
 });

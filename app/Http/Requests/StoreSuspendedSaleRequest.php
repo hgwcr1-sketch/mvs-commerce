@@ -6,7 +6,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
-class StorePosSaleRequest extends FormRequest
+class StoreSuspendedSaleRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -16,15 +16,7 @@ class StorePosSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'checkout_token' => ['required', 'uuid'],
-            'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
-            'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
             'customer_id' => ['nullable', 'integer'],
-            'payments' => ['required', 'array', 'min:1'],
-            'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
-            'payments.*.amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d+$/'],
-            'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+$/'],
-            'payments.*.reference' => ['nullable', 'string', 'max:150'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'regex:/^\d+(?:\.\d{1,4})?$/'],
@@ -32,26 +24,20 @@ class StorePosSaleRequest extends FormRequest
             'branch_id' => ['prohibited'],
             'user_id' => ['prohibited'],
             'price' => ['prohibited'],
-            'cost' => ['prohibited'],
             'tax' => ['prohibited'],
-            'discount' => ['prohibited'],
             'totals' => ['prohibited'],
-            'stock' => ['prohibited'],
-            'change_amount' => ['prohibited'],
-            'payments.*.change_amount' => ['prohibited'],
-            'payment_method_id' => ['prohibited'],
-            'received_amount' => ['prohibited'],
-            'sale_number' => ['prohibited'],
             'status' => ['prohibited'],
+            'suspension_number' => ['prohibited'],
+            'checkout_token' => ['prohibited'],
+            'recovery_token' => ['prohibited'],
+            'suspended_sale_id' => ['prohibited'],
+            'payments' => ['prohibited'],
             'items.*.price' => ['prohibited'],
             'items.*.sale_price' => ['prohibited'],
-            'items.*.cost' => ['prohibited'],
             'items.*.tax' => ['prohibited'],
             'items.*.tax_rate' => ['prohibited'],
-            'items.*.discount' => ['prohibited'],
             'items.*.subtotal' => ['prohibited'],
             'items.*.total' => ['prohibited'],
-            'items.*.stock' => ['prohibited'],
         ];
     }
 

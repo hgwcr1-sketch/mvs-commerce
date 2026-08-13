@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class CompanySequence extends Model
 {
     public const POS_SALE = 'pos_sale';
+    public const DOCUMENT_POS_SUSPENSION = 'pos_suspension';
     public const POS = self::POS_SALE;
 
     protected $fillable = [
@@ -56,5 +57,10 @@ class CompanySequence extends Model
     public static function nextPosNumber(int $companyId): string
     {
         return sprintf('POS-%08d', static::nextValue($companyId, static::POS));
+    }
+
+    public static function nextSuspensionNumber(int $companyId): string
+    {
+        return sprintf('SUSP-%06d', static::nextValue($companyId, static::DOCUMENT_POS_SUSPENSION));
     }
 }

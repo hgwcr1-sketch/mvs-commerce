@@ -84,7 +84,10 @@
 
             <section class="overflow-hidden rounded-2xl bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-5 py-4">
-                    <h2 class="text-lg font-bold text-slate-800">Carrito temporal</h2>
+                    <div class="flex items-center justify-between gap-3">
+                        <h2 class="text-lg font-bold text-slate-800">Carrito temporal</h2>
+                        <button x-show="cart.length" type="button" @click="clearCart" class="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">Limpiar carrito</button>
+                    </div>
                     <p x-show="notice" x-text="notice" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800"></p>
                 </div>
                 <div class="overflow-x-auto">
@@ -161,7 +164,7 @@
                                 + Nuevo cliente
                             </button>
                         @endcan
-                        <button x-show="selectedCustomer" type="button" @click="clearCustomer"
+                        <button x-show="selectedCustomer || suspended.customerInvalid" type="button" @click="clearCustomer"
                                 class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
                             Quitar cliente
                         </button>
@@ -237,71 +240,71 @@
     <section class="rounded-2xl bg-white p-3 shadow-sm">
         <div class="flex gap-2 overflow-x-auto pb-1">
             <button type="button" class="whitespace-nowrap rounded-xl bg-amber-500 px-4 py-3 font-bold text-white">Tiquete electrónico</button>
-            @foreach(['Factura electrónica', 'Pedido', 'Apartado', 'Abono', 'Cotización', 'Nota de crédito', 'Nota de débito', 'Suspender'] as $option)
+            <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-xl border border-amber-400 px-4 py-3 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
+            <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold text-white">Suspendidas</button>
+            @foreach(['Factura electrónica', 'Pedido', 'Apartado', 'Abono', 'Cotización', 'Nota de crédito', 'Nota de débito'] as $option)
                 <button type="button" disabled class="whitespace-nowrap rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
             @endforeach
         </div>
     </section>
 
-    <div x-show="checkout.open" x-cloak @click.self="closeCheckout" @keydown.enter.window="if (checkoutCanConfirm && !selectedPaymentMethod) confirmCheckout()"
-         class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4"
-         role="dialog" aria-modal="true" aria-label="Cobro">
-        <div class="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+    <div x-show="suspended.open" x-cloak @click.self="suspended.open = false" class="fixed inset-0 z-[115] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-label="Ventas suspendidas">
+        <div class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="flex items-center justify-between"><div><h2 class="text-2xl font-bold">Ventas suspendidas</h2><p class="text-sm text-slate-500">Sucursal activa</p></div><button type="button" @click="suspended.open = false" class="text-3xl">×</button></div>
+            <p x-show="suspended.error" x-text="suspended.error" class="mt-4 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
+            <div class="mt-5 overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-100"><tr><th class="p-3 text-left">Número</th><th class="p-3 text-left">Hora</th><th class="p-3 text-left">Cajero</th><th class="p-3 text-left">Cliente</th><th class="p-3 text-right">Líneas</th><th class="p-3 text-right">Total</th><th class="p-3 text-left">Estado</th><th class="p-3"></th></tr></thead>
+                <tbody><template x-for="sale in suspended.list" :key="sale.id"><tr class="border-b"><td class="p-3 font-bold" x-text="sale.suspension_number"></td><td class="p-3" x-text="new Date(sale.suspended_at).toLocaleString('es-CR')"></td><td class="p-3" x-text="sale.cashier"></td><td class="p-3" x-text="sale.customer"></td><td class="p-3 text-right" x-text="sale.items_count"></td><td class="p-3 text-right font-bold" x-text="money(sale.estimated_total)"></td><td class="p-3" x-text="sale.status"></td><td class="p-3 text-right"><button type="button" @click="recoverSuspended(sale)" class="rounded-lg bg-amber-500 px-3 py-2 font-bold text-white">Recuperar</button> <button x-show="suspended.canCancel" type="button" @click="cancelSuspended(sale)" class="rounded-lg px-3 py-2 font-bold text-red-600">Cancelar</button></td></tr></template></tbody>
+            </table><p x-show="!suspended.loading && suspended.list.length === 0" class="p-8 text-center text-slate-500">No hay ventas suspendidas disponibles.</p></div>
+        </div>
+    </div>
+
+    <div x-show="checkout.open" x-cloak @click.self="requestCloseCheckout" @keydown.escape.window="requestCloseCheckout" @keydown.enter.window="handleCheckoutEnter($event)"
+         class="fixed inset-0 z-[120] flex items-center justify-center bg-[#111111]/80 p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="Cobrar venta">
+        <div class="flex max-h-[90vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-3xl border border-[#B9BDC2] bg-white shadow-2xl">
             <template x-if="!checkout.result">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <div><h2 class="text-2xl font-bold text-slate-900">Cobro</h2><p class="text-sm text-amber-700">Sin apertura de caja</p></div>
-                        <button type="button" @click="closeCheckout" :disabled="checkout.processing" class="text-3xl text-slate-500">×</button>
+                <div class="flex min-h-0 flex-1 flex-col">
+                    <header class="flex items-center justify-between gap-4 border-b border-[#B9BDC2]/60 bg-[#111111] px-5 py-4 text-white sm:px-7">
+                        <div><h2 class="text-2xl font-black tracking-tight">Cobrar venta</h2><p class="mt-1 text-sm text-[#B9BDC2]"><span x-text="`${cart.length} producto${cart.length === 1 ? '' : 's'}`"></span> · <span x-text="selectedCustomer?.name || 'Consumidor Final'"></span></p></div>
+                        <button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 text-2xl hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#B1922D]" aria-label="Cerrar cobro">×</button>
+                    </header>
+
+                    <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                        <div class="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                            <section class="space-y-4" aria-label="Resumen del cobro">
+                                <div class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-5">
+                                    <h3 class="font-black text-[#111111]">Resumen permanente</h3>
+                                    <dl class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><dt>Subtotal</dt><dd class="font-bold" x-text="money(subtotal)"></dd></div><div class="flex justify-between"><dt>Descuento</dt><dd class="font-bold">₡0</dd></div><div class="flex justify-between"><dt>Impuesto</dt><dd class="font-bold" x-text="money(taxTotal)"></dd></div><div x-show="roundingTotal !== 0" class="flex justify-between"><dt>Ajuste de redondeo</dt><dd class="font-bold" x-text="money(roundingTotal)"></dd></div></dl>
+                                    <div class="mt-4 flex items-end justify-between border-t border-[#B9BDC2] pt-4"><span class="font-bold">Total</span><strong class="text-3xl text-[#111111]" x-text="money(grandTotal)"></strong></div>
+                                </div>
+                                <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money(appliedTotal)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
+                                <div class="rounded-2xl border border-[#B9BDC2] p-4">
+                                    <div class="flex items-center justify-between"><h3 class="font-black">Pagos aplicados</h3><span x-show="checkout.payments.length > 1" class="rounded-full bg-[#B1922D]/15 px-3 py-1 text-xs font-black text-[#806817]">Pago mixto</span></div>
+                                    <p x-show="checkout.payments.length === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
+                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
+                                </div>
+                            </section>
+
+                            <section class="space-y-4" aria-label="Monto y formas de pago">
+                                <div class="rounded-2xl border-2 border-[#B1922D] p-5"><div class="flex items-center justify-between gap-3"><label for="checkout-amount" class="font-black text-[#111111]">Monto a aplicar</label><button type="button" @click="usePendingBalance" class="text-sm font-bold text-[#806817] underline">Usar saldo pendiente</button></div><div class="mt-2 flex min-w-0 items-center rounded-xl bg-slate-50 px-4"><span class="shrink-0 text-3xl font-black text-[#806817]">₡</span><input id="checkout-amount" x-ref="checkoutAmount" x-model="checkout.draft.amount" @focus="$event.target.select()" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="min-w-0 w-full border-0 bg-transparent py-4 pl-2 text-right text-3xl font-black text-[#111111] focus:ring-0 sm:text-4xl"></div></div>
+                                <div><div class="flex items-end justify-between"><div><h3 class="text-lg font-black">Formas de pago</h3><p class="text-xs text-slate-500">Seleccione un método para aplicar el monto.</p></div><span class="text-xs font-semibold text-slate-500">Sin apertura de caja</span></div>
+                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-white ring-4 ring-amber-500/30' : 'border-amber-500 bg-amber-500 text-white hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-bold transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-black" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-white/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Próximamente' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                </div>
+
+                                <div x-show="selectedPaymentMethod" x-transition class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4">
+                                    <div class="flex items-center justify-between"><strong x-text="selectedPaymentMethod?.name"></strong><span class="font-black text-[#806817]" x-text="money(Number(checkout.draft.amount))"></span></div>
+                                    <div x-show="selectedPaymentMethod?.requires_reference" class="mt-3"><label for="checkout-reference" class="text-sm font-bold">Referencia *</label><input id="checkout-reference" x-ref="checkoutReference" x-model="checkout.draft.reference" @keydown.enter.prevent="addPayment" maxlength="150" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 focus:border-[#B1922D] focus:ring-[#B1922D]"></div>
+                                    <div x-show="selectedPaymentMethod?.allows_change" class="mt-3"><label for="checkout-received" class="text-sm font-bold">Monto recibido</label><input id="checkout-received" x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" @focus="$event.target.select()" @keydown.enter.prevent="addPayment" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 text-right text-2xl font-black focus:border-[#B1922D] focus:ring-[#B1922D]"><div class="mt-2 flex flex-wrap gap-2"><template x-for="amount in suggestedAmounts" :key="amount"><button type="button" @click="checkout.draft.receivedAmount = String(amount)" class="rounded-lg border border-[#B9BDC2] bg-white px-3 py-2 text-sm font-bold hover:border-[#B1922D]" x-text="money(amount)"></button></template></div><div class="mt-3 rounded-xl bg-[#111111] px-4 py-3 text-white"><span class="text-sm font-bold text-[#B9BDC2]">Vuelto</span><strong class="mt-1 block text-right text-2xl font-extrabold text-emerald-400 sm:text-3xl" x-text="money(Math.max(0, Number(checkout.draft.receivedAmount) - Number(checkout.draft.amount)))"></strong></div></div>
+                                    <div class="mt-4 flex justify-end gap-2"><button type="button" @click="cancelPaymentDraft" class="rounded-xl border border-[#B9BDC2] px-4 py-2 font-bold">Cancelar</button><button type="button" @click="addPayment" :disabled="!canAddPayment || checkout.processing" class="rounded-xl bg-amber-500 px-5 py-2 font-bold text-white hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:opacity-40" x-text="selectedPaymentMethod?.allows_change ? 'Agregar efectivo' : 'Agregar pago'"></button></div>
+                                </div>
+                                <p x-show="checkoutError" x-text="checkoutError" class="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
+                            </section>
+                        </div>
                     </div>
-                    <div class="mt-5 space-y-2 rounded-xl bg-slate-100 p-4">
-                        <div class="flex justify-between"><span>Subtotal</span><strong x-text="money(subtotal)"></strong></div>
-                        <div class="flex justify-between"><span>Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
-                        <div x-show="roundingTotal !== 0" class="flex justify-between"><span>Ajuste por redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
-                        <div class="flex justify-between border-t border-slate-300 pt-2 text-xl"><span>Total</span><strong x-text="money(grandTotal)"></strong></div>
-                    </div>
-                    <div class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-900 p-4 text-white md:grid-cols-4">
-                        <div><span class="text-xs text-slate-400">Total</span><strong class="block" x-text="money(grandTotal)"></strong></div>
-                        <div><span class="text-xs text-slate-400">Aplicado</span><strong class="block" x-text="money(appliedTotal)"></strong></div>
-                        <div><span class="text-xs text-slate-400">Saldo</span><strong class="block" x-text="money(pendingBalance)"></strong></div>
-                        <div><span class="text-xs text-slate-400">Vuelto</span><strong class="block text-green-400" x-text="money(totalPaymentChange)"></strong></div>
-                    </div>
-                    <p x-show="checkout.payments.length > 1" class="mt-3 rounded-lg bg-blue-50 p-2 text-center font-semibold text-blue-700">Pago mixto</p>
-                    <label class="mt-5 block text-sm font-semibold">Método</label>
-                    <select x-model.number="checkout.draft.methodId" @change="resetPaymentDraft" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3">
-                        <option value="">Seleccione…</option>
-                        <template x-for="method in availablePaymentMethods" :key="method.id"><option :value="method.id" x-text="method.name"></option></template>
-                    </select>
-                    <label class="mt-4 block text-sm font-semibold">Monto aplicado</label>
-                    <div class="mt-1 flex gap-2"><input x-model="checkout.draft.amount" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="min-w-0 flex-1 rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-bold"><button type="button" @click="completeBalance" :disabled="checkout.processing || pendingBalance <= 0" class="rounded-xl bg-slate-200 px-3 font-semibold">Completar saldo</button></div>
-                    <template x-if="selectedPaymentMethod?.allows_change"><div><label class="mt-4 block text-sm font-semibold">Monto recibido</label><input x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-bold"></div></template>
-                    <template x-if="selectedPaymentMethod?.requires_reference"><div><label class="mt-4 block text-sm font-semibold">Referencia *</label><input x-model="checkout.draft.reference" maxlength="150" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3"></div></template>
-                    <div x-show="selectedPaymentMethod?.allows_change" class="mt-3 flex flex-wrap gap-2">
-                        <template x-for="amount in suggestedAmounts" :key="amount">
-                            <button type="button" @click="checkout.draft.receivedAmount = amount" :disabled="checkout.processing" class="rounded-lg bg-slate-200 px-3 py-2 font-semibold" x-text="money(amount)"></button>
-                        </template>
-                    </div>
-                    <button type="button" @click="addPayment" :disabled="!canAddPayment || checkout.processing" class="mt-4 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white disabled:opacity-50">Agregar pago</button>
-                    <div class="mt-4 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between rounded-xl border border-slate-200 p-3"><div><strong x-text="payment.method_name"></strong><p class="text-sm" x-text="money(payment.amount)"></p><p x-show="payment.reference" class="text-xs text-slate-500" x-text="`Ref: ${payment.reference}`"></p><p x-show="payment.change_amount > 0" class="text-xs text-green-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="text-sm font-semibold text-red-600">Eliminar</button></div></template></div>
-                    <p x-show="checkoutError" x-text="checkoutError" class="mt-4 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
-                    <button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm"
-                            class="mt-5 w-full rounded-xl bg-amber-500 px-5 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                            x-text="checkout.processing ? 'Procesando…' : 'Confirmar cobro'"></button>
+
+                    <footer class="grid shrink-0 grid-cols-2 gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:flex sm:justify-end sm:px-6"><button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="rounded-xl border border-[#B9BDC2] px-5 py-3 font-bold">Cancelar</button><button type="button" @click="clearPayments" :disabled="checkout.processing || !checkout.payments.length" class="rounded-xl border border-[#B1922D] px-5 py-3 font-bold text-[#806817] disabled:opacity-40">Limpiar pagos</button><button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm" class="col-span-2 rounded-xl bg-amber-500 px-6 py-3 text-lg font-black text-white hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:bg-slate-300" x-text="checkout.processing ? 'Procesando…' : `Confirmar cobro — ${money(grandTotal)}`"></button></footer>
                 </div>
             </template>
-            <template x-if="checkout.result">
-                <div class="text-center">
-                    <h2 class="text-2xl font-bold text-green-700">Venta completada</h2>
-                    <p class="mt-2 text-xl font-bold" x-text="checkout.result.sale_number"></p>
-                    <p class="mt-4">Total: <strong x-text="money(checkout.result.total)"></strong></p>
-                    <p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p>
-                    <div class="mx-auto mt-4 max-w-sm space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span></p></template></div>
-                    <p x-show="checkout.result.duplicate" class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p>
-                    <div class="mt-6 flex justify-center gap-3">
-                        <a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white">Imprimir comprobante</a>
-                        <button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-bold text-white">Nueva venta</button>
-                    </div>
-                </div>
-            </template>
+            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#B1922D] text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-[#111111] px-5 py-3 font-bold text-white">Imprimir comprobante</a><button type="button" @click="newSale" class="rounded-xl bg-[#B1922D] px-5 py-3 font-bold text-[#111111]">Nueva venta</button></div></div></template>
         </div>
     </div>
 
@@ -448,6 +451,7 @@ document.addEventListener('alpine:init', () => {
             message: '',
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' },
         },
+        suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
 
         get resultsOpen() {
             return this.query.trim().length > 0 && (this.loading || this.results.length >= 0);
@@ -463,7 +467,7 @@ document.addEventListener('alpine:init', () => {
         },
         get roundingTotal() { return this.grandTotal - (this.subtotal + this.taxTotal); },
         get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
-        get canCheckout() { return this.cart.length > 0 && !this.cart.some(item => this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get canCheckout() { return this.cart.length > 0 && !this.suspended.customerInvalid && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
@@ -472,11 +476,11 @@ document.addEventListener('alpine:init', () => {
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
-            if (!method || !/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) return false;
+            if (!method || this.checkout.processing || this.methodUnavailable(method) || !/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) return false;
             if (method.requires_reference && !this.checkout.draft.reference.trim()) return false;
             if (!method.allows_change) return true;
             if (!/^\d+$/.test(String(this.checkout.draft.receivedAmount)) || Number(this.checkout.draft.receivedAmount) < amount) return false;
-            return Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance;
+            return true;
         },
         get suggestedAmounts() {
             const total = Number(this.checkout.draft.amount) || this.pendingBalance;
@@ -484,6 +488,25 @@ document.addEventListener('alpine:init', () => {
         },
         get customerResultsOpen() {
             return this.customerQuery.trim().length > 0;
+        },
+        async readFetchResponse(response) {
+            if (response.redirected) throw new Error('La sesión venció. Recargue la página e inténtelo nuevamente.');
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            let payload = null;
+            if (contentType.includes('application/json')) {
+                try { payload = await response.json(); } catch (error) { throw new Error('No se pudo completar la operación. Intente nuevamente.'); }
+            } else {
+                await response.text();
+                throw new Error(response.status === 419 ? 'La sesión venció. Recargue la página e inténtelo nuevamente.' : 'No se pudo completar la operación. Intente nuevamente.');
+            }
+            if (!response.ok) {
+                if (response.status === 419) throw new Error('La sesión venció. Recargue la página e inténtelo nuevamente.');
+                const requestError = new Error(response.status === 403 ? (payload.message || 'No tiene autorización para realizar esta operación.') : (payload.message || 'No se pudo completar la operación. Intente nuevamente.'));
+                requestError.payload = payload;
+                requestError.status = response.status;
+                throw requestError;
+            }
+            return payload;
         },
         async searchProducts() {
             const term = this.query.trim();
@@ -574,18 +597,46 @@ document.addEventListener('alpine:init', () => {
             this.checkout.open = true;
             this.checkout.error = '';
             this.checkout.result = null;
-            if (!this.checkout.payments.length) this.checkout.draft = { methodId: this.availablePaymentMethods.length === 1 ? this.availablePaymentMethods[0].id : '', amount: String(this.grandTotal), receivedAmount: String(this.grandTotal), reference: '' };
+            this.checkout.draft = { methodId: '', amount: String(this.pendingBalance || this.grandTotal), receivedAmount: String(this.pendingBalance || this.grandTotal), reference: '' };
+            this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); });
         },
-        closeCheckout() { if (!this.checkout.processing) this.checkout.open = false; },
-        resetPaymentDraft() { this.checkout.draft.amount = String(this.pendingBalance); this.checkout.draft.receivedAmount = String(this.pendingBalance); this.checkout.draft.reference = ''; },
-        completeBalance() { this.checkout.draft.amount = String(this.pendingBalance); if (this.selectedPaymentMethod?.allows_change) this.checkout.draft.receivedAmount = String(this.pendingBalance); },
+        requestCloseCheckout() {
+            if (this.checkout.processing || !this.checkout.open) return;
+            if (this.checkout.payments.length && !window.confirm('¿Desea cerrar el cobro? Los pagos preparados se limpiarán.')) return;
+            this.clearPayments();
+            this.checkout.open = false;
+            this.$nextTick(() => this.$refs.searchInput?.focus());
+        },
+        unsupportedPaymentMethod(method) { return ['credit', 'loyalty_points'].includes(method.type); },
+        methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0; },
+        methodInitial(method) { return (method.name || '?').trim().charAt(0).toUpperCase(); },
+        selectPaymentMethod(method) {
+            if (this.methodUnavailable(method) || this.checkout.processing) return;
+            const amount = Number(this.checkout.draft.amount);
+            if (!/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) { this.checkout.error = 'Indique un monto entero que no supere el saldo pendiente.'; this.$refs.checkoutAmount?.focus(); return; }
+            this.checkout.error = '';
+            this.checkout.draft.methodId = method.id;
+            this.checkout.draft.reference = '';
+            this.checkout.draft.receivedAmount = String(amount);
+            if (!method.requires_reference && !method.allows_change) { this.addPayment(); return; }
+            this.$nextTick(() => { const field = method.requires_reference ? this.$refs.checkoutReference : this.$refs.receivedAmount; field?.focus(); field?.select?.(); });
+        },
+        usePendingBalance() { this.checkout.draft.amount = String(this.pendingBalance); this.checkout.draft.receivedAmount = String(this.pendingBalance); this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); }); },
+        cancelPaymentDraft() { this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' }; this.checkout.error = ''; this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); }); },
+        clearPayments() { this.checkout.payments = []; this.checkout.draft = { methodId: '', amount: String(this.grandTotal), receivedAmount: String(this.grandTotal), reference: '' }; this.checkout.error = ''; },
+        handleCheckoutEnter(event) {
+            if (event.defaultPrevented || !this.checkout.open || this.checkout.result || this.checkout.processing) return;
+            if (this.selectedPaymentMethod) { if (this.canAddPayment) { event.preventDefault(); this.addPayment(); } return; }
+            if (this.checkoutCanConfirm) { event.preventDefault(); this.confirmCheckout(); }
+        },
         addPayment() {
             if (!this.canAddPayment) return;
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount), received = method.allows_change ? Number(this.checkout.draft.receivedAmount) : amount;
             this.checkout.payments.push({ payment_method_id: method.id, method_name: method.name, amount, received_amount: received, change_amount: method.allows_change ? received - amount : 0, reference: this.checkout.draft.reference.trim() || null });
             this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' };
+            this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); });
         },
-        removePayment(index) { this.checkout.payments.splice(index, 1); this.checkout.error = ''; },
+        removePayment(index) { this.checkout.payments.splice(index, 1); this.checkout.error = ''; this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' }; },
         async confirmCheckout() {
             if (!this.checkoutCanConfirm) return;
             this.checkout.processing = true;
@@ -596,20 +647,21 @@ document.addEventListener('alpine:init', () => {
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
+                        ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
                         customer_id: this.customerId,
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
                         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
                     }),
                 });
-                const payload = await response.json();
-                if (!response.ok) { this.checkout.error = payload.message || 'No fue posible completar el cobro.'; return; }
+                const payload = await this.readFetchResponse(response);
                 this.checkout.result = payload;
                 this.cart = [];
                 this.customerId = null;
                 this.selectedCustomer = null;
+                this.clearSuspendedRecovery();
                 this.successMessage = payload.message;
             } catch (error) {
-                this.checkout.error = 'No fue posible completar el cobro. Intente nuevamente.';
+                this.checkout.error = error.message || 'No fue posible completar el cobro. Intente nuevamente.';
             } finally {
                 this.checkout.processing = false;
             }
@@ -618,7 +670,62 @@ document.addEventListener('alpine:init', () => {
             this.checkoutToken = crypto.randomUUID();
             this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null };
             this.successMessage = '';
+            this.clearSuspendedRecovery();
             this.$nextTick(() => this.$refs.searchInput.focus());
+        },
+        clearSuspendedRecovery() { this.suspended.activeId = null; this.suspended.recoveryToken = null; this.suspended.warnings = []; this.suspended.customerInvalid = false; },
+        async releaseCurrentRecovery() {
+            if (!this.suspended.activeId) return true;
+            try {
+                const response = await fetch(`/pos/suspendidas/${this.suspended.activeId}/liberar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.recoveryToken }) });
+                await this.readFetchResponse(response);
+                this.clearSuspendedRecovery();
+                return true;
+            } catch (error) {
+                this.notice = error.message;
+                this.suspended.error = error.message;
+                return false;
+            }
+        },
+        async clearCart() {
+            if (!this.cart.length) return;
+            if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
+            if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
+            if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID();
+            this.$nextTick(() => this.$refs.searchInput.focus());
+        },
+        async suspendCurrent() {
+            if (!this.cart.length || this.suspended.saving) return;
+            this.suspended.saving = true; this.notice = '';
+            try {
+                const recoveredCart = this.suspended.activeId && this.suspended.recoveryToken;
+                const url = recoveredCart ? `/pos/suspendidas/${this.suspended.activeId}/volver-a-suspender` : {{ Illuminate\Support\Js::from(route('pos.suspended.store')) }};
+                const response = await fetch(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ ...(recoveredCart ? { recovery_token: this.suspended.recoveryToken } : {}), customer_id: this.customerId, items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })) }) });
+                const payload = await this.readFetchResponse(response);
+                this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkoutToken = crypto.randomUUID(); this.clearSuspendedRecovery(); this.successMessage = payload.message;
+            } catch (error) { this.notice = error.message; } finally { this.suspended.saving = false; }
+        },
+        async openSuspended() {
+            this.suspended.open = true; this.suspended.loading = true; this.suspended.error = '';
+            try { const response = await fetch({{ Illuminate\Support\Js::from(route('pos.suspended.index')) }}, { headers: { Accept: 'application/json' } }); const payload = await this.readFetchResponse(response); this.suspended.list = payload; }
+            catch (error) { this.suspended.error = error.message; } finally { this.suspended.loading = false; }
+        },
+        async recoverSuspended(sale) {
+            if (this.cart.length && !window.confirm('El carrito actual será reemplazado. ¿Desea continuar?')) return;
+            this.suspended.error = '';
+            try {
+                if (this.suspended.activeId && this.suspended.activeId !== sale.id && !(await this.releaseCurrentRecovery())) return;
+                const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
+                const payload = await this.readFetchResponse(response);
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable }));
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.$refs.searchInput.focus());
+            } catch (error) { this.suspended.error = error.message; }
+        },
+        async cancelSuspended(sale) {
+            const reason = window.prompt(`Razón para cancelar ${sale.suspension_number}:`); if (!reason?.trim() || !window.confirm('La suspensión quedará cancelada. ¿Continuar?')) return;
+            try { const response = await fetch(`/pos/suspendidas/${sale.id}/cancelar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ reason: reason.trim() }) }); await this.readFetchResponse(response); this.suspended.list = this.suspended.list.filter(item => item.id !== sale.id); }
+            catch (error) { this.suspended.error = error.message; }
         },
         async searchCustomers() {
             const term = this.customerQuery.trim();
@@ -659,6 +766,7 @@ document.addEventListener('alpine:init', () => {
         clearCustomer() {
             this.customerId = null;
             this.selectedCustomer = null;
+            this.suspended.customerInvalid = false;
             this.closeCustomerResults();
             this.$nextTick(() => this.$refs.customerSearchInput.focus());
         },
@@ -700,7 +808,7 @@ document.addEventListener('alpine:init', () => {
                     },
                     body: JSON.stringify(this.quickCustomer.form),
                 });
-                const payload = await response.json();
+                const payload = await this.readFetchResponse(response);
                 if (response.status === 422) {
                     this.quickCustomer.errors = payload.errors || {};
                     this.quickCustomer.message = payload.message || 'Revise la información ingresada.';
@@ -712,7 +820,8 @@ document.addEventListener('alpine:init', () => {
                 this.quickCustomer.open = false;
                 this.resetQuickCustomer();
             } catch (error) {
-                this.quickCustomer.message = 'No fue posible crear el cliente. Intente nuevamente.';
+                this.quickCustomer.errors = error.payload?.errors || {};
+                this.quickCustomer.message = error.message || 'No fue posible crear el cliente. Intente nuevamente.';
             } finally {
                 this.quickCustomer.saving = false;
             }
