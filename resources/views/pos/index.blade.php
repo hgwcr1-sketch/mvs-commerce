@@ -243,14 +243,14 @@
         </div>
     </section>
 
-    <div x-show="checkout.open" x-cloak @click.self="closeCheckout"
+    <div x-show="checkout.open" x-cloak @click.self="closeCheckout" @keydown.enter.window="if (checkoutCanConfirm && !selectedPaymentMethod) confirmCheckout()"
          class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4"
-         role="dialog" aria-modal="true" aria-label="Cobro en efectivo">
-        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+         role="dialog" aria-modal="true" aria-label="Cobro">
+        <div class="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
             <template x-if="!checkout.result">
                 <div>
                     <div class="flex items-center justify-between">
-                        <div><h2 class="text-2xl font-bold text-slate-900">Cobro en efectivo</h2><p class="text-sm text-amber-700">Sin apertura de caja</p></div>
+                        <div><h2 class="text-2xl font-bold text-slate-900">Cobro</h2><p class="text-sm text-amber-700">Sin apertura de caja</p></div>
                         <button type="button" @click="closeCheckout" :disabled="checkout.processing" class="text-3xl text-slate-500">×</button>
                     </div>
                     <div class="mt-5 space-y-2 rounded-xl bg-slate-100 p-4">
@@ -259,23 +259,30 @@
                         <div x-show="roundingTotal !== 0" class="flex justify-between"><span>Ajuste por redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
                         <div class="flex justify-between border-t border-slate-300 pt-2 text-xl"><span>Total</span><strong x-text="money(grandTotal)"></strong></div>
                     </div>
+                    <div class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-900 p-4 text-white md:grid-cols-4">
+                        <div><span class="text-xs text-slate-400">Total</span><strong class="block" x-text="money(grandTotal)"></strong></div>
+                        <div><span class="text-xs text-slate-400">Aplicado</span><strong class="block" x-text="money(appliedTotal)"></strong></div>
+                        <div><span class="text-xs text-slate-400">Saldo</span><strong class="block" x-text="money(pendingBalance)"></strong></div>
+                        <div><span class="text-xs text-slate-400">Vuelto</span><strong class="block text-green-400" x-text="money(totalPaymentChange)"></strong></div>
+                    </div>
+                    <p x-show="checkout.payments.length > 1" class="mt-3 rounded-lg bg-blue-50 p-2 text-center font-semibold text-blue-700">Pago mixto</p>
                     <label class="mt-5 block text-sm font-semibold">Método</label>
-                    <select x-model.number="checkout.paymentMethodId" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3">
-                        <template x-for="method in cashMethods" :key="method.id"><option :value="method.id" x-text="method.name"></option></template>
+                    <select x-model.number="checkout.draft.methodId" @change="resetPaymentDraft" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <option value="">Seleccione…</option>
+                        <template x-for="method in availablePaymentMethods" :key="method.id"><option :value="method.id" x-text="method.name"></option></template>
                     </select>
-                    <label for="received-amount" class="mt-5 block text-sm font-semibold">Monto recibido</label>
-                    <input id="received-amount" x-ref="receivedAmount" x-model="checkout.receivedAmount" inputmode="numeric" pattern="[0-9]*"
-                           @keydown.enter.prevent="confirmCheckout" class="mt-1 w-full rounded-xl border-2 border-slate-300 px-4 py-4 text-3xl font-bold focus:border-amber-500">
-                    <div class="mt-3 flex flex-wrap gap-2">
+                    <label class="mt-4 block text-sm font-semibold">Monto aplicado</label>
+                    <div class="mt-1 flex gap-2"><input x-model="checkout.draft.amount" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="min-w-0 flex-1 rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-bold"><button type="button" @click="completeBalance" :disabled="checkout.processing || pendingBalance <= 0" class="rounded-xl bg-slate-200 px-3 font-semibold">Completar saldo</button></div>
+                    <template x-if="selectedPaymentMethod?.allows_change"><div><label class="mt-4 block text-sm font-semibold">Monto recibido</label><input x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-xl font-bold"></div></template>
+                    <template x-if="selectedPaymentMethod?.requires_reference"><div><label class="mt-4 block text-sm font-semibold">Referencia *</label><input x-model="checkout.draft.reference" maxlength="150" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3"></div></template>
+                    <div x-show="selectedPaymentMethod?.allows_change" class="mt-3 flex flex-wrap gap-2">
                         <template x-for="amount in suggestedAmounts" :key="amount">
-                            <button type="button" @click="checkout.receivedAmount = amount" class="rounded-lg bg-slate-200 px-3 py-2 font-semibold" x-text="money(amount)"></button>
+                            <button type="button" @click="checkout.draft.receivedAmount = amount" :disabled="checkout.processing" class="rounded-lg bg-slate-200 px-3 py-2 font-semibold" x-text="money(amount)"></button>
                         </template>
                     </div>
+                    <button type="button" @click="addPayment" :disabled="!canAddPayment || checkout.processing" class="mt-4 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white disabled:opacity-50">Agregar pago</button>
+                    <div class="mt-4 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between rounded-xl border border-slate-200 p-3"><div><strong x-text="payment.method_name"></strong><p class="text-sm" x-text="money(payment.amount)"></p><p x-show="payment.reference" class="text-xs text-slate-500" x-text="`Ref: ${payment.reference}`"></p><p x-show="payment.change_amount > 0" class="text-xs text-green-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="text-sm font-semibold text-red-600">Eliminar</button></div></template></div>
                     <p x-show="checkoutError" x-text="checkoutError" class="mt-4 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
-                    <div class="mt-5 rounded-xl bg-slate-900 p-4 text-white">
-                        <div x-show="receivedNumber >= grandTotal" class="flex justify-between text-xl"><span>Vuelto</span><strong class="text-green-400" x-text="money(changeAmount)"></strong></div>
-                        <div x-show="receivedNumber < grandTotal" class="flex justify-between"><span>Faltante</span><strong class="text-red-400" x-text="money(grandTotal - receivedNumber)"></strong></div>
-                    </div>
                     <button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm"
                             class="mt-5 w-full rounded-xl bg-amber-500 px-5 py-4 text-lg font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
                             x-text="checkout.processing ? 'Procesando…' : 'Confirmar cobro'"></button>
@@ -286,8 +293,8 @@
                     <h2 class="text-2xl font-bold text-green-700">Venta completada</h2>
                     <p class="mt-2 text-xl font-bold" x-text="checkout.result.sale_number"></p>
                     <p class="mt-4">Total: <strong x-text="money(checkout.result.total)"></strong></p>
-                    <p>Recibido: <strong x-text="money(checkout.result.received_amount)"></strong></p>
-                    <p>Vuelto: <strong x-text="money(checkout.result.change_amount)"></strong></p>
+                    <p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p>
+                    <div class="mx-auto mt-4 max-w-sm space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span></p></template></div>
                     <p x-show="checkout.result.duplicate" class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p>
                     <div class="mt-6 flex justify-center gap-3">
                         <a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white">Imprimir comprobante</a>
@@ -432,8 +439,8 @@ document.addEventListener('alpine:init', () => {
         customerRequestNumber: 0,
         successMessage: '',
         checkoutToken: crypto.randomUUID(),
-        cashMethods: @json($paymentMethods->where('type', 'cash')->where('allows_change', true)->values()),
-        checkout: { open: false, processing: false, paymentMethodId: null, receivedAmount: '', error: '', result: null },
+        paymentMethods: @json($paymentMethods->values()),
+        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null },
         quickCustomer: {
             open: false,
             saving: false,
@@ -455,13 +462,24 @@ document.addEventListener('alpine:init', () => {
             return Math.round(this.subtotal + this.taxTotal);
         },
         get roundingTotal() { return this.grandTotal - (this.subtotal + this.taxTotal); },
-        get canCheckout() { return this.cart.length > 0 && !this.cart.some(item => this.exceedsStock(item)) && this.cashMethods.length > 0; },
-        get receivedNumber() { return Number(this.checkout.receivedAmount) || 0; },
-        get changeAmount() { return Math.max(0, this.receivedNumber - this.grandTotal); },
-        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.paymentMethodId && /^\d+$/.test(String(this.checkout.receivedAmount)) && this.receivedNumber >= this.grandTotal; },
-        get checkoutError() { return this.checkout.error || (this.checkout.receivedAmount !== '' && this.receivedNumber < this.grandTotal ? 'El monto recibido es insuficiente.' : ''); },
+        get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
+        get canCheckout() { return this.cart.length > 0 && !this.cart.some(item => this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
+        get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
+        get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
+        get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
+        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0; },
+        get checkoutError() { return this.checkout.error; },
+        get canAddPayment() {
+            const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
+            if (!method || !/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) return false;
+            if (method.requires_reference && !this.checkout.draft.reference.trim()) return false;
+            if (!method.allows_change) return true;
+            if (!/^\d+$/.test(String(this.checkout.draft.receivedAmount)) || Number(this.checkout.draft.receivedAmount) < amount) return false;
+            return Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance;
+        },
         get suggestedAmounts() {
-            const total = this.grandTotal;
+            const total = Number(this.checkout.draft.amount) || this.pendingBalance;
             return [...new Set([total, 1000, 2000, 5000, 10000, 20000, 50000].filter(value => value >= total))].slice(0, 4);
         },
         get customerResultsOpen() {
@@ -556,11 +574,18 @@ document.addEventListener('alpine:init', () => {
             this.checkout.open = true;
             this.checkout.error = '';
             this.checkout.result = null;
-            this.checkout.paymentMethodId = this.cashMethods.length === 1 ? this.cashMethods[0].id : this.checkout.paymentMethodId;
-            this.checkout.receivedAmount = String(this.grandTotal);
-            this.$nextTick(() => this.$refs.receivedAmount?.focus());
+            if (!this.checkout.payments.length) this.checkout.draft = { methodId: this.availablePaymentMethods.length === 1 ? this.availablePaymentMethods[0].id : '', amount: String(this.grandTotal), receivedAmount: String(this.grandTotal), reference: '' };
         },
         closeCheckout() { if (!this.checkout.processing) this.checkout.open = false; },
+        resetPaymentDraft() { this.checkout.draft.amount = String(this.pendingBalance); this.checkout.draft.receivedAmount = String(this.pendingBalance); this.checkout.draft.reference = ''; },
+        completeBalance() { this.checkout.draft.amount = String(this.pendingBalance); if (this.selectedPaymentMethod?.allows_change) this.checkout.draft.receivedAmount = String(this.pendingBalance); },
+        addPayment() {
+            if (!this.canAddPayment) return;
+            const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount), received = method.allows_change ? Number(this.checkout.draft.receivedAmount) : amount;
+            this.checkout.payments.push({ payment_method_id: method.id, method_name: method.name, amount, received_amount: received, change_amount: method.allows_change ? received - amount : 0, reference: this.checkout.draft.reference.trim() || null });
+            this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' };
+        },
+        removePayment(index) { this.checkout.payments.splice(index, 1); this.checkout.error = ''; },
         async confirmCheckout() {
             if (!this.checkoutCanConfirm) return;
             this.checkout.processing = true;
@@ -572,8 +597,7 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
                         customer_id: this.customerId,
-                        payment_method_id: this.checkout.paymentMethodId,
-                        received_amount: Number(this.checkout.receivedAmount),
+                        payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
                         items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
                     }),
                 });
@@ -592,7 +616,7 @@ document.addEventListener('alpine:init', () => {
         },
         newSale() {
             this.checkoutToken = crypto.randomUUID();
-            this.checkout = { open: false, processing: false, paymentMethodId: null, receivedAmount: '', error: '', result: null };
+            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null };
             this.successMessage = '';
             this.$nextTick(() => this.$refs.searchInput.focus());
         },

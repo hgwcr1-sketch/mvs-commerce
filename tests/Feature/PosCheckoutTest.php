@@ -157,9 +157,9 @@ class PosCheckoutTest extends TestCase
         $product = $this->product($company, false);
         foreach ([
             $this->payment($company, ['is_active' => false]),
-            $this->payment($company, ['type' => 'card']),
-            $this->payment($company, ['allows_change' => false]),
             $this->payment($this->company('Ajena')),
+            $this->payment($company, ['type' => 'credit']),
+            $this->payment($company, ['type' => 'loyalty_points']),
         ] as $method) {
             $this->checkout($user, $company, $branch, $method, [['product_id' => $product->id, 'quantity' => 1]], 5000)->assertUnprocessable();
         }
@@ -197,6 +197,93 @@ class PosCheckoutTest extends TestCase
 
         $this->checkout($user, $company, $branch, $cash, [['product_id' => $product->id, 'quantity' => 1]], 5000)->assertJsonPath('sale_number', 'POS-00000001');
         $this->checkout($user2, $company2, $branch2, $cash2, [['product_id' => $product2->id, 'quantity' => 1]], 5000)->assertJsonPath('sale_number', 'POS-00000001');
+    }
+
+    public function test_card_sinpe_and_custom_paypal_payments_require_and_store_references(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $product = $this->product($company, false, false, ['sale_price' => 1000, 'tax_rate' => 0]);
+
+        foreach ([
+            $this->payment($company, ['name' => 'Tarjeta', 'type' => 'card', 'requires_reference' => true, 'allows_change' => false]),
+            $this->payment($company, ['name' => 'SINPE', 'type' => 'sinpe', 'requires_reference' => true, 'allows_change' => false]),
+            $this->payment($company, ['name' => 'PayPal', 'type' => 'other', 'requires_reference' => true, 'allows_change' => false]),
+        ] as $method) {
+            $this->checkoutPayments($user, $company, $branch, $product, [[
+                'payment_method_id' => $method->id, 'amount' => 1000, 'reference' => null,
+            ]])->assertUnprocessable();
+            $this->checkoutPayments($user, $company, $branch, $product, [[
+                'payment_method_id' => $method->id, 'amount' => 1000, 'reference' => 'REF-'.$method->id,
+            ]])->assertOk();
+        }
+
+        $this->assertDatabaseCount('sale_payments', 3);
+    }
+
+    public function test_mixed_cash_card_sinpe_and_paypal_must_exactly_cover_total(): void
+    {
+        [$company, $branch, $user, $cash] = $this->context();
+        $product = $this->product($company, false, false, ['sale_price' => 1000, 'tax_rate' => 0]);
+        $card = $this->payment($company, ['name' => 'Tarjeta', 'type' => 'card', 'requires_reference' => true, 'allows_change' => false]);
+        $sinpe = $this->payment($company, ['name' => 'SINPE', 'type' => 'sinpe', 'requires_reference' => true, 'allows_change' => false]);
+        $paypal = $this->payment($company, ['name' => 'PayPal', 'type' => 'other', 'requires_reference' => true, 'allows_change' => false]);
+
+        $this->checkoutPayments($user, $company, $branch, $product, [
+            ['payment_method_id' => $card->id, 'amount' => 400, 'reference' => 'CARD'],
+            ['payment_method_id' => $cash->id, 'amount' => 600, 'received_amount' => 1000],
+        ])->assertOk()->assertJsonPath('total_change', '400.0000')->assertJsonCount(2, 'payments');
+
+        $this->checkoutPayments($user, $company, $branch, $product, [
+            ['payment_method_id' => $sinpe->id, 'amount' => 300, 'reference' => 'S'],
+            ['payment_method_id' => $paypal->id, 'amount' => 300, 'reference' => 'P'],
+            ['payment_method_id' => $cash->id, 'amount' => 400, 'received_amount' => 400],
+        ])->assertOk()->assertJsonCount(3, 'payments');
+
+        foreach ([900, 1100] as $amount) {
+            $this->checkoutPayments($user, $company, $branch, $product, [[
+                'payment_method_id' => $card->id, 'amount' => $amount, 'reference' => 'BAD',
+            ]])->assertUnprocessable();
+        }
+    }
+
+    public function test_payment_rules_reject_short_cash_duplicate_method_and_changed_reference_is_conflict(): void
+    {
+        [$company, $branch, $user, $cash] = $this->context();
+        $product = $this->product($company, true, false, ['sale_price' => 1000, 'tax_rate' => 0]);
+        $this->stock($branch, $product, 5);
+
+        $this->checkoutPayments($user, $company, $branch, $product, [[
+            'payment_method_id' => $cash->id, 'amount' => 1000, 'received_amount' => 999,
+        ]])->assertUnprocessable();
+        $this->checkoutPayments($user, $company, $branch, $product, [
+            ['payment_method_id' => $cash->id, 'amount' => 500, 'received_amount' => 500],
+            ['payment_method_id' => $cash->id, 'amount' => 500, 'received_amount' => 500],
+        ])->assertUnprocessable();
+
+        $card = $this->payment($company, ['name' => 'Tarjeta', 'type' => 'card', 'requires_reference' => true, 'allows_change' => false]);
+        $token = (string) Str::uuid();
+        $payments = [['payment_method_id' => $card->id, 'amount' => 1000, 'reference' => 'ONE']];
+        $this->checkoutPayments($user, $company, $branch, $product, $payments, $token)->assertOk();
+        $this->checkoutPayments($user, $company, $branch, $product, $payments, $token)->assertOk()->assertJsonPath('duplicate', true);
+        $payments[0]['reference'] = 'TWO';
+        $this->checkoutPayments($user, $company, $branch, $product, $payments, $token)->assertConflict();
+        $this->assertDatabaseCount('sales', 1);
+        $this->assertDatabaseCount('sale_payments', 1);
+        $this->assertDatabaseCount('inventory_movements', 1);
+    }
+
+    public function test_receipt_lists_mixed_payment_methods(): void
+    {
+        [$company, $branch, $user, $cash] = $this->context();
+        $product = $this->product($company, false, false, ['sale_price' => 1000, 'tax_rate' => 0]);
+        $card = $this->payment($company, ['name' => 'Tarjeta', 'type' => 'card', 'requires_reference' => true, 'allows_change' => false]);
+        $saleId = $this->checkoutPayments($user, $company, $branch, $product, [
+            ['payment_method_id' => $card->id, 'amount' => 400, 'reference' => 'ABC'],
+            ['payment_method_id' => $cash->id, 'amount' => 600, 'received_amount' => 600],
+        ])->json('sale_id');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))
+            ->assertOk()->assertSee('Formas de pago')->assertSee('Pago mixto')->assertSee('Tarjeta')->assertSee('ABC')->assertSee('Efectivo');
     }
 
     private function context(string $name = 'Empresa', array $permissions = ['pos.acceder', 'ventas.crear']): array
@@ -255,9 +342,22 @@ class PosCheckoutTest extends TestCase
 
     private function checkout(User $user, Company $company, Branch $branch, PaymentMethod $method, array $items, int $received, array $extra = [], ?int $customer = null, ?string $token = null)
     {
+        $total = round(collect($items)->sum(function ($item) {
+            $product = Product::findOrFail($item['product_id']);
+            return (float) $product->sale_price * (float) $item['quantity'] * (1 + ((float) ($product->tax_rate ?? 0) / 100));
+        }), 0, PHP_ROUND_HALF_UP);
         return $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), array_merge([
-            'checkout_token' => $token ?? (string) Str::uuid(), 'customer_id' => $customer, 'payment_method_id' => $method->id, 'received_amount' => $received, 'items' => $items,
+            'checkout_token' => $token ?? (string) Str::uuid(), 'customer_id' => $customer,
+            'payments' => [['payment_method_id' => $method->id, 'amount' => $total, 'received_amount' => $received, 'reference' => null]], 'items' => $items,
         ], $extra));
+    }
+
+    private function checkoutPayments(User $user, Company $company, Branch $branch, Product $product, array $payments, ?string $token = null)
+    {
+        return $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
+            'checkout_token' => $token ?? (string) Str::uuid(), 'customer_id' => null,
+            'payments' => $payments, 'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ]);
     }
 
     private function activeSession(Company $company, Branch $branch): array

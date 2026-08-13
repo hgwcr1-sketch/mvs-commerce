@@ -65,8 +65,20 @@
             <tr><td>Ajuste por redondeo</td><td>₡{{ number_format((float) $sale->rounding_total, 0, ',', '.') }}</td></tr>
         @endif
         <tr class="grand"><td>Total</td><td>₡{{ number_format((float) $sale->total, 0, ',', '.') }}</td></tr>
-        <tr><td>Efectivo recibido</td><td>₡{{ number_format((float) $sale->payments->first()?->received_amount, 0, ',', '.') }}</td></tr>
-        <tr><td>Vuelto</td><td>₡{{ number_format((float) $sale->payments->first()?->change_amount, 0, ',', '.') }}</td></tr>
+    </table>
+    <div class="rule"></div>
+    <p><strong>Formas de pago</strong>@if($sale->payments->count() >= 2) — Pago mixto @endif</p>
+    <table>
+        @foreach($sale->payments as $payment)
+            <tr><td>{{ $payment->paymentMethod->name }}</td><td>₡{{ number_format((float) $payment->amount, 0, ',', '.') }}</td></tr>
+            @if($payment->reference)
+                <tr><td class="muted">Referencia</td><td class="muted">{{ $payment->reference }}</td></tr>
+            @endif
+            @if($payment->paymentMethod->allows_change)
+                <tr><td class="muted">Recibido</td><td class="muted">₡{{ number_format((float) $payment->received_amount, 0, ',', '.') }}</td></tr>
+                <tr><td class="muted">Vuelto</td><td class="muted">₡{{ number_format((float) $payment->change_amount, 0, ',', '.') }}</td></tr>
+            @endif
+        @endforeach
     </table>
     <div class="rule"></div>
     <p class="center"><strong>Sin sesión de caja</strong></p>

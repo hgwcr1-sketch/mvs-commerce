@@ -32,7 +32,7 @@ class PosController extends Controller
         $paymentMethods = PaymentMethod::forCompany($companyId)
             ->active()
             ->ordered()
-            ->get(['id', 'code', 'name', 'type', 'allows_change']);
+            ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference']);
 
         return view('pos.index', [
             'company' => $company,
@@ -270,8 +270,9 @@ class PosController extends Controller
                 'errors' => $exception->errors(),
             ], 422);
         }
-        $sale = $result['sale']->load('payments');
-        $payment = $sale->payments->first();
+        $sale = $result['sale']->load('payments.paymentMethod');
+        $payments = $sale->payments;
+        $firstPayment = $payments->first();
 
         return response()->json([
             'success' => true,
@@ -283,8 +284,17 @@ class PosController extends Controller
             'tax_total' => $sale->tax_total,
             'rounding_total' => $sale->rounding_total,
             'total' => $sale->total,
-            'received_amount' => $payment?->received_amount,
-            'change_amount' => $payment?->change_amount,
+            'paid_total' => $sale->paid_total,
+            'total_change' => number_format($payments->sum(fn ($payment) => (float) $payment->change_amount), 4, '.', ''),
+            'payments' => $payments->map(fn ($payment) => [
+                'method_name' => $payment->paymentMethod->name,
+                'amount' => $payment->amount,
+                'received_amount' => $payment->received_amount,
+                'change_amount' => $payment->change_amount,
+                'reference' => $payment->reference,
+            ])->values(),
+            'received_amount' => $firstPayment?->received_amount,
+            'change_amount' => $firstPayment?->change_amount,
             'receipt_url' => route('pos.receipt', $sale),
         ]);
     }

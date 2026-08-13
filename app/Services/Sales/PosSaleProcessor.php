@@ -29,7 +29,8 @@ class PosSaleProcessor
     public function process(array $data, User $user, int $companyId, int $branchId): array
     {
         $items = $this->consolidateItems($data['items']);
-        $fingerprint = $this->fingerprint($data, $items, $user->id, $companyId, $branchId);
+        $payments = $this->canonicalPayments($data['payments']);
+        $fingerprint = $this->fingerprint($data, $items, $payments, $user->id, $companyId, $branchId);
 
         $existing = $this->existingSale($companyId, $data['checkout_token'], $fingerprint);
 
@@ -38,7 +39,7 @@ class PosSaleProcessor
         }
 
         try {
-            $sale = DB::transaction(function () use ($data, $items, $fingerprint, $user, $companyId, $branchId) {
+            $sale = DB::transaction(function () use ($data, $items, $payments, $fingerprint, $user, $companyId, $branchId) {
                 $company = Company::query()->where('is_active', true)->find($companyId);
 
                 if ($company === null || !$user->companies()->whereKey($companyId)->exists()) {
@@ -67,15 +68,17 @@ class PosSaleProcessor
                     throw ValidationException::withMessages(['customer_id' => 'El cliente no está disponible para esta empresa.']);
                 }
 
-                $paymentMethod = PaymentMethod::query()
+                $paymentMethods = PaymentMethod::query()
                     ->where('company_id', $companyId)
                     ->where('is_active', true)
-                    ->where('type', PaymentMethod::TYPE_CASH)
-                    ->where('allows_change', true)
-                    ->find($data['payment_method_id']);
+                    ->whereIn('id', array_column($payments, 'payment_method_id'))
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
 
-                if ($paymentMethod === null) {
-                    throw ValidationException::withMessages(['payment_method_id' => 'Seleccione un método de Efectivo válido.']);
+                if ($paymentMethods->count() !== count($payments)) {
+                    throw ValidationException::withMessages(['payments' => 'Uno o más métodos de pago no están disponibles.']);
                 }
 
                 $products = Product::query()
@@ -121,11 +124,7 @@ class PosSaleProcessor
                 $unroundedTotal = $this->decimal4($subtotal + $taxTotal);
                 $total = round($unroundedTotal, 0, PHP_ROUND_HALF_UP);
                 $roundingTotal = $this->decimal4($total - $unroundedTotal);
-                $receivedAmount = (float) $data['received_amount'];
-
-                if ($receivedAmount < $total) {
-                    throw ValidationException::withMessages(['received_amount' => 'El monto recibido es insuficiente.']);
-                }
+                $resolvedPayments = $this->resolvePayments($payments, $paymentMethods, $total);
 
                 $sale = Sale::create([
                     'company_id' => $companyId,
@@ -178,16 +177,18 @@ class PosSaleProcessor
                     }
                 }
 
-                SalePayment::create([
-                    'sale_id' => $sale->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'created_by' => $user->id,
-                    'amount' => $total,
-                    'received_amount' => $receivedAmount,
-                    'change_amount' => $receivedAmount - $total,
-                    'reference' => null,
-                    'status' => SalePayment::STATUS_COMPLETED,
-                ]);
+                foreach ($resolvedPayments as $payment) {
+                    SalePayment::create([
+                        'sale_id' => $sale->id,
+                        'payment_method_id' => $payment['method']->id,
+                        'created_by' => $user->id,
+                        'amount' => $payment['amount'],
+                        'received_amount' => $payment['received_amount'],
+                        'change_amount' => $payment['change_amount'],
+                        'reference' => $payment['reference'],
+                        'status' => SalePayment::STATUS_COMPLETED,
+                    ]);
+                }
 
                 return $sale;
             }, 3);
@@ -225,15 +226,91 @@ class PosSaleProcessor
         }
     }
 
-    private function fingerprint(array $data, array $items, int $userId, int $companyId, int $branchId): string
+    private function canonicalPayments(array $payments): array
+    {
+        $canonical = array_map(fn (array $payment) => [
+            'payment_method_id' => (int) $payment['payment_method_id'],
+            'amount' => number_format((float) $payment['amount'], 4, '.', ''),
+            'received_amount' => array_key_exists('received_amount', $payment) && $payment['received_amount'] !== null
+                ? number_format((float) $payment['received_amount'], 4, '.', '')
+                : null,
+            'reference' => isset($payment['reference']) && trim((string) $payment['reference']) !== ''
+                ? trim((string) $payment['reference'])
+                : null,
+        ], array_values($payments));
+
+        $methodIds = array_column($canonical, 'payment_method_id');
+        if (count($methodIds) !== count(array_unique($methodIds))) {
+            throw ValidationException::withMessages(['payments' => 'No puede repetir una forma de pago en la misma venta.']);
+        }
+
+        return $canonical;
+    }
+
+    private function resolvePayments(array $payments, $paymentMethods, float $total): array
+    {
+        $resolved = [];
+        $applied = 0.0;
+        $changeProducerSeen = false;
+
+        foreach ($payments as $index => $payment) {
+            $method = $paymentMethods->get($payment['payment_method_id']);
+            if (in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) {
+                throw ValidationException::withMessages(['payments' => "El método {$method->name} todavía no está disponible en el POS."]);
+            }
+
+            if ($method->requires_reference && $payment['reference'] === null) {
+                throw ValidationException::withMessages(['payments' => "La referencia es obligatoria para {$method->name}."]);
+            }
+
+            $amount = (float) $payment['amount'];
+            $pending = $this->decimal4($total - $applied);
+            if ($amount > $pending) {
+                throw ValidationException::withMessages(['payments' => "El monto aplicado con {$method->name} supera el saldo pendiente."]);
+            }
+
+            if ($method->allows_change) {
+                $received = $payment['received_amount'] === null ? $amount : (float) $payment['received_amount'];
+                if ($received < $amount) {
+                    throw ValidationException::withMessages(['payments' => "El monto recibido con {$method->name} es insuficiente."]);
+                }
+                $change = $this->decimal4($received - $amount);
+                if ($change > 0) {
+                    if ($changeProducerSeen || $index !== array_key_last($payments)) {
+                        throw ValidationException::withMessages(['payments' => 'El único pago que produce vuelto debe ser el último.']);
+                    }
+                    $changeProducerSeen = true;
+                }
+            } else {
+                $received = $amount;
+                $change = 0.0;
+            }
+
+            $resolved[] = [
+                'method' => $method,
+                'amount' => $amount,
+                'received_amount' => $received,
+                'change_amount' => $change,
+                'reference' => $payment['reference'],
+            ];
+            $applied = $this->decimal4($applied + $amount);
+        }
+
+        if ($applied !== $this->decimal4($total)) {
+            throw ValidationException::withMessages(['payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta.']);
+        }
+
+        return $resolved;
+    }
+
+    private function fingerprint(array $data, array $items, array $payments, int $userId, int $companyId, int $branchId): string
     {
         return hash('sha256', json_encode([
             'company_id' => $companyId,
             'branch_id' => $branchId,
             'user_id' => $userId,
             'customer_id' => isset($data['customer_id']) ? (int) $data['customer_id'] : null,
-            'payment_method_id' => (int) $data['payment_method_id'],
-            'received_amount' => (string) (int) $data['received_amount'],
+            'payments' => $payments,
             'items' => array_map(fn ($quantity) => number_format($quantity, 4, '.', ''), $items),
         ], JSON_THROW_ON_ERROR));
     }
