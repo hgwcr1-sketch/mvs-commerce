@@ -27,6 +27,8 @@ class Sale extends Model
         'branch_id',
         'user_id',
         'customer_id',
+        'checkout_token',
+        'request_fingerprint',
         'sale_number',
         'document_type',
         'sale_condition',
