@@ -10,7 +10,7 @@
                 <div><p class="text-xs uppercase text-slate-400">Empresa</p><p class="font-semibold">{{ $company->trade_name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Sucursal</p><p class="font-semibold">{{ $branch->name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Cajero</p><p class="font-semibold">{{ $cashier->name }}</p></div>
-                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">{{ $cashSession ? 'Caja abierta: '.$cashSession->session_number : 'Sin apertura de caja' }}</p>@if(!$cashSession && $canOpenCash)<a href="{{ route('cash.open.create') }}" class="text-xs text-amber-300 underline">Abrir caja</a>@endif</div>
+                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">@if($cashSession) Caja abierta: {{ $cashSession->session_number }} — {{ $cashSession->cashRegister->name }} @elseif($cashSettings->require_open_session) Debe abrir una caja antes de cobrar @else Sin apertura de caja — cobro permitido temporalmente @endif</p>@if(!$cashSession && $canOpenCash)<a href="{{ route('cash.open.create') }}" class="text-xs text-amber-300 underline">Abrir caja</a>@endif</div>
             </div>
             <a href="{{ route('dashboard') }}"
                class="self-end rounded-xl border border-slate-600 px-5 py-2 font-medium hover:bg-slate-800 xl:self-auto">
@@ -18,6 +18,10 @@
             </a>
         </div>
     </section>
+
+    @if($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)
+        <section class="rounded-2xl border border-amber-300 bg-amber-50 p-4"><label for="cash-session" class="font-semibold text-amber-900">Caja / Sesión para cobrar</label><select id="cash-session" x-model="cashSessionId" class="mt-2 w-full rounded-xl border-amber-300"><option value="">Seleccione una sesión</option>@foreach($cashSessions as $session)<option value="{{ $session->id }}">{{ $session->session_number }} — {{ $session->cashRegister->name }}</option>@endforeach</select></section>
+    @endif
 
     <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div class="space-y-5">
@@ -442,6 +446,8 @@ document.addEventListener('alpine:init', () => {
         customerRequestNumber: 0,
         successMessage: '',
         checkoutToken: crypto.randomUUID(),
+        cashSessionId: @json($cashSession?->id),
+        cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->values()),
         checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null },
         quickCustomer: {
@@ -467,7 +473,7 @@ document.addEventListener('alpine:init', () => {
         },
         get roundingTotal() { return this.grandTotal - (this.subtotal + this.taxTotal); },
         get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
-        get canCheckout() { return this.cart.length > 0 && !this.suspended.customerInvalid && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
@@ -647,6 +653,7 @@ document.addEventListener('alpine:init', () => {
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
+                        cash_session_id: this.cashSessionId || null,
                         ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
                         customer_id: this.customerId,
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),

@@ -14,6 +14,7 @@ use App\Models\SalePayment;
 use App\Models\SuspendedSale;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
+use App\Services\Cash\CashSessionResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +24,7 @@ class PosSaleProcessor
 {
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
+        private readonly CashSessionResolver $cashSessionResolver,
     ) {
     }
 
@@ -60,6 +62,8 @@ class PosSaleProcessor
                 if ($branch === null || !$user->branches()->whereKey($branchId)->exists()) {
                     throw ValidationException::withMessages(['branch' => 'La sucursal activa ya no está autorizada.']);
                 }
+
+                $cashSession = $this->cashSessionResolver->resolve($user, $companyId, $branchId, isset($data['cash_session_id']) ? (int) $data['cash_session_id'] : null, true);
 
                 $suspendedSale = $this->lockSuspensionForCheckout($data, $user, $companyId, $branchId);
 
@@ -134,6 +138,7 @@ class PosSaleProcessor
                     'company_id' => $companyId,
                     'branch_id' => $branchId,
                     'user_id' => $user->id,
+                    'cash_session_id' => $cashSession?->id,
                     'customer_id' => $customerId,
                     'checkout_token' => $data['checkout_token'],
                     'request_fingerprint' => $fingerprint,
@@ -184,11 +189,14 @@ class PosSaleProcessor
                 foreach ($resolvedPayments as $payment) {
                     SalePayment::create([
                         'sale_id' => $sale->id,
+                        'cash_session_id' => $cashSession?->id,
                         'payment_method_id' => $payment['method']->id,
+                        'affects_cash_snapshot' => $payment['method']->affects_cash,
                         'created_by' => $user->id,
                         'amount' => $payment['amount'],
                         'received_amount' => $payment['received_amount'],
                         'change_amount' => $payment['change_amount'],
+                        'cash_effect_amount' => $payment['method']->affects_cash ? $payment['amount'] : 0,
                         'reference' => $payment['reference'],
                         'status' => SalePayment::STATUS_COMPLETED,
                     ]);
@@ -322,6 +330,7 @@ class PosSaleProcessor
             'company_id' => $companyId,
             'branch_id' => $branchId,
             'user_id' => $userId,
+            'cash_session_id' => isset($data['cash_session_id']) ? (int) $data['cash_session_id'] : null,
             'customer_id' => isset($data['customer_id']) ? (int) $data['customer_id'] : null,
             'payments' => $payments,
             'items' => array_map(fn ($quantity) => number_format($quantity, 4, '.', ''), $items),

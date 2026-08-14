@@ -144,17 +144,17 @@ class CompanyCashSettingManagementTest extends TestCase
         $this->putAs($this->userWithPermissions($company, ['caja.administrar']), $company, $this->payload(['closure_email_recipients' => $emails]))->assertSessionHasErrors('closure_email_recipients');
     }
 
-    public function test_require_open_session_cannot_be_modified_by_manipulated_request(): void
+    public function test_require_open_session_requires_active_registers_in_every_active_branch(): void
     {
         [$company] = $this->context('Empresa'); $settings = $this->settings($company, ['require_open_session' => false]);
-        $this->putAs($this->userWithPermissions($company, ['caja.administrar']), $company, $this->payload(['require_open_session' => '1']))->assertSessionHasNoErrors();
+        $this->putAs($this->userWithPermissions($company, ['caja.administrar']), $company, $this->payload(['require_open_session' => '1']))->assertSessionHasErrors('require_open_session');
         $this->assertFalse($settings->fresh()->require_open_session);
     }
 
-    public function test_view_shows_locked_opening_control_and_back_button(): void
+    public function test_view_shows_functional_opening_control_and_back_button(): void
     {
         [$company] = $this->context('Empresa'); $this->settings($company);
-        $this->getAs($this->userWithPermissions($company, ['caja.administrar']), $company)->assertOk()->assertSee('Exigir apertura antes de cobrar')->assertSee('Se habilitará al completar la integración de apertura con el POS.')->assertSee('disabled', false)->assertSee('Volver');
+        $this->getAs($this->userWithPermissions($company, ['caja.administrar']), $company)->assertOk()->assertSee('Exigir apertura antes de cobrar')->assertSee('Cuando está activo, el POS exige una sesión de caja abierta antes de completar una venta.')->assertSee('name="require_open_session"', false)->assertSee('Volver');
     }
 
     public function test_update_sends_no_email(): void

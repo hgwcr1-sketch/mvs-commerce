@@ -34,6 +34,7 @@ class CompanyCashSettingController extends Controller
         $company = $this->activeCompany();
         $data = $request->safe()->only([
             'allow_multiple_registers',
+            'require_open_session',
             'session_mode',
             'blind_closing',
             'accepts_usd',
@@ -52,6 +53,15 @@ class CompanyCashSettingController extends Controller
                 ->where('company_id', $company->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if (!$cashSetting->require_open_session && $data['require_open_session']) {
+                $missingBranches = $company->branches()->where('is_active', true)
+                    ->whereDoesntHave('cashRegisters', fn ($query) => $query->where('is_active', true))
+                    ->pluck('name');
+                if ($missingBranches->isNotEmpty()) {
+                    throw ValidationException::withMessages(['require_open_session' => 'Falta una caja activa en: '.$missingBranches->join(', ').'.']);
+                }
+            }
 
             if ($cashSetting->allow_multiple_registers && !$data['allow_multiple_registers']) {
                 $hasMultipleActive = CashRegister::query()

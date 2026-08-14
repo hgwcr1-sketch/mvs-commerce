@@ -81,7 +81,7 @@
         @endforeach
     </table>
     <div class="rule"></div>
-    <p class="center"><strong>Sin sesión de caja</strong></p>
+    <p class="center"><strong>{{ $sale->cashSession ? $sale->cashSession->session_number.' — '.$sale->cashSession->cashRegister->name : 'Sin sesión de caja' }}</strong></p>
 </main>
 <div class="actions">
     <button type="button" onclick="window.print()">Imprimir</button>

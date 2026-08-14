@@ -13,7 +13,7 @@ use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SuspendedSale;
-use App\Models\CashSession;
+use App\Services\Cash\CashSessionResolver;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SuspendedSaleService;
 use Illuminate\Http\JsonResponse;
@@ -25,7 +25,7 @@ use Illuminate\View\View;
 
 class PosController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, CashSessionResolver $cashSessionResolver): View
     {
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
@@ -38,10 +38,9 @@ class PosController extends Controller
             ->active()
             ->ordered()
             ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference']);
-        $cashSession = CashSession::forCompany($companyId)->forBranch($branchId)
-            ->where('opened_by', $request->user()->id)
-            ->whereIn('status', [CashSession::STATUS_OPEN, CashSession::STATUS_CLOSING])
-            ->latest('opened_at')->first();
+        $cashSettings = app(\App\Services\CompanyCashSettingsProvisioner::class)->provision($company);
+        $cashSessions = $cashSessionResolver->applicable($request->user(), $companyId, $branchId);
+        $cashSession = $cashSessions->count() === 1 ? $cashSessions->first() : null;
 
         return view('pos.index', [
             'company' => $company,
@@ -50,6 +49,8 @@ class PosController extends Controller
             'paymentMethods' => $paymentMethods,
             'canCancelSuspended' => $request->user()->hasPermission('ventas.anular', $company),
             'cashSession' => $cashSession,
+            'cashSessions' => $cashSessions,
+            'cashSettings' => $cashSettings,
             'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
         ]);
     }
@@ -379,7 +380,7 @@ class PosController extends Controller
             abort(403);
         }
 
-        $sale->load(['branch', 'user', 'customer', 'items', 'payments.paymentMethod']);
+        $sale->load(['branch', 'user', 'customer', 'items', 'payments.paymentMethod', 'cashSession.cashRegister']);
 
         return view('pos.receipt', compact('sale', 'company'));
     }

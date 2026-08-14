@@ -37,7 +37,7 @@
                     <option value="shared" @selected(old('session_mode', $cashSetting->session_mode) === 'shared')>Compartida — varios usuarios autorizados pueden operar</option>
                 </select></div>
 
-                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><label class="flex items-start gap-3"><input type="checkbox" disabled @checked($cashSetting->require_open_session) class="mt-1 rounded border-slate-300 text-slate-400"><span><span class="block font-medium text-slate-600">Exigir apertura antes de cobrar: {{ $cashSetting->require_open_session ? 'Sí' : 'No' }}</span><span class="text-sm text-slate-500">Se habilitará al completar la integración de apertura con el POS.</span></span></label></div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><label class="flex items-start gap-3"><input type="hidden" name="require_open_session" value="0"><input type="checkbox" name="require_open_session" value="1" @checked(old('require_open_session', $cashSetting->require_open_session)) class="mt-1 rounded border-slate-300 text-amber-500"><span><span class="block font-medium text-slate-700">Exigir apertura antes de cobrar</span><span class="text-sm text-slate-500">Cuando está activo, el POS exige una sesión de caja abierta antes de completar una venta.</span></span></label>@error('require_open_session')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror</div>
             </div>
         </x-card>
 

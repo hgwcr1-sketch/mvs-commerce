@@ -17,6 +17,7 @@ class StorePosSaleRequest extends FormRequest
     {
         return [
             'checkout_token' => ['required', 'uuid'],
+            'cash_session_id' => ['nullable', 'integer'],
             'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
             'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
             'customer_id' => ['nullable', 'integer'],
@@ -43,6 +44,10 @@ class StorePosSaleRequest extends FormRequest
             'received_amount' => ['prohibited'],
             'sale_number' => ['prohibited'],
             'status' => ['prohibited'],
+            'affects_cash_snapshot' => ['prohibited'],
+            'cash_effect_amount' => ['prohibited'],
+            'payments.*.affects_cash_snapshot' => ['prohibited'],
+            'payments.*.cash_effect_amount' => ['prohibited'],
             'items.*.price' => ['prohibited'],
             'items.*.sale_price' => ['prohibited'],
             'items.*.cost' => ['prohibited'],

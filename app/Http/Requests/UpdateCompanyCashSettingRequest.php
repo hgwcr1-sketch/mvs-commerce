@@ -26,6 +26,7 @@ class UpdateCompanyCashSettingRequest extends FormRequest
 
         $this->merge([
             'allow_multiple_registers' => $this->boolean('allow_multiple_registers'),
+            'require_open_session' => $this->boolean('require_open_session'),
             'blind_closing' => $this->boolean('blind_closing'),
             'accepts_usd' => $acceptsUsd,
             'require_difference_authorization' => $this->boolean('require_difference_authorization'),
@@ -43,6 +44,7 @@ class UpdateCompanyCashSettingRequest extends FormRequest
     {
         return [
             'allow_multiple_registers' => ['boolean'],
+            'require_open_session' => ['boolean'],
             'session_mode' => ['required', Rule::in([
                 CompanyCashSetting::SESSION_MODE_INDIVIDUAL,
                 CompanyCashSetting::SESSION_MODE_SHARED,
