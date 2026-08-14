@@ -58,6 +58,7 @@ use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CashSessionController;
+use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -144,6 +145,15 @@ Route::middleware('active.branch')->group(function () {
     Route::post('/caja/abrir', [CashSessionController::class, 'store'])
         ->middleware('permission:caja.abrir')
         ->name('cash.open.store');
+    Route::get('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'index'])
+        ->middleware('permission:caja.ver')
+        ->name('cash.movements.index');
+    Route::get('/caja/sesiones/{cashSession}/movimientos/crear', [CashMovementController::class, 'create'])
+        ->middleware('permission:caja.movimientos')
+        ->name('cash.movements.create');
+    Route::post('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'store'])
+        ->middleware('permission:caja.movimientos')
+        ->name('cash.movements.store');
 });
 
 /*
