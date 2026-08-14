@@ -181,7 +181,11 @@ class PosAccessAndSearchTest extends TestCase
             ->assertSee("change_amount: method.allows_change ? received - amount : 0", false)
             ->assertSee("received_amount: received", false)
             ->assertDontSee("Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance", false)
-            ->assertSee("border-amber-500 bg-amber-500 text-white hover:bg-amber-600", false)
+            ->assertSee("border-amber-500 bg-amber-500 text-black hover:bg-amber-600", false)
+            ->assertSee('bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600', false)
+            ->assertSee('bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta', false)
+            ->assertSee('bg-[#111111] px-5 py-3 font-normal text-white">Imprimir comprobante', false)
+            ->assertSee('rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓', false)
             ->assertSee("disabled:bg-slate-100 disabled:text-slate-500", false)
             ->assertSee("text-xl font-extrabold sm:text-2xl", false)
             ->assertSee("text-2xl font-extrabold text-emerald-400 sm:text-3xl", false);
