@@ -13,4 +13,5 @@ class CashCountDetail extends Model
     public function cashSession(): BelongsTo { return $this->belongsTo(CashSession::class); }
     public function cashDenomination(): BelongsTo { return $this->belongsTo(CashDenomination::class); }
     public function countedBy(): BelongsTo { return $this->belongsTo(User::class, 'counted_by'); }
+    public function scopeClosing($query) { return $query->where('count_type', self::TYPE_CLOSING); }
 }

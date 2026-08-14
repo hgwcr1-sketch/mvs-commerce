@@ -59,6 +59,7 @@ use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashMovementController;
+use App\Http\Controllers\CashClosingController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -154,6 +155,13 @@ Route::middleware('active.branch')->group(function () {
     Route::post('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'store'])
         ->middleware('permission:caja.movimientos')
         ->name('cash.movements.store');
+    Route::post('/caja/sesiones/{cashSession}/cierre/iniciar', [CashClosingController::class, 'start'])->middleware('permission:caja.cerrar')->name('cash.closing.start');
+    Route::get('/caja/sesiones/{cashSession}/cierre', [CashClosingController::class, 'create'])->middleware('permission:caja.cerrar')->name('cash.closing.create');
+    Route::post('/caja/sesiones/{cashSession}/cierre', [CashClosingController::class, 'submit'])->middleware('permission:caja.cerrar')->name('cash.closing.submit');
+    Route::post('/caja/sesiones/{cashSession}/cierre/cancelar', [CashClosingController::class, 'cancel'])->middleware('permission:caja.cerrar')->name('cash.closing.cancel');
+    Route::get('/caja/sesiones/{cashSession}/cierre/resultado', [CashClosingController::class, 'show'])->name('cash.closing.show');
+    Route::get('/caja/sesiones/{cashSession}/cierre/autorizar', [CashClosingController::class, 'authorizeForm'])->middleware('permission:caja.autorizar_diferencia')->name('cash.closing.authorize.form');
+    Route::post('/caja/sesiones/{cashSession}/cierre/autorizar', [CashClosingController::class, 'authorize'])->middleware('permission:caja.autorizar_diferencia')->name('cash.closing.authorize');
 });
 
 /*

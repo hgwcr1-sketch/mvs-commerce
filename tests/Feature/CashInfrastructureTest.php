@@ -103,16 +103,33 @@ class CashInfrastructureTest extends TestCase
     public function test_crc_denominations_are_idempotent_and_preserve_customizations(): void
     {
         $company = $this->company('Empresa denominaciones');
+        $legacy = CashDenomination::create([
+            'company_id' => $company->id,
+            'currency_code' => 'CRC',
+            'value' => 50000,
+            'label' => 'Billete histórico de ₡50.000',
+            'type' => CashDenomination::TYPE_BILL,
+            'sort_order' => 5,
+            'is_active' => true,
+        ]);
         $provisioner = app(CashDenominationProvisioner::class);
         $provisioner->provision($company);
-        $denomination = CashDenomination::forCompany($company->id)->forCurrency('CRC')->where('value', 50000)->firstOrFail();
-        $denomination->update(['label' => 'Valor personalizado', 'is_active' => false, 'sort_order' => 999]);
+        $denomination = CashDenomination::forCompany($company->id)->forCurrency('CRC')->where('value', 1000)->firstOrFail();
+        $denomination->update(['label' => 'Valor personalizado', 'sort_order' => 999]);
         $provisioner->provision($company);
 
         $this->assertSame(12, CashDenomination::forCompany($company->id)->forCurrency('CRC')->count());
+        $this->assertSame(11, CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->count());
+        $this->assertSame(
+            [20000, 10000, 5000, 2000, 1000, 500, 100, 50, 25, 10, 5],
+            CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->orderByDesc('value')->pluck('value')->map(fn ($value) => (int) $value)->all(),
+        );
+        $this->assertFalse($legacy->fresh()->is_active);
+        $this->assertSame('Billete histórico de ₡50.000', $legacy->fresh()->label);
         $this->assertSame('Valor personalizado', $denomination->fresh()->label);
-        $this->assertFalse($denomination->fresh()->is_active);
+        $this->assertTrue($denomination->fresh()->is_active);
         $this->assertSame(999, $denomination->fresh()->sort_order);
+        $this->assertSame(12, CashDenomination::forCompany($company->id)->forCurrency('CRC')->distinct()->count('value'));
     }
 
     public function test_denominations_are_isolated_by_company(): void
@@ -121,8 +138,8 @@ class CashInfrastructureTest extends TestCase
         $second = $this->company('Empresa dos');
         $this->seed(CashInfrastructureSeeder::class);
 
-        $this->assertSame(12, CashDenomination::forCompany($first->id)->count());
-        $this->assertSame(12, CashDenomination::forCompany($second->id)->count());
+        $this->assertSame(11, CashDenomination::forCompany($first->id)->count());
+        $this->assertSame(11, CashDenomination::forCompany($second->id)->count());
         $this->assertEmpty(CashDenomination::forCompany($first->id)->pluck('id')->intersect(CashDenomination::forCompany($second->id)->pluck('id')));
     }
 
@@ -185,7 +202,8 @@ class CashInfrastructureTest extends TestCase
         $company = app(CompanyProvisioner::class)->provision(User::factory()->create(), ['trade_name' => 'Empresa futura']);
 
         $this->assertDatabaseHas('company_cash_settings', ['company_id' => $company->id, 'accepts_usd' => false, 'blind_closing' => true]);
-        $this->assertSame(12, CashDenomination::forCompany($company->id)->count());
+        $this->assertSame(11, CashDenomination::forCompany($company->id)->count());
+        $this->assertDatabaseMissing('cash_denominations', ['company_id' => $company->id, 'currency_code' => 'CRC', 'value' => 50000]);
         $this->assertSame(0, CashRegister::forCompany($company->id)->count());
     }
 

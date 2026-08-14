@@ -8,7 +8,6 @@ use App\Models\Company;
 class CashDenominationProvisioner
 {
     private const CRC_DENOMINATIONS = [
-        [50000, 'Billete de ₡50.000', CashDenomination::TYPE_BILL],
         [20000, 'Billete de ₡20.000', CashDenomination::TYPE_BILL],
         [10000, 'Billete de ₡10.000', CashDenomination::TYPE_BILL],
         [5000, 'Billete de ₡5.000', CashDenomination::TYPE_BILL],
@@ -24,6 +23,13 @@ class CashDenominationProvisioner
 
     public function provision(Company $company): void
     {
+        CashDenomination::query()
+            ->forCompany($company->id)
+            ->forCurrency('CRC')
+            ->where('value', 50000)
+            ->where('is_active', true)
+            ->update(['is_active' => false]);
+
         foreach (self::CRC_DENOMINATIONS as $index => [$value, $label, $type]) {
             CashDenomination::firstOrCreate(
                 ['company_id' => $company->id, 'currency_code' => 'CRC', 'value' => $value],

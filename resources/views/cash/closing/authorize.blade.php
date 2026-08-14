@@ -1,0 +1,10 @@
+@extends('layouts.app')
+@section('title','Autorizar diferencia')
+@section('content')
+<div class="mx-auto max-w-4xl space-y-6">
+    <div class="flex items-start justify-between gap-4"><div><h2 class="text-2xl font-semibold">Autorizar diferencia</h2><p class="text-sm text-slate-600">{{ $cashSession->session_number }} — {{ $cashSession->cashRegister->name }}</p></div><a href="{{ route('cash.closing.show',$cashSession) }}" class="rounded-lg border border-slate-300 px-4 py-2">Volver</a></div>
+    <x-card><div class="grid gap-4 sm:grid-cols-3"><div><span class="text-sm text-slate-500">Efectivo esperado</span><strong class="block text-2xl">₡{{ number_format((float)$cashSession->expected_cash,0,',','.') }}</strong></div><div><span class="text-sm text-slate-500">Efectivo contado</span><strong class="block text-2xl">₡{{ number_format((float)$cashSession->counted_cash,0,',','.') }}</strong></div><div><span class="text-sm text-slate-500">Diferencia</span><strong class="block text-2xl">₡{{ number_format((float)$cashSession->difference_amount,0,',','.') }}</strong></div></div></x-card>
+    <x-card><div class="space-y-2">@foreach($cashSession->paymentReconciliations as $item)<div class="flex justify-between border-b py-2"><span>{{ $item->payment_method_name_snapshot }}</span><span>Esperado ₡{{ number_format((float)$item->expected_amount,0,',','.') }} · Reportado ₡{{ number_format((float)$item->reported_amount,0,',','.') }} · Diferencia ₡{{ number_format((float)$item->difference_amount,0,',','.') }}</span></div>@endforeach</div></x-card>
+    <form method="POST" action="{{ route('cash.closing.authorize',$cashSession) }}">@csrf<label class="flex gap-3"><input type="checkbox" name="confirmation" value="1" required class="mt-1 rounded text-amber-500"><span>Confirmo la revisión y autorización de las diferencias.</span></label><div class="mt-6 flex justify-end"><button class="rounded-xl bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600">Autorizar y cerrar</button></div></form>
+</div>
+@endsection
