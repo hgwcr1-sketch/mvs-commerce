@@ -63,8 +63,8 @@
         </x-card>
 
         <x-card>
-            <x-slot:header><div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-800">Reporte de cierre</h3><button type="button" @click="addEmail" :disabled="emails.length >= 10" class="rounded-lg border border-amber-500 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40">+ Agregar correo</button></div></x-slot:header>
-            <p class="mb-4 text-sm text-slate-500">Los correos se utilizarán cuando habilitemos el envío automático del cierre.</p>
+            <x-slot:header><div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-800">Correos para avisos de apertura y cierre</h3><button type="button" @click="addEmail" :disabled="emails.length >= 10" class="rounded-lg border border-amber-500 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40">+ Agregar correo</button></div></x-slot:header>
+            <p class="mb-4 text-sm text-slate-500">Cada destinatario recibirá avisos independientes al abrir y cerrar definitivamente una sesión de Caja.</p>
             <div class="space-y-3"><template x-for="(email, index) in emails" :key="index"><div class="flex gap-3"><input type="email" name="closure_email_recipients[]" x-model="emails[index]" maxlength="150" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0" placeholder="correo@empresa.com"><button type="button" @click="removeEmail(index)" class="rounded-xl border border-red-200 px-4 text-sm font-semibold text-red-600 hover:bg-red-50">Quitar</button></div></template><p x-show="emails.length === 0" class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No hay destinatarios configurados.</p></div>
         </x-card>
 

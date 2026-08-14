@@ -81,11 +81,11 @@ class UpdateCompanyCashSettingRequest extends FormRequest
             'difference_tolerance.required' => 'Debe indicar la tolerancia de diferencia.',
             'difference_tolerance.numeric' => 'La tolerancia debe ser numérica.',
             'difference_tolerance.min' => 'La tolerancia no puede ser negativa.',
-            'closure_email_recipients.array' => 'Los destinatarios de cierre no son válidos.',
-            'closure_email_recipients.max' => 'Puede configurar como máximo 10 correos.',
+            'closure_email_recipients.array' => 'Los correos para avisos de apertura y cierre no son válidos.',
+            'closure_email_recipients.max' => 'Puede configurar como máximo 10 correos para avisos de apertura y cierre.',
             'closure_email_recipients.*.email' => 'Cada destinatario debe ser un correo válido.',
             'closure_email_recipients.*.max' => 'Cada correo puede tener como máximo 150 caracteres.',
-            'closure_email_recipients.*.distinct' => 'No puede repetir destinatarios de cierre.',
+            'closure_email_recipients.*.distinct' => 'No puede repetir correos para avisos de apertura y cierre.',
         ];
     }
 }

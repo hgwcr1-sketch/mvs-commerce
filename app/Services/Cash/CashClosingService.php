@@ -7,6 +7,7 @@ use App\Models\CashCountDetail;
 use App\Models\CashPaymentReconciliation;
 use App\Models\CashSession;
 use App\Models\CashSessionEvent;
+use App\Models\CashSessionMailNotification;
 use App\Models\Company;
 use App\Models\CompanyCashSetting;
 use App\Models\User;
@@ -18,6 +19,7 @@ class CashClosingService
     public function __construct(
         private readonly CashExpectedAmountService $cashExpected,
         private readonly CashPaymentExpectedAmountService $paymentExpected,
+        private readonly CashSessionMailNotificationService $mailNotifications,
     ) {}
 
     public function start(User $user, int $companyId, int $branchId, int $sessionId, string $token): CashSession
@@ -74,7 +76,10 @@ class CashClosingService
             $updates = ['expected_cash' => $expectedCash, 'counted_cash' => $countedCash, 'difference_amount' => $cashDifference, 'closing_confirmation_token' => $data['request_token'], 'closing_submitted_at' => $now, 'closing_notes' => $data['closing_notes'] ?? null];
             if (! $requiresAuthorization) $updates += ['status' => CashSession::STATUS_CLOSED, 'open_guard' => null, 'closed_by' => $user->id, 'closed_at' => $now];
             $session->update($updates);
-            if (! $requiresAuthorization) CashSessionEvent::create(['cash_session_id' => $session->id, 'event_type' => CashSessionEvent::TYPE_CLOSED, 'user_id' => $user->id, 'occurred_at' => $now, 'payload' => $this->closingPayload($session->fresh())]);
+            if (! $requiresAuthorization) {
+                CashSessionEvent::create(['cash_session_id' => $session->id, 'event_type' => CashSessionEvent::TYPE_CLOSED, 'user_id' => $user->id, 'occurred_at' => $now, 'payload' => $this->closingPayload($session->fresh())]);
+                $this->mailNotifications->create($session->fresh(), CashSessionMailNotification::TYPE_CLOSED, $settings);
+            }
             return ['session' => $session->fresh(), 'duplicate' => false, 'requires_authorization' => $requiresAuthorization];
         });
     }
@@ -94,12 +99,13 @@ class CashClosingService
     public function authorize(User $user, int $companyId, int $branchId, int $sessionId): CashSession
     {
         return DB::transaction(function () use ($user, $companyId, $branchId, $sessionId) {
-            [$session] = $this->lockedContext($user, $companyId, $branchId, $sessionId, 'caja.autorizar_diferencia');
+            [$session, $settings] = $this->lockedContext($user, $companyId, $branchId, $sessionId, 'caja.autorizar_diferencia');
             if ($session->status === CashSession::STATUS_CLOSED && $session->difference_authorized_by !== null) return $session;
             if ($session->status !== CashSession::STATUS_CLOSING || $session->closing_submitted_at === null) throw ValidationException::withMessages(['cash_session_id' => 'No existe un cierre pendiente de autorización.']);
             $now = now(); $session->update(['difference_authorized_by' => $user->id, 'difference_authorized_at' => $now, 'status' => CashSession::STATUS_CLOSED, 'open_guard' => null, 'closed_by' => $user->id, 'closed_at' => $now]);
             CashSessionEvent::create(['cash_session_id' => $session->id, 'event_type' => CashSessionEvent::TYPE_DIFFERENCE_AUTHORIZED, 'user_id' => $user->id, 'occurred_at' => $now]);
             CashSessionEvent::create(['cash_session_id' => $session->id, 'event_type' => CashSessionEvent::TYPE_CLOSED, 'user_id' => $user->id, 'occurred_at' => $now, 'payload' => $this->closingPayload($session->fresh())]);
+            $this->mailNotifications->create($session->fresh(), CashSessionMailNotification::TYPE_CLOSED, $settings);
             return $session->fresh();
         });
     }

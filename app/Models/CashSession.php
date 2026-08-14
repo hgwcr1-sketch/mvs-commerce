@@ -35,6 +35,7 @@ class CashSession extends Model
     public function events(): HasMany { return $this->hasMany(CashSessionEvent::class); }
     public function countDetails(): HasMany { return $this->hasMany(CashCountDetail::class); }
     public function paymentReconciliations(): HasMany { return $this->hasMany(CashPaymentReconciliation::class); }
+    public function mailNotifications(): HasMany { return $this->hasMany(CashSessionMailNotification::class); }
     public function scopeForCompany(Builder $query, int $companyId): Builder { return $query->where('company_id', $companyId); }
     public function scopeForBranch(Builder $query, int $branchId): Builder { return $query->where('branch_id', $branchId); }
     public function scopeOpen(Builder $query): Builder { return $query->where('status', self::STATUS_OPEN); }
