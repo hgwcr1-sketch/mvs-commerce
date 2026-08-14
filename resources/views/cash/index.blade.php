@@ -2,7 +2,7 @@
 @section('title','Caja')
 @section('content')
 <div class="space-y-6">
-<div class="flex items-center justify-between"><div><h2 class="text-2xl font-semibold text-slate-800">Caja</h2><p class="text-sm text-slate-600">Consulta la sesión abierta y tus aperturas recientes.</p></div><a href="{{ route('dashboard') }}" class="rounded-lg border border-slate-300 px-4 py-2">Volver</a></div>
+<div class="flex items-center justify-between"><div><h2 class="text-2xl font-semibold text-slate-800">Caja</h2><p class="text-sm text-slate-600">Consulta la sesión abierta y tus aperturas recientes.</p></div><div class="flex gap-2">@can('caja.ver')<a href="{{ route('cash.history.index') }}" class="rounded-lg bg-amber-500 px-4 py-2 font-normal text-black hover:bg-amber-600">Historial</a>@endcan<a href="{{ route('dashboard') }}" class="rounded-lg border border-slate-300 px-4 py-2">Volver</a></div></div>
 @foreach(['success'=>'green','info'=>'amber'] as $key=>$color)@if(session($key))<div class="rounded-lg border border-{{ $color }}-200 bg-{{ $color }}-50 p-4 text-{{ $color }}-800">{{ session($key) }}</div>@endif @endforeach
 <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">El POS todavía permite cobrar sin apertura durante esta etapa.</div>
 @if($openSessions->isEmpty())

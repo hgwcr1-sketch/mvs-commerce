@@ -45,4 +45,12 @@ class CashSessionMailNotification extends Model
             ->where('attempts', '<', self::MAX_ATTEMPTS)
             ->where(fn (Builder $available) => $available->whereNull('available_at')->orWhere('available_at', '<=', now()));
     }
+
+    public function isAdministrativelyRetriable(): bool
+    {
+        if ($this->attempts >= self::MAX_ATTEMPTS || ($this->available_at && $this->available_at->isFuture())) return false;
+        if ($this->status === self::STATUS_FAILED) return true;
+
+        return $this->status === self::STATUS_PENDING && $this->updated_at?->lte(now()->subMinutes(5));
+    }
 }

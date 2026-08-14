@@ -60,6 +60,7 @@ use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\CashClosingController;
+use App\Http\Controllers\CashSessionHistoryController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -146,6 +147,15 @@ Route::middleware('active.branch')->group(function () {
     Route::post('/caja/abrir', [CashSessionController::class, 'store'])
         ->middleware('permission:caja.abrir')
         ->name('cash.open.store');
+    Route::get('/caja/historial', [CashSessionHistoryController::class, 'index'])
+        ->middleware('permission:caja.ver')
+        ->name('cash.history.index');
+    Route::get('/caja/historial/{cashSession}', [CashSessionHistoryController::class, 'show'])
+        ->middleware('permission:caja.ver')
+        ->name('cash.history.show');
+    Route::post('/caja/historial/{cashSession}/correos/{notification}/reintentar', [CashSessionHistoryController::class, 'retry'])
+        ->middleware('permission:caja.administrar')
+        ->name('cash.history.mail.retry');
     Route::get('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'index'])
         ->middleware('permission:caja.ver')
         ->name('cash.movements.index');
