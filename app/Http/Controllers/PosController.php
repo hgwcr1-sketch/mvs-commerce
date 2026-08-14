@@ -13,6 +13,7 @@ use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SuspendedSale;
+use App\Models\CashSession;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SuspendedSaleService;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,10 @@ class PosController extends Controller
             ->active()
             ->ordered()
             ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference']);
+        $cashSession = CashSession::forCompany($companyId)->forBranch($branchId)
+            ->where('opened_by', $request->user()->id)
+            ->whereIn('status', [CashSession::STATUS_OPEN, CashSession::STATUS_CLOSING])
+            ->latest('opened_at')->first();
 
         return view('pos.index', [
             'company' => $company,
@@ -44,6 +49,8 @@ class PosController extends Controller
             'cashier' => $request->user(),
             'paymentMethods' => $paymentMethods,
             'canCancelSuspended' => $request->user()->hasPermission('ventas.anular', $company),
+            'cashSession' => $cashSession,
+            'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
         ]);
     }
 

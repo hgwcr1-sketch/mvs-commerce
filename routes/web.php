@@ -57,6 +57,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CompanyCashSettingController;
+use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DataImportController;
@@ -132,6 +133,17 @@ Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function (
     });
     Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])
         ->name('pos.receipt');
+});
+
+Route::middleware('active.branch')->group(function () {
+    Route::get('/caja', [CashSessionController::class, 'index'])
+        ->name('cash.index');
+    Route::get('/caja/abrir', [CashSessionController::class, 'create'])
+        ->middleware('permission:caja.abrir')
+        ->name('cash.open.create');
+    Route::post('/caja/abrir', [CashSessionController::class, 'store'])
+        ->middleware('permission:caja.abrir')
+        ->name('cash.open.store');
 });
 
 /*

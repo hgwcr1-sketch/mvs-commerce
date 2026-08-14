@@ -10,7 +10,7 @@
                 <div><p class="text-xs uppercase text-slate-400">Empresa</p><p class="font-semibold">{{ $company->trade_name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Sucursal</p><p class="font-semibold">{{ $branch->name }}</p></div>
                 <div><p class="text-xs uppercase text-slate-400">Cajero</p><p class="font-semibold">{{ $cashier->name }}</p></div>
-                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">Sin apertura de caja</p></div>
+                <div><p class="text-xs uppercase text-slate-400">Estado de caja</p><p class="font-semibold text-amber-400">{{ $cashSession ? 'Caja abierta: '.$cashSession->session_number : 'Sin apertura de caja' }}</p>@if(!$cashSession && $canOpenCash)<a href="{{ route('cash.open.create') }}" class="text-xs text-amber-300 underline">Abrir caja</a>@endif</div>
             </div>
             <a href="{{ route('dashboard') }}"
                class="self-end rounded-xl border border-slate-600 px-5 py-2 font-medium hover:bg-slate-800 xl:self-auto">

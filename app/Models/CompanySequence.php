@@ -11,6 +11,7 @@ class CompanySequence extends Model
     public const POS_SALE = 'pos_sale';
     public const DOCUMENT_POS_SUSPENSION = 'pos_suspension';
     public const POS = self::POS_SALE;
+    public const CASH_SESSION = 'cash_session';
 
     protected $fillable = [
         'company_id',
@@ -62,5 +63,10 @@ class CompanySequence extends Model
     public static function nextSuspensionNumber(int $companyId): string
     {
         return sprintf('SUSP-%06d', static::nextValue($companyId, static::DOCUMENT_POS_SUSPENSION));
+    }
+
+    public static function nextCashSessionNumber(int $companyId): string
+    {
+        return sprintf('CAJA-%08d', static::nextValue($companyId, static::CASH_SESSION));
     }
 }
