@@ -247,6 +247,37 @@
     label="Límite de Crédito"
     :value="old('credit_limit', $customer->credit_limit ?? 0)"/>
 
+    <x-select
+    name="price_level"
+    label="Nivel de Precio">
+
+    <option value="normal"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'normal')>
+        Normal
+    </option>
+
+    <option value="wholesale"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'wholesale')>
+        Mayorista
+    </option>
+
+    <option value="a"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'a')>
+        Precio A
+    </option>
+
+    <option value="b"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'b')>
+        Precio B
+    </option>
+
+    <option value="c"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'c')>
+        Precio C
+    </option>
+
+</x-select>
+
         <x-input
             type="number"
             name="credit_days"

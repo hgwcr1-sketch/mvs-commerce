@@ -199,7 +199,7 @@ class SuspendedSaleService
         $warnings = $customerInvalid ? ['El cliente ya no está activo. Debe quitarlo antes de cobrar.'] : [];
         $canCheckout = !$customerInvalid;
         $companyId = (int) $sale->company_id;
-        $items = $sale->items->map(function ($snapshot) use ($products, $stocks, $companyId, &$warnings, &$canCheckout) {
+        $items = $sale->items->map(function ($snapshot) use ($products, $stocks, $companyId, $customer, &$warnings, &$canCheckout) {
             $product = $snapshot->product_id ? $products->get($snapshot->product_id) : null;
             $unavailable = !$product || $product->trashed() || !$product->is_active || (int) $product->company_id !== $companyId;
             if ($unavailable) {
@@ -208,25 +208,70 @@ class SuspendedSaleService
                 return ['product_id' => $snapshot->product_id, 'name' => $snapshot->description, 'code' => $snapshot->product_code, 'barcode' => $snapshot->barcode, 'quantity' => $snapshot->quantity, 'price' => $snapshot->estimated_unit_price, 'tax_rate' => $snapshot->estimated_tax_rate, 'stock' => 0, 'track_inventory' => true, 'allows_decimals' => true, 'unit' => $snapshot->unit_code, 'image_url' => null, 'unavailable' => true];
             }
             $stock = (float) ($stocks[$product->id] ?? 0);
-            $priceChanged = $this->decimal4((float) $snapshot->estimated_unit_price) !== $this->decimal4((float) $product->sale_price);
-            $taxChanged = $this->decimal4((float) $snapshot->estimated_tax_rate) !== $this->decimal4((float) ($product->tax_rate ?? 0));
-            $stockInsufficient = $product->track_inventory && (float) $snapshot->quantity > $stock;
-            if ($priceChanged) $warnings[] = "{$product->name}: precio cambió de {$snapshot->estimated_unit_price} a {$product->sale_price}.";
+            $currentPrice = match ($customer?->price_level ?? 'normal') {
+    'wholesale' => $product->wholesale_price !== null
+        ? (float) $product->wholesale_price
+        : (float) $product->sale_price,
+
+    'a' => $product->price_a !== null
+        ? (float) $product->price_a
+        : (float) $product->sale_price,
+
+    'b' => $product->price_b !== null
+        ? (float) $product->price_b
+        : (float) $product->sale_price,
+
+    'c' => $product->price_c !== null
+        ? (float) $product->price_c
+        : (float) $product->sale_price,
+
+    default => (float) $product->sale_price,
+};
+
+$priceChanged = $this->decimal4((float) $snapshot->estimated_unit_price)
+    !== $this->decimal4($currentPrice);
+
+$taxChanged = $this->decimal4((float) $snapshot->estimated_tax_rate)
+    !== $this->decimal4((float) ($product->tax_rate ?? 0));
+
+$stockInsufficient = $product->track_inventory
+    && (float) $snapshot->quantity > $stock;
+
+if ($priceChanged) {
+    $warnings[] = "{$product->name}: precio cambió de {$snapshot->estimated_unit_price} a {$currentPrice}.";
+}
             if ($taxChanged) $warnings[] = "{$product->name}: impuesto cambió de {$snapshot->estimated_tax_rate}% a {$product->tax_rate}%.";
             if ($stockInsufficient) { $warnings[] = "{$product->name}: stock insuficiente."; $canCheckout = false; }
             $path = $this->safeImage($product->image);
-            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $product->sale_price, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? Storage::disk('public')->url($path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient];
+            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $currentPrice, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? Storage::disk('public')->url($path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient];
         })->values();
-        return ['suspended_sale_id' => $sale->id, 'suspension_number' => $sale->suspension_number, 'recovery_token' => $sale->recovery_token, 'customer' => $customerInvalid || !$customer ? null : ['id' => $customer->id, 'name' => $customer->name, 'identification' => $customer->identification], 'customer_invalid' => $customerInvalid, 'items' => $items, 'warnings' => $warnings, 'can_checkout' => $canCheckout];
+        return ['suspended_sale_id' => $sale->id, 'suspension_number' => $sale->suspension_number, 'recovery_token' => $sale->recovery_token, 'customer' => $customerInvalid || !$customer ? null : [
+    'id' => $customer->id,
+    'name' => $customer->name,
+    'identification' => $customer->identification,
+    'price_level' => $customer->price_level ?? 'normal',
+], 'customer_invalid' => $customerInvalid, 'items' => $items, 'warnings' => $warnings, 'can_checkout' => $canCheckout];
     }
 
     private function resolveSnapshot(array $data, User $user, int $companyId, int $branchId): array
     {
         $company = $this->validateContext($user, $companyId, $branchId);
         $customerId = $data['customer_id'] ?? null;
-        if ($customerId !== null && !Customer::query()->forCompany($companyId)->where('is_active', true)->whereKey($customerId)->exists()) {
-            throw ValidationException::withMessages(['customer_id' => 'El cliente no está disponible para esta empresa.']);
-        }
+$customer = null;
+
+if ($customerId !== null) {
+    $customer = Customer::query()
+        ->forCompany($companyId)
+        ->where('is_active', true)
+        ->whereKey($customerId)
+        ->first();
+
+    if ($customer === null) {
+        throw ValidationException::withMessages([
+            'customer_id' => 'El cliente no está disponible para esta empresa.',
+        ]);
+    }
+}
         $items = $this->consolidateItems($data['items']);
         $products = Product::query()->with('unit:id,abbreviation,allows_decimals')
             ->where('company_id', $companyId)->where('is_active', true)
@@ -239,7 +284,25 @@ class SuspendedSaleService
         foreach ($items as $productId => $quantity) {
             $product = $products->get($productId);
             $this->validateQuantity($product, $quantity);
-            $price = (float) $product->sale_price;
+            $price = match ($customer?->price_level ?? 'normal') {
+    'wholesale' => $product->wholesale_price !== null
+        ? (float) $product->wholesale_price
+        : (float) $product->sale_price,
+
+    'a' => $product->price_a !== null
+        ? (float) $product->price_a
+        : (float) $product->sale_price,
+
+    'b' => $product->price_b !== null
+        ? (float) $product->price_b
+        : (float) $product->sale_price,
+
+    'c' => $product->price_c !== null
+        ? (float) $product->price_c
+        : (float) $product->sale_price,
+
+    default => (float) $product->sale_price,
+};
             $taxRate = (float) ($product->tax_rate ?? 0);
             $gross = $this->decimal4($price * $quantity);
             $tax = $this->decimal4($gross * $taxRate / 100);

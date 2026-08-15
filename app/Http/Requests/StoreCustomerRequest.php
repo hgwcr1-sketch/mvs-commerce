@@ -64,7 +64,20 @@ class StoreCustomerRequest extends FormRequest
 
             'credit_days' => 'nullable|integer|min:0',
 
-            'points' => 'nullable|integer|min:0',
+            'credit_days' => 'nullable|integer|min:0',
+
+'price_level' => [
+    'required',
+    Rule::in([
+        'normal',
+        'wholesale',
+        'a',
+        'b',
+        'c',
+    ]),
+],
+
+'points' => 'nullable|integer|min:0',
 
             'birth_date' => 'nullable|date',
 

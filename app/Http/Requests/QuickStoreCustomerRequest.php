@@ -54,7 +54,8 @@ class QuickStoreCustomerRequest extends FormRequest
             'is_active' => ['prohibited'],
             'points' => ['prohibited'],
             'credit_limit' => ['prohibited'],
-            'credit_days' => ['prohibited'],
+'credit_days' => ['prohibited'],
+'price_level' => ['prohibited'],
         ];
     }
 
@@ -77,6 +78,7 @@ class QuickStoreCustomerRequest extends FormRequest
             'points.prohibited' => 'El campo puntos no está permitido en la creación rápida.',
             'credit_limit.prohibited' => 'El campo límite de crédito no está permitido en la creación rápida.',
             'credit_days.prohibited' => 'El campo días de crédito no está permitido en la creación rápida.',
+            'price_level.prohibited' => 'El nivel de precio no está permitido en la creación rápida.',
         ];
     }
 

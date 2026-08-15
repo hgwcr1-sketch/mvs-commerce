@@ -120,11 +120,9 @@
 <x-card class="mt-6">
 
     <x-slot:header>
-
         <h3 class="text-lg font-semibold">
             Precios
         </h3>
-
     </x-slot:header>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -134,69 +132,91 @@
             step="0.01"
             name="cost"
             label="Costo"
-            :value="$product->cost ?? 0" />
+            :value="old('cost', $product->cost ?? 0)" />
 
         <x-input
             type="number"
             step="0.01"
             name="sale_price"
             label="Precio Venta"
-            :value="$product->sale_price ?? 0" />
+            :value="old('sale_price', $product->sale_price ?? 0)" />
 
         <x-input
             type="number"
             step="0.01"
             name="wholesale_price"
             label="Precio Mayorista"
-            :value="$product->wholesale_price ?? ''" />
+            :value="old('wholesale_price', $product->wholesale_price ?? '')" />
 
         <x-input
             type="number"
             step="0.01"
             name="special_price"
             label="Precio Oferta"
-            <x-select
-    name="tax_rate"
-    label="Impuesto *">
+            :value="old('special_price', $product->special_price ?? '')" />
 
-    <option value="">Seleccione...</option>
+        <x-input
+            type="number"
+            step="0.01"
+            name="price_a"
+            label="Precio A"
+            :value="old('price_a', $product->price_a ?? '')" />
 
-    <option value="0"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '0')>
-        Exento (0%)
-    </option>
+        <x-input
+            type="number"
+            step="0.01"
+            name="price_b"
+            label="Precio B"
+            :value="old('price_b', $product->price_b ?? '')" />
 
-    <option value="1"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '1')>
-        IVA 1%
-    </option>
+        <x-input
+            type="number"
+            step="0.01"
+            name="price_c"
+            label="Precio C"
+            :value="old('price_c', $product->price_c ?? '')" />
 
-    <option value="2"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '2')>
-        IVA 2%
-    </option>
+        <x-select
+            name="tax_rate"
+            label="Impuesto *">
 
-    <option value="4"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '4')>
-        IVA 4%
-    </option>
+            <option value="">Seleccione...</option>
 
-    <option value="8"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '8')>
-        IVA 8%
-    </option>
+            <option value="0"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '0')>
+                Exento (0%)
+            </option>
 
-    <option value="13"
-        @selected(old('tax_rate', $product->tax_rate ?? '13') == '13')>
-        IVA 13%
-    </option>
+            <option value="1"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '1')>
+                IVA 1%
+            </option>
 
-</x-select>
+            <option value="2"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '2')>
+                IVA 2%
+            </option>
+
+            <option value="4"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '4')>
+                IVA 4%
+            </option>
+
+            <option value="8"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '8')>
+                IVA 8%
+            </option>
+
+            <option value="13"
+                @selected(old('tax_rate', $product->tax_rate ?? '13') == '13')>
+                IVA 13%
+            </option>
+
+        </x-select>
 
     </div>
 
 </x-card>
-
 
 {{-- =========================
     INVENTARIO

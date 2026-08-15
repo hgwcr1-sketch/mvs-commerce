@@ -170,9 +170,7 @@
                                                        placeholder="0">
                                             </div>
                                         </template>
-                                        <span x-show="!canDiscount || !Number(item._discount)"
-                                              class="text-slate-400"
-                                              x-text="money(0)"></span>
+
                                     </td>
                                     <td class="px-4 py-4 text-right" x-text="money(lineTax(item, index))"></td>
                                     <td class="px-4 py-4 text-right font-bold" x-text="money(lineTotal(item, index))"></td>
@@ -713,11 +711,39 @@ document.addEventListener('alpine:init', () => {
         decimal4(value) {
             return Math.round((this.numberValue(value) + Number.EPSILON) * 10000) / 10000;
         },
+        customerPrice(item) {
+    const level = this.selectedCustomer?.price_level || 'normal';
+
+    const prices = {
+        wholesale: item.wholesale_price,
+        a: item.price_a,
+        b: item.price_b,
+        c: item.price_c,
+    };
+
+    const levelPrice = prices[level];
+
+    if (
+        level !== 'normal'
+        && levelPrice !== null
+        && levelPrice !== undefined
+        && levelPrice !== ''
+        && Number(levelPrice) > 0
+    ) {
+        return this.numberValue(levelPrice);
+    }
+
+    return this.numberValue(item.sale_price);
+},
         lineAppliedPrice(item) {
-            const manualPrice = this.numberValue(item._unitPrice);
-            if (this.canOverridePrice && manualPrice > 0) return manualPrice;
-            return this.numberValue(item.sale_price);
-        },
+    const manualPrice = this.numberValue(item._unitPrice);
+
+    if (this.canOverridePrice && manualPrice > 0) {
+        return manualPrice;
+    }
+
+    return this.customerPrice(item);
+},
         lineGross(item) {
             return this.decimal4(this.lineAppliedPrice(item) * this.numberValue(item.quantity));
         },

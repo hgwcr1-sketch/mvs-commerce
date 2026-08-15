@@ -100,8 +100,12 @@ class PosController extends Controller
                 'products.barcode',
                 'products.image',
                 'products.sale_price',
-                'products.tax_rate',
-                'products.track_inventory',
+'products.wholesale_price',
+'products.price_a',
+'products.price_b',
+'products.price_c',
+'products.tax_rate',
+'products.track_inventory',
             ])
             ->addSelect([
                 'available_stock' => DB::table('branch_product')
@@ -164,8 +168,19 @@ class PosController extends Controller
                 'internal_code' => $product->internal_code,
                 'matched_barcode' => $matchedBarcode,
                 'sale_price' => (float) $product->sale_price,
-                'tax_rate' => (float) ($product->tax_rate ?? 0),
-                'controls_inventory' => (bool) $product->track_inventory,
+'wholesale_price' => $product->wholesale_price !== null
+    ? (float) $product->wholesale_price
+    : null,
+'price_a' => $product->price_a !== null
+    ? (float) $product->price_a
+    : null,
+'price_b' => $product->price_b !== null
+    ? (float) $product->price_b
+    : null,
+'price_c' => $product->price_c !== null
+    ? (float) $product->price_c
+    : null,
+'tax_rate' => (float) ($product->tax_rate ?? 0),'controls_inventory' => (bool) $product->track_inventory,
                 'available_stock' => $availableStock,
                 'can_add_to_cart' => !$product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
@@ -219,7 +234,8 @@ class PosController extends Controller
                 'email',
                 'customer_type',
                 'credit_limit',
-                'credit_days',
+'credit_days',
+'price_level',
             ]);
 
         return response()->json($customers->map(fn (Customer $customer) => [
@@ -231,7 +247,8 @@ class PosController extends Controller
             'email' => $customer->email,
             'customer_type' => $customer->customer_type,
             'credit_limit' => (float) $customer->credit_limit,
-            'credit_days' => (int) ($customer->credit_days ?? 0),
+'credit_days' => (int) ($customer->credit_days ?? 0),
+'price_level' => $customer->price_level ?? 'normal',
         ])->values());
     }
 
@@ -250,23 +267,25 @@ class PosController extends Controller
             'email' => $data['email'] ?? null,
             'accepts_email_invoice' => false,
             'credit_limit' => 0,
-            'credit_days' => 0,
-            'points' => 0,
-            'is_active' => true,
+'credit_days' => 0,
+'price_level' => 'normal',
+'points' => 0,
+'is_active' => true,
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Cliente creado correctamente.',
             'customer' => [
-                'id' => $customer->id,
-                'name' => $customer->name,
-                'identification' => $customer->identification,
-                'phone' => $customer->phone,
-                'mobile' => $customer->mobile,
-                'email' => $customer->email,
-                'customer_type' => $customer->customer_type,
-            ],
+    'id' => $customer->id,
+    'name' => $customer->name,
+    'identification' => $customer->identification,
+    'phone' => $customer->phone,
+    'mobile' => $customer->mobile,
+    'email' => $customer->email,
+    'customer_type' => $customer->customer_type,
+    'price_level' => $customer->price_level,
+],
         ], 201);
     }
 

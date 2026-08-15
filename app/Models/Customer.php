@@ -30,9 +30,10 @@ class Customer extends Model
         'address',
         'notes',
         'credit_limit',
-        'credit_days',
-        'points',
-        'birth_date',
+'credit_days',
+'price_level',
+'points',
+'birth_date',
         'is_active',
     ];
 

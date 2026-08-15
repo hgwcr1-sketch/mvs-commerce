@@ -125,19 +125,21 @@ class PosSaleProcessor
                 );
 
                 $customerId = $data['customer_id'] ?? null;
+$customer = null;
 
-                if (
-                    $customerId !== null
-                    && ! Customer::query()
-                        ->where('company_id', $companyId)
-                        ->where('is_active', true)
-                        ->whereKey($customerId)
-                        ->exists()
-                ) {
-                    throw ValidationException::withMessages([
-                        'customer_id' => 'El cliente no está disponible para esta empresa.',
-                    ]);
-                }
+if ($customerId !== null) {
+    $customer = Customer::query()
+        ->where('company_id', $companyId)
+        ->where('is_active', true)
+        ->whereKey($customerId)
+        ->first();
+
+    if ($customer === null) {
+        throw ValidationException::withMessages([
+            'customer_id' => 'El cliente no está disponible para esta empresa.',
+        ]);
+    }
+}
 
                 $paymentMethods = PaymentMethod::query()
                     ->where('company_id', $companyId)
@@ -203,9 +205,29 @@ class PosSaleProcessor
                         $quantity,
                     );
 
-                    $unitPrice = $lineData['unit_price'] !== null
-                        ? (float) $lineData['unit_price']
-                        : (float) $product->sale_price;
+                    $basePrice = match ($customer?->price_level ?? 'normal') {
+    'wholesale' => $product->wholesale_price !== null
+        ? (float) $product->wholesale_price
+        : (float) $product->sale_price,
+
+    'a' => $product->price_a !== null
+        ? (float) $product->price_a
+        : (float) $product->sale_price,
+
+    'b' => $product->price_b !== null
+        ? (float) $product->price_b
+        : (float) $product->sale_price,
+
+    'c' => $product->price_c !== null
+        ? (float) $product->price_c
+        : (float) $product->sale_price,
+
+    default => (float) $product->sale_price,
+};
+
+$unitPrice = $lineData['unit_price'] !== null
+    ? (float) $lineData['unit_price']
+    : $basePrice;
 
                     if ($unitPrice <= 0) {
                         throw ValidationException::withMessages([

@@ -191,12 +191,12 @@ Route::get('/productos-buscar', [ProductController::class, 'search'])
     ->name('productos.search');
 
 Route::resource('productos', ProductController::class)
-    ->only(['index', 'show'])
-    ->middleware(['active.branch', 'permission:productos.ver']);
-
-Route::resource('productos', ProductController::class)
     ->only(['create', 'store'])
     ->middleware(['active.branch', 'permission:productos.crear']);
+
+Route::resource('productos', ProductController::class)
+    ->only(['index', 'show'])
+    ->middleware(['active.branch', 'permission:productos.ver']);
 
 Route::resource('productos', ProductController::class)
     ->only(['edit', 'update'])
@@ -205,7 +205,6 @@ Route::resource('productos', ProductController::class)
 Route::resource('productos', ProductController::class)
     ->only(['destroy'])
     ->middleware(['active.branch', 'permission:productos.eliminar']);
-
 
 /*
 |--------------------------------------------------------------------------
