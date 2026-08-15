@@ -430,7 +430,9 @@ Route::resource('ordenes-compra', PurchaseOrderController::class);
 |--------------------------------------------------------------------------
 */
 
-Route::resource('ventas', SaleController::class);
+Route::resource('ventas', SaleController::class)
+    ->only(['index', 'show'])
+    ->middleware(['active.branch', 'permission:ventas.ver']);
 
 Route::resource('cotizaciones', QuoteController::class);
 
