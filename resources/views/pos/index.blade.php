@@ -299,10 +299,39 @@
 
     <section class="rounded-2xl bg-white p-3 shadow-sm">
         <div class="flex gap-2 overflow-x-auto pb-1">
-            <button type="button" class="whitespace-nowrap rounded-xl bg-amber-500 px-4 py-3 font-normal text-black hover:bg-amber-600">Tiquete electrónico</button>
+
+      <button
+    type="button"
+    @click.prevent.stop="
+        documentType = 'electronic_ticket';
+        notice = '';
+    "
+    :class="documentType === 'electronic_ticket'
+        ? 'bg-amber-500 text-black'
+        : 'border border-slate-300 bg-white text-slate-700'"
+    class="whitespace-nowrap rounded-xl px-4 py-3 font-normal">
+    Tiquete electrónico
+</button>
+
+<button
+    type="button"
+    @click="
+        if (customerId) {
+            documentType = 'electronic_invoice';
+        } else {
+            notice = 'Seleccione un cliente antes de usar Factura electrónica.';
+        }
+    "
+    :class="documentType === 'electronic_invoice'
+        ? 'bg-amber-500 text-black'
+        : 'border border-slate-300 bg-white text-slate-700'"
+    class="whitespace-nowrap rounded-xl px-4 py-3 font-normal hover:bg-amber-100">
+    Factura electrónica
+</button>
+
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-xl border border-amber-400 px-4 py-3 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold text-white">Suspendidas</button>
-            @foreach(['Factura electrónica', 'Pedido', 'Apartado', 'Abono', 'Cotización', 'Nota de crédito', 'Nota de débito'] as $option)
+            @foreach(['Pedido', 'Apartado', 'Abono', 'Cotización', 'Nota de crédito', 'Nota de débito'] as $option)
                 <button type="button" disabled class="whitespace-nowrap rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
             @endforeach
         </div>
@@ -494,6 +523,7 @@ document.addEventListener('alpine:init', () => {
         notice: '',
         imageModal: { open: false, url: null, name: '' },
         customerId: null,
+        documentType: 'electronic_ticket',
         selectedCustomer: null,
         customerQuery: '',
         customerResults: [],
@@ -850,6 +880,7 @@ document.addEventListener('alpine:init', () => {
                         } : {}),
                         ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
                         customer_id: this.customerId,
+                        document_type: this.documentType,
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
                         items: this.cart.map(item => ({
                             product_id: item.id,
@@ -869,6 +900,9 @@ document.addEventListener('alpine:init', () => {
                 this.cart = [];
                 this.customerId = null;
                 this.selectedCustomer = null;
+                if (this.documentType === 'electronic_invoice') {
+    this.documentType = 'electronic_ticket';
+}
                 this.clearSuspendedRecovery();
                 this.successMessage = payload.message;
             } catch (error) {
@@ -972,10 +1006,15 @@ document.addEventListener('alpine:init', () => {
             if (this.customerResults[this.customerSelectedIndex]) this.selectCustomer(this.customerResults[this.customerSelectedIndex]);
         },
         selectCustomer(customer) {
-            this.customerId = customer.id;
-            this.selectedCustomer = customer;
-            this.closeCustomerResults();
-        },
+    this.customerId = customer.id;
+    this.selectedCustomer = customer;
+
+    if (this.notice === 'Seleccione un cliente antes de usar Factura electrónica.') {
+        this.notice = '';
+    }
+
+    this.closeCustomerResults();
+},
         clearCustomer() {
             this.customerId = null;
             this.selectedCustomer = null;

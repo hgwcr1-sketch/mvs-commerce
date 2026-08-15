@@ -299,6 +299,78 @@ class PosCheckoutTest extends TestCase
         return Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
     }
 
+public function test_electronic_invoice_requires_customer_and_is_saved_when_customer_is_valid(): void
+{
+    $company = $this->company('Empresa Factura ');
+    $branch = $this->branch($company, 'Principal');
+
+    $user = $this->user($company, $branch, [
+        'pos.acceder',
+        'ventas.crear',
+    ]);
+
+    $cash = $this->payment($company);
+
+    $product = $this->product(
+        $company,
+        false,
+        false,
+        [
+            'sale_price' => 1000,
+            'tax_rate' => 0,
+        ],
+    );
+
+    $this->checkout(
+        $user,
+        $company,
+        $branch,
+        $cash,
+        [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]],
+        1000,
+        [
+            'document_type' => Sale::DOCUMENT_ELECTRONIC_INVOICE,
+        ],
+    )->assertUnprocessable();
+
+    $this->assertDatabaseCount('sales', 0);
+
+    $customer = $this->customer($company);
+
+    $response = $this->checkout(
+        $user,
+        $company,
+        $branch,
+        $cash,
+        [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]],
+        1000,
+        [
+            'document_type' => Sale::DOCUMENT_ELECTRONIC_INVOICE,
+        ],
+        $customer->id,
+    );
+
+    $response->assertOk();
+
+    $sale = Sale::latest('id')->firstOrFail();
+
+    $this->assertSame(
+        Sale::DOCUMENT_ELECTRONIC_INVOICE,
+        $sale->document_type,
+    );
+
+    $this->assertSame(
+        $customer->id,
+        $sale->customer_id,
+    );
+}
+
     private function branch(Company $company, string $name): Branch
     {
         return Branch::create(['company_id' => $company->id, 'name' => $name, 'code' => $name.'-'.$company->id, 'is_active' => true]);

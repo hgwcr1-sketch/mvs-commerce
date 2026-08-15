@@ -390,7 +390,7 @@ $unitPrice = $lineData['unit_price'] !== null
                     'sale_number' => CompanySequence::nextPosNumber(
                         $companyId,
                     ),
-                    'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+                    'document_type' => $data['document_type'],
                     'sale_condition' => Sale::CONDITION_CASH,
                     'status' => Sale::STATUS_COMPLETED,
                     'currency_code' => $company->currency,

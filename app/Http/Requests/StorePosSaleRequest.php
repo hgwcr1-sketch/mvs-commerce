@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Sale;
 use App\Models\Company;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,6 +14,15 @@ class StorePosSaleRequest extends FormRequest
     {
         return true;
     }
+
+protected function prepareForValidation(): void
+{
+    if (! $this->filled('document_type')) {
+        $this->merge([
+            'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+        ]);
+    }
+}
 
     public function rules(): array
     {
@@ -37,7 +47,16 @@ class StorePosSaleRequest extends FormRequest
             'cash_session_id' => ['nullable', 'integer'],
             'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
             'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
-            'customer_id' => ['nullable', 'integer'],
+            'customer_id' => [
+    $this->input('document_type') === Sale::DOCUMENT_ELECTRONIC_INVOICE
+        ? 'required'
+        : 'nullable',
+    'integer',
+],
+            'document_type' => [
+    'required',
+    'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+],
 
             'payments' => ['required', 'array', 'min:1'],
             'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
