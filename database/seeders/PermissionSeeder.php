@@ -19,6 +19,8 @@ class PermissionSeeder extends Seeder
 
             // POS
             ['name' => 'pos.acceder', 'label' => 'Acceder al POS', 'module' => 'POS'],
+            ['name' => 'pos.aplicar_descuento', 'label' => 'Aplicar descuentos en el POS', 'module' => 'POS'],
+            ['name' => 'pos.cambiar_precio', 'label' => 'Cambiar precio en el POS', 'module' => 'POS'],
 
             // Clientes
             ['name' => 'clientes.ver', 'label' => 'Ver clientes', 'module' => 'Clientes'],

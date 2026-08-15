@@ -134,8 +134,28 @@
                                             <button type="button" @click="increase(item)" class="h-9 w-9 rounded-lg bg-amber-500 text-lg font-normal text-black hover:bg-amber-600">+</button>
                                         </div>
                                     </td>
-                                    <td class="px-4 py-4 text-right" x-text="money(item.sale_price)"></td>
-                                    <td class="px-4 py-4 text-right">₡0,00</td>
+                                    <td class="px-4 py-4 text-right">
+                                        <template x-if="canOverridePrice">
+                                            <div class="flex items-center justify-end gap-1">
+                                                <input x-model="item._unitPrice" type="number" min="0" step="any"
+                                                       @input="item._unitPrice = Math.max(0, parseInt(item._unitPrice) || 0)"
+                                                       class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm font-bold text-amber-900"
+                                                       :title="'Precio original: ' + money(item.sale_price)">
+                                            </div>
+                                        </template>
+                                        <span x-show="!canOverridePrice || !item._unitPrice" x-text="money(item.sale_price)"></span>
+                                    </td>
+                                    <td class="px-4 py-4 text-right">
+                                        <template x-if="canDiscount">
+                                            <div class="flex items-center justify-end gap-1">
+                                                <input x-model="item._discount" type="number" min="0" step="any"
+                                                       @input="item._discount = Math.max(0, parseInt(item._discount) || 0)"
+                                                       class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm"
+                                                       placeholder="0">
+                                            </div>
+                                        </template>
+                                        <span x-show="!canDiscount || !item._discount" class="text-slate-400">₡0</span>
+                                    </td>
                                     <td class="px-4 py-4 text-right" x-text="money(lineTax(item))"></td>
                                     <td class="px-4 py-4 text-right font-bold" x-text="money(lineTotal(item))"></td>
                                     <td class="px-4 py-4 text-right"><button type="button" @click="remove(item)" class="rounded-lg px-3 py-2 text-red-600 hover:bg-red-50">Eliminar</button></td>
@@ -226,8 +246,18 @@
             <section class="rounded-2xl bg-slate-900 p-5 text-white shadow-lg">
                 <div class="space-y-3 text-sm">
                     <div class="flex justify-between"><span class="text-slate-300">Subtotal</span><strong x-text="money(subtotal)"></strong></div>
-                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong>₡0</strong></div>
+                    <template x-if="canDiscount">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-slate-300 shrink-0">Dto. general</span>
+                            <input x-model="_generalDiscountInput" type="number" min="0" step="any"
+                                   @input="_generalDiscountInput = Math.max(0, parseInt(_generalDiscountInput) || 0)"
+                                   class="w-28 rounded-lg border border-amber-400/50 bg-slate-800 px-2 py-1 text-right text-sm font-bold text-amber-400 placeholder-amber-400/50"
+                                   placeholder="₡0">
+                        </div>
+                    </template>
+                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong class="text-amber-400" x-text="money(cart.reduce((s,item) => s + lineDiscount(item),0) + generalDiscount)"></strong></div>
                     <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
+                    <div x-show="roundingTotal !== 0" class="flex justify-between"><span class="text-slate-400">Redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
                 </div>
                 <div class="my-5 border-t border-slate-700"></div>
                 <div class="flex items-end justify-between"><span class="text-lg">Total</span><strong class="text-3xl text-amber-400" x-text="money(grandTotal)"></strong></div>
@@ -445,6 +475,9 @@ document.addEventListener('alpine:init', () => {
         customerLoading: false,
         customerRequestNumber: 0,
         successMessage: '',
+        _generalDiscountInput: '',
+        canDiscount: @json($canDiscount),
+        canOverridePrice: @json($canOverridePrice),
         checkoutToken: crypto.randomUUID(),
         cashSessionId: @json($cashSession?->id),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
@@ -469,9 +502,16 @@ document.addEventListener('alpine:init', () => {
             return this.cart.reduce((sum, item) => sum + this.lineTax(item), 0);
         },
         get grandTotal() {
-            return Math.round(this.subtotal + this.taxTotal);
+            const subtotalDiscount = this.generalDiscount;
+            const netAmount = this.subtotal - subtotalDiscount;
+            return Math.round(netAmount + this.taxTotal);
         },
-        get roundingTotal() { return this.grandTotal - (this.subtotal + this.taxTotal); },
+        get roundingTotal() { return this.grandTotal - (this.subtotal - this.generalDiscount + this.taxTotal); },
+        get generalDiscount() {
+            if (!this.canDiscount || !this._generalDiscountInput) return 0;
+            const val = parseInt(this._generalDiscountInput, 10);
+            return isNaN(val) || val < 0 ? 0 : Math.min(val, this.subtotal);
+        },
         get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
         get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
@@ -560,7 +600,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 existing.quantity += 1;
             }
-            else this.cart.push({ ...product, quantity: 1 });
+            else this.cart.push({ ...product, quantity: 1, _discount: 0, _unitPrice: 0 });
             this.notice = '';
             this.closeResults();
             this.$nextTick(() => this.$refs.searchInput.focus());
@@ -582,8 +622,19 @@ document.addEventListener('alpine:init', () => {
         decrease(item) { if (item.quantity > 1) item.quantity -= 1; },
         remove(item) { this.cart = this.cart.filter(current => current.id !== item.id); },
         exceedsStock(item) { return item.controls_inventory && item.quantity > item.available_stock; },
-        lineTax(item) { return item.sale_price * item.quantity * (item.tax_rate / 100); },
-        lineTotal(item) { return (item.sale_price * item.quantity) + this.lineTax(item); },
+        lineGross(item) { return (item.sale_price * item.quantity); },
+        lineDiscount(item) {
+            if (!this.canDiscount || !item._discount) return 0;
+            const val = parseInt(item._discount, 10);
+            return isNaN(val) || val < 0 ? 0 : Math.min(val, this.lineGross(item));
+        },
+        lineSubtotal(item) { return this.lineGross(item) - this.lineDiscount(item); },
+        lineTax(item) { return this.lineSubtotal(item) * (item.tax_rate / 100); },
+        lineTotal(item) { return this.lineSubtotal(item) + this.lineTax(item); },
+        lineAppliedPrice(item) {
+            if (this.canOverridePrice && item._unitPrice > 0) return item._unitPrice;
+            return item.sale_price;
+        },
         money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value) || 0); },
         formatQuantity(value) { return new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4 }).format(Number(value) || 0); },
         otherStockLabel(product) { return product.other_branch_stock.map(stock => `${stock.branch_name} ${this.formatQuantity(stock.available_stock)}`).join(', '); },
@@ -654,10 +705,16 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
                         cash_session_id: this.cashSessionId || null,
+                        ...(this.canDiscount && this._generalDiscountInput > 0 ? { discount_total: parseInt(this._generalDiscountInput) || 0 } : {}),
                         ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
                         customer_id: this.customerId,
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
-                        items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })),
+                        items: this.cart.map(item => ({
+                        product_id: item.id,
+                        quantity: item.quantity,
+                        ...(this.canDiscount && item._discount > 0 ? { discount: item._discount } : {}),
+                        ...(this.canOverridePrice && item._unitPrice > 0 ? { unit_price: item._unitPrice } : {}),
+                    })),
                     }),
                 });
                 const payload = await this.readFetchResponse(response);
@@ -676,6 +733,7 @@ document.addEventListener('alpine:init', () => {
         newSale() {
             this.checkoutToken = crypto.randomUUID();
             this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null };
+            this._generalDiscountInput = '';
             this.successMessage = '';
             this.clearSuspendedRecovery();
             this.$nextTick(() => this.$refs.searchInput.focus());
@@ -699,7 +757,7 @@ document.addEventListener('alpine:init', () => {
             if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
-            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID();
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = '';
             this.$nextTick(() => this.$refs.searchInput.focus());
         },
         async suspendCurrent() {
@@ -725,7 +783,7 @@ document.addEventListener('alpine:init', () => {
                 if (this.suspended.activeId && this.suspended.activeId !== sale.id && !(await this.releaseCurrentRecovery())) return;
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable }));
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _unitPrice: 0 }));
                 this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.$refs.searchInput.focus());
             } catch (error) { this.suspended.error = error.message; }
         },

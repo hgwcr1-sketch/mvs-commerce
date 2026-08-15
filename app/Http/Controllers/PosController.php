@@ -52,6 +52,8 @@ class PosController extends Controller
             'cashSessions' => $cashSessions,
             'cashSettings' => $cashSettings,
             'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
+            'canDiscount' => $request->user()->hasPermission('pos.aplicar_descuento', $company),
+            'canOverridePrice' => $request->user()->hasPermission('pos.cambiar_precio', $company),
         ]);
     }
 

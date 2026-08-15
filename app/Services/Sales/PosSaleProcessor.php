@@ -106,30 +106,105 @@ class PosSaleProcessor
                 $resolvedLines = [];
                 $subtotal = 0.0;
                 $taxTotal = 0.0;
+                $totalLineDiscount = 0.0;
 
-                foreach ($items as $productId => $quantity) {
+                // Verificar permisos para descuento y cambio de precio
+                $canDiscount = $user->hasPermission('pos.aplicar_descuento', $company);
+                $canPrice = $user->hasPermission('pos.cambiar_precio', $company);
+                $requestedGeneralDiscount = isset($data['discount_total']) ? (float) $data['discount_total'] : 0.0;
+
+                if ($requestedGeneralDiscount > 0 && !$canDiscount) {
+                    throw ValidationException::withMessages(['discount_total' => 'No tiene permiso para aplicar descuentos generales.']);
+                }
+
+                foreach ($items as $productId => $lineData) {
                     $product = $products->get($productId);
+                    $quantity = $lineData['quantity'];
                     $this->validateQuantity($product, $quantity);
 
+                    // Precio: usar el del producto por defecto, o el manual si tiene permiso
                     $unitPrice = (float) $product->sale_price;
+                    if ($canPrice && isset($lineData['unit_price']) && $lineData['unit_price'] > 0) {
+                        $unitPrice = (float) $lineData['unit_price'];
+                    }
+
                     $unitCost = (float) $product->cost;
                     $taxRate = (float) ($product->tax_rate ?? 0);
                     $grossTotal = $this->decimal4($unitPrice * $quantity);
-                    $lineSubtotal = $grossTotal;
+
+                    // Descuento por línea
+                    $lineDiscount = 0.0;
+                    if ($canDiscount && isset($lineData['discount']) && $lineData['discount'] > 0) {
+                        $discountAmount = (float) $lineData['discount'];
+                        $discountType = $lineData['discountType'] ?? 'fixed';
+                        $grossTotal = $line['grossTotal'];
+                        
+                        // Calcular descuento monto real según el tipo
+                        if ($discountType === 'percentage') {
+                            // Percentage: discount = gross * percentage / 100
+                            // But percentage is stored as 0-100, so we need the actual % value
+                            // The frontend sends discount as the UI interprets as %
+                            // We need to know it's a percentage. If discount > 100, treat as fixed; else could be %
+                            // To be safe: if user specifies percentage, they should send the % value
+                            // But we need a way to distinguish. Let's use: if discount <= 100, could be %; 
+                            // but that's ambiguous. Better: always store monetary amount, and use discount_type
+                            // to indicate. If percentage, we need the % value separately.
+                            
+                            // Actually, let's re-think: the discount field stores the monetary amount.
+                            // The discount_type tells us how to interpret it.
+                            // But for percentage, we need the % value, not the monetary amount.
+                            // 
+                            // Solution: For percentage discounts, we store the % value in discount field
+                            // (0-100), and use discount_type to indicate it's a percentage.
+                            // The actual monetary discount = gross_total * discount / 100
+                            
+                            // But wait, the validation says "descuento nunca superior al importe bruto"
+                            // For percentage, this means discount% <= 100, which is always true if <= 100.
+                            // 
+                            // Let's store: if discount_type = percentage, the discount field contains the % value (0-100)
+                            // And we calculate: monetary_discount = gross_total * discount / 100
+                            
+                            // But the current validation "discount never > gross total" doesn't work well for %.
+                            // Let's adjust: for percentage, max is 100 (meaning 100% = free item)
+                            
+                            if ($discountAmount > 100) {
+                                throw ValidationException::withMessages(['items' => "El descuento porcentual no puede ser mayor a 100%."]);
+                            }
+                            $lineDiscount = $this->decimal4($grossTotal * $discountAmount / 100);
+                            if ($lineDiscount > $grossTotal) {
+                                $lineDiscount = $this->decimal4($grossTotal); // cap at gross
+                            }
+                        } else {
+                            // Fixed amount
+                            if ($discountAmount > $grossTotal) {
+                                throw ValidationException::withMessages(['items' => "El descuento de {$product->name} supera el importe de la línea."]);
+                            }
+                            $lineDiscount = $this->decimal4($discountAmount);
+                        }
+                    }
+
+                    $lineSubtotal = $this->decimal4($grossTotal - $lineDiscount);
                     $lineTax = $this->decimal4($lineSubtotal * ($taxRate / 100));
                     $lineTotal = $this->decimal4($lineSubtotal + $lineTax);
 
                     $resolvedLines[] = compact(
                         'product', 'quantity', 'unitPrice', 'unitCost', 'taxRate',
-                        'grossTotal', 'lineSubtotal', 'lineTax', 'lineTotal',
+                        'grossTotal', 'lineDiscount', 'lineSubtotal', 'lineTax', 'lineTotal',
                     );
                     $subtotal += $lineSubtotal;
                     $taxTotal += $lineTax;
+                    $totalLineDiscount += $lineDiscount;
                 }
 
                 $subtotal = $this->decimal4($subtotal);
                 $taxTotal = $this->decimal4($taxTotal);
-                $unroundedTotal = $this->decimal4($subtotal + $taxTotal);
+
+                // Aplicar descuento general
+                $generalDiscount = $canDiscount ? $this->decimal4(min($requestedGeneralDiscount, $subtotal)) : 0.0;
+
+                $totalDiscount = $this->decimal4($totalLineDiscount + $generalDiscount);
+                $netAmount = $this->decimal4($subtotal - $generalDiscount);
+                $unroundedTotal = $this->decimal4($netAmount + $taxTotal);
                 $total = round($unroundedTotal, 0, PHP_ROUND_HALF_UP);
                 $roundingTotal = $this->decimal4($total - $unroundedTotal);
                 $resolvedPayments = $this->resolvePayments($payments, $paymentMethods, $total);
@@ -149,7 +224,7 @@ class PosSaleProcessor
                     'currency_code' => $company->currency,
                     'exchange_rate' => 1,
                     'subtotal' => $subtotal,
-                    'discount_total' => 0,
+                    'discount_total' => $totalDiscount,
                     'tax_total' => $taxTotal,
                     'rounding_total' => $roundingTotal,
                     'total' => $total,
@@ -173,7 +248,7 @@ class PosSaleProcessor
                         'quantity' => $line['quantity'],
                         'unit_price' => $line['unitPrice'],
                         'gross_total' => $line['grossTotal'],
-                        'discount_total' => 0,
+                        'discount_total' => $line['lineDiscount'],
                         'subtotal' => $line['lineSubtotal'],
                         'tax_rate' => $line['taxRate'],
                         'tax_total' => $line['lineTax'],
@@ -230,7 +305,38 @@ class PosSaleProcessor
         $consolidated = [];
         foreach ($items as $item) {
             $productId = (int) $item['product_id'];
-            $consolidated[$productId] = $this->decimal4(($consolidated[$productId] ?? 0) + (float) $item['quantity']);
+            $discountAmount = 0.0;
+            $discountType = 'fixed'; // default
+
+            if (isset($item['discount'])) {
+                $discountAmount = (float) $item['discount'];
+            }
+            if (isset($item['discount_type'])) {
+                $discountType = $item['discount_type'];
+            }
+
+            if (!isset($consolidated[$productId])) {
+                $consolidated[$productId] = [
+                    'quantity' => 0.0,
+                    'discount' => 0.0,
+                    'discountType' => $discountType,
+                    'unit_price' => isset($item['unit_price']) ? (float) $item['unit_price'] : 0.0,
+                ];
+            }
+
+            // Accumulate quantity
+            $consolidated[$productId]['quantity'] = $this->decimal4($consolidated[$productId]['quantity'] + (float) $item['quantity']);
+
+            // If new discount type is percentage, convert; keep fixed as-is
+            // We store the monetary equivalent in 'discount'
+            if ($discountType === 'percentage') {
+                // Percentage will be converted when calculating line discount
+                // For now, store 0 and mark the type; actual calc happens later
+                $consolidated[$productId]['discountType'] = 'percentage';
+            } else {
+                $consolidated[$productId]['discount'] = $discountAmount;
+                $consolidated[$productId]['discountType'] = 'fixed';
+            }
         }
         ksort($consolidated, SORT_NUMERIC);
 
@@ -333,7 +439,12 @@ class PosSaleProcessor
             'cash_session_id' => isset($data['cash_session_id']) ? (int) $data['cash_session_id'] : null,
             'customer_id' => isset($data['customer_id']) ? (int) $data['customer_id'] : null,
             'payments' => $payments,
-            'items' => array_map(fn ($quantity) => number_format($quantity, 4, '.', ''), $items),
+            'items' => array_map(fn (array $line) => [
+                'quantity' => number_format($line['quantity'], 4, '.', ''),
+                'discount' => number_format($line['discount'] ?? 0, 4, '.', ''),
+                'unit_price' => number_format($line['unit_price'] ?? 0, 4, '.', ''),
+            ], $items),
+            'discount_total' => isset($data['discount_total']) ? (float) $data['discount_total'] : 0,
             'suspended_sale_id' => isset($data['suspended_sale_id']) ? (int) $data['suspended_sale_id'] : null,
             'recovery_token' => $data['recovery_token'] ?? null,
         ], JSON_THROW_ON_ERROR));
