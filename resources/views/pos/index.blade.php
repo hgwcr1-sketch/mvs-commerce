@@ -108,7 +108,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="item in cart" :key="item.id">
+                            <template x-for="(item, index) in cart" :key="item.id">
                                 <tr class="border-b border-slate-100" :class="exceedsStock(item) ? 'bg-red-50' : ''">
                                     <td class="px-4 py-4">
                                         <div class="flex items-center gap-3">
@@ -136,28 +136,46 @@
                                     </td>
                                     <td class="px-4 py-4 text-right">
                                         <template x-if="canOverridePrice">
-                                            <div class="flex items-center justify-end gap-1">
-                                                <input x-model="item._unitPrice" type="number" min="0" step="any"
-                                                       @input="item._unitPrice = Math.max(0, parseInt(item._unitPrice) || 0)"
-                                                       class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm font-bold text-amber-900"
+                                            <div class="flex flex-col items-end gap-1">
+                                                <input x-model="item._unitPrice"
+                                                       type="number"
+                                                       min="0.0001"
+                                                       step="0.0001"
+                                                       inputmode="decimal"
+                                                       class="w-24 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm font-bold text-amber-900"
+                                                       :placeholder="String(item.sale_price)"
                                                        :title="'Precio original: ' + money(item.sale_price)">
+                                                <span x-show="Number(item._unitPrice) > 0 && Number(item._unitPrice) !== Number(item.sale_price)"
+                                                      class="text-[11px] font-semibold text-amber-700">
+                                                    Original: <span x-text="money(item.sale_price)"></span>
+                                                </span>
                                             </div>
                                         </template>
-                                        <span x-show="!canOverridePrice || !item._unitPrice" x-text="money(item.sale_price)"></span>
+                                        <span x-show="!canOverridePrice" x-text="money(item.sale_price)"></span>
                                     </td>
                                     <td class="px-4 py-4 text-right">
                                         <template x-if="canDiscount">
                                             <div class="flex items-center justify-end gap-1">
-                                                <input x-model="item._discount" type="number" min="0" step="any"
-                                                       @input="item._discount = Math.max(0, parseInt(item._discount) || 0)"
+                                                <select x-model="item._discountType"
+                                                        class="w-14 rounded border border-amber-300 bg-amber-50 px-1 py-1 text-xs font-bold text-amber-900">
+                                                    <option value="fixed">₡</option>
+                                                    <option value="percentage">%</option>
+                                                </select>
+                                                <input x-model="item._discount"
+                                                       type="number"
+                                                       min="0"
+                                                       step="0.0001"
+                                                       inputmode="decimal"
                                                        class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm"
                                                        placeholder="0">
                                             </div>
                                         </template>
-                                        <span x-show="!canDiscount || !item._discount" class="text-slate-400">₡0</span>
+                                        <span x-show="!canDiscount || !Number(item._discount)"
+                                              class="text-slate-400"
+                                              x-text="money(0)"></span>
                                     </td>
-                                    <td class="px-4 py-4 text-right" x-text="money(lineTax(item))"></td>
-                                    <td class="px-4 py-4 text-right font-bold" x-text="money(lineTotal(item))"></td>
+                                    <td class="px-4 py-4 text-right" x-text="money(lineTax(item, index))"></td>
+                                    <td class="px-4 py-4 text-right font-bold" x-text="money(lineTotal(item, index))"></td>
                                     <td class="px-4 py-4 text-right"><button type="button" @click="remove(item)" class="rounded-lg px-3 py-2 text-red-600 hover:bg-red-50">Eliminar</button></td>
                                 </tr>
                             </template>
@@ -248,14 +266,24 @@
                     <div class="flex justify-between"><span class="text-slate-300">Subtotal</span><strong x-text="money(subtotal)"></strong></div>
                     <template x-if="canDiscount">
                         <div class="flex items-center justify-between gap-2">
-                            <span class="text-slate-300 shrink-0">Dto. general</span>
-                            <input x-model="_generalDiscountInput" type="number" min="0" step="any"
-                                   @input="_generalDiscountInput = Math.max(0, parseInt(_generalDiscountInput) || 0)"
-                                   class="w-28 rounded-lg border border-amber-400/50 bg-slate-800 px-2 py-1 text-right text-sm font-bold text-amber-400 placeholder-amber-400/50"
-                                   placeholder="₡0">
+                            <span class="shrink-0 text-slate-300">Dto. general</span>
+                            <div class="flex items-center gap-1">
+                                <select x-model="_generalDiscountType"
+                                        class="w-14 rounded-lg border border-amber-400/50 bg-slate-800 px-1 py-1 text-xs font-bold text-amber-400">
+                                    <option value="fixed">₡</option>
+                                    <option value="percentage">%</option>
+                                </select>
+                                <input x-model="_generalDiscountInput"
+                                       type="number"
+                                       min="0"
+                                       step="0.0001"
+                                       inputmode="decimal"
+                                       class="w-24 rounded-lg border border-amber-400/50 bg-slate-800 px-2 py-1 text-right text-sm font-bold text-amber-400 placeholder-amber-400/50"
+                                       placeholder="0">
+                            </div>
                         </div>
                     </template>
-                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong class="text-amber-400" x-text="money(cart.reduce((s,item) => s + lineDiscount(item),0) + generalDiscount)"></strong></div>
+                    <div class="flex justify-between"><span class="text-slate-300">Descuento</span><strong class="text-amber-400" x-text="money(totalDiscount)"></strong></div>
                     <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
                     <div x-show="roundingTotal !== 0" class="flex justify-between"><span class="text-slate-400">Redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
                 </div>
@@ -307,7 +335,7 @@
                             <section class="space-y-4" aria-label="Resumen del cobro">
                                 <div class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-5">
                                     <h3 class="font-black text-[#111111]">Resumen permanente</h3>
-                                    <dl class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><dt>Subtotal</dt><dd class="font-bold" x-text="money(subtotal)"></dd></div><div class="flex justify-between"><dt>Descuento</dt><dd class="font-bold">₡0</dd></div><div class="flex justify-between"><dt>Impuesto</dt><dd class="font-bold" x-text="money(taxTotal)"></dd></div><div x-show="roundingTotal !== 0" class="flex justify-between"><dt>Ajuste de redondeo</dt><dd class="font-bold" x-text="money(roundingTotal)"></dd></div></dl>
+                                    <dl class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><dt>Subtotal</dt><dd class="font-bold" x-text="money(subtotal)"></dd></div><div class="flex justify-between"><dt>Descuento</dt><dd class="font-bold" x-text="money(totalDiscount)"></dd></div><div class="flex justify-between"><dt>Impuesto</dt><dd class="font-bold" x-text="money(taxTotal)"></dd></div><div x-show="roundingTotal !== 0" class="flex justify-between"><dt>Ajuste de redondeo</dt><dd class="font-bold" x-text="money(roundingTotal)"></dd></div></dl>
                                     <div class="mt-4 flex items-end justify-between border-t border-[#B9BDC2] pt-4"><span class="font-bold">Total</span><strong class="text-3xl text-[#111111]" x-text="money(grandTotal)"></strong></div>
                                 </div>
                                 <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money(appliedTotal)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
@@ -476,6 +504,7 @@ document.addEventListener('alpine:init', () => {
         customerRequestNumber: 0,
         successMessage: '',
         _generalDiscountInput: '',
+        _generalDiscountType: 'fixed',
         canDiscount: @json($canDiscount),
         canOverridePrice: @json($canOverridePrice),
         checkoutToken: crypto.randomUUID(),
@@ -495,25 +524,80 @@ document.addEventListener('alpine:init', () => {
         get resultsOpen() {
             return this.query.trim().length > 0 && (this.loading || this.results.length >= 0);
         },
+        get subtotalBeforeGeneralDiscount() {
+            return this.decimal4(this.cart.reduce((sum, item) => sum + this.lineSubtotalBeforeGeneral(item), 0));
+        },
+        get generalDiscount() {
+            if (!this.canDiscount) return 0;
+            const value = this.numberValue(this._generalDiscountInput);
+            if (value <= 0 || this.subtotalBeforeGeneralDiscount <= 0) return 0;
+            if (this._generalDiscountType === 'percentage') {
+                return this.decimal4(this.subtotalBeforeGeneralDiscount * (Math.min(value, 100) / 100));
+            }
+            return this.decimal4(Math.min(value, this.subtotalBeforeGeneralDiscount));
+        },
+        get generalDiscountAllocations() {
+            const allocations = this.cart.map(() => 0);
+            const base = this.subtotalBeforeGeneralDiscount;
+            const discount = this.generalDiscount;
+            if (discount <= 0 || base <= 0 || !this.cart.length) return allocations;
+
+            let allocated = 0;
+            let lastPositiveIndex = null;
+
+            this.cart.forEach((item, index) => {
+                const lineBase = this.lineSubtotalBeforeGeneral(item);
+                if (lineBase > 0) lastPositiveIndex = index;
+                const share = this.decimal4(discount * (lineBase / base));
+                allocations[index] = Math.min(share, lineBase);
+                allocated = this.decimal4(allocated + allocations[index]);
+            });
+
+            const remainder = this.decimal4(discount - allocated);
+            if (lastPositiveIndex !== null && Math.abs(remainder) > 0.0000001) {
+                allocations[lastPositiveIndex] = this.decimal4(allocations[lastPositiveIndex] + remainder);
+            }
+
+            return allocations;
+        },
         get subtotal() {
-            return this.cart.reduce((sum, item) => sum + (item.sale_price * item.quantity), 0);
+            return this.decimal4(this.cart.reduce((sum, item, index) => sum + this.lineSubtotal(item, index), 0));
         },
         get taxTotal() {
-            return this.cart.reduce((sum, item) => sum + this.lineTax(item), 0);
+            return this.decimal4(this.cart.reduce((sum, item, index) => sum + this.lineTax(item, index), 0));
+        },
+        get totalDiscount() {
+            const lineDiscounts = this.cart.reduce((sum, item) => sum + this.lineDiscount(item), 0);
+            return this.decimal4(lineDiscounts + this.generalDiscount);
         },
         get grandTotal() {
-            const subtotalDiscount = this.generalDiscount;
-            const netAmount = this.subtotal - subtotalDiscount;
-            return Math.round(netAmount + this.taxTotal);
+            return Math.round(this.decimal4(this.subtotal + this.taxTotal));
         },
-        get roundingTotal() { return this.grandTotal - (this.subtotal - this.generalDiscount + this.taxTotal); },
-        get generalDiscount() {
-            if (!this.canDiscount || !this._generalDiscountInput) return 0;
-            const val = parseInt(this._generalDiscountInput, 10);
-            return isNaN(val) || val < 0 ? 0 : Math.min(val, this.subtotal);
+        get roundingTotal() {
+            return this.decimal4(this.grandTotal - this.decimal4(this.subtotal + this.taxTotal));
+        },
+        get hasInvalidAdjustments() {
+            if (this.canOverridePrice && this.cart.some(item => item._unitPrice !== '' && item._unitPrice !== null && this.numberValue(item._unitPrice) <= 0)) return true;
+
+            if (this.canDiscount) {
+                for (const item of this.cart) {
+                    const value = this.numberValue(item._discount);
+                    if (value < 0) return true;
+                    if (item._discountType === 'percentage' && value > 100) return true;
+                    if (item._discountType === 'fixed' && value > this.lineGross(item)) return true;
+                }
+
+                const generalValue = this.numberValue(this._generalDiscountInput);
+                if (generalValue < 0) return true;
+                if (this._generalDiscountType === 'percentage' && generalValue > 100) return true;
+                if (this._generalDiscountType === 'fixed' && generalValue > this.subtotalBeforeGeneralDiscount) return true;
+                if (this.generalDiscount > 0 && this.generalDiscount >= this.subtotalBeforeGeneralDiscount) return true;
+            }
+
+            return false;
         },
         get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
-        get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
@@ -600,7 +684,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 existing.quantity += 1;
             }
-            else this.cart.push({ ...product, quantity: 1, _discount: 0, _unitPrice: 0 });
+            else this.cart.push({ ...product, quantity: 1, _discount: 0, _discountType: 'fixed', _unitPrice: '' });
             this.notice = '';
             this.closeResults();
             this.$nextTick(() => this.$refs.searchInput.focus());
@@ -622,18 +706,47 @@ document.addEventListener('alpine:init', () => {
         decrease(item) { if (item.quantity > 1) item.quantity -= 1; },
         remove(item) { this.cart = this.cart.filter(current => current.id !== item.id); },
         exceedsStock(item) { return item.controls_inventory && item.quantity > item.available_stock; },
-        lineGross(item) { return (item.sale_price * item.quantity); },
-        lineDiscount(item) {
-            if (!this.canDiscount || !item._discount) return 0;
-            const val = parseInt(item._discount, 10);
-            return isNaN(val) || val < 0 ? 0 : Math.min(val, this.lineGross(item));
+        numberValue(value) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : 0;
         },
-        lineSubtotal(item) { return this.lineGross(item) - this.lineDiscount(item); },
-        lineTax(item) { return this.lineSubtotal(item) * (item.tax_rate / 100); },
-        lineTotal(item) { return this.lineSubtotal(item) + this.lineTax(item); },
+        decimal4(value) {
+            return Math.round((this.numberValue(value) + Number.EPSILON) * 10000) / 10000;
+        },
         lineAppliedPrice(item) {
-            if (this.canOverridePrice && item._unitPrice > 0) return item._unitPrice;
-            return item.sale_price;
+            const manualPrice = this.numberValue(item._unitPrice);
+            if (this.canOverridePrice && manualPrice > 0) return manualPrice;
+            return this.numberValue(item.sale_price);
+        },
+        lineGross(item) {
+            return this.decimal4(this.lineAppliedPrice(item) * this.numberValue(item.quantity));
+        },
+        lineDiscount(item) {
+            if (!this.canDiscount) return 0;
+            const value = this.numberValue(item._discount);
+            if (value <= 0) return 0;
+
+            const gross = this.lineGross(item);
+            if (item._discountType === 'percentage') {
+                return this.decimal4(gross * (Math.min(value, 100) / 100));
+            }
+
+            return this.decimal4(Math.min(value, gross));
+        },
+        lineSubtotalBeforeGeneral(item) {
+            return this.decimal4(this.lineGross(item) - this.lineDiscount(item));
+        },
+        lineGeneralDiscount(index) {
+            return this.generalDiscountAllocations[index] ?? 0;
+        },
+        lineSubtotal(item, index) {
+            return this.decimal4(this.lineSubtotalBeforeGeneral(item) - this.lineGeneralDiscount(index));
+        },
+        lineTax(item, index) {
+            return this.decimal4(this.lineSubtotal(item, index) * (this.numberValue(item.tax_rate) / 100));
+        },
+        lineTotal(item, index) {
+            return this.decimal4(this.lineSubtotal(item, index) + this.lineTax(item, index));
         },
         money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value) || 0); },
         formatQuantity(value) { return new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4 }).format(Number(value) || 0); },
@@ -705,16 +818,24 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
                         cash_session_id: this.cashSessionId || null,
-                        ...(this.canDiscount && this._generalDiscountInput > 0 ? { discount_total: parseInt(this._generalDiscountInput) || 0 } : {}),
+                        ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? {
+                            discount_total: this.numberValue(this._generalDiscountInput),
+                            discount_total_type: this._generalDiscountType,
+                        } : {}),
                         ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
                         customer_id: this.customerId,
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
                         items: this.cart.map(item => ({
-                        product_id: item.id,
-                        quantity: item.quantity,
-                        ...(this.canDiscount && item._discount > 0 ? { discount: item._discount } : {}),
-                        ...(this.canOverridePrice && item._unitPrice > 0 ? { unit_price: item._unitPrice } : {}),
-                    })),
+                            product_id: item.id,
+                            quantity: item.quantity,
+                            ...(this.canDiscount && this.numberValue(item._discount) > 0 ? {
+                                discount: this.numberValue(item._discount),
+                                discount_type: item._discountType,
+                            } : {}),
+                            ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? {
+                                unit_price: this.numberValue(item._unitPrice),
+                            } : {}),
+                        })),
                     }),
                 });
                 const payload = await this.readFetchResponse(response);
@@ -734,6 +855,7 @@ document.addEventListener('alpine:init', () => {
             this.checkoutToken = crypto.randomUUID();
             this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null };
             this._generalDiscountInput = '';
+            this._generalDiscountType = 'fixed';
             this.successMessage = '';
             this.clearSuspendedRecovery();
             this.$nextTick(() => this.$refs.searchInput.focus());
@@ -757,7 +879,7 @@ document.addEventListener('alpine:init', () => {
             if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
-            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = '';
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed';
             this.$nextTick(() => this.$refs.searchInput.focus());
         },
         async suspendCurrent() {
@@ -783,7 +905,7 @@ document.addEventListener('alpine:init', () => {
                 if (this.suspended.activeId && this.suspended.activeId !== sale.id && !(await this.releaseCurrentRecovery())) return;
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _unitPrice: 0 }));
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
                 this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.$refs.searchInput.focus());
             } catch (error) { this.suspended.error = error.message; }
         },
