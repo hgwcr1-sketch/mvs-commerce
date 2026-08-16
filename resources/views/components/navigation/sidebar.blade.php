@@ -57,6 +57,14 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             :active="request()->routeIs('pos.*')" />
     @endcan
 
+@can('ventas.ver')
+    <x-navigation.item
+        route="ventas.index"
+        icon="tag"
+        label="Historial de ventas"
+        :active="request()->routeIs('ventas.*')" />
+@endcan
+
     @canany(['caja.abrir', 'caja.ver'])
         <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
     @endcanany

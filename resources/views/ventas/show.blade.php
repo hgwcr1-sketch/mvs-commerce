@@ -8,6 +8,18 @@
 
 <div class="space-y-6">
 
+@if(session('success'))
+    <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+        {{ session('success') }}
+    </div>
+@endif
+
+@if($errors->any())
+    <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+        {{ $errors->first() }}
+    </div>
+@endif
+
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
         <div>
@@ -40,6 +52,36 @@
     </div>
 
     <x-card>
+
+    @can('ventas.anular')
+    @if($sale->status === \App\Models\Sale::STATUS_COMPLETED)
+
+        <form
+            method="POST"
+            action="{{ route('ventas.void', $sale) }}"
+            onsubmit="return confirm('¿Está seguro de anular esta venta? Esta acción devolverá el inventario y anulará los pagos.');">
+
+            @csrf
+
+            <input
+                type="text"
+                name="reason"
+                required
+                minlength="3"
+                maxlength="255"
+                placeholder="Motivo de anulación"
+                class="rounded-lg border border-red-300 px-3 py-2 text-sm">
+
+            <button
+                type="submit"
+                class="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700">
+                Anular venta
+            </button>
+
+        </form>
+
+    @endif
+@endcan
 
         <x-slot:header>
             <h3 class="text-lg font-semibold text-slate-800">

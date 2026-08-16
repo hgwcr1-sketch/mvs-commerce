@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Sales\SaleVoidService;
 use App\Models\Sale;
 use Illuminate\Http\Request;
 
@@ -79,4 +80,31 @@ class SaleController extends Controller
         'sale' => $venta,
     ]);
 }
+
+public function void(
+    Request $request,
+    Sale $venta,
+    SaleVoidService $service,
+)
+{
+    $data = $request->validate([
+        'reason' => [
+            'required',
+            'string',
+            'min:3',
+            'max:255',
+        ],
+    ]);
+
+    $service->void(
+        $venta,
+        $request->user(),
+        $data['reason'],
+    );
+
+    return redirect()
+        ->route('ventas.show', $venta)
+        ->with('success', 'Venta anulada correctamente.');
+}
+
 }

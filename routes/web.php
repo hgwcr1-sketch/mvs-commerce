@@ -434,6 +434,10 @@ Route::resource('ventas', SaleController::class)
     ->only(['index', 'show'])
     ->middleware(['active.branch', 'permission:ventas.ver']);
 
+Route::post('/ventas/{venta}/anular', [SaleController::class, 'void'])
+    ->middleware(['active.branch', 'permission:ventas.anular'])
+    ->name('ventas.void');
+
 Route::resource('cotizaciones', QuoteController::class);
 
 Route::resource('facturas', InvoiceController::class);
@@ -441,7 +445,6 @@ Route::resource('facturas', InvoiceController::class);
 Route::resource('apartados', LayawayController::class);
 
 Route::resource('devoluciones', ReturnController::class);
-
 /*
 |--------------------------------------------------------------------------
 | Finanzas
