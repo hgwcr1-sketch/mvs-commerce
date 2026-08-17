@@ -47,6 +47,19 @@
                 Reimprimir comprobante
             </a>
 
+            @can('devoluciones.crear')
+            @if(
+                $sale->status === \App\Models\Sale::STATUS_COMPLETED
+                || $sale->status === \App\Models\Sale::STATUS_PARTIALLY_RETURNED
+            )
+                <a
+                    href="{{ route('ventas.return.create', $sale) }}"
+                    class="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700">
+                    Devolver productos
+                </a>
+            @endif
+            @endcan
+
         </div>
 
     </div>
@@ -275,6 +288,64 @@
             </table>
 
         </div>
+
+    </x-card>
+
+    <x-card>
+
+        <x-slot:header>
+            <h3 class="text-lg font-semibold text-slate-800">
+                Devoluciones
+            </h3>
+        </x-slot:header>
+
+        @forelse($sale->returns as $saleReturn)
+
+            <div class="mb-4 rounded-xl border border-slate-200 p-4">
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="font-semibold text-slate-800">
+                            {{ $saleReturn->return_number }}
+                        </p>
+                        <p class="text-sm text-slate-500">
+                            {{ $saleReturn->returned_at?->format('d/m/Y H:i') ?: '—' }}
+                            &middot;
+                            {{ $saleReturn->user?->name ?: '—' }}
+                        </p>
+                    </div>
+
+                    <span class="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                        Registrar devolución
+                    </span>
+                </div>
+
+                <p class="mt-2 text-sm text-slate-600">
+                    <span class="font-semibold text-slate-700">Motivo:</span>
+                    {{ $saleReturn->reason }}
+                </p>
+
+                <ul class="mt-2 space-y-1 text-sm text-slate-600">
+                    @foreach($saleReturn->items as $returnItem)
+
+                        <li>
+                            {{ rtrim(rtrim(number_format((float) $returnItem->quantity, 4, ',', '.'), '0'), ',') }}
+                            &times;
+                            {{ $returnItem->product?->name ?: $returnItem->saleItem?->description ?: 'Producto' }}
+                        </li>
+
+                    @endforeach
+                </ul>
+
+            </div>
+
+        @empty
+
+            <p class="text-sm text-slate-500">
+                Esta venta no tiene devoluciones registradas.
+            </p>
+
+        @endforelse
 
     </x-card>
 

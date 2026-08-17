@@ -74,6 +74,8 @@ class SaleController extends Controller
         'items',
         'payments.paymentMethod',
         'cashSession.cashRegister',
+        'returns.user',
+        'returns.items.product',
     ]);
 
     return view('ventas.show', [

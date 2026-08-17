@@ -444,7 +444,13 @@ Route::resource('facturas', InvoiceController::class);
 
 Route::resource('apartados', LayawayController::class);
 
-Route::resource('devoluciones', ReturnController::class);
+Route::get('/ventas/{venta}/devolucion', [ReturnController::class, 'create'])
+    ->middleware(['active.branch', 'permission:devoluciones.crear'])
+    ->name('ventas.return.create');
+
+Route::post('/ventas/{venta}/devolucion', [ReturnController::class, 'store'])
+    ->middleware(['active.branch', 'permission:devoluciones.crear'])
+    ->name('ventas.return.store');
 /*
 |--------------------------------------------------------------------------
 | Finanzas

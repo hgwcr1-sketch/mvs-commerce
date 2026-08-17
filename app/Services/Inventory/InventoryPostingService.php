@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
+use App\Models\SaleReturn;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -116,6 +117,68 @@ class InventoryPostingService
         'notes' => 'Anulación de venta '.$sale->sale_number,
     ]);
 }
+
+public function saleReturn(
+        Sale $sale,
+        SaleReturn $saleReturn,
+        Product $product,
+        float $quantity,
+        int $userId,
+    ): InventoryMovement {
+        if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La línea de devolución no es válida.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $sale->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($branchProduct === null) {
+            throw ValidationException::withMessages([
+                'inventory' => 'No se pudo obtener el inventario de la sucursal.',
+            ]);
+        }
+
+        $previousStock = (float) $branchProduct->stock;
+        $newStock = round($previousStock + $quantity, 4);
+
+        DB::table('branch_product')
+            ->where('id', $branchProduct->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        return InventoryMovement::create([
+            'company_id' => $sale->company_id,
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'sale_return',
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Entrada por devolución de venta',
+            'reference_type' => SaleReturn::class,
+            'reference_id' => $saleReturn->id,
+            'notes' => 'Devolución '.$saleReturn->return_number.' de la venta '.$sale->sale_number,
+        ]);
+    }
 
     /**
      * Registra la entrada únicamente en la sucursal receptora de la compra.
