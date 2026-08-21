@@ -438,7 +438,14 @@ Route::post('/ventas/{venta}/anular', [SaleController::class, 'void'])
     ->middleware(['active.branch', 'permission:ventas.anular'])
     ->name('ventas.void');
 
-Route::resource('cotizaciones', QuoteController::class);
+Route::middleware('active.branch')->group(function () {
+    Route::get('/cotizaciones', [QuoteController::class, 'index'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.index');
+    Route::post('/cotizaciones', [QuoteController::class, 'store'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.store');
+    Route::get('/cotizaciones/{cotizacione}', [QuoteController::class, 'show'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.show');
+    Route::get('/cotizaciones/{quote}/imprimir', [QuoteController::class, 'print'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.print');
+    Route::get('/cotizaciones/{quote}/cargar', [QuoteController::class, 'load'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.load');
+    Route::post('/cotizaciones/{quote}/cancelar', [QuoteController::class, 'cancel'])->middleware('permission:cotizaciones.editar')->name('cotizaciones.cancel');
+});
 
 Route::resource('facturas', InvoiceController::class);
 

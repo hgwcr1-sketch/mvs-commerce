@@ -9,10 +9,16 @@ use Illuminate\Support\Facades\DB;
 class CompanySequence extends Model
 {
     public const POS_SALE = 'pos_sale';
+
     public const DOCUMENT_POS_SUSPENSION = 'pos_suspension';
+
     public const POS = self::POS_SALE;
+
     public const CASH_SESSION = 'cash_session';
+
     public const SALE_RETURN = 'sale_return';
+
+    public const QUOTE = 'quote';
 
     protected $fillable = [
         'company_id',
@@ -74,5 +80,10 @@ class CompanySequence extends Model
     public static function nextSaleReturnNumber(int $companyId): string
     {
         return sprintf('DEV-%08d', static::nextValue($companyId, static::SALE_RETURN));
+    }
+
+    public static function nextQuoteNumber(int $companyId): string
+    {
+        return sprintf('COT-%08d', static::nextValue($companyId, static::QUOTE));
     }
 }

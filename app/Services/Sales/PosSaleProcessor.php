@@ -8,6 +8,7 @@ use App\Models\CompanySequence;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Quote;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
@@ -25,8 +26,7 @@ class PosSaleProcessor
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
-    ) {
-    }
+    ) {}
 
     /** @return array{sale: Sale, duplicate: bool} */
     public function process(array $data, User $user, int $companyId, int $branchId): array
@@ -107,6 +107,20 @@ class PosSaleProcessor
                     ]);
                 }
 
+                $quote = $this->lockQuoteForCheckout($data, $companyId, $branchId);
+                if ($quote !== null) {
+                    $items = $quote->items->mapWithKeys(fn ($item) => [(int) $item->product_id => [
+                        'quantity' => (float) $item->quantity,
+                        'discount' => (float) $item->discount_total,
+                        'discount_type' => 'fixed',
+                        'unit_price' => (float) $item->unit_price,
+                        'quote_item' => $item,
+                    ]])->all();
+                    $data['customer_id'] = $quote->customer_id;
+                    $data['discount_total'] = 0;
+                    $data['discount_total_type'] = 'fixed';
+                }
+
                 $cashSession = $this->cashSessionResolver->resolve(
                     $user,
                     $companyId,
@@ -125,21 +139,21 @@ class PosSaleProcessor
                 );
 
                 $customerId = $data['customer_id'] ?? null;
-$customer = null;
+                $customer = null;
 
-if ($customerId !== null) {
-    $customer = Customer::query()
-        ->where('company_id', $companyId)
-        ->where('is_active', true)
-        ->whereKey($customerId)
-        ->first();
+                if ($customerId !== null) {
+                    $customer = Customer::query()
+                        ->where('company_id', $companyId)
+                        ->where('is_active', true)
+                        ->whereKey($customerId)
+                        ->first();
 
-    if ($customer === null) {
-        throw ValidationException::withMessages([
-            'customer_id' => 'El cliente no está disponible para esta empresa.',
-        ]);
-    }
-}
+                    if ($customer === null) {
+                        throw ValidationException::withMessages([
+                            'customer_id' => 'El cliente no está disponible para esta empresa.',
+                        ]);
+                    }
+                }
 
                 $paymentMethods = PaymentMethod::query()
                     ->where('company_id', $companyId)
@@ -185,12 +199,9 @@ if ($customerId !== null) {
                     $company,
                 );
 
-                $this->authorizeRequestedAdjustments(
-                    $items,
-                    $data,
-                    $canDiscount,
-                    $canOverridePrice,
-                );
+                if ($quote === null) {
+                    $this->authorizeRequestedAdjustments($items, $data, $canDiscount, $canOverridePrice);
+                }
 
                 $resolvedLines = [];
                 $baseAfterLineDiscounts = 0.0;
@@ -206,28 +217,28 @@ if ($customerId !== null) {
                     );
 
                     $basePrice = match ($customer?->price_level ?? 'normal') {
-    'wholesale' => $product->wholesale_price !== null
-        ? (float) $product->wholesale_price
-        : (float) $product->sale_price,
+                        'wholesale' => $product->wholesale_price !== null
+                            ? (float) $product->wholesale_price
+                            : (float) $product->sale_price,
 
-    'a' => $product->price_a !== null
-        ? (float) $product->price_a
-        : (float) $product->sale_price,
+                        'a' => $product->price_a !== null
+                            ? (float) $product->price_a
+                            : (float) $product->sale_price,
 
-    'b' => $product->price_b !== null
-        ? (float) $product->price_b
-        : (float) $product->sale_price,
+                        'b' => $product->price_b !== null
+                            ? (float) $product->price_b
+                            : (float) $product->sale_price,
 
-    'c' => $product->price_c !== null
-        ? (float) $product->price_c
-        : (float) $product->sale_price,
+                        'c' => $product->price_c !== null
+                            ? (float) $product->price_c
+                            : (float) $product->sale_price,
 
-    default => (float) $product->sale_price,
-};
+                        default => (float) $product->sale_price,
+                    };
 
-$unitPrice = $lineData['unit_price'] !== null
-    ? (float) $lineData['unit_price']
-    : $basePrice;
+                    $unitPrice = $lineData['unit_price'] !== null
+                        ? (float) $lineData['unit_price']
+                        : $basePrice;
 
                     if ($unitPrice <= 0) {
                         throw ValidationException::withMessages([
@@ -235,12 +246,11 @@ $unitPrice = $lineData['unit_price'] !== null
                         ]);
                     }
 
-                    $unitCost = (float) $product->cost;
-                    $taxRate = (float) ($product->tax_rate ?? 0);
+                    $quoteItem = $lineData['quote_item'] ?? null;
+                    $unitCost = $quoteItem ? (float) $quoteItem->unit_cost : (float) $product->cost;
+                    $taxRate = $quoteItem ? (float) $quoteItem->tax_rate : (float) ($product->tax_rate ?? 0);
 
-                    $grossTotal = $this->decimal4(
-                        $unitPrice * $quantity,
-                    );
+                    $grossTotal = $quoteItem ? (float) $quoteItem->gross_total : $this->decimal4($unitPrice * $quantity);
 
                     $lineDiscount = $this->resolveDiscountAmount(
                         (float) $lineData['discount'],
@@ -263,6 +273,7 @@ $unitPrice = $lineData['unit_price'] !== null
                         'lineDiscount' => $lineDiscount,
                         'lineBase' => $lineBase,
                         'generalDiscount' => 0.0,
+                        'quoteItem' => $quoteItem,
                     ];
 
                     $baseAfterLineDiscounts += $lineBase;
@@ -303,7 +314,7 @@ $unitPrice = $lineData['unit_price'] !== null
                         'discount_total' => 'El descuento general debe dejar un importe positivo en la venta.',
                     ]);
                 }
-                                $generalAllocations = $this->allocateGeneralDiscount(
+                $generalAllocations = $this->allocateGeneralDiscount(
                     $resolvedLines,
                     $generalDiscount,
                     $baseAfterLineDiscounts,
@@ -409,15 +420,16 @@ $unitPrice = $lineData['unit_price'] !== null
 
                 foreach ($resolvedLines as $line) {
                     $product = $line['product'];
+                    $quoteItem = $line['quoteItem'];
 
                     SaleItem::create([
                         'sale_id' => $sale->id,
-                        'product_id' => $product->id,
-                        'product_code' => $product->internal_code,
-                        'barcode' => $product->barcode,
-                        'cabys_code' => $product->cabys_code,
-                        'description' => $product->name,
-                        'unit_code' => $product->unit?->abbreviation,
+                        'product_id' => $quoteItem?->product_id ?? $product->id,
+                        'product_code' => $quoteItem?->product_code ?? $product->internal_code,
+                        'barcode' => $quoteItem?->barcode ?? $product->barcode,
+                        'cabys_code' => $quoteItem?->cabys_code ?? $product->cabys_code,
+                        'description' => $quoteItem?->description ?? $product->name,
+                        'unit_code' => $quoteItem?->unit_code ?? $product->unit?->abbreviation,
                         'quantity' => $line['quantity'],
                         'unit_price' => $line['unitPrice'],
                         'gross_total' => $line['grossTotal'],
@@ -442,18 +454,13 @@ $unitPrice = $lineData['unit_price'] !== null
                     SalePayment::create([
                         'sale_id' => $sale->id,
                         'cash_session_id' => $cashSession?->id,
-                        'payment_method_id' =>
-                            $payment['method']->id,
-                        'affects_cash_snapshot' =>
-                            $payment['method']->affects_cash,
+                        'payment_method_id' => $payment['method']->id,
+                        'affects_cash_snapshot' => $payment['method']->affects_cash,
                         'created_by' => $user->id,
                         'amount' => $payment['amount'],
-                        'received_amount' =>
-                            $payment['received_amount'],
-                        'change_amount' =>
-                            $payment['change_amount'],
-                        'cash_effect_amount' =>
-                            $payment['method']->affects_cash
+                        'received_amount' => $payment['received_amount'],
+                        'change_amount' => $payment['change_amount'],
+                        'cash_effect_amount' => $payment['method']->affects_cash
                                 ? $payment['amount']
                                 : 0,
                         'reference' => $payment['reference'],
@@ -467,6 +474,10 @@ $unitPrice = $lineData['unit_price'] !== null
                         'recovered_sale_id' => $sale->id,
                         'recovered_at' => now(),
                     ]);
+                }
+
+                if ($quote !== null) {
+                    $quote->update(['status' => Quote::STATUS_CONVERTED, 'converted_sale_id' => $sale->id, 'converted_at' => now()]);
                 }
 
                 return $sale;
@@ -522,8 +533,7 @@ $unitPrice = $lineData['unit_price'] !== null
                     $item['discount_type']
                     ?? 'fixed'
                 ),
-                'unit_price' =>
-                    array_key_exists('unit_price', $item)
+                'unit_price' => array_key_exists('unit_price', $item)
                     && $item['unit_price'] !== null
                         ? $this->decimal4(
                             (float) $item['unit_price'],
@@ -573,8 +583,7 @@ $unitPrice = $lineData['unit_price'] !== null
         bool $canOverridePrice,
     ): void {
         $hasLineDiscount = collect($items)->contains(
-            fn (array $line) =>
-                (float) $line['discount'] > 0,
+            fn (array $line) => (float) $line['discount'] > 0,
         );
 
         $hasGeneralDiscount =
@@ -591,8 +600,7 @@ $unitPrice = $lineData['unit_price'] !== null
         }
 
         $hasPriceOverride = collect($items)->contains(
-            fn (array $line) =>
-                $line['unit_price'] !== null,
+            fn (array $line) => $line['unit_price'] !== null,
         );
 
         if (
@@ -604,7 +612,8 @@ $unitPrice = $lineData['unit_price'] !== null
             ]);
         }
     }
-        private function resolveDiscountAmount(
+
+    private function resolveDiscountAmount(
         float $value,
         string $type,
         float $base,
@@ -752,8 +761,7 @@ $unitPrice = $lineData['unit_price'] !== null
     ): array {
         $canonical = array_map(
             fn (array $payment) => [
-                'payment_method_id' =>
-                    (int) $payment['payment_method_id'],
+                'payment_method_id' => (int) $payment['payment_method_id'],
 
                 'amount' => number_format(
                     (float) $payment['amount'],
@@ -762,11 +770,10 @@ $unitPrice = $lineData['unit_price'] !== null
                     '',
                 ),
 
-                'received_amount' =>
-                    array_key_exists(
-                        'received_amount',
-                        $payment,
-                    )
+                'received_amount' => array_key_exists(
+                    'received_amount',
+                    $payment,
+                )
                     && $payment['received_amount'] !== null
                         ? number_format(
                             (float) $payment['received_amount'],
@@ -776,8 +783,7 @@ $unitPrice = $lineData['unit_price'] !== null
                         )
                         : null,
 
-                'reference' =>
-                    isset($payment['reference'])
+                'reference' => isset($payment['reference'])
                     && trim(
                         (string) $payment['reference'],
                     ) !== ''
@@ -913,7 +919,8 @@ $unitPrice = $lineData['unit_price'] !== null
 
         return $resolved;
     }
-        private function fingerprint(
+
+    private function fingerprint(
         array $data,
         array $items,
         array $payments,
@@ -928,13 +935,11 @@ $unitPrice = $lineData['unit_price'] !== null
                 'branch_id' => $branchId,
                 'user_id' => $userId,
 
-                'cash_session_id' =>
-                    isset($data['cash_session_id'])
+                'cash_session_id' => isset($data['cash_session_id'])
                         ? (int) $data['cash_session_id']
                         : null,
 
-                'customer_id' =>
-                    isset($data['customer_id'])
+                'customer_id' => isset($data['customer_id'])
                         ? (int) $data['customer_id']
                         : null,
 
@@ -956,11 +961,9 @@ $unitPrice = $lineData['unit_price'] !== null
                             '',
                         ),
 
-                        'discount_type' =>
-                            $line['discount_type'],
+                        'discount_type' => $line['discount_type'],
 
-                        'unit_price' =>
-                            $line['unit_price'] === null
+                        'unit_price' => $line['unit_price'] === null
                                 ? null
                                 : number_format(
                                     $line['unit_price'],
@@ -972,8 +975,7 @@ $unitPrice = $lineData['unit_price'] !== null
                     $items,
                 ),
 
-                'discount_total' =>
-                    isset($data['discount_total'])
+                'discount_total' => isset($data['discount_total'])
                         ? number_format(
                             (float) $data['discount_total'],
                             4,
@@ -982,20 +984,19 @@ $unitPrice = $lineData['unit_price'] !== null
                         )
                         : '0.0000',
 
-                'discount_total_type' =>
-                    (string) (
-                        $data['discount_total_type']
-                        ?? 'fixed'
-                    ),
+                'discount_total_type' => (string) (
+                    $data['discount_total_type']
+                    ?? 'fixed'
+                ),
 
-                'suspended_sale_id' =>
-                    isset($data['suspended_sale_id'])
+                'suspended_sale_id' => isset($data['suspended_sale_id'])
                         ? (int) $data['suspended_sale_id']
                         : null,
 
-                'recovery_token' =>
-                    $data['recovery_token']
+                'recovery_token' => $data['recovery_token']
                     ?? null,
+
+                'quote_id' => isset($data['quote_id']) ? (int) $data['quote_id'] : null,
             ], JSON_THROW_ON_ERROR),
         );
     }
@@ -1059,6 +1060,28 @@ $unitPrice = $lineData['unit_price'] !== null
         }
 
         return $suspended;
+    }
+
+    private function lockQuoteForCheckout(array $data, int $companyId, int $branchId): ?Quote
+    {
+        if (! isset($data['quote_id'])) {
+            return null;
+        }
+
+        $quote = Quote::query()->lockForUpdate()->find($data['quote_id']);
+        if (! $quote || (int) $quote->company_id !== $companyId || (int) $quote->branch_id !== $branchId) {
+            throw ValidationException::withMessages(['quote_id' => 'La cotización no pertenece al contexto activo.']);
+        }
+        if ($quote->status !== Quote::STATUS_ACTIVE) {
+            throw ValidationException::withMessages(['quote_id' => 'La cotización ya no está activa.']);
+        }
+        if ($quote->expires_at?->isBefore(today())) {
+            throw ValidationException::withMessages(['quote_id' => 'La cotización está vencida.']);
+        }
+
+        $quote->load('items');
+
+        return $quote;
     }
 
     private function verifyRecoveredSuspension(

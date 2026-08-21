@@ -13,19 +13,24 @@ class StoreSaleReturnRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $items = collect($this->input('items', []))
-            ->filter(function ($item) {
+        $items = $this->input('items');
+
+        if (! is_array($items)) {
+            return;
+        }
+
+        $items = array_values(array_filter(
+            $items,
+            function ($item): bool {
                 if (! is_array($item)) {
-                    return false;
+                    return true;
                 }
 
                 $quantity = $item['quantity'] ?? null;
 
-                return $quantity !== null
-                    && trim((string) $quantity) !== '';
-            })
-            ->values()
-            ->all();
+                return ! ($quantity === null || (is_string($quantity) && trim($quantity) === ''));
+            },
+        ));
 
         $this->merge([
             'items' => $items,

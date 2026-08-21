@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Sale;
 use App\Models\Company;
+use App\Models\Sale;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -12,17 +12,23 @@ class StorePosSaleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        if (! $this->filled('quote_id')) {
+            return true;
+        }
+
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        return $company !== null && $this->user()?->hasPermission('cotizaciones.crear', $company);
     }
 
-protected function prepareForValidation(): void
-{
-    if (! $this->filled('document_type')) {
-        $this->merge([
-            'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
-        ]);
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('document_type')) {
+            $this->merge([
+                'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+            ]);
+        }
     }
-}
 
     public function rules(): array
     {
@@ -47,16 +53,17 @@ protected function prepareForValidation(): void
             'cash_session_id' => ['nullable', 'integer'],
             'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
             'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
+            'quote_id' => ['nullable', 'integer'],
             'customer_id' => [
-    $this->input('document_type') === Sale::DOCUMENT_ELECTRONIC_INVOICE
-        ? 'required'
-        : 'nullable',
-    'integer',
-],
+                $this->input('document_type') === Sale::DOCUMENT_ELECTRONIC_INVOICE
+                    ? 'required'
+                    : 'nullable',
+                'integer',
+            ],
             'document_type' => [
-    'required',
-    'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
-],
+                'required',
+                'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+            ],
 
             'payments' => ['required', 'array', 'min:1'],
             'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
@@ -73,7 +80,7 @@ protected function prepareForValidation(): void
                 'regex:/^\d+(?:\.\d{1,4})?$/',
             ],
 
-            'items.*.discount' => $canDiscount
+            'items.*.discount' => $canDiscount || $this->filled('quote_id')
                 ? [
                     'nullable',
                     'numeric',
@@ -82,14 +89,14 @@ protected function prepareForValidation(): void
                 ]
                 : ['prohibited'],
 
-            'items.*.discount_type' => $canDiscount
+            'items.*.discount_type' => $canDiscount || $this->filled('quote_id')
                 ? [
                     'nullable',
                     'in:fixed,percentage',
                 ]
                 : ['prohibited'],
 
-            'discount_total' => $canDiscount
+            'discount_total' => $canDiscount || $this->filled('quote_id')
                 ? [
                     'nullable',
                     'numeric',
@@ -98,14 +105,14 @@ protected function prepareForValidation(): void
                 ]
                 : ['prohibited'],
 
-            'discount_total_type' => $canDiscount
+            'discount_total_type' => $canDiscount || $this->filled('quote_id')
                 ? [
                     'nullable',
                     'in:fixed,percentage',
                 ]
                 : ['prohibited'],
 
-            'items.*.unit_price' => $canOverridePrice
+            'items.*.unit_price' => $canOverridePrice || $this->filled('quote_id')
                 ? [
                     'nullable',
                     'numeric',
