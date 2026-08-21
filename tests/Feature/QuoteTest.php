@@ -30,7 +30,9 @@ class QuoteTest extends TestCase
         $this->stock($branch, $product, 5);
 
         $response = $this->createQuote($user, $company, $branch, $product, ['quantity' => 2, 'unit_price' => 900, 'discount' => 100, 'discount_type' => 'fixed']);
-        $response->assertCreated()->assertJsonPath('quote_number', 'COT-00000001');
+        $response->assertCreated()
+            ->assertJsonPath('quote_number', 'COT-00000001')
+            ->assertJsonPath('show_url', route('cotizaciones.show', $response->json('quote_id')));
         $quote = Quote::with('items')->firstOrFail();
         $item = $quote->items->first();
 

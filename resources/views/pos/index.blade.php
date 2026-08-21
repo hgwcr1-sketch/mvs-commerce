@@ -329,7 +329,7 @@
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
-            @can('cotizaciones.crear')<button type="button" @click="createQuote" :disabled="cart.length === 0" class="whitespace-nowrap rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 disabled:opacity-40">Cotizar</button>@endcan
+            @can('cotizaciones.crear')<button type="button" @click="createQuote()" :disabled="cart.length === 0 || quoteId || creatingQuote" class="whitespace-nowrap rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 disabled:opacity-40" x-text="creatingQuote ? 'Cotizando…' : 'Cotizar'">Cotizar</button>@endcan
             @foreach(['Pedido', 'Apartado', 'Abono', 'Nota de crédito', 'Nota de débito'] as $option)
                 <button type="button" disabled class="whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
             @endforeach
@@ -536,6 +536,7 @@ document.addEventListener('alpine:init', () => {
         canOverridePrice: @json($canOverridePrice),
         checkoutToken: crypto.randomUUID(),
         quoteId: null,
+        creatingQuote: false,
         cashSessionId: @json($cashSession?->id),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->values()),
@@ -930,16 +931,19 @@ document.addEventListener('alpine:init', () => {
         },
         clearSuspendedRecovery() { this.suspended.activeId = null; this.suspended.recoveryToken = null; this.suspended.warnings = []; this.suspended.customerInvalid = false; },
         async createQuote() {
-            if (!this.cart.length || this.quoteId) return;
+            if (!this.cart.length) { this.notice = 'Agregue al menos un producto antes de crear la cotización.'; return; }
+            if (this.quoteId) { this.notice = 'Esta cotización ya está cargada como base editable.'; return; }
+            if (this.creatingQuote) return;
+            this.creatingQuote = true;
+            this.notice = '';
             try {
                 const response = await fetch({{ Illuminate\Support\Js::from(route('cotizaciones.store')) }}, {
                     method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({ customer_id: this.customerId, ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? { discount_total: this.numberValue(this._generalDiscountInput), discount_total_type: this._generalDiscountType } : {}), items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}), ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}) })) }),
                 });
                 const payload = await this.readFetchResponse(response);
-                this.successMessage = payload.message; this.cart = []; this.customerId = null; this.selectedCustomer = null;
-                window.open(payload.print_url, '_blank');
-            } catch (error) { this.notice = error.message; }
+                window.location.assign(payload.show_url);
+            } catch (error) { this.notice = error.message; this.creatingQuote = false; }
         },
         async loadQuote(id) {
             try {

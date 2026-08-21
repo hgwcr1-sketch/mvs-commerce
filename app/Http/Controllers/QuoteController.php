@@ -58,7 +58,7 @@ class QuoteController extends Controller
     {
         $quote = $service->create($request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
 
-        return response()->json(['success' => true, 'message' => "Cotización {$quote->quote_number} creada correctamente.", 'quote_id' => $quote->id, 'quote_number' => $quote->quote_number, 'print_url' => route('cotizaciones.print', $quote)], 201);
+        return response()->json(['success' => true, 'message' => "Cotización {$quote->quote_number} creada correctamente.", 'quote_id' => $quote->id, 'quote_number' => $quote->quote_number, 'show_url' => route('cotizaciones.show', $quote), 'print_url' => route('cotizaciones.print', $quote)], 201);
     }
 
     /**
