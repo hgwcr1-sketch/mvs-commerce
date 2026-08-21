@@ -297,6 +297,9 @@ class PosController extends Controller
                 $request->user(),
                 (int) session('active_company_id'),
                 (int) session('active_branch_id'),
+                $request->validated('quote_id') !== null
+                    ? (int) $request->validated('quote_id')
+                    : null,
             );
         } catch (ValidationException $exception) {
             return response()->json([

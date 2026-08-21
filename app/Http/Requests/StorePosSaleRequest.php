@@ -45,6 +45,7 @@ protected function prepareForValidation(): void
         return [
             'checkout_token' => ['required', 'uuid'],
             'cash_session_id' => ['nullable', 'integer'],
+            'quote_id' => ['nullable', 'integer'],
             'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
             'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
             'customer_id' => [

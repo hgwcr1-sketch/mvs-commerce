@@ -77,6 +77,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'ventas.editar', 'label' => 'Editar ventas', 'module' => 'Ventas'],
             ['name' => 'ventas.anular', 'label' => 'Anular ventas', 'module' => 'Ventas'],
 
+            // Cotizaciones
+            ['name' => 'cotizaciones.ver', 'label' => 'Ver cotizaciones', 'module' => 'Cotizaciones'],
+
             // Caja
             ['name' => 'caja.abrir', 'label' => 'Abrir caja', 'module' => 'Caja'],
             ['name' => 'caja.ver', 'label' => 'Ver caja', 'module' => 'Caja'],

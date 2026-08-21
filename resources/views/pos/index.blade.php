@@ -287,6 +287,13 @@
                 </div>
                 <div class="my-5 border-t border-slate-700"></div>
                 <div class="flex items-end justify-between"><span class="text-lg">Total</span><strong class="text-3xl text-amber-400" x-text="money(grandTotal)"></strong></div>
+                <div x-show="activeQuote" class="mt-3 rounded-xl bg-blue-50 px-4 py-2 text-sm text-blue-800">
+                    Cotización <strong x-text="activeQuote.quote_number"></strong> cargada — se cobrará con sus valores.
+                </div>
+                <button type="button" @click="saveAsQuote" :disabled="!cart.length || savingQuote"
+                        class="mt-3 w-full rounded-2xl border border-slate-600 px-5 py-3 text-sm text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span x-text="savingQuote ? 'Guardando…' : 'Guardar cotización'"></span>
+                </button>
                 @can('ventas.crear')
                     <button type="button" @click="openCheckout" :disabled="!canCheckout"
                             class="mt-5 w-full rounded-2xl bg-amber-500 px-5 py-4 text-lg font-normal text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
@@ -536,6 +543,9 @@ document.addEventListener('alpine:init', () => {
         canDiscount: @json($canDiscount),
         canOverridePrice: @json($canOverridePrice),
         checkoutToken: crypto.randomUUID(),
+        quoteId: null,
+        activeQuote: null,
+        savingQuote: false,
         cashSessionId: @json($cashSession?->id),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->values()),
@@ -874,6 +884,7 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({
                         checkout_token: this.checkoutToken,
                         cash_session_id: this.cashSessionId || null,
+                        ...(this.quoteId ? { quote_id: this.quoteId } : {}),
                         ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? {
                             discount_total: this.numberValue(this._generalDiscountInput),
                             discount_total_type: this._generalDiscountType,
@@ -900,6 +911,7 @@ document.addEventListener('alpine:init', () => {
                 this.cart = [];
                 this.customerId = null;
                 this.selectedCustomer = null;
+                this.clearQuote();
                 if (this.documentType === 'electronic_invoice') {
     this.documentType = 'electronic_ticket';
 }
@@ -917,6 +929,7 @@ document.addEventListener('alpine:init', () => {
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
             this.successMessage = '';
+            this.clearQuote();
             this.clearSuspendedRecovery();
             this.$nextTick(() => this.$refs.searchInput.focus());
         },
@@ -1077,6 +1090,86 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.quickCustomer.saving = false;
             }
+        },
+        async init() {
+            const params = new URLSearchParams(window.location.search);
+            const quoteId = params.get('quote');
+            if (quoteId) {
+                await this.loadQuote(Number(quoteId));
+            }
+        },
+        async loadQuote(id) {
+            if (!this.canLoadQuote(id)) return;
+            this.notice = '';
+            try {
+                const response = await fetch(`/cotizaciones/${id}/cargar`, { headers: { Accept: 'application/json' } });
+                const payload = await this.readFetchResponse(response);
+                this.cart = payload.items.map(item => ({
+                    id: item.product_id,
+                    name: item.product_name,
+                    internal_code: item.product_code,
+                    barcode: item.barcode,
+                    quantity: Number(item.quantity),
+                    sale_price: Number(item.unit_price),
+                    tax_rate: Number(item.tax_rate),
+                    available_stock: null,
+                    controls_inventory: false,
+                    allows_decimals: true,
+                    has_image: false,
+                    image_url: null,
+                    unavailable: false,
+                    _discount: Number(item.discount_total),
+                    _discountType: 'fixed',
+                    _unitPrice: Number(item.unit_price),
+                }));
+                this.quoteId = id;
+                this.activeQuote = payload.quote;
+                if (payload.quote.customer_id) {
+                    this.customerId = payload.quote.customer_id;
+                    this.selectedCustomer = { id: payload.quote.customer_id, name: payload.quote.customer_name, price_level: 'normal' };
+                }
+                this.checkoutToken = crypto.randomUUID();
+                this.checkout.payments = [];
+                this.checkout.open = false;
+                this.notice = `Cotización ${payload.quote.quote_number} cargada. Se cobrará con los valores de la cotización.`;
+            } catch (error) {
+                this.notice = error.message;
+            }
+        },
+        canLoadQuote(id) {
+            if (this.cart.length && this.quoteId !== id && !window.confirm('El carrito actual será reemplazado por la cotización. ¿Desea continuar?')) return false;
+            return true;
+        },
+        async saveAsQuote() {
+            if (!this.cart.length || this.savingQuote) return;
+            this.savingQuote = true;
+            this.notice = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('cotizaciones.store')) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({
+                        customer_id: this.customerId,
+                        items: this.cart.map(item => ({
+                            product_id: item.id,
+                            quantity: item.quantity,
+                            ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}),
+                            ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}),
+                        })),
+                    }),
+                });
+                const payload = await this.readFetchResponse(response);
+                this.successMessage = payload.message;
+                this.notice = payload.message;
+            } catch (error) {
+                this.notice = error.message;
+            } finally {
+                this.savingQuote = false;
+            }
+        },
+        clearQuote() {
+            this.quoteId = null;
+            this.activeQuote = null;
         },
     }));
 });

@@ -8,6 +8,8 @@ use App\Models\CompanySequence;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\Quote;
+use App\Models\QuoteItem;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
@@ -29,7 +31,7 @@ class PosSaleProcessor
     }
 
     /** @return array{sale: Sale, duplicate: bool} */
-    public function process(array $data, User $user, int $companyId, int $branchId): array
+    public function process(array $data, User $user, int $companyId, int $branchId, ?int $quoteId = null): array
     {
         $items = $this->consolidateItems($data['items']);
         $payments = $this->canonicalPayments($data['payments']);
@@ -72,8 +74,26 @@ class PosSaleProcessor
                 $fingerprint,
                 $user,
                 $companyId,
-                $branchId
+                $branchId,
+                $quoteId
             ) {
+                $fromQuote = false;
+
+                if ($quoteId !== null) {
+                    $quote = $this->lockQuoteForConversion(
+                        $quoteId,
+                        $companyId,
+                        $branchId,
+                    );
+
+                    $items = $this->buildQuoteItemsForCheckout(
+                        $quote,
+                        $data['items'] ?? [],
+                        $data,
+                    );
+
+                    $fromQuote = true;
+                }
                 $company = Company::query()
                     ->where('is_active', true)
                     ->find($companyId);
@@ -185,12 +205,14 @@ if ($customerId !== null) {
                     $company,
                 );
 
-                $this->authorizeRequestedAdjustments(
-                    $items,
-                    $data,
-                    $canDiscount,
-                    $canOverridePrice,
-                );
+                if (! $fromQuote) {
+                    $this->authorizeRequestedAdjustments(
+                        $items,
+                        $data,
+                        $canDiscount,
+                        $canOverridePrice,
+                    );
+                }
 
                 $resolvedLines = [];
                 $baseAfterLineDiscounts = 0.0;
@@ -235,8 +257,13 @@ $unitPrice = $lineData['unit_price'] !== null
                         ]);
                     }
 
-                    $unitCost = (float) $product->cost;
-                    $taxRate = (float) ($product->tax_rate ?? 0);
+                    $unitCost = isset($lineData['unit_cost'])
+                        ? (float) $lineData['unit_cost']
+                        : (float) $product->cost;
+
+                    $taxRate = isset($lineData['tax_rate'])
+                        ? (float) $lineData['tax_rate']
+                        : (float) ($product->tax_rate ?? 0);
 
                     $grossTotal = $this->decimal4(
                         $unitPrice * $quantity,
@@ -469,6 +496,15 @@ $unitPrice = $lineData['unit_price'] !== null
                     ]);
                 }
 
+                if ($fromQuote) {
+                    $quote->update([
+                        'status' => Quote::STATUS_CONVERTED,
+                        'converted' => true,
+                        'converted_sale_id' => $sale->id,
+                        'converted_at' => now(),
+                    ]);
+                }
+
                 return $sale;
             }, 3);
         } catch (QueryException $exception) {
@@ -602,6 +638,175 @@ $unitPrice = $lineData['unit_price'] !== null
             throw ValidationException::withMessages([
                 'unit_price' => 'No tiene permiso para cambiar precios en el POS.',
             ]);
+        }
+    }
+
+    private function lockQuoteForConversion(
+        int $quoteId,
+        int $companyId,
+        int $branchId,
+    ): Quote {
+        $quote = Quote::query()
+            ->lockForUpdate()
+            ->find($quoteId);
+
+        if (
+            $quote === null
+            || (int) $quote->company_id !== $companyId
+            || (int) $quote->branch_id !== $branchId
+        ) {
+            throw ValidationException::withMessages([
+                'quote_id' => 'La cotización no pertenece al contexto activo.',
+            ]);
+        }
+
+        if (
+            $quote->cancelled
+            || $quote->converted
+            || $quote->status !== Quote::STATUS_ACTIVE
+        ) {
+            throw ValidationException::withMessages([
+                'quote_id' => 'La cotización no está activa para ser convertida.',
+            ]);
+        }
+
+        if (
+            $quote->expires_at !== null
+            && $quote->expires_at->isPast()
+        ) {
+            throw ValidationException::withMessages([
+                'quote_id' => 'La cotización está vencida y no puede convertirse.',
+            ]);
+        }
+
+        return $quote;
+    }
+
+    /**
+     * Los productos, cantidades, precios y descuentos de la conversión provienen
+     * de los QuoteItems persistidos (fuente de verdad), no del navegador.
+     */
+    private function buildQuoteItemsForCheckout(
+        Quote $quote,
+        array $browserItems,
+        array $browserData,
+    ): array {
+        $quote->load('items');
+
+        $items = [];
+
+        foreach ($quote->items as $quoteItem) {
+            $productId = (int) $quoteItem->product_id;
+
+            $items[$productId] = [
+                'quantity' => $this->decimal4(
+                    (float) $quoteItem->quantity,
+                ),
+                'discount' => $this->decimal4(
+                    (float) $quoteItem->discount_total,
+                ),
+                'discount_type' => 'fixed',
+                'unit_price' => $this->decimal4(
+                    (float) $quoteItem->unit_price,
+                ),
+                'tax_rate' => $this->decimal4(
+                    (float) $quoteItem->tax_rate,
+                ),
+                'unit_cost' => $this->decimal4(
+                    (float) $quoteItem->unit_cost,
+                ),
+            ];
+        }
+
+        $this->assertQuoteItemsMatchBrowser($quote, $browserItems);
+
+        if (
+            isset($browserData['discount_total'])
+            && (float) $browserData['discount_total'] > 0
+        ) {
+            throw ValidationException::withMessages([
+                'discount_total' => 'Una cotización no admite descuentos adicionales al cobrarla.',
+            ]);
+        }
+
+        return $items;
+    }
+
+    private function assertQuoteItemsMatchBrowser(
+        Quote $quote,
+        array $browserItems,
+    ): void {
+        $expected = $quote->items->keyBy(function (QuoteItem $item) {
+            return (int) $item->product_id;
+        });
+
+        $browserProductIds = collect($browserItems)
+            ->pluck('product_id')
+            ->map(fn ($id) => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        $quoteProductIds = $expected
+            ->keys()
+            ->map(fn ($id) => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        if ($browserProductIds !== $quoteProductIds) {
+            throw ValidationException::withMessages([
+                'items' => 'El carrito no coincide con la cotización.',
+            ]);
+        }
+
+        foreach ($browserItems as $browserItem) {
+            $productId = (int) $browserItem['product_id'];
+            $quoteItem = $expected->get($productId);
+
+            if (abs(
+                (float) $browserItem['quantity']
+                - (float) $quoteItem->quantity,
+            ) > 0.0000001) {
+                throw ValidationException::withMessages([
+                    'items' => 'No puede modificar la cantidad de una cotización al cobrarla.',
+                ]);
+            }
+
+            if (
+                array_key_exists('unit_price', $browserItem)
+                && $browserItem['unit_price'] !== null
+                && abs(
+                    (float) $browserItem['unit_price']
+                    - (float) $quoteItem->unit_price,
+                ) > 0.0000001
+            ) {
+                throw ValidationException::withMessages([
+                    'items' => 'No puede modificar el precio de una cotización al cobrarla.',
+                ]);
+            }
+
+            if (
+                isset($browserItem['discount'])
+                && (float) $browserItem['discount'] > 0
+                && abs(
+                    (float) $browserItem['discount']
+                    - (float) $quoteItem->discount_total,
+                ) > 0.0000001
+            ) {
+                throw ValidationException::withMessages([
+                    'items' => 'No puede modificar el descuento de una cotización al cobrarla.',
+                ]);
+            }
+
+            if (
+                isset($browserItem['discount_type'])
+                && (string) $browserItem['discount_type'] !== 'fixed'
+            ) {
+                throw ValidationException::withMessages([
+                    'items' => 'El descuento de la cotización no es modificable al cobrarla.',
+                ]);
+            }
         }
     }
         private function resolveDiscountAmount(
