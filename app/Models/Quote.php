@@ -14,6 +14,26 @@ class Quote extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    public function getEffectiveStatusAttribute(): string
+    {
+        if ($this->status === self::STATUS_ACTIVE && $this->expires_at?->isBefore(today())) {
+            return 'expired';
+        }
+
+        return $this->status;
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->effective_status) {
+            self::STATUS_ACTIVE => 'Activa',
+            'expired' => 'Vencida',
+            self::STATUS_CONVERTED => 'Convertida',
+            self::STATUS_CANCELLED => 'Anulada',
+            default => ucfirst($this->effective_status),
+        };
+    }
+
     protected $fillable = ['company_id', 'branch_id', 'user_id', 'customer_id', 'quote_number', 'status', 'currency_code', 'subtotal', 'discount_total', 'tax_total', 'total', 'expires_at', 'notes', 'converted_sale_id', 'converted_at', 'cancelled_by', 'cancelled_at', 'cancellation_reason'];
 
     protected function casts(): array

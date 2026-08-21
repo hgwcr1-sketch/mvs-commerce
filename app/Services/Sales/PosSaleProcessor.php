@@ -108,18 +108,6 @@ class PosSaleProcessor
                 }
 
                 $quote = $this->lockQuoteForCheckout($data, $companyId, $branchId);
-                if ($quote !== null) {
-                    $items = $quote->items->mapWithKeys(fn ($item) => [(int) $item->product_id => [
-                        'quantity' => (float) $item->quantity,
-                        'discount' => (float) $item->discount_total,
-                        'discount_type' => 'fixed',
-                        'unit_price' => (float) $item->unit_price,
-                        'quote_item' => $item,
-                    ]])->all();
-                    $data['customer_id'] = $quote->customer_id;
-                    $data['discount_total'] = 0;
-                    $data['discount_total_type'] = 'fixed';
-                }
 
                 $cashSession = $this->cashSessionResolver->resolve(
                     $user,
@@ -246,11 +234,9 @@ class PosSaleProcessor
                         ]);
                     }
 
-                    $quoteItem = $lineData['quote_item'] ?? null;
-                    $unitCost = $quoteItem ? (float) $quoteItem->unit_cost : (float) $product->cost;
-                    $taxRate = $quoteItem ? (float) $quoteItem->tax_rate : (float) ($product->tax_rate ?? 0);
-
-                    $grossTotal = $quoteItem ? (float) $quoteItem->gross_total : $this->decimal4($unitPrice * $quantity);
+                    $unitCost = (float) $product->cost;
+                    $taxRate = (float) ($product->tax_rate ?? 0);
+                    $grossTotal = $this->decimal4($unitPrice * $quantity);
 
                     $lineDiscount = $this->resolveDiscountAmount(
                         (float) $lineData['discount'],
@@ -273,7 +259,6 @@ class PosSaleProcessor
                         'lineDiscount' => $lineDiscount,
                         'lineBase' => $lineBase,
                         'generalDiscount' => 0.0,
-                        'quoteItem' => $quoteItem,
                     ];
 
                     $baseAfterLineDiscounts += $lineBase;
@@ -420,16 +405,15 @@ class PosSaleProcessor
 
                 foreach ($resolvedLines as $line) {
                     $product = $line['product'];
-                    $quoteItem = $line['quoteItem'];
 
                     SaleItem::create([
                         'sale_id' => $sale->id,
-                        'product_id' => $quoteItem?->product_id ?? $product->id,
-                        'product_code' => $quoteItem?->product_code ?? $product->internal_code,
-                        'barcode' => $quoteItem?->barcode ?? $product->barcode,
-                        'cabys_code' => $quoteItem?->cabys_code ?? $product->cabys_code,
-                        'description' => $quoteItem?->description ?? $product->name,
-                        'unit_code' => $quoteItem?->unit_code ?? $product->unit?->abbreviation,
+                        'product_id' => $product->id,
+                        'product_code' => $product->internal_code,
+                        'barcode' => $product->barcode,
+                        'cabys_code' => $product->cabys_code,
+                        'description' => $product->name,
+                        'unit_code' => $product->unit?->abbreviation,
                         'quantity' => $line['quantity'],
                         'unit_price' => $line['unitPrice'],
                         'gross_total' => $line['grossTotal'],
@@ -1078,8 +1062,6 @@ class PosSaleProcessor
         if ($quote->expires_at?->isBefore(today())) {
             throw ValidationException::withMessages(['quote_id' => 'La cotización está vencida.']);
         }
-
-        $quote->load('items');
 
         return $quote;
     }

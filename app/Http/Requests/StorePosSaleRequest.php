@@ -80,7 +80,7 @@ class StorePosSaleRequest extends FormRequest
                 'regex:/^\d+(?:\.\d{1,4})?$/',
             ],
 
-            'items.*.discount' => $canDiscount || $this->filled('quote_id')
+            'items.*.discount' => $canDiscount
                 ? [
                     'nullable',
                     'numeric',
@@ -89,14 +89,14 @@ class StorePosSaleRequest extends FormRequest
                 ]
                 : ['prohibited'],
 
-            'items.*.discount_type' => $canDiscount || $this->filled('quote_id')
+            'items.*.discount_type' => $canDiscount
                 ? [
                     'nullable',
                     'in:fixed,percentage',
                 ]
                 : ['prohibited'],
 
-            'discount_total' => $canDiscount || $this->filled('quote_id')
+            'discount_total' => $canDiscount
                 ? [
                     'nullable',
                     'numeric',
@@ -105,14 +105,14 @@ class StorePosSaleRequest extends FormRequest
                 ]
                 : ['prohibited'],
 
-            'discount_total_type' => $canDiscount || $this->filled('quote_id')
+            'discount_total_type' => $canDiscount
                 ? [
                     'nullable',
                     'in:fixed,percentage',
                 ]
                 : ['prohibited'],
 
-            'items.*.unit_price' => $canOverridePrice || $this->filled('quote_id')
+            'items.*.unit_price' => $canOverridePrice
                 ? [
                     'nullable',
                     'numeric',

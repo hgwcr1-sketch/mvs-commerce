@@ -771,7 +771,6 @@ document.addEventListener('alpine:init', () => {
     return this.numberValue(item.sale_price);
 },
         lineAppliedPrice(item) {
-    if (this.quoteId) return this.numberValue(item._quoteUnitPrice);
     const manualPrice = this.numberValue(item._unitPrice);
 
     if (this.canOverridePrice && manualPrice > 0) {
@@ -784,7 +783,6 @@ document.addEventListener('alpine:init', () => {
             return this.decimal4(this.lineAppliedPrice(item) * this.numberValue(item.quantity));
         },
         lineDiscount(item) {
-            if (this.quoteId) return this.numberValue(item._quoteDiscount);
             if (!this.canDiscount) return 0;
             const value = this.numberValue(item._discount);
             if (value <= 0) return 0;
@@ -948,8 +946,8 @@ document.addEventListener('alpine:init', () => {
                 const response = await fetch(`/cotizaciones/${id}/cargar`, { headers: { Accept: 'application/json' } });
                 const payload = await this.readFetchResponse(response);
                 this.quoteId = payload.quote_id;
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.unit_price), tax_rate: Number(item.tax_rate), available_stock: 999999999, controls_inventory: false, allows_decimals: true, unavailable: false, _discount: 0, _discountType: 'fixed', _unitPrice: '', _quoteUnitPrice: Number(item.unit_price), _quoteDiscount: Number(item.discount_total) }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = crypto.randomUUID(); this.notice = `Cotización ${payload.quote_number} cargada. Los valores guardados no pueden modificarse.`;
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = crypto.randomUUID(); this.notice = `Cotización ${payload.quote_number} cargada como base editable. La cotización original no se modificará.`;
             } catch (error) { this.notice = error.message; }
         },
         async releaseCurrentRecovery() {
@@ -970,7 +968,7 @@ document.addEventListener('alpine:init', () => {
             if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
-            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed';
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null;
             this.$nextTick(() => this.$refs.searchInput.focus());
         },
         async suspendCurrent() {

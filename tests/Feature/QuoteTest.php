@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
@@ -93,39 +94,50 @@ class QuoteTest extends TestCase
         $this->assertDatabaseCount('sales', 0);
     }
 
-    public function test_loading_and_conversion_use_immutable_database_snapshots_and_ignore_manipulated_payload(): void
+    public function test_conversion_uses_edited_pos_data_and_keeps_quote_snapshot_immutable(): void
     {
         [$company, $branch, $user, $cash] = $this->context('Empresa', ['pos.acceder', 'ventas.crear', 'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'pos.cambiar_precio', 'pos.aplicar_descuento']);
         $product = $this->product($company, ['sale_price' => 1000, 'cost' => 400, 'tax_rate' => 13]);
-        $other = $this->product($company, ['sale_price' => 9999]);
+        $other = $this->product($company, ['sale_price' => 1200, 'cost' => 300, 'tax_rate' => 13]);
         $this->stock($branch, $product, 10);
+        $this->stock($branch, $other, 10);
         $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 2, 'unit_price' => 800, 'discount' => 100, 'discount_type' => 'fixed'])->json('quote_id'));
         $original = $quote->load('items')->toArray();
 
-        $limited = $this->user($company, $branch, ['pos.acceder', 'ventas.crear', 'cotizaciones.crear']);
-        $this->actingAs($limited)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.load', $quote))->assertOk()->assertJsonPath('items.0.unit_price', 800)->assertJsonPath('items.0.quantity', 2);
-        $product->update(['sale_price' => 5000, 'cost' => 2000, 'tax_rate' => 1]);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.load', $quote))
+            ->assertOk()->assertJsonPath('items.0.unit_price', 800)->assertJsonPath('items.0.quantity', 2);
+        $this->assertSame(Quote::STATUS_ACTIVE, $quote->fresh()->status);
+        $this->assertNull($quote->fresh()->converted_sale_id);
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertEquals(10, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
 
-        $response = $this->checkoutQuote($limited, $company, $branch, $cash, $quote, $other, ['quantity' => 99, 'unit_price' => 1, 'discount' => 0, 'discount_type' => 'percentage', 'discount_total' => 0]);
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
+            'checkout_token' => (string) Str::uuid(),
+            'quote_id' => $quote->id,
+            'payments' => [['payment_method_id' => $cash->id, 'amount' => 1639, 'received_amount' => 1639]],
+            'items' => [['product_id' => $other->id, 'quantity' => 3, 'unit_price' => 500, 'discount' => 50, 'discount_type' => 'fixed']],
+        ]);
         $response->assertOk();
         $sale = Sale::with('items')->firstOrFail();
         $item = $sale->items->first();
-        $this->assertSame($product->id, $item->product_id);
-        $this->assertSame('2.0000', $item->quantity);
-        $this->assertSame('800.0000', $item->unit_price);
-        $this->assertSame('100.0000', $item->discount_total);
-        $this->assertSame('400.0000', $item->unit_cost);
+        $this->assertSame($other->id, $item->product_id);
+        $this->assertSame('3.0000', $item->quantity);
+        $this->assertSame('500.0000', $item->unit_price);
+        $this->assertSame('50.0000', $item->discount_total);
+        $this->assertSame('188.5000', $item->tax_total);
+        $this->assertSame('300.0000', $item->unit_cost);
         $quote->refresh();
         $this->assertSame(Quote::STATUS_CONVERTED, $quote->status);
         $this->assertSame($sale->id, $quote->converted_sale_id);
         $this->assertNotNull($quote->converted_at);
-        $this->assertEquals(8, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $this->assertEquals(10, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $this->assertEquals(7, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $other->id)->value('stock'));
         $this->assertDatabaseCount('sales', 1);
         $this->assertDatabaseCount('sale_payments', 1);
         $this->assertSame($original['items'], $quote->fresh()->load('items')->toArray()['items']);
-        $this->checkoutQuote($limited, $company, $branch, $cash, $quote, $product)->assertUnprocessable();
+        $this->checkoutQuote($user, $company, $branch, $cash, $quote, $product)->assertUnprocessable();
         $this->assertDatabaseCount('sales', 1);
-        $this->assertEquals(8, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $this->assertEquals(7, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $other->id)->value('stock'));
     }
 
     public function test_failed_checkout_leaves_quote_active_and_creates_nothing(): void
@@ -139,6 +151,37 @@ class QuoteTest extends TestCase
         $this->assertDatabaseCount('sales', 0);
         $this->assertDatabaseCount('sale_payments', 0);
         $this->assertEquals(1, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+    }
+
+    public function test_history_filters_saved_quotes_and_supports_registered_and_final_customers(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $product = $this->product($company);
+        $customer = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'name' => 'Cliente Registrado',
+            'is_active' => true,
+        ]);
+
+        $registered = $this->createQuote($user, $company, $branch, $product, [], [
+            'customer_id' => $customer->id,
+            'notes' => 'Seguimiento comercial',
+        ]);
+        $registered->assertCreated();
+        $final = $this->createQuote($user, $company, $branch, $product);
+        $final->assertCreated();
+
+        $this->assertSame($customer->id, Quote::findOrFail($registered->json('quote_id'))->customer_id);
+        $this->assertNull(Quote::findOrFail($final->json('quote_id'))->customer_id);
+
+        $base = $this->actingAs($user)->withSession($this->activeSession($company, $branch));
+        $base->get(route('cotizaciones.index', ['number' => '00000001']))
+            ->assertOk()->assertSee('COT-00000001')->assertDontSee('COT-00000002');
+        $base->get(route('cotizaciones.index', ['customer' => 'Registrado']))
+            ->assertOk()->assertSee('Cliente Registrado')->assertDontSee('Consumidor Final');
+        $base->get(route('cotizaciones.index', ['date' => today()->toDateString(), 'status' => 'active']))
+            ->assertOk()->assertSee('COT-00000001')->assertSee('COT-00000002');
     }
 
     private function context(string $name = 'Empresa', array $permissions = ['pos.acceder', 'ventas.crear', 'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'pos.cambiar_precio', 'pos.aplicar_descuento']): array
