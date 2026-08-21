@@ -13,6 +13,7 @@ use App\Models\CompanyCashSetting;
 use App\Services\Cash\CashClosingService;
 use App\Services\Cash\CashExpectedAmountService;
 use App\Services\Cash\CashPaymentExpectedAmountService;
+use App\Services\CashDenominationProvisioner;
 use DateTimeZone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,10 +29,11 @@ class CashClosingController extends Controller
         return redirect()->route('cash.closing.create', $cashSession);
     }
 
-    public function create(Request $request, CashSession $cashSession, CashExpectedAmountService $cashExpected, CashPaymentExpectedAmountService $paymentExpected): View
+    public function create(Request $request, CashSession $cashSession, CashExpectedAmountService $cashExpected, CashPaymentExpectedAmountService $paymentExpected, CashDenominationProvisioner $denominationProvisioner): View
     {
         [$company, $settings] = $this->context($request, $cashSession); $this->authorizeContinuation($request, $cashSession, $settings);
         abort_unless($cashSession->status === CashSession::STATUS_CLOSING && $cashSession->closing_submitted_at === null, 409);
+        $denominationProvisioner->provision($company);
         $denominations = CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->orderBy('sort_order')->get();
         $methods = $paymentExpected->methods($cashSession);
         $blind = (bool) $cashSession->blind_closing_snapshot;

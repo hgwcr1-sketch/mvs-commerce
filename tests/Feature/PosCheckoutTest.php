@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
@@ -174,9 +176,10 @@ class PosCheckoutTest extends TestCase
         [$company, $branch, $user, $cash] = $this->context();
         $product = $this->product($company, false);
         $saleId = $this->checkout($user, $company, $branch, $cash, [['product_id' => $product->id, 'quantity' => 1]], 5000)->json('sale_id');
+        $cashSession = CashSession::findOrFail(Sale::findOrFail($saleId)->cash_session_id);
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))
-            ->assertOk()->assertSee('Comprobante interno — pendiente de integración con Hacienda')->assertSee('Sin sesión de caja');
+            ->assertOk()->assertSee('Comprobante interno — pendiente de integración con Hacienda')->assertSee($cashSession->session_number);
 
         $viewer = $this->user($company, $branch, ['pos.acceder', 'ventas.ver']);
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))->assertOk();
@@ -414,22 +417,32 @@ public function test_electronic_invoice_requires_customer_and_is_saved_when_cust
 
     private function checkout(User $user, Company $company, Branch $branch, PaymentMethod $method, array $items, int $received, array $extra = [], ?int $customer = null, ?string $token = null)
     {
+        $cashSession = $this->ensureCashSession($company, $branch, $user);
         $total = round(collect($items)->sum(function ($item) {
             $product = Product::findOrFail($item['product_id']);
             return (float) $product->sale_price * (float) $item['quantity'] * (1 + ((float) ($product->tax_rate ?? 0) / 100));
         }), 0, PHP_ROUND_HALF_UP);
         return $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), array_merge([
-            'checkout_token' => $token ?? (string) Str::uuid(), 'customer_id' => $customer,
+            'checkout_token' => $token ?? (string) Str::uuid(), 'cash_session_id' => $cashSession->id, 'customer_id' => $customer,
             'payments' => [['payment_method_id' => $method->id, 'amount' => $total, 'received_amount' => $received, 'reference' => null]], 'items' => $items,
         ], $extra));
     }
 
     private function checkoutPayments(User $user, Company $company, Branch $branch, Product $product, array $payments, ?string $token = null)
     {
+        $cashSession = $this->ensureCashSession($company, $branch, $user);
         return $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
-            'checkout_token' => $token ?? (string) Str::uuid(), 'customer_id' => null,
+            'checkout_token' => $token ?? (string) Str::uuid(), 'cash_session_id' => $cashSession->id, 'customer_id' => null,
             'payments' => $payments, 'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ]);
+    }
+
+    private function ensureCashSession(Company $company, Branch $branch, User $user): CashSession
+    {
+        $session = CashSession::query()->forCompany($company->id)->forBranch($branch->id)->where('opened_by', $user->id)->where('status', CashSession::STATUS_OPEN)->first();
+        if ($session) return $session;
+        $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'CAJA-'.uniqid(), 'name' => 'Caja', 'is_active' => true]);
+        return CashSession::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'cash_register_id' => $register->id, 'session_number' => 'CAJA-'.uniqid(), 'opened_by' => $user->id, 'status' => CashSession::STATUS_OPEN, 'open_guard' => CashSession::OPEN_GUARD, 'opening_amount' => 0, 'opened_at' => now()]);
     }
 
     private function activeSession(Company $company, Branch $branch): array

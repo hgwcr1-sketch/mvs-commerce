@@ -44,11 +44,12 @@ class CashBlindClosingTest extends TestCase
     public function test_blind_form_has_eleven_denominations_dynamic_methods_and_no_control_value_leaks(): void
     {
         [$company, $branch, $user, , $session] = $this->context();
-        $card = $this->method($company, 'card', 'Tarjeta', true); $paypal = $this->method($company, 'paypal', 'PayPal', false);
+        $cash = $this->method($company, 'cash', 'Efectivo', true, true); $card = $this->method($company, 'card', 'Tarjeta', true); $paypal = $this->method($company, 'paypal', 'PayPal', false);
         $this->payment($company, $branch, $user, $session, $paypal, 777);
+        CashDenomination::forCompany($company->id)->delete();
         $this->start($user, $company, $branch, $session);
         $response = $this->actingAs($user)->withSession($this->ctx($company, $branch))->get(route('cash.closing.create', $session));
-        $response->assertOk()->assertSee('Cierre ciego activo')->assertSee('Tarjeta')->assertSee('PayPal')->assertSee('Billetes')->assertSee('Monedas')->assertSee('Volver')
+        $response->assertOk()->assertSee('Cierre ciego activo')->assertSee('Efectivo')->assertSee('Tarjeta')->assertSee('PayPal')->assertSee('Billetes')->assertSee('Monedas')->assertSee('Volver')
             ->assertDontSee('Esperado:')->assertDontSee('777.0000')->assertDontSee('difference')->assertDontSee('tolerance')
             ->assertSee('bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600', false)
             ->assertSee('autocomplete="off"', false)
@@ -66,7 +67,7 @@ class CashBlindClosingTest extends TestCase
         foreach (CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->get() as $denomination) {
             $response->assertSee('name="denominations['.$denomination->id.']" x-model.number="quantities['.$denomination->id.']" type="number" min="0" step="1" autocomplete="off"', false);
         }
-        foreach ([$card, $paypal] as $method) {
+        foreach ([$cash, $card, $paypal] as $method) {
             $response->assertSee('name="payments['.$method->id.'][reported_amount]" x-model.number="reportedPayments['.$method->id.']" type="number" min="0" step="1" autocomplete="off"', false);
         }
         $this->assertFalse($card->is_active === false); $this->assertFalse($paypal->is_active);
@@ -111,13 +112,15 @@ class CashBlindClosingTest extends TestCase
         $this->payment($company, $branch, $user, $session, $cash, 500, 2000, 1500); $this->payment($company, $branch, $user, $session, $card, 300);
         $this->movement($session, $user, CashMovement::TYPE_ENTRY, CashMovement::DIRECTION_IN, 100); $this->movement($session, $user, CashMovement::TYPE_EXIT, CashMovement::DIRECTION_OUT, 50);
         $this->start($user, $company, $branch, $session);
-        $payload = $this->payload($company, $session, 1550, [$card->id => 300]);
+        $payload = $this->payload($company, $session, 1550, [$cash->id => 500, $card->id => 300]);
         $this->submit($user, $company, $branch, $session, $payload)->assertRedirect(route('cash.closing.show', $session));
         $closed = $session->fresh();
         $this->assertSame(CashSession::STATUS_CLOSED, $closed->status); $this->assertNull($closed->open_guard);
         $this->assertSame('1550.0000', $closed->expected_cash); $this->assertSame('1550.0000', $closed->counted_cash); $this->assertSame('0.0000', $closed->difference_amount);
-        $this->assertSame(11, $closed->countDetails()->closing()->count()); $this->assertSame(1, $closed->paymentReconciliations()->count());
-        $reconciliation = $closed->paymentReconciliations()->first(); $this->assertSame('Tarjeta', $reconciliation->payment_method_name_snapshot); $this->assertSame('300.0000', $reconciliation->expected_amount);
+        $this->assertSame(11, $closed->countDetails()->closing()->count()); $this->assertSame(2, $closed->paymentReconciliations()->count());
+        $reconciliations = $closed->paymentReconciliations()->get()->keyBy('payment_method_id');
+        $this->assertSame('500.0000', $reconciliations->get($cash->id)->expected_amount);
+        $this->assertSame('Tarjeta', $reconciliations->get($card->id)->payment_method_name_snapshot); $this->assertSame('300.0000', $reconciliations->get($card->id)->expected_amount);
     }
 
     public function test_surplus_and_shortage_are_stored_without_compensation(): void

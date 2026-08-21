@@ -19,9 +19,7 @@ class CashPaymentExpectedAmountService
         return PaymentMethod::query()
             ->forCompany($session->company_id)
             ->where(function ($query) use ($historicalIds) {
-                $query->where(function ($active) {
-                    $active->where('is_active', true)->where('affects_cash', false);
-                })->orWhereIn('id', $historicalIds);
+                $query->where('is_active', true)->orWhereIn('id', $historicalIds);
             })
             ->ordered()
             ->get();
@@ -35,9 +33,8 @@ class CashPaymentExpectedAmountService
             ->where('payments.cash_session_id', $session->id)
             ->where('payments.status', SalePayment::STATUS_COMPLETED)
             ->where('sales.status', Sale::STATUS_COMPLETED)
-            ->where('payments.affects_cash_snapshot', false)
             ->groupBy('payments.payment_method_id')
-            ->selectRaw('payments.payment_method_id, SUM(payments.amount) as expected_amount')
+            ->selectRaw('payments.payment_method_id, SUM(CASE WHEN payments.affects_cash_snapshot = 1 THEN COALESCE(payments.cash_effect_amount, payments.amount) ELSE payments.amount END) as expected_amount')
             ->pluck('expected_amount', 'payments.payment_method_id')
             ->map(fn ($amount) => (float) $amount);
     }

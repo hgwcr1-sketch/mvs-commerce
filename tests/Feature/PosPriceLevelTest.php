@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
@@ -451,6 +453,9 @@ public function test_authorized_manual_price_overrides_customer_price_level(): v
             'is_active' => true,
             'allows_change' => true,
         ]);
+
+        $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'CAJA-'.uniqid(), 'name' => 'Caja', 'is_active' => true]);
+        CashSession::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'cash_register_id' => $register->id, 'session_number' => 'CAJA-'.uniqid(), 'opened_by' => $user->id, 'status' => CashSession::STATUS_OPEN, 'open_guard' => CashSession::OPEN_GUARD, 'opening_amount' => 0, 'opened_at' => now()]);
 
         return [$company, $branch, $user, $cash];
     }

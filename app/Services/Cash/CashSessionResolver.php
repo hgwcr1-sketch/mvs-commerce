@@ -40,7 +40,7 @@ class CashSessionResolver
             return $selected;
         }
         if ($sessions->count() > 1) throw ValidationException::withMessages(['cash_session_id' => $settings->session_mode === CompanyCashSetting::SESSION_MODE_SHARED ? 'Seleccione explícitamente una sesión de caja.' : 'Existen varias sesiones individuales inconsistentes.']);
-        if ($sessions->isEmpty() && $settings->require_open_session) throw ValidationException::withMessages(['cash_session_id' => 'Debe abrir una caja antes de cobrar.']);
+        if ($sessions->isEmpty()) throw ValidationException::withMessages(['cash_session_id' => 'Debe abrir una sesión de caja para realizar ventas.']);
         return $sessions->first();
     }
 }

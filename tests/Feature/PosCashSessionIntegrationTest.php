@@ -47,14 +47,15 @@ class PosCashSessionIntegrationTest extends TestCase
         foreach([$closed,$inactive,$otherBranchSession] as $session) $this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]],$session)->assertUnprocessable();
     }
 
-    public function test_requirement_controls_sessionless_sales_and_configuration_requires_register_per_branch(): void
+    public function test_checkout_without_open_session_is_rejected_without_persistence_or_inventory_change(): void
     {
-        [$c,$b,$u]=$this->context(); $cash=$this->method($c,true,true); $p=$this->product($c); $settings=$this->settings($c);
-        $this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]])->assertOk(); $this->assertNull(Sale::first()->cash_session_id);
-        $settings->update(['require_open_session'=>true]); $this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]])->assertUnprocessable();
-        $settings->update(['require_open_session'=>false]); $admin=$this->user($c,$b,['caja.administrar']); $payload=$this->settingsPayload(['require_open_session'=>'1']); $this->actingAs($admin)->withSession(['active_company_id'=>$c->id])->put(route('settings.cash.update'),$payload)->assertSessionHasErrors('require_open_session');
-        $this->register($c,$b); $settings->update(['require_open_session'=>false]); $this->actingAs($admin)->withSession(['active_company_id'=>$c->id])->put(route('settings.cash.update'),$payload)->assertSessionHasNoErrors();
-        $this->actingAs($admin)->withSession(['active_company_id'=>$c->id])->put(route('settings.cash.update'),$this->settingsPayload(['require_open_session'=>'0']))->assertSessionHasNoErrors();
+        [$c,$b,$u]=$this->context(); $cash=$this->method($c,true,true); $p=$this->product($c,true);
+        \DB::table('branch_product')->insert(['branch_id'=>$b->id,'product_id'=>$p->id,'stock'=>5,'created_at'=>now(),'updated_at'=>now()]);
+        $this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]])
+            ->assertUnprocessable()
+            ->assertJsonPath('message','Debe abrir una sesión de caja para realizar ventas.');
+        $this->assertDatabaseCount('sales',0); $this->assertDatabaseCount('sale_payments',0); $this->assertDatabaseCount('inventory_movements',0);
+        $this->assertEquals(5,\DB::table('branch_product')->where('branch_id',$b->id)->where('product_id',$p->id)->value('stock'));
     }
 
     public function test_custom_cash_effect_mixed_payment_change_and_historical_snapshot(): void
@@ -72,13 +73,11 @@ class PosCashSessionIntegrationTest extends TestCase
         $this->assertDatabaseCount('sales',1); $this->assertDatabaseCount('sale_payments',1);
     }
 
-    public function test_receipt_session_and_sessionless_labels_and_permissions(): void
+    public function test_receipt_session_label_and_permissions(): void
     {
         [$c,$b,$u]=$this->context(); $cash=$this->method($c,true,true); $p=$this->product($c); $session=$this->cashSession($c,$b,$this->register($c,$b,'Receipt'),$u);
         $saleId=$this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]],$session)->json('sale_id');
         $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('pos.receipt',$saleId))->assertSee($session->session_number)->assertSee('Receipt');
-        $session->update(['status'=>'closed','open_guard'=>null]); $without=$this->checkout($u,$c,$b,$p,[['payment_method_id'=>$cash->id,'amount'=>1000,'received_amount'=>1000]])->json('sale_id');
-        $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('pos.receipt',$without))->assertSee('Sin sesión de caja');
         $unauthorized=$this->user($c,$b,[]); $this->actingAs($unauthorized)->withSession($this->ctx($c,$b))->postJson(route('pos.checkout'),[])->assertForbidden();
     }
 
@@ -88,7 +87,7 @@ class PosCashSessionIntegrationTest extends TestCase
     private function register(Company $c,Branch $b,string $name='Caja'): CashRegister{return CashRegister::create(['company_id'=>$c->id,'branch_id'=>$b->id,'code'=>$name.uniqid(),'name'=>$name,'is_active'=>true]);}
     private function cashSession(Company $c,Branch $b,CashRegister $r,User $u): CashSession{return CashSession::create(['company_id'=>$c->id,'branch_id'=>$b->id,'cash_register_id'=>$r->id,'session_number'=>'CAJA-'.uniqid(),'opened_by'=>$u->id,'status'=>'open','open_guard'=>'OPEN','opening_amount'=>0,'opened_at'=>now()]);}
     private function method(Company $c,bool $affects,bool $change,string $type='cash'): PaymentMethod{return PaymentMethod::create(['company_id'=>$c->id,'code'=>'M'.uniqid(),'name'=>ucfirst($type),'type'=>$type,'is_active'=>true,'affects_cash'=>$affects,'allows_change'=>$change,'requires_reference'=>!$change]);}
-    private function product(Company $c): Product{$id=uniqid();$cat=ProductCategory::create(['company_id'=>$c->id,'name'=>'C'.$id,'slug'=>'c'.$id,'is_active'=>true]);$unit=Unit::create(['company_id'=>$c->id,'name'=>'Unidad','abbreviation'=>'U','slug'=>'u'.$id,'is_active'=>true]);return Product::create(['company_id'=>$c->id,'category_id'=>$cat->id,'unit_id'=>$unit->id,'name'=>'Producto','internal_code'=>'P'.$id,'cost'=>500,'sale_price'=>1000,'tax_rate'=>0,'track_inventory'=>false,'is_active'=>true]);}
+    private function product(Company $c,bool $tracked=false): Product{$id=uniqid();$cat=ProductCategory::create(['company_id'=>$c->id,'name'=>'C'.$id,'slug'=>'c'.$id,'is_active'=>true]);$unit=Unit::create(['company_id'=>$c->id,'name'=>'Unidad','abbreviation'=>'U','slug'=>'u'.$id,'is_active'=>true]);return Product::create(['company_id'=>$c->id,'category_id'=>$cat->id,'unit_id'=>$unit->id,'name'=>'Producto','internal_code'=>'P'.$id,'cost'=>500,'sale_price'=>1000,'tax_rate'=>0,'track_inventory'=>$tracked,'is_active'=>true]);}
     private function checkout(User $u,Company $c,Branch $b,Product $p,array $payments,?CashSession $s=null,?string $token=null){return $this->actingAs($u)->withSession($this->ctx($c,$b))->postJson(route('pos.checkout'),['checkout_token'=>$token??(string)Str::uuid(),'cash_session_id'=>$s?->id,'payments'=>$payments,'items'=>[['product_id'=>$p->id,'quantity'=>1]]]);}
     private function ctx(Company $c,Branch $b): array{return['active_company_id'=>$c->id,'active_branch_id'=>$b->id];}
     private function settingsPayload(array $extra=[]): array{return array_merge(['allow_multiple_registers'=>'0','session_mode'=>'individual','blind_closing'=>'1','accepts_usd'=>'0','usd_change_policy'=>'crc_only','difference_tolerance'=>0,'require_difference_authorization'=>'0','auto_print_closure'=>'0'], $extra);}
