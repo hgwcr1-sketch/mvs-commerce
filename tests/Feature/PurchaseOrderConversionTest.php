@@ -156,6 +156,67 @@ class PurchaseOrderConversionTest extends TestCase
         $this->assertSame('700.0000', $purchase->items->sole()->unit_cost);
     }
 
+    public function test_credit_without_due_date_returns_to_form_and_displays_error(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $product = $this->product($company);
+        $supplier = $this->supplier($company);
+        $this->associate($product, $supplier, ['current_cost' => 500]);
+        $purchaseOrder = $this->preparedOrder($company, $branch, $user, $product, $supplier, 2);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->followingRedirects()
+            ->from(route('ordenes-compra.convertir', $purchaseOrder))
+            ->post(route('ordenes-compra.convertir.store', $purchaseOrder), $this->payload($purchaseOrder, 2, 'credit'));
+
+        $response->assertOk()
+            ->assertViewIs('purchase-orders.convert')
+            ->assertSee('No fue posible convertir el pedido:')
+            ->assertSee('due date', false)
+            ->assertSee('value="credit" selected', false);
+    }
+
+    public function test_business_error_returns_to_form_with_all_entered_values(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $product = $this->product($company);
+        $supplier = $this->supplier($company);
+        $this->associate($product, $supplier, ['current_cost' => null]);
+        $purchaseOrder = $this->preparedOrder($company, $branch, $user, $product, $supplier, 5);
+        $dueDate = today()->addDays(30)->toDateString();
+        $payload = $this->payload($purchaseOrder, 3, 'credit', $dueDate) + [
+            'supplier_invoice_number' => 'FAC-123',
+            'notes' => 'Entrega parcial urgente',
+        ];
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->followingRedirects()
+            ->from(route('ordenes-compra.convertir', $purchaseOrder))
+            ->post(route('ordenes-compra.convertir.store', $purchaseOrder), $payload);
+
+        $response->assertOk()
+            ->assertViewIs('purchase-orders.convert')
+            ->assertSee('No existe un costo autorizado activo para el producto y proveedor.')
+            ->assertSee('value="credit" selected', false)
+            ->assertSee('value="'.$dueDate.'"', false)
+            ->assertSee('value="3"', false)
+            ->assertSee('value="FAC-123"', false)
+            ->assertSee('Entrega parcial urgente');
+    }
+
+    public function test_conversion_form_has_back_link_to_current_purchase_order(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $product = $this->product($company);
+        $supplier = $this->supplier($company);
+        $this->associate($product, $supplier, ['current_cost' => 500]);
+        $purchaseOrder = $this->preparedOrder($company, $branch, $user, $product, $supplier, 2);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('ordenes-compra.convertir', $purchaseOrder))
+            ->assertOk()
+            ->assertSee('← Volver')
+            ->assertSee(route('ordenes-compra.show', $purchaseOrder), false);
+    }
+
     public function test_existing_manual_purchase_processor_remains_compatible(): void
     {
         [$company, $branch, $user] = $this->context();

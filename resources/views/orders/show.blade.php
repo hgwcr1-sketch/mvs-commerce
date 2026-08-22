@@ -46,7 +46,7 @@
                         <form method="POST" action="{{ route('pedidos.items.review', [$order, $item]) }}" class="space-y-2">
                             @csrf @method('PATCH')
                             @if($canApprove)
-                                <label class="block text-xs font-semibold">Cantidad aprobada<input type="number" name="approved_quantity" value="{{ $item->requested_quantity }}" min="{{ $item->allows_decimals_snapshot ? '0.0001' : '1' }}" max="{{ $item->requested_quantity }}" step="{{ $item->allows_decimals_snapshot ? '0.0001' : '1' }}" required class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2"></label>
+                                <label class="block text-xs font-semibold">Cantidad aprobada<input type="number" name="approved_quantity" value="{{ $item->requested_quantity }}" min="{{ $item->allows_decimals_snapshot ? '0.0001' : '1' }}" step="{{ $item->allows_decimals_snapshot ? '0.0001' : '1' }}" required class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2"></label>
                                 <label class="block text-xs font-semibold">Proveedor
                                     <select x-ref="supplierSelect" name="supplier_id" required class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2">
                                         <option value="">{{ $hasActiveSuppliers ? 'Seleccione' : 'Sin proveedor asociado' }}</option>

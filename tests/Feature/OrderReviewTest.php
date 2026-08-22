@@ -85,6 +85,80 @@ class OrderReviewTest extends TestCase
         $this->assertSame(Order::STATUS_REJECTED, $rejected->fresh()->status);
     }
 
+    public function test_approved_quantity_can_be_less_than_equal_to_or_greater_than_requested_quantity(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.aprobar']);
+        $product = $this->product($company);
+
+        foreach ([6, 10, 30] as $approvedQuantity) {
+            $order = $this->order($company, $branch, $requester, [[$product, 10]]);
+            $this->review($reviewer, $company, $branch, $order, $order->items->sole(), $approvedQuantity)->assertRedirect();
+            $this->assertSame(number_format($approvedQuantity, 4, '.', ''), $order->items->sole()->fresh()->approved_quantity);
+        }
+    }
+
+    public function test_zero_approved_quantity_rejects_line_and_clears_supplier(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.rechazar']);
+        $order = $this->order($company, $branch, $requester, [[$this->product($company), 10]]);
+
+        $this->review($reviewer, $company, $branch, $order, $order->items->sole(), 0)->assertRedirect();
+
+        $item = $order->items->sole()->fresh();
+        $this->assertSame('0.0000', $item->approved_quantity);
+        $this->assertNull($item->supplier_id);
+        $this->assertSame(OrderItem::STATUS_REJECTED, $item->item_status);
+    }
+
+    public function test_decimal_approved_quantity_is_allowed_by_snapshot(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.aprobar']);
+        $product = $this->product($company);
+        $product->unit()->update(['allows_decimals' => true]);
+        $order = $this->order($company, $branch, $requester, [[$product, 2.5]]);
+
+        $this->review($reviewer, $company, $branch, $order, $order->items->sole(), 3.75)->assertRedirect();
+        $this->assertSame('3.7500', $order->items->sole()->fresh()->approved_quantity);
+    }
+
+    public function test_decimal_approved_quantity_is_rejected_by_integer_snapshot(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.aprobar']);
+        $order = $this->order($company, $branch, $requester, [[$this->product($company), 2]]);
+
+        $this->review($reviewer, $company, $branch, $order, $order->items->sole(), 1.5)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('approved_quantity');
+    }
+
+    public function test_negative_approved_quantity_is_rejected(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.aprobar']);
+        $order = $this->order($company, $branch, $requester, [[$this->product($company), 2]]);
+
+        $this->review($reviewer, $company, $branch, $order, $order->items->sole(), -1)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('approved_quantity');
+    }
+
+    public function test_supplier_is_required_for_positive_approved_quantity(): void
+    {
+        [$company, $branch, $requester] = $this->context();
+        $reviewer = $this->user($company, $branch, ['pedidos.aprobar']);
+        $order = $this->order($company, $branch, $requester, [[$this->product($company), 2]]);
+
+        $this->actingAs($reviewer)
+            ->withSession($this->activeSession($company, $branch))
+            ->patchJson(route('pedidos.items.review', [$order, $order->items->sole()]), ['approved_quantity' => 3])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('supplier_id');
+    }
+
     public function test_invalid_quantities_and_repeated_decisions_are_rejected(): void
     {
         [$company, $branch, $requester] = $this->context();
@@ -93,7 +167,7 @@ class OrderReviewTest extends TestCase
         $order = $this->order($company, $branch, $requester, [[$product, 3]]);
 
         $this->review($reviewer, $company, $branch, $order, $order->items->sole(), -1)->assertUnprocessable();
-        $this->assertServiceValidation($order, $order->items->sole(), 4, $reviewer, $company, $branch, 'approved_quantity');
+        $this->assertServiceValidation($order, $order->items->sole(), -1, $reviewer, $company, $branch, 'approved_quantity');
         $this->review($reviewer, $company, $branch, $order, $order->items->sole(), 3)->assertRedirect();
         $this->assertServiceValidation($order->fresh(), $order->items->sole()->fresh(), 2, $reviewer, $company, $branch, 'order');
     }
@@ -127,7 +201,7 @@ class OrderReviewTest extends TestCase
         $order = $this->order($company, $branch, $requester, [[$this->product($company), 2]]);
 
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('pedidos.show', $order))->assertOk()->assertSee('Solo lectura')->assertDontSee('Guardar aprobación');
-        $this->actingAs($administrator)->withSession($this->activeSession($company, $branch))->get(route('pedidos.show', $order))->assertOk()->assertSee('Guardar aprobación')->assertSee('Cantidad aprobada')->assertDontSee('Solo lectura');
+        $this->actingAs($administrator)->withSession($this->activeSession($company, $branch))->get(route('pedidos.show', $order))->assertOk()->assertSee('Guardar aprobación')->assertSee('Cantidad aprobada')->assertDontSee('max=&quot;2.0000&quot;', false)->assertDontSee('Solo lectura');
     }
 
     private function review(User $user, Company $company, Branch $branch, Order $order, OrderItem $item, float $quantity, ?string $note = null, ?Supplier $supplier = null)

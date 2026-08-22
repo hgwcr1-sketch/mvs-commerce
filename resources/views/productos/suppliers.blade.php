@@ -25,7 +25,7 @@
         <form method="POST" action="{{ route('productos.proveedores.store', $product) }}" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             @csrf
             <label class="block text-sm font-semibold">Proveedor activo
-                <select name="supplier_id" required class="mt-1 w-full rounded-lg border-slate-300">
+                <select name="supplier_id" required class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
                     <option value="">Seleccione</option>
                     @foreach($suppliers as $supplier)
                         <option value="{{ $supplier->id }}" @selected(old('supplier_id') == $supplier->id)>{{ $supplier->commercial_name ?: $supplier->name }}</option>
@@ -33,15 +33,15 @@
                 </select>
             </label>
             <label class="block text-sm font-semibold">Código del proveedor
-                <input name="supplier_product_code" value="{{ old('supplier_product_code') }}" maxlength="100" class="mt-1 w-full rounded-lg border-slate-300">
+                <input name="supplier_product_code" value="{{ old('supplier_product_code') }}" maxlength="100" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
             </label>
             @if($canManageCosts)<label class="block text-sm font-semibold">Costo actual
-                <input type="number" name="current_cost" value="{{ old('current_cost') }}" min="0" step="0.0001" class="mt-1 w-full rounded-lg border-slate-300">
+                <input type="number" name="current_cost" value="{{ old('current_cost') }}" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
             </label>@endif
-            <label class="flex items-center gap-2"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" checked> Relación activa</label>
-            <label class="flex items-center gap-2"><input type="hidden" name="is_primary" value="0"><input type="checkbox" name="is_primary" value="1"> Proveedor principal</label>
+            <label class="flex items-center gap-2"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" checked class="rounded border border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"> Relación activa</label>
+            <label class="flex items-center gap-2"><input type="hidden" name="is_primary" value="0"><input type="checkbox" name="is_primary" value="1" class="rounded border border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"> Proveedor principal</label>
             <label class="block text-sm font-semibold md:col-span-2 lg:col-span-3">Notas
-                <textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded-lg border-slate-300">{{ old('notes') }}</textarea>
+                <textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">{{ old('notes') }}</textarea>
             </label>
             <div><button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white">Agregar proveedor</button></div>
         </form>
@@ -63,11 +63,11 @@
                     @if($canEdit)
                         <form method="POST" action="{{ route('productos.proveedores.update', [$product, $relation]) }}" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                             @csrf @method('PUT')
-                            <label class="text-sm font-semibold">Código del proveedor<input name="supplier_product_code" value="{{ $relation->supplier_product_code }}" maxlength="100" class="mt-1 w-full rounded-lg border-slate-300"></label>
-                            @if($canManageCosts)<label class="text-sm font-semibold">Costo actual<input type="number" name="current_cost" value="{{ $relation->current_cost }}" min="0" step="0.0001" class="mt-1 w-full rounded-lg border-slate-300"></label>@endif
-                            <label class="text-sm font-semibold">Notas<textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded-lg border-slate-300">{{ $relation->notes }}</textarea></label>
-                            <label class="flex items-center gap-2"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" @checked($relation->is_active)> Relación activa</label>
-                            <label class="flex items-center gap-2"><input type="hidden" name="is_primary" value="0"><input type="checkbox" name="is_primary" value="1" @checked($relation->is_primary)> Proveedor principal</label>
+                            <label class="text-sm font-semibold">Código del proveedor<input name="supplier_product_code" value="{{ $relation->supplier_product_code }}" maxlength="100" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"></label>
+                            @if($canManageCosts)<label class="text-sm font-semibold">Costo actual<input type="number" name="current_cost" value="{{ $relation->current_cost === null ? '' : number_format((float) $relation->current_cost, 2, '.', '') }}" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"><span class="mt-1 block text-xs font-normal text-slate-500">{{ $relation->current_cost === null ? 'Sin costo registrado' : '₡'.number_format((float) $relation->current_cost, 2, ',', '.') }}</span></label>@endif
+                            <label class="text-sm font-semibold">Notas<textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">{{ $relation->notes }}</textarea></label>
+                            <label class="flex items-center gap-2"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" @checked($relation->is_active) class="rounded border border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"> Relación activa</label>
+                            <label class="flex items-center gap-2"><input type="hidden" name="is_primary" value="0"><input type="checkbox" name="is_primary" value="1" @checked($relation->is_primary) class="rounded border border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"> Proveedor principal</label>
                             <div><button type="submit" class="rounded-lg bg-amber-500 px-4 py-2 font-bold text-white">Guardar cambios</button></div>
                         </form>
                         <form method="POST" action="{{ route('productos.proveedores.destroy', [$product, $relation]) }}" class="mt-3" onsubmit="return confirm('¿Eliminar esta relación?')">
@@ -77,7 +77,7 @@
                     @else
                         <dl class="grid gap-2 text-sm md:grid-cols-3">
                             <div><dt class="font-semibold">Código</dt><dd>{{ $relation->supplier_product_code ?? '—' }}</dd></div>
-                            @if($canManageCosts)<div><dt class="font-semibold">Costo actual</dt><dd>{{ $relation->current_cost === null ? '—' : number_format((float) $relation->current_cost, 4, ',', '.') }}</dd></div>@endif
+                            @if($canManageCosts)<div><dt class="font-semibold">Costo actual</dt><dd>{{ $relation->current_cost === null ? '—' : '₡'.number_format((float) $relation->current_cost, 2, ',', '.') }}</dd></div>@endif
                             <div><dt class="font-semibold">Notas</dt><dd>{{ $relation->notes ?? '—' }}</dd></div>
                         </dl>
                     @endif

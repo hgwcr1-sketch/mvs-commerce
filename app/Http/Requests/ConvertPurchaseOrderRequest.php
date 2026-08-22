@@ -8,13 +8,13 @@ use Illuminate\Foundation\Http\FormRequest;
 class ConvertPurchaseOrderRequest extends FormRequest
 {
     public function authorize(): bool
-    {
-        $company = Company::query()->find((int) session('active_company_id'));
+{
+    $company = Company::query()->find((int) session('active_company_id'));
 
-        return $company !== null
-            && $this->user()?->hasPermission('compras.ordenes', $company) === true
-            && $this->user()?->hasPermission('compras.crear', $company) === true;
-    }
+    return $company !== null
+        && $this->user()?->hasPermission('compras.ordenes', $company) === true
+        && $this->user()?->hasPermission('compras.crear', $company) === true;
+}
 
     public function rules(): array
     {

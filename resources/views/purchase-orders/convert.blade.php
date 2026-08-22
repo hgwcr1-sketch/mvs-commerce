@@ -1,11 +1,35 @@
 @extends('layouts.app')
 @section('title', 'Convertir '.$purchaseOrder->number)
 @section('content')
-<div class="space-y-5"><div><h1 class="text-2xl font-bold">Convertir a compra</h1><p>{{ $purchaseOrder->number }} · {{ $purchaseOrder->supplier->name }} · {{ $purchaseOrder->branch->name }}</p></div>
-@if($errors->any())<div class="rounded-xl bg-red-50 p-4 font-semibold text-red-700">{{ $errors->first() }}</div>@endif
-<form method="POST" action="{{ route('ordenes-compra.convertir.store',$purchaseOrder) }}" class="space-y-4">@csrf
-<x-card><div class="overflow-x-auto"><table class="min-w-full text-sm"><thead><tr><th class="p-2">Incluir</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Pendiente</th><th class="p-2 text-right">Costo autorizado</th><th class="p-2 text-right">Cantidad a comprar</th></tr></thead><tbody class="divide-y">@foreach($purchaseOrder->items as $index=>$item)@if($item->pending_quantity>0)<tr><td class="p-2 text-center"><input type="checkbox" checked onchange="this.closest('tr').querySelectorAll('input[type=hidden],input[type=number]').forEach(i=>i.disabled=!this.checked)"></td><td class="p-2">{{ $item->description }}</td><td class="p-2 text-right">{{ number_format($item->pending_quantity,4,',','.') }}</td><td class="p-2 text-right">{{ $item->unit_cost_snapshot===null?'—':'₡'.number_format((float)$item->unit_cost_snapshot,4,',','.') }}</td><td class="p-2"><input type="hidden" name="lines[{{ $index }}][purchase_order_item_id]" value="{{ $item->id }}"><input type="number" name="lines[{{ $index }}][quantity]" value="{{ $item->pending_quantity }}" min="{{ $item->product->unit?->allows_decimals?'0.0001':'1' }}" max="{{ $item->pending_quantity }}" step="{{ $item->product->unit?->allows_decimals?'0.0001':'1' }}" class="w-32 rounded border-slate-300"></td></tr>@endif @endforeach</tbody></table></div></x-card>
-<x-card><div class="grid gap-4 md:grid-cols-2"><label class="font-semibold">Tipo de pago<select name="payment_type" id="payment_type" required class="mt-1 w-full rounded border-slate-300"><option value="cash">Contado</option><option value="credit">Crédito</option></select></label><label class="font-semibold">Fecha de vencimiento<input type="date" name="due_date" id="due_date" class="mt-1 w-full rounded border-slate-300"></label><label class="font-semibold">Factura del proveedor<input name="supplier_invoice_number" maxlength="255" class="mt-1 w-full rounded border-slate-300"></label><label class="font-semibold">Notas<textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded border-slate-300"></textarea></label></div></x-card>
-<button class="rounded bg-emerald-600 px-5 py-2 font-bold text-white">Confirmar compra</button></form></div>
+<div class="space-y-5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div><h1 class="text-2xl font-bold">Convertir a compra</h1><p>{{ $purchaseOrder->number }} · {{ $purchaseOrder->supplier->name }} · {{ $purchaseOrder->branch->name }}</p></div>
+        <a href="{{ route('ordenes-compra.show', $purchaseOrder) }}" class="rounded border px-4 py-2">← Volver</a>
+    </div>
+    @if($errors->any())
+        <div class="rounded-xl bg-red-50 p-4 text-red-700" role="alert">
+            <p class="font-bold">No fue posible convertir el pedido:</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
+    <form method="POST" action="{{ route('ordenes-compra.convertir.store', $purchaseOrder) }}" class="space-y-4">@csrf
+        <x-card><div class="overflow-x-auto"><table class="min-w-full text-sm">
+            <thead><tr><th class="p-2">Incluir</th><th class="p-2 text-left">Producto</th><th class="p-2 text-right">Pendiente</th><th class="p-2 text-right">Costo autorizado</th><th class="p-2 text-right">Cantidad a comprar</th></tr></thead>
+            <tbody class="divide-y">@foreach($purchaseOrder->items as $index => $item)@if($item->pending_quantity > 0)<tr>
+                <td class="p-2 text-center"><input type="checkbox" checked onchange="this.closest('tr').querySelectorAll('input[type=hidden],input[type=number]').forEach(i => i.disabled = !this.checked)"></td>
+                <td class="p-2">{{ $item->description }}</td><td class="p-2 text-right">{{ number_format($item->pending_quantity, 4, ',', '.') }}</td>
+                <td class="p-2 text-right">{{ $item->unit_cost_snapshot === null ? '—' : '₡'.number_format((float) $item->unit_cost_snapshot, 4, ',', '.') }}</td>
+                <td class="p-2"><input type="hidden" name="lines[{{ $index }}][purchase_order_item_id]" value="{{ $item->id }}"><input type="number" name="lines[{{ $index }}][quantity]" value="{{ old('lines.'.$index.'.quantity', $item->pending_quantity) }}" min="{{ $item->product->unit?->allows_decimals ? '0.0001' : '1' }}" max="{{ $item->pending_quantity }}" step="{{ $item->product->unit?->allows_decimals ? '0.0001' : '1' }}" class="w-32 rounded border-slate-300"></td>
+            </tr>@endif @endforeach</tbody>
+        </table></div></x-card>
+        <x-card><div class="grid gap-4 md:grid-cols-2">
+            <label class="font-semibold">Tipo de pago<select name="payment_type" id="payment_type" required class="mt-1 w-full rounded border-slate-300"><option value="cash" @selected(old('payment_type', 'cash') === 'cash')>Contado</option><option value="credit" @selected(old('payment_type') === 'credit')>Crédito</option></select></label>
+            <label class="font-semibold">Fecha de vencimiento<input type="date" name="due_date" id="due_date" value="{{ old('due_date') }}" class="mt-1 w-full rounded border-slate-300"></label>
+            <label class="font-semibold">Factura del proveedor<input name="supplier_invoice_number" value="{{ old('supplier_invoice_number') }}" maxlength="255" class="mt-1 w-full rounded border-slate-300"></label>
+            <label class="font-semibold">Notas<textarea name="notes" maxlength="2000" rows="2" class="mt-1 w-full rounded border-slate-300">{{ old('notes') }}</textarea></label>
+        </div></x-card>
+        <button class="rounded bg-emerald-600 px-5 py-2 font-bold text-white">Confirmar compra</button>
+    </form>
+</div>
 <script>document.addEventListener('DOMContentLoaded',()=>{const type=document.getElementById('payment_type'),due=document.getElementById('due_date');const sync=()=>{due.required=type.value==='credit';due.disabled=type.value!=='credit';if(due.disabled)due.value=''};type.addEventListener('change',sync);sync()})</script>
 @endsection

@@ -134,6 +134,34 @@ class ProductSupplierTest extends TestCase
         $this->assertTrue($relation->fresh()->is_primary);
     }
 
+    public function test_supplier_cost_uses_two_decimal_display_and_preserves_entered_value(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.ver', 'productos.editar', 'compras.ordenes']);
+        $product = $this->product($company);
+        $relation = $this->relation($product, $this->supplier($company), ['current_cost' => '15000.0000']);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('productos.proveedores.index', $product))
+            ->assertOk()
+            ->assertSee('₡15.000,00')
+            ->assertSee('value="15000.00"', false)
+            ->assertSee('step="0.01"', false)
+            ->assertDontSee('15000,0005')
+            ->assertDontSee('15000.0005');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->put(route('productos.proveedores.update', [$product, $relation]), [
+                'supplier_product_code' => $relation->supplier_product_code,
+                'current_cost' => '15000',
+                'is_primary' => '0',
+                'is_active' => '1',
+                'notes' => $relation->notes,
+            ])->assertRedirect();
+
+        $this->assertSame('15000.0000', $relation->fresh()->current_cost);
+    }
+
     public function test_eloquent_relations_expose_products_suppliers_and_pivot_model(): void
     {
         [$company] = $this->context();

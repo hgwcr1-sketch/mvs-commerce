@@ -142,8 +142,8 @@ class OrderService
 
             $approved = $this->decimal((float) $data['approved_quantity']);
             $requested = (float) $lockedItem->requested_quantity;
-            if ($approved < 0 || $approved > $requested) {
-                throw ValidationException::withMessages(['approved_quantity' => 'La cantidad aprobada debe estar entre cero y la cantidad solicitada.']);
+            if ($approved < 0) {
+                throw ValidationException::withMessages(['approved_quantity' => 'La cantidad aprobada no puede ser negativa.']);
             }
             if (! $lockedItem->allows_decimals_snapshot && floor($approved) !== $approved) {
                 throw ValidationException::withMessages(['approved_quantity' => 'La unidad del producto solo admite cantidades enteras.']);
