@@ -1,13 +1,14 @@
 @props([
     'icon',
     'label',
+    'active' => false,
 ])
 
-<div x-data="{ open: false }">
+<div x-data="{ open: @js($active) }">
     
     <button
         @click="open = !open"
-        class="flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3 text-slate-300 transition-all duration-200 hover:bg-slate-800 hover:text-white">
+        class="flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3 text-slate-300 transition-all duration-200 hover:bg-slate-800 hover:text-white {{ $active ? 'bg-slate-800 text-white' : '' }}">
 
         <div class="flex items-center gap-4">
 
@@ -47,22 +48,13 @@
         </div>
 
 
-        <span class="text-xs">
-
-    <span x-show="!open">
-        ▼
-    </span>
-
-    <span x-show="open">
-        ▲
-    </span>
-
-</span>
+        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="text-xs transition-transform">▼</span>
 
     </button>
 
 
     <div
+    x-cloak
     x-show="open"
     x-transition
     class="mt-2 space-y-1 pl-10">

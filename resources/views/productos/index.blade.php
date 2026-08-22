@@ -231,6 +231,14 @@
             <div class="flex justify-center gap-2">
 
                 <a
+                    href="{{ route('productos.proveedores.index', $product) }}"
+                    class="rounded bg-sky-600 px-3 py-1 text-white">
+
+                    Proveedores
+
+                </a>
+
+                <a
                     href="{{ route('productos.edit',$product) }}"
                     class="rounded bg-amber-500 px-3 py-1 text-white">
 

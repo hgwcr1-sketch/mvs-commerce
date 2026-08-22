@@ -7,6 +7,7 @@ use App\Models\Sale;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class StorePosSaleRequest extends FormRequest
 {
@@ -18,7 +19,11 @@ class StorePosSaleRequest extends FormRequest
 
         $company = Company::query()->find((int) session('active_company_id'));
 
-        return $company !== null && $this->user()?->hasPermission('cotizaciones.crear', $company);
+        if ($company === null) {
+            return false;
+        }
+
+        return $this->user()?->hasPermission('cotizaciones.crear', $company) === true;
     }
 
     protected function prepareForValidation(): void
@@ -53,7 +58,7 @@ class StorePosSaleRequest extends FormRequest
             'cash_session_id' => ['nullable', 'integer'],
             'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
             'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
-            'quote_id' => ['nullable', 'integer'],
+            'quote_id' => ['nullable', 'integer', Rule::prohibitedIf(fn () => $this->filled('suspended_sale_id'))],
             'customer_id' => [
                 $this->input('document_type') === Sale::DOCUMENT_ELECTRONIC_INVOICE
                     ? 'required'

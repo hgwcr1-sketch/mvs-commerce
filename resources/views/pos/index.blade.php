@@ -128,9 +128,13 @@
                                     </td>
                                     <td class="w-28 whitespace-nowrap px-3 py-2">
                                         <div class="flex items-center justify-center gap-1">
-                                            <button type="button" @click="decrease(item)" class="h-7 w-7 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300">−</button>
-                                            <span class="min-w-8 text-center font-bold" x-text="formatQuantity(item.quantity)"></span>
-                                            <button type="button" @click="increase(item)" class="h-7 w-7 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600">+</button>
+                                            <button type="button" @click="decrease(item)" class="h-7 w-7 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300 disabled:opacity-40">−</button>
+                                            <input type="number"
+                                                   x-model.number="item.quantity"
+                                                   :min="item.allows_decimals ? 0.0001 : 1"
+                                                   :step="item.allows_decimals ? 0.0001 : 1"
+                                                   class="w-16 rounded border border-slate-300 px-1 py-1 text-center text-sm font-bold">
+                                            <button type="button" @click="increase(item)" class="h-7 w-7 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600 disabled:opacity-40">+</button>
                                         </div>
                                     </td>
                                     <td class="w-28 whitespace-nowrap px-3 py-2 text-right">
@@ -138,9 +142,9 @@
                                             <div class="flex flex-col items-end gap-1">
                                                 <input x-model="item._unitPrice"
                                                        type="number"
-                                                       min="0.0001"
-                                                       step="0.0001"
-                                                       inputmode="decimal"
+                                                       min="1"
+                                                       step="1"
+                                                       inputmode="numeric"
                                                        class="w-24 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm font-bold text-amber-900"
                                                        :placeholder="String(item.sale_price)"
                                                        :title="'Precio original: ' + money(item.sale_price)">
@@ -163,7 +167,7 @@
                                                 <input x-model="item._discount"
                                                        type="number"
                                                        min="0"
-                                                       step="0.0001"
+                                                       :step="item._discountType === 'fixed' ? 1 : 0.0001"
                                                        inputmode="decimal"
                                                        class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm"
                                                        placeholder="0">
@@ -173,7 +177,7 @@
                                     </td>
                                     <td class="w-24 whitespace-nowrap px-3 py-2 text-right" x-text="money(lineTax(item, index))"></td>
                                     <td class="w-28 whitespace-nowrap px-3 py-2 text-right font-bold" x-text="money(lineTotal(item, index))"></td>
-                                    <td class="w-20 whitespace-nowrap px-3 py-2 text-right"><button type="button" @click="remove(item)" class="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50">Eliminar</button></td>
+                                    <td class="w-20 whitespace-nowrap px-3 py-2 text-right"><button type="button" @click="remove(item)" class="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40">Eliminar</button></td>
                                 </tr>
                             </template>
                             <tr x-show="cart.length === 0">
@@ -272,7 +276,7 @@
                                 <input x-model="_generalDiscountInput"
                                        type="number"
                                        min="0"
-                                       step="0.0001"
+                                       :step="_generalDiscountType === 'fixed' ? 1 : 0.0001"
                                        inputmode="decimal"
                                        class="w-24 rounded-lg border border-amber-400/50 bg-slate-800 px-2 py-1 text-right text-sm font-bold text-amber-400 placeholder-amber-400/50"
                                        placeholder="0">
@@ -330,11 +334,76 @@
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
             @can('cotizaciones.crear')<button type="button" @click="createQuote()" :disabled="cart.length === 0 || quoteId || creatingQuote" class="whitespace-nowrap rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 disabled:opacity-40" x-text="creatingQuote ? 'Cotizando…' : 'Cotizar'">Cotizar</button>@endcan
-            @foreach(['Pedido', 'Apartado', 'Abono', 'Nota de crédito', 'Nota de débito'] as $option)
+            @can('apartados.crear')<a href="{{ route('apartados.create') }}" class="whitespace-nowrap rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">Nuevo apartado</a>@endcan
+            @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
+            @foreach(['Nota de crédito', 'Nota de débito'] as $option)
                 <button type="button" disabled class="whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
             @endforeach
         </div>
     </section>
+
+    @can('pedidos.crear')
+    <div x-show="orderRequest.open" x-cloak @click.self="closeOrderRequest" @keydown.escape.window="closeOrderRequest" @keydown.enter.stop
+         class="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/80 p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="Crear pedido interno">
+        <div class="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <header class="flex items-center justify-between gap-4 bg-slate-900 px-5 py-4 text-white sm:px-7">
+                <div><h2 class="text-2xl font-black">Solicitar reposición</h2><p class="mt-1 text-sm text-slate-300">Solicitud de productos para la sucursal activa</p></div>
+                <button type="button" @click="closeOrderRequest" :disabled="orderRequest.saving" class="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 text-2xl" aria-label="Cerrar pedido">×</button>
+            </header>
+            <template x-if="orderRequest.result">
+                <div class="overflow-y-auto p-8 text-center sm:p-12">
+                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-black text-emerald-700">✓</div>
+                    <h3 class="mt-4 text-2xl font-black text-slate-900" x-text="orderRequest.result.message"></h3>
+                    <p class="mt-2 text-slate-600">El pedido quedó pendiente para revisión. No afectó inventario ni caja.</p>
+                    <div class="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+                        <button type="button" @click="closeOrderRequest" class="rounded-xl border border-slate-300 px-5 py-3 font-bold">Cerrar</button>
+                        <a :href="orderRequest.result.show_url" class="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-700">Ver pedido</a>
+                    </div>
+                </div>
+            </template>
+            <template x-if="!orderRequest.result">
+                <div class="flex min-h-0 flex-1 flex-col">
+                    <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                        <div class="relative">
+                            <label for="order-product-search" class="mb-1 block font-bold text-slate-800">Buscar producto</label>
+                            <input id="order-product-search" x-ref="orderProductSearch" x-model="orderRequest.query" @input.debounce.250ms="searchOrderProducts" autocomplete="off" placeholder="Nombre, código o código de barras" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-emerald-500 focus:ring-emerald-500">
+                            <div x-show="orderRequest.query.trim()" class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+                                <p x-show="orderRequest.loading" class="p-4 text-slate-500">Buscando…</p>
+                                <template x-for="product in orderRequest.results" :key="product.id">
+                                    <button type="button" @click="addOrderProduct(product)" class="flex w-full items-center justify-between gap-4 border-b border-slate-100 p-4 text-left hover:bg-emerald-50">
+                                        <span class="min-w-0"><strong class="block truncate" x-text="product.name"></strong><small class="text-slate-500" x-text="`${product.internal_code || 'Sin código'} · ${product.unit || 'Unidad'}`"></small></span>
+                                        <span class="shrink-0 text-right text-xs"><span class="block" x-text="`Existencia: ${formatQuantity(product.available_stock)}`"></span><strong class="text-emerald-700" x-text="money(product.sale_price)"></strong></span>
+                                    </button>
+                                </template>
+                                <p x-show="!orderRequest.loading && orderRequest.results.length === 0" class="p-4 text-slate-500">No se encontraron productos.</p>
+                            </div>
+                        </div>
+                        <p x-show="orderRequest.error" x-text="orderRequest.error" class="mt-4 rounded-xl bg-red-50 p-3 font-semibold text-red-700"></p>
+                        <div class="mt-5 space-y-3">
+                            <p class="font-bold text-slate-700" x-text="`Productos solicitados: ${orderRequest.items.length}`"></p>
+                            <p x-show="orderRequest.items.length === 0" class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center text-slate-500">Busque y agregue al menos un producto.</p>
+                            <template x-for="(item, index) in orderRequest.items" :key="item.id">
+                                <article class="grid gap-3 rounded-2xl border border-slate-200 p-4 lg:grid-cols-[1.5fr_.7fr_.7fr_.65fr_1.3fr_auto] lg:items-end">
+                                    <div><span class="text-xs font-bold uppercase text-slate-500">Producto</span><strong class="block" x-text="item.name"></strong><small class="text-slate-500" x-text="`${item.internal_code || 'Sin código'} · ${item.unit || 'Unidad'}`"></small></div>
+                                    <div><span class="text-xs font-bold uppercase text-slate-500">Existencia actual</span><strong class="block" x-text="formatQuantity(item.available_stock)"></strong></div>
+                                    <div><span class="text-xs font-bold uppercase text-slate-500">Precio de venta</span><strong class="block" x-text="money(item.sale_price)"></strong></div>
+                                    <label class="text-xs font-bold uppercase text-slate-500">Cantidad solicitada<input type="number" x-model="item.requested_quantity" :step="item.allows_decimals ? 0.0001 : 1" :min="item.allows_decimals ? 0.0001 : 1" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base font-normal text-slate-900"></label>
+                                    <label class="text-xs font-bold uppercase text-slate-500">Observación<input type="text" x-model="item.request_note" maxlength="1000" placeholder="Opcional" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base font-normal text-slate-900"></label>
+                                    <button type="button" @click="removeOrderProduct(index)" class="rounded-lg px-3 py-2 font-bold text-red-600 hover:bg-red-50" aria-label="Eliminar producto">Eliminar</button>
+                                </article>
+                            </template>
+                        </div>
+                        <label class="mt-5 block font-bold text-slate-800">Observación general<textarea x-model="orderRequest.notes" maxlength="2000" rows="3" placeholder="Opcional" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal"></textarea></label>
+                    </div>
+                    <footer class="flex flex-col-reverse gap-3 border-t border-slate-200 p-4 sm:flex-row sm:justify-end sm:px-6">
+                        <button type="button" @click="closeOrderRequest" :disabled="orderRequest.saving" class="rounded-xl border border-slate-300 px-5 py-3 font-bold">Cancelar</button>
+                        <button type="button" @click="submitOrderRequest" :disabled="orderRequest.saving || orderRequest.items.length === 0" class="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white hover:bg-emerald-700 disabled:opacity-40" x-text="orderRequest.saving ? 'Enviando…' : 'Enviar solicitud'"></button>
+                    </footer>
+                </div>
+            </template>
+        </div>
+    </div>
+    @endcan
 
     <div x-show="suspended.open" x-cloak @click.self="suspended.open = false" class="fixed inset-0 z-[115] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-label="Ventas suspendidas">
         <div class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
@@ -355,6 +424,18 @@
                         <div><h2 class="text-2xl font-black tracking-tight">Cobrar venta</h2><p class="mt-1 text-sm text-[#B9BDC2]"><span x-text="`${cart.length} producto${cart.length === 1 ? '' : 's'}`"></span> · <span x-text="selectedCustomer?.name || 'Consumidor Final'"></span></p></div>
                         <button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 text-2xl hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#B1922D]" aria-label="Cerrar cobro">×</button>
                     </header>
+                    <div x-show="creditPaymentSelected" class="border-b px-5 py-4" :class="creditEligible ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'">
+                        <div class="grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                            <span>Cliente: <strong x-text="selectedCustomer?.name || 'Sin cliente seleccionado'"></strong></span>
+                            <span>Límite de crédito: <strong x-text="money(selectedCustomer?.credit_limit || 0)"></strong></span>
+                            <span>Utilizado: <strong x-text="money(selectedCustomer?.credit_used || 0)"></strong></span>
+                            <span>Disponible: <strong x-text="money(creditAvailable)"></strong></span>
+                            <span>Plazo: <strong x-text="`${selectedCustomer?.credit_days || 0} días`"></strong></span>
+                            <span>Vencimiento: <strong x-text="creditDueDateLabel"></strong></span>
+                            <span>Monto de esta venta: <strong x-text="money(grandTotal)"></strong></span>
+                        </div>
+                        <p class="mt-3 text-sm font-semibold" :class="creditEligible ? 'text-emerald-700' : 'text-red-700'" x-text="creditStatusMessage"></p>
+                    </div>
 
                     <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
                         <div class="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -537,6 +618,7 @@ document.addEventListener('alpine:init', () => {
         checkoutToken: crypto.randomUUID(),
         quoteId: null,
         creatingQuote: false,
+        orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
         cashSessionId: @json($cashSession?->id),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->values()),
@@ -630,17 +712,29 @@ document.addEventListener('alpine:init', () => {
 
             return false;
         },
-        get availablePaymentMethods() { return this.paymentMethods.filter(method => !['credit', 'loyalty_points'].includes(method.type) && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
+        get availablePaymentMethods() { return this.paymentMethods.filter(method => method.type !== 'loyalty_points' && !this.checkout.payments.some(payment => payment.payment_method_id === method.id)); },
+        get creditAvailable() { return Math.max(0, Number(this.selectedCustomer?.credit_limit || 0) - Number(this.selectedCustomer?.credit_used || 0)); },
+        get creditPaymentSelected() { return this.selectedPaymentMethod?.type === 'credit' || this.checkout.payments.some(payment => payment.method_type === 'credit'); },
+        get creditEligible() { return !!this.selectedCustomer && Number(this.selectedCustomer.credit_limit) > 0 && Number(this.selectedCustomer.credit_days) > 0 && this.creditAvailable >= this.grandTotal; },
+        get creditDueDateLabel() { const value = this.selectedCustomer?.credit_due_date; return value ? new Date(`${value}T00:00:00`).toLocaleDateString('es-CR') : '—'; },
+        get creditStatusMessage() {
+            if (!this.selectedCustomer) return 'Para vender a crédito debe seleccionar un cliente.';
+            if (Number(this.selectedCustomer.credit_limit) <= 0) return 'Este cliente no tiene crédito autorizado.';
+            if (Number(this.selectedCustomer.credit_days) <= 0) return 'El cliente no tiene un plazo de crédito configurado.';
+            if (this.creditAvailable < this.grandTotal) return 'El cliente no tiene crédito disponible suficiente.';
+            return 'Crédito disponible suficiente para esta venta.';
+        },
         get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
-        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0; },
+        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && (!this.creditPaymentSelected || this.creditEligible); },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
             if (!method || this.checkout.processing || this.methodUnavailable(method) || !/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) return false;
+            if (method.type === 'credit' && !this.creditEligible) return false;
             if (method.requires_reference && !this.checkout.draft.reference.trim()) return false;
             if (!method.allows_change) return true;
             if (!/^\d+$/.test(String(this.checkout.draft.receivedAmount)) || Number(this.checkout.draft.receivedAmount) < amount) return false;
@@ -697,6 +791,65 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 if (currentRequest === this.requestNumber) this.loading = false;
             }
+        },
+        openOrderRequest() {
+            this.orderRequest = { open: true, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null };
+            this.$nextTick(() => this.$refs.orderProductSearch?.focus());
+        },
+        closeOrderRequest() {
+            if (this.orderRequest.saving) return;
+            this.orderRequest.open = false;
+            this.$nextTick(() => this.$refs.searchInput?.focus());
+        },
+        async searchOrderProducts() {
+            const term = this.orderRequest.query.trim();
+            const currentRequest = ++this.orderRequest.requestNumber;
+            if (!term) { this.orderRequest.results = []; this.orderRequest.loading = false; return; }
+            this.orderRequest.loading = true;
+            this.orderRequest.error = '';
+            try {
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search')) }}, window.location.origin);
+                url.searchParams.set('q', term);
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                const products = await this.readFetchResponse(response);
+                if (currentRequest === this.orderRequest.requestNumber) this.orderRequest.results = products;
+            } catch (error) {
+                if (currentRequest === this.orderRequest.requestNumber) { this.orderRequest.results = []; this.orderRequest.error = error.message; }
+            } finally {
+                if (currentRequest === this.orderRequest.requestNumber) this.orderRequest.loading = false;
+            }
+        },
+        addOrderProduct(product) {
+            const existing = this.orderRequest.items.find(item => item.id === product.id);
+            if (existing) existing.requested_quantity = Number(existing.requested_quantity) + 1;
+            else this.orderRequest.items.push({ id: product.id, name: product.name, internal_code: product.internal_code, available_stock: Number(product.available_stock), sale_price: Number(product.sale_price), unit: product.unit, allows_decimals: !!product.allows_decimals, requested_quantity: 1, request_note: '' });
+            this.orderRequest.query = '';
+            this.orderRequest.results = [];
+            this.orderRequest.requestNumber += 1;
+            this.orderRequest.error = '';
+            this.$nextTick(() => this.$refs.orderProductSearch?.focus());
+        },
+        removeOrderProduct(index) { this.orderRequest.items.splice(index, 1); },
+        async submitOrderRequest() {
+            if (this.orderRequest.saving || !this.orderRequest.items.length) return;
+            for (const item of this.orderRequest.items) {
+                const quantity = Number(item.requested_quantity);
+                if (!Number.isFinite(quantity) || quantity <= 0 || (!item.allows_decimals && !Number.isInteger(quantity))) {
+                    this.orderRequest.error = `Revise la cantidad solicitada de ${item.name}.`;
+                    return;
+                }
+            }
+            this.orderRequest.saving = true;
+            this.orderRequest.error = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pedidos.store')) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({ notes: this.orderRequest.notes || null, items: this.orderRequest.items.map(item => ({ product_id: item.id, requested_quantity: item.requested_quantity, request_note: item.request_note || null })) }),
+                });
+                this.orderRequest.result = await this.readFetchResponse(response);
+            } catch (error) { this.orderRequest.error = error.message || 'No fue posible crear el pedido.'; }
+            finally { this.orderRequest.saving = false; }
         },
         moveSelection(direction) {
             if (!this.results.length) return;
@@ -820,7 +973,7 @@ document.addEventListener('alpine:init', () => {
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
         handleGlobalEnter(event) {
-            if (event.defaultPrevented || this.checkout.open || this.quickCustomer.open || this.resultsOpen || this.customerResultsOpen) return;
+            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.resultsOpen || this.customerResultsOpen) return;
             if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
             if (this.canCheckout) { event.preventDefault(); this.openCheckout(); }
         },
@@ -839,15 +992,21 @@ document.addEventListener('alpine:init', () => {
             this.checkout.open = false;
             this.$nextTick(() => this.$refs.searchInput?.focus());
         },
-        unsupportedPaymentMethod(method) { return ['credit', 'loyalty_points'].includes(method.type); },
-        methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0; },
+        unsupportedPaymentMethod(method) { return method.type === 'loyalty_points'; },
+        methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0 || (method.type === 'credit' && this.checkout.payments.length > 0); },
         methodInitial(method) { return (method.name || '?').trim().charAt(0).toUpperCase(); },
         selectPaymentMethod(method) {
             if (this.methodUnavailable(method) || this.checkout.processing) return;
+            this.checkout.draft.methodId = method.id;
+            if (method.type === 'credit') {
+                if (!this.selectedCustomer) { this.checkout.error = 'Para vender a crédito debe seleccionar un cliente.'; return; }
+                if (Number(this.selectedCustomer.credit_limit) <= 0) { this.checkout.error = 'Este cliente no tiene crédito autorizado.'; return; }
+                if (Number(this.selectedCustomer.credit_days) <= 0) { this.checkout.error = 'El cliente no tiene un plazo de crédito configurado.'; return; }
+                if (this.creditAvailable < this.pendingBalance) { this.checkout.error = 'El cliente no tiene crédito disponible suficiente.'; return; }
+            }
             const amount = Number(this.checkout.draft.amount);
             if (!/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) { this.checkout.error = 'Indique un monto entero que no supere el saldo pendiente.'; this.$refs.checkoutAmount?.focus(); return; }
             this.checkout.error = '';
-            this.checkout.draft.methodId = method.id;
             this.checkout.draft.reference = '';
             this.checkout.draft.receivedAmount = String(amount);
             if (!method.requires_reference && !method.allows_change) { this.addPayment(); return; }
@@ -864,7 +1023,7 @@ document.addEventListener('alpine:init', () => {
         addPayment() {
             if (!this.canAddPayment) return;
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount), received = method.allows_change ? Number(this.checkout.draft.receivedAmount) : amount;
-            this.checkout.payments.push({ payment_method_id: method.id, method_name: method.name, amount, received_amount: received, change_amount: method.allows_change ? received - amount : 0, reference: this.checkout.draft.reference.trim() || null });
+            this.checkout.payments.push({ payment_method_id: method.id, method_name: method.name, method_type: method.type, amount, received_amount: received, change_amount: method.allows_change ? received - amount : 0, reference: this.checkout.draft.reference.trim() || null });
             this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' };
             this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); });
         },

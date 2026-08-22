@@ -52,6 +52,11 @@ class PaymentMethod extends Model
         return $this->hasMany(CashPaymentReconciliation::class);
     }
 
+    public function accountPayablePayments(): HasMany
+    {
+        return $this->hasMany(AccountPayablePayment::class);
+    }
+
     public function scopeForCompany(Builder $query, int $companyId): Builder
     {
         return $query->where('company_id', $companyId);

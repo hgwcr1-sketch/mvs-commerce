@@ -21,6 +21,13 @@ class CashExpectedAmountService
             ->whereNotNull('payments.cash_effect_amount')
             ->sum('payments.cash_effect_amount');
 
+        $receivablePayments = DB::table('accounts_receivable_payments')
+            ->where('cash_session_id', $session->id)
+            ->where('affects_cash_snapshot', true)
+            ->sum('cash_effect_amount');
+        $layawayPayments = DB::table('layaway_payments')->where('cash_session_id',$session->id)->where('affects_cash_snapshot',true)->sum('cash_effect_amount');
+        $payablePayments = DB::table('accounts_payable_payments')->where('cash_session_id',$session->id)->where('affects_cash_snapshot',true)->sum('cash_effect_amount');
+
         $entries = CashMovement::forSession($session->id)
             ->where('direction', CashMovement::DIRECTION_IN)
             ->sum('amount');
@@ -30,7 +37,7 @@ class CashExpectedAmountService
             ->sum('amount');
 
         return round(
-            (float) $session->opening_amount + (float) $cashSales + (float) $entries - (float) $outputs,
+            (float) $session->opening_amount + (float) $cashSales + (float) $receivablePayments + (float) $layawayPayments - (float) $payablePayments + (float) $entries - (float) $outputs,
             4,
         );
     }

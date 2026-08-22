@@ -38,6 +38,10 @@ class SaleController extends Controller
             $query->where('status', $status);
         }
 
+        if ($request->boolean('with_returns')) {
+            $query->whereHas('returns');
+        }
+
         if ($dateFrom = $request->query('date_from')) {
             $query->whereDate('completed_at', '>=', $dateFrom);
         }
@@ -70,9 +74,10 @@ class SaleController extends Controller
     $venta->load([
         'branch',
         'user',
-        'customer',
+        'customer.accountsReceivable',
         'items',
         'payments.paymentMethod',
+        'accountReceivable',
         'cashSession.cashRegister',
         'returns.user',
         'returns.items.product',

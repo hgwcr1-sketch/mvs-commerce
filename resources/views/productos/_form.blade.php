@@ -98,6 +98,7 @@
 
                 <option
                     value="{{ $unit->id }}"
+                    data-allows-decimals="{{ $unit->allows_decimals ? '1' : '0' }}"
                     @selected(old('unit_id',$product->unit_id ?? '')==$unit->id)>
 
                     {{ $unit->name }}
@@ -129,49 +130,49 @@
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="cost"
             label="Costo"
             :value="old('cost', $product->cost ?? 0)" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="sale_price"
             label="Precio Venta"
             :value="old('sale_price', $product->sale_price ?? 0)" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="wholesale_price"
             label="Precio Mayorista"
             :value="old('wholesale_price', $product->wholesale_price ?? '')" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="special_price"
             label="Precio Oferta"
             :value="old('special_price', $product->special_price ?? '')" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="price_a"
             label="Precio A"
             :value="old('price_a', $product->price_a ?? '')" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="price_b"
             label="Precio B"
             :value="old('price_b', $product->price_b ?? '')" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="price_c"
             label="Precio C"
             :value="old('price_c', $product->price_c ?? '')" />
@@ -243,7 +244,7 @@
 
             <input
                 type="number"
-                step="0.01"
+                step="{{ $product->unit?->allows_decimals ? '0.0001' : '1' }}"
                 value="{{ $product->branch_stock ?? 0 }}"
                 readonly
                 class="form-input w-full bg-slate-100 cursor-not-allowed">
@@ -257,7 +258,7 @@
 
         <x-input
             type="number"
-            step="0.01"
+            step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
             name="stock"
             label="Stock Inicial"
             :value="old('stock', 0)" />
@@ -266,7 +267,7 @@
 
     <x-input
         type="number"
-        step="0.01"
+        step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
         name="minimum_stock"
         label="Stock Mínimo"
         :value="old(
@@ -278,7 +279,7 @@
 
     <x-input
         type="number"
-        step="0.01"
+        step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
         name="maximum_stock"
         label="Stock Máximo"
         :value="old(
@@ -291,6 +292,27 @@
 </div>
 
 </x-card>
+
+@once
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const unit = document.querySelector('[name="unit_id"]');
+    if (!unit) return;
+    const quantities = ['stock', 'minimum_stock', 'maximum_stock']
+        .map(name => document.querySelector(`[name="${name}"]`))
+        .filter(Boolean);
+    const syncQuantityStep = () => {
+        const fractional = unit.selectedOptions[0]?.dataset.allowsDecimals === '1';
+        quantities.forEach(input => {
+            input.min = '0';
+            input.step = fractional ? '0.0001' : '1';
+        });
+    };
+    unit.addEventListener('change', syncQuantityStep);
+    syncQuantityStep();
+});
+</script>
+@endonce
 
 
 {{-- =========================

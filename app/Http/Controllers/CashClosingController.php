@@ -36,11 +36,12 @@ class CashClosingController extends Controller
         $denominationProvisioner->provision($company);
         $denominations = CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->orderBy('sort_order')->get();
         $methods = $paymentExpected->methods($cashSession);
+        $expectedBreakdown = $paymentExpected->breakdown($cashSession);
         $blind = (bool) $cashSession->blind_closing_snapshot;
         return view('cash.closing.create', [
             'cashSession' => $cashSession->loadMissing('cashRegister:id,name'), 'denominations' => $denominations, 'methods' => $methods,
             'blind' => $blind, 'expectedCash' => $blind ? null : $cashExpected->calculate($cashSession),
-            'expectedMethods' => $blind ? collect() : $paymentExpected->expectedAmounts($cashSession), 'requestToken' => (string) Str::uuid(),
+            'expectedMethods' => $paymentExpected->expectedAmounts($cashSession), 'expectedBreakdown' => $expectedBreakdown, 'requestToken' => (string) Str::uuid(),
         ]);
     }
 

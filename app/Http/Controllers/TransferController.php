@@ -103,6 +103,12 @@ class TransferController extends Controller
         $product = Product::where('company_id', $companyId)
     ->where('is_active', true)
     ->findOrFail($data['product_id']);
+
+        if (! $product->unit?->allows_decimals && floor((float) $data['quantity']) !== (float) $data['quantity']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'quantity' => 'Este producto solo admite cantidades enteras.',
+            ]);
+        }
     
         $quantity = (float) $data['quantity'];
 

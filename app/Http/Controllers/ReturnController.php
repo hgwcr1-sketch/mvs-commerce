@@ -18,7 +18,7 @@ class ReturnController extends Controller
     {
         $this->assertIsolatedContext($venta);
 
-        $venta->load('items.product');
+        $venta->load('items.product.unit');
 
         $lines = [];
 
@@ -32,6 +32,7 @@ class ReturnController extends Controller
                 'sold' => (float) $item->quantity,
                 'returned' => $alreadyReturned,
                 'pending' => max(0.0, (float) $item->quantity - $alreadyReturned),
+                'allows_decimals' => (bool) $item->product?->unit?->allows_decimals,
             ];
         }
 

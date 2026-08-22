@@ -174,6 +174,15 @@
 
             <div>
                 <p class="text-xs font-semibold uppercase text-slate-500">
+                    Condición
+                </p>
+                <p class="mt-1 font-semibold text-slate-800">
+                    {{ $sale->sale_condition === \App\Models\Sale::CONDITION_CREDIT ? 'Crédito' : 'Contado' }}
+                </p>
+            </div>
+
+            <div>
+                <p class="text-xs font-semibold uppercase text-slate-500">
                     Cajero
                 </p>
                 <p class="mt-1 text-slate-800">
@@ -202,6 +211,46 @@
         </div>
 
     </x-card>
+
+    @if($sale->sale_condition === \App\Models\Sale::CONDITION_CREDIT && $sale->accountReceivable)
+        @php
+            $creditStatus = [
+                'pending' => 'Pendiente',
+                'partial' => 'Parcial',
+                'paid' => 'Pagada',
+                'overdue' => 'Vencida',
+                'cancelled' => 'Cancelada',
+            ][$sale->accountReceivable->effective_status] ?? $sale->accountReceivable->effective_status;
+            $creditUsed = (float) $sale->customer?->accountsReceivable
+                ->whereNotIn('status', ['paid', 'cancelled'])
+                ->sum('balance_due');
+        @endphp
+
+        <x-card>
+            <x-slot:header>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">Información de crédito</h3>
+                        <p class="text-sm text-slate-500">Estado actual de la cuenta por cobrar.</p>
+                    </div>
+                    @can('cuentas_cobrar.ver')
+                        <a href="{{ route('cuentas-por-cobrar.show', $sale->accountReceivable) }}" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                            Ver cuenta por cobrar
+                        </a>
+                    @endcan
+                </div>
+            </x-slot:header>
+
+            <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Cliente</dt><dd class="mt-1 font-medium text-slate-800">{{ $sale->customer?->name ?: '—' }}</dd></div>
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Límite de crédito</dt><dd class="mt-1 font-medium text-slate-800">₡{{ number_format((float) $sale->customer?->credit_limit, 0, ',', '.') }}</dd></div>
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Crédito utilizado</dt><dd class="mt-1 font-medium text-slate-800">₡{{ number_format($creditUsed, 0, ',', '.') }}</dd></div>
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Vencimiento</dt><dd class="mt-1 font-medium text-slate-800">{{ $sale->accountReceivable->due_date->format('d/m/Y') }}</dd></div>
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Saldo pendiente</dt><dd class="mt-1 font-semibold text-slate-900">₡{{ number_format((float) $sale->accountReceivable->balance_due, 0, ',', '.') }}</dd></div>
+                <div><dt class="text-xs font-semibold uppercase text-slate-500">Estado de CxC</dt><dd class="mt-1 font-semibold text-slate-800">{{ $creditStatus }}</dd></div>
+            </dl>
+        </x-card>
+    @endif
 
     <x-card>
 
@@ -264,19 +313,19 @@
                             </td>
 
                             <td class="px-4 py-3 text-right text-sm text-slate-700">
-                                ₡{{ number_format((float) $item->unit_price, 2, ',', '.') }}
+                                ₡{{ number_format((float) $item->unit_price, 0, ',', '.') }}
                             </td>
 
                             <td class="px-4 py-3 text-right text-sm text-slate-700">
-                                ₡{{ number_format((float) $item->discount_total, 2, ',', '.') }}
+                                ₡{{ number_format((float) $item->discount_total, 0, ',', '.') }}
                             </td>
 
                             <td class="px-4 py-3 text-right text-sm text-slate-700">
-                                ₡{{ number_format((float) $item->tax_total, 2, ',', '.') }}
+                                ₡{{ number_format((float) $item->tax_total, 0, ',', '.') }}
                             </td>
 
                             <td class="px-4 py-3 text-right font-semibold text-slate-800">
-                                ₡{{ number_format((float) $item->total, 2, ',', '.') }}
+                                ₡{{ number_format((float) $item->total, 0, ',', '.') }}
                             </td>
 
                         </tr>
@@ -371,7 +420,7 @@
                             </span>
 
                             <span class="font-semibold text-slate-800">
-                                ₡{{ number_format((float) $payment->amount, 2, ',', '.') }}
+                                ₡{{ number_format((float) $payment->amount, 0, ',', '.') }}
                             </span>
                         </div>
 
@@ -386,12 +435,12 @@
                             <div class="mt-2 text-sm text-slate-500">
                                 <p>
                                     Recibido:
-                                    ₡{{ number_format((float) $payment->received_amount, 2, ',', '.') }}
+                                    ₡{{ number_format((float) $payment->received_amount, 0, ',', '.') }}
                                 </p>
 
                                 <p>
                                     Vuelto:
-                                    ₡{{ number_format((float) $payment->change_amount, 2, ',', '.') }}
+                                    ₡{{ number_format((float) $payment->change_amount, 0, ',', '.') }}
                                 </p>
                             </div>
 
@@ -421,7 +470,7 @@
                     </span>
 
                     <strong class="text-slate-800">
-                        ₡{{ number_format((float) $sale->subtotal, 2, ',', '.') }}
+                        ₡{{ number_format((float) $sale->subtotal, 0, ',', '.') }}
                     </strong>
                 </div>
 
@@ -433,7 +482,7 @@
                         </span>
 
                         <strong class="text-amber-700">
-                            -₡{{ number_format((float) $sale->discount_total, 2, ',', '.') }}
+                            -₡{{ number_format((float) $sale->discount_total, 0, ',', '.') }}
                         </strong>
                     </div>
 
@@ -445,7 +494,7 @@
                     </span>
 
                     <strong class="text-slate-800">
-                        ₡{{ number_format((float) $sale->tax_total, 2, ',', '.') }}
+                        ₡{{ number_format((float) $sale->tax_total, 0, ',', '.') }}
                     </strong>
                 </div>
 
@@ -457,7 +506,7 @@
                         </span>
 
                         <strong class="text-slate-800">
-                            ₡{{ number_format((float) $sale->rounding_total, 2, ',', '.') }}
+                            ₡{{ number_format((float) $sale->rounding_total, 0, ',', '.') }}
                         </strong>
                     </div>
 
@@ -471,7 +520,7 @@
                         </span>
 
                         <strong class="text-xl text-slate-900">
-                            ₡{{ number_format((float) $sale->total, 2, ',', '.') }}
+                            ₡{{ number_format((float) $sale->total, 0, ',', '.') }}
                         </strong>
                     </div>
 

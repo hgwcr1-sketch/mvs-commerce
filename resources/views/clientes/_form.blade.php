@@ -242,7 +242,7 @@
 
         <x-input
     type="number"
-    step="0.01"
+    step="1"
     name="credit_limit"
     label="Límite de Crédito"
     :value="old('credit_limit', $customer->credit_limit ?? 0)"/>

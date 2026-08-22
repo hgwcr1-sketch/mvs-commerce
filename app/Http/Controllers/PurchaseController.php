@@ -14,6 +14,7 @@ use App\Models\ProductCategory;
 use App\Models\Brand;
 use App\Models\Unit;
 use App\Services\Purchases\PurchaseProcessor;
+use App\Services\Purchases\PurchaseAccountPayableService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -106,7 +107,7 @@ class PurchaseController extends Controller
             ->with([
                 'brand:id,name',
                 'category:id,name',
-                'unit:id,name',
+                'unit:id,name,allows_decimals',
                 'barcodes' => function ($query) {
                     $query
                         ->where('is_active', true)
@@ -159,6 +160,7 @@ class PurchaseController extends Controller
                 'brand' => $product->brand?->name,
                 'category' => $product->category?->name,
                 'unit' => $product->unit?->name,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
                 'cost' => (float) $product->cost,
                 'sale_price' => (float) $product->sale_price,
                 'tax_rate' => (float) $product->tax_rate,
@@ -272,7 +274,7 @@ class PurchaseController extends Controller
         'supplier',
         'branch',
         'user',
-        'items.product',
+            'items.product.unit',
     ])
     ->where('company_id', $companyId)
     ->where('branch_id', $branchId)
@@ -800,7 +802,7 @@ public function update(Request $request, string $id)
             /**
      * Anular compra.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, PurchaseAccountPayableService $accountPayableService)
 {
     $companyId = session('active_company_id');
     $branchId = session('active_branch_id');
@@ -810,7 +812,8 @@ public function update(Request $request, string $id)
         DB::transaction(function () use (
             $id,
             $companyId,
-            $branchId
+            $branchId,
+            $accountPayableService
         ) {
 
             $purchase = Purchase::with('items.product')
@@ -904,6 +907,12 @@ public function update(Request $request, string $id)
                     'Anulación manual',
 
             ]);
+
+            $accountPayableService->cancelFor(
+                $purchase,
+                Auth::user(),
+                'Anulación manual'
+            );
 
         });
 

@@ -7,7 +7,7 @@
         <a href="{{ route('cash.index') }}" class="rounded-lg border border-slate-300 px-4 py-2">Volver</a>
     </div>
     @if($errors->any())<div class="rounded-lg bg-red-50 p-4 text-red-700">{{ $errors->first() }}</div>@endif
-    @if($blind)<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Cierre ciego activo. Registre únicamente lo contado; los valores de control se calcularán después de confirmar.</div>@endif
+    @if($blind)<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Cierre ciego activo. Registre lo contado; el origen de los cobros se muestra para facilitar la conciliación y las diferencias se calcularán al confirmar.</div>@endif
     <form x-ref="closingForm" method="POST" action="{{ route('cash.closing.submit', $cashSession) }}" autocomplete="off" class="space-y-6" @submit.prevent="requestConfirmation">
         @csrf
         <input type="hidden" name="request_token" value="{{ old('request_token', $requestToken) }}">
@@ -22,8 +22,33 @@
             @unless($blind)<div class="mt-3 text-right text-sm text-slate-600">Esperado: ₡{{ number_format($expectedCash,0,',','.') }}</div>@endunless
         </x-card>
         <x-card>
-            <x-slot:header><h3 class="text-lg font-semibold">Otras formas de pago</h3></x-slot:header>
-            <div class="space-y-5">@forelse($methods as $method)<div class="rounded-xl border border-slate-200 p-4"><div class="grid gap-4 sm:grid-cols-3"><div><label class="mb-2 block font-medium" for="payment-{{ $method->id }}">{{ $method->name }}</label><input id="payment-{{ $method->id }}" name="payments[{{ $method->id }}][reported_amount]" x-model.number="reportedPayments[{{ $method->id }}]" type="number" min="0" step="1" autocomplete="off" required value="{{ old("payments.$method->id.reported_amount",0) }}" class="w-full rounded-xl border-slate-300 px-4 py-3 text-right"></div><div><label class="mb-2 block text-sm">Referencia</label><input name="payments[{{ $method->id }}][reference]" maxlength="150" value="{{ old("payments.$method->id.reference") }}" class="w-full rounded-xl border-slate-300 px-4 py-3"></div><div><label class="mb-2 block text-sm">Notas</label><input name="payments[{{ $method->id }}][notes]" maxlength="5000" value="{{ old("payments.$method->id.notes") }}" class="w-full rounded-xl border-slate-300 px-4 py-3"></div></div>@unless($blind)<p class="mt-2 text-sm text-slate-600">Esperado: ₡{{ number_format((float)$expectedMethods->get($method->id,0),0,',','.') }}</p>@endunless</div>@empty<p class="text-slate-500">No hay otras formas de pago configuradas.</p>@endforelse</div>
+            <x-slot:header><h3 class="text-lg font-semibold">Formas de pago</h3></x-slot:header>
+            <div class="space-y-5">
+                @forelse($methods as $method)
+                    @php($source = $expectedBreakdown->get($method->id, ['sales'=>0,'receivables'=>0,'layaways'=>0,'payables'=>0,'total'=>0]))
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+                            <div>
+                                <h4 class="mb-3 text-lg font-semibold text-slate-900">{{ $method->name }}</h4>
+                                <dl class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+                                    <dt class="text-slate-600">Ventas</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['sales'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">CxC</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['receivables'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">Apartados</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['layaways'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">CxP</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['payables'],0,',','.') }}</dd>
+                                    <dt class="border-t pt-2 font-semibold">Total esperado</dt><dd class="border-t pt-2 text-right font-bold">₡{{ number_format((float)$source['total'],0,',','.') }}</dd>
+                                </dl>
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+                                <div><label class="mb-2 block font-medium" for="payment-{{ $method->id }}">Monto reportado</label><input id="payment-{{ $method->id }}" name="payments[{{ $method->id }}][reported_amount]" x-model.number="reportedPayments[{{ $method->id }}]" type="number" min="0" step="1" autocomplete="off" required value="{{ old("payments.$method->id.reported_amount",0) }}" class="w-full rounded-xl border-slate-300 px-4 py-3 text-right"></div>
+                                <div><label class="mb-2 block text-sm">Referencia</label><input name="payments[{{ $method->id }}][reference]" maxlength="150" value="{{ old("payments.$method->id.reference") }}" class="w-full rounded-xl border-slate-300 px-4 py-3"></div>
+                                <div><label class="mb-2 block text-sm">Notas</label><input name="payments[{{ $method->id }}][notes]" maxlength="5000" value="{{ old("payments.$method->id.notes") }}" class="w-full rounded-xl border-slate-300 px-4 py-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-slate-500">No hay formas de pago configuradas.</p>
+                @endforelse
+            </div>
         </x-card>
         <x-card><label class="mb-2 block font-medium" for="closing_notes">Notas del cierre <span class="font-normal text-slate-500">(opcional)</span></label><textarea id="closing_notes" name="closing_notes" x-model="closingNotes" rows="3" maxlength="5000" class="w-full rounded-xl border-slate-300 px-4 py-3">{{ old('closing_notes') }}</textarea></x-card>
         <div class="flex flex-wrap justify-end gap-3"><button type="submit" form="cancel-closing" class="rounded-xl border border-slate-300 px-5 py-3">Cancelar cierre</button><button type="submit" :disabled="processing" class="rounded-xl bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600 disabled:opacity-50">Revisar y confirmar</button></div>

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\AccountReceivable;
+use App\Models\AccountReceivablePayment;
 use App\Models\CashCountDetail;
 use App\Models\CashDenomination;
 use App\Models\CashMovement;
@@ -12,6 +14,9 @@ use App\Models\CashSession;
 use App\Models\CashSessionEvent;
 use App\Models\Company;
 use App\Models\CompanyCashSetting;
+use App\Models\Customer;
+use App\Models\Layaway;
+use App\Models\LayawayPayment;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Role;
@@ -41,7 +46,7 @@ class CashBlindClosingTest extends TestCase
         $this->assertSame(CashSession::STATUS_OPEN, $session->fresh()->status); $this->assertSame(1, $session->events()->where('event_type', CashSessionEvent::TYPE_CLOSING_CANCELLED)->count());
     }
 
-    public function test_blind_form_has_eleven_denominations_dynamic_methods_and_no_control_value_leaks(): void
+    public function test_closing_form_has_denominations_dynamic_methods_and_source_breakdown(): void
     {
         [$company, $branch, $user, , $session] = $this->context();
         $cash = $this->method($company, 'cash', 'Efectivo', true, true); $card = $this->method($company, 'card', 'Tarjeta', true); $paypal = $this->method($company, 'paypal', 'PayPal', false);
@@ -50,7 +55,7 @@ class CashBlindClosingTest extends TestCase
         $this->start($user, $company, $branch, $session);
         $response = $this->actingAs($user)->withSession($this->ctx($company, $branch))->get(route('cash.closing.create', $session));
         $response->assertOk()->assertSee('Cierre ciego activo')->assertSee('Efectivo')->assertSee('Tarjeta')->assertSee('PayPal')->assertSee('Billetes')->assertSee('Monedas')->assertSee('Volver')
-            ->assertDontSee('Esperado:')->assertDontSee('777.0000')->assertDontSee('difference')->assertDontSee('tolerance')
+            ->assertSee('Ventas')->assertSee('CxC')->assertSee('Apartados')->assertSee('Total esperado')->assertDontSee('difference')->assertDontSee('tolerance')
             ->assertSee('bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600', false)
             ->assertSee('autocomplete="off"', false)
             ->assertSee('Revise el conteo declarado')
@@ -121,6 +126,41 @@ class CashBlindClosingTest extends TestCase
         $reconciliations = $closed->paymentReconciliations()->get()->keyBy('payment_method_id');
         $this->assertSame('500.0000', $reconciliations->get($cash->id)->expected_amount);
         $this->assertSame('Tarjeta', $reconciliations->get($card->id)->payment_method_name_snapshot); $this->assertSame('300.0000', $reconciliations->get($card->id)->expected_amount);
+    }
+
+    public function test_payment_origins_are_visible_and_persisted_without_changing_method_totals(): void
+    {
+        [$company, $branch, $user, , $session] = $this->context('Desglose');
+        $cash = $this->method($company, 'cash', 'Efectivo', true, true);
+        $card = $this->method($company, 'card', 'Tarjeta', true);
+        $this->payment($company, $branch, $user, $session, $cash, 100);
+
+        $customer = Customer::create(['company_id'=>$company->id,'customer_type'=>'individual','name'=>'Cliente cierre','credit_limit'=>10000,'credit_days'=>30,'is_active'=>true]);
+        $creditSale = Sale::create(['company_id'=>$company->id,'branch_id'=>$branch->id,'user_id'=>$user->id,'cash_session_id'=>$session->id,'customer_id'=>$customer->id,'sale_number'=>'CXC-'.Str::random(6),'checkout_token'=>Str::uuid(),'request_fingerprint'=>hash('sha256',Str::random()),'status'=>Sale::STATUS_COMPLETED,'completed_at'=>now()]);
+        $receivable = AccountReceivable::create(['company_id'=>$company->id,'branch_id'=>$branch->id,'customer_id'=>$customer->id,'sale_id'=>$creditSale->id,'issued_at'=>today(),'due_date'=>today()->addMonth(),'original_amount'=>200,'balance_due'=>0,'status'=>'paid','currency_code'=>'CRC']);
+        AccountReceivablePayment::create(['account_receivable_id'=>$receivable->id,'company_id'=>$company->id,'branch_id'=>$branch->id,'customer_id'=>$customer->id,'user_id'=>$user->id,'cash_session_id'=>$session->id,'payment_method_id'=>$cash->id,'amount'=>200,'affects_cash_snapshot'=>true,'cash_effect_amount'=>200,'paid_at'=>now()]);
+
+        $layaway = Layaway::create(['company_id'=>$company->id,'branch_id'=>$branch->id,'customer_id'=>$customer->id,'created_by'=>$user->id,'number'=>'APT-'.Str::random(6),'status'=>Layaway::STATUS_ACTIVE,'currency_code'=>'CRC','total'=>700,'paid_total'=>700,'balance_due'=>0,'expires_at'=>today()->addMonth()]);
+        foreach ([[$cash,300],[$card,400]] as [$method,$amount]) LayawayPayment::create(['layaway_id'=>$layaway->id,'company_id'=>$company->id,'branch_id'=>$branch->id,'user_id'=>$user->id,'cash_session_id'=>$session->id,'payment_method_id'=>$method->id,'amount'=>$amount,'affects_cash_snapshot'=>$method->affects_cash,'cash_effect_amount'=>$method->affects_cash?$amount:0,'paid_at'=>now()]);
+
+        $service = app(\App\Services\Cash\CashPaymentExpectedAmountService::class);
+        $before = $service->expectedAmounts($session);
+        $this->assertSame(600.0, $before->get($cash->id));
+        $this->assertSame(400.0, $before->get($card->id));
+
+        $this->start($user,$company,$branch,$session);
+        $this->actingAs($user)->withSession($this->ctx($company,$branch))->get(route('cash.closing.create',$session))
+            ->assertOk()->assertSee('Ventas')->assertSee('CxC')->assertSee('Apartados')->assertSee('Total esperado')
+            ->assertSee('₡100')->assertSee('₡200')->assertSee('₡300')->assertSee('₡400')->assertSee('₡600');
+
+        $this->submit($user,$company,$branch,$session,$this->payload($company,$session,1600,[$cash->id=>600,$card->id=>400]))->assertRedirect();
+        $rows=$session->fresh()->paymentReconciliations()->get()->keyBy('payment_method_id');
+        $this->assertSame('100.0000',$rows[$cash->id]->sales_amount); $this->assertSame('200.0000',$rows[$cash->id]->receivables_amount); $this->assertSame('300.0000',$rows[$cash->id]->layaways_amount); $this->assertSame('600.0000',$rows[$cash->id]->expected_amount);
+        $this->assertSame('0.0000',$rows[$card->id]->sales_amount); $this->assertSame('0.0000',$rows[$card->id]->receivables_amount); $this->assertSame('400.0000',$rows[$card->id]->layaways_amount); $this->assertSame('400.0000',$rows[$card->id]->expected_amount);
+
+        AccountReceivablePayment::query()->update(['amount'=>999,'cash_effect_amount'=>999]); LayawayPayment::query()->update(['amount'=>999,'cash_effect_amount'=>999]);
+        $admin=$this->user($company,$branch,['caja.ver','caja.ver_todas','caja.administrar']);
+        $this->actingAs($admin)->withSession($this->ctx($company,$branch))->get(route('cash.history.show',$session))->assertOk()->assertSee('₡100')->assertSee('₡200')->assertSee('₡300')->assertSee('₡400')->assertSee('₡600');
     }
 
     public function test_surplus_and_shortage_are_stored_without_compensation(): void

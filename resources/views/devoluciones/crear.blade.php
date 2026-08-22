@@ -98,9 +98,9 @@
                                         <input
                                             type="number"
                                             name="items[{{ $loop->index }}][quantity]"
-                                            min="0"
+                                            min="{{ $line['allows_decimals'] ? '0.0001' : '1' }}"
                                             max="{{ $line['pending'] }}"
-                                            step="0.0001"
+                                            step="{{ $line['allows_decimals'] ? '0.0001' : '1' }}"
                                             value=""
                                             placeholder="0"
                                             class="w-28 rounded-lg border border-slate-300 px-3 py-1 text-right">

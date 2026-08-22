@@ -62,7 +62,7 @@ class SaleReturnService
                 ]);
             }
 
-            $sale->load('items.product');
+            $sale->load('items.product.unit');
 
             // Cantidad ya devuelta por línea, calculada dentro de la transacción.
             $previouslyReturned = $this->returnedQuantitiesBySaleItem($sale);
@@ -79,6 +79,12 @@ class SaleReturnService
                 if ($item === null) {
                     throw ValidationException::withMessages([
                         'items' => 'Una o más líneas no pertenecen a la venta.',
+                    ]);
+                }
+
+                if (! $item->product?->unit?->allows_decimals && floor($quantity) !== $quantity) {
+                    throw ValidationException::withMessages([
+                        'items' => "{$item->description} solo admite cantidades enteras.",
                     ]);
                 }
 

@@ -19,6 +19,9 @@ class CompanySequence extends Model
     public const SALE_RETURN = 'sale_return';
 
     public const QUOTE = 'quote';
+    public const LAYAWAY = 'layaway';
+    public const ORDER = 'order';
+    public const PURCHASE_ORDER = 'purchase_order';
 
     protected $fillable = [
         'company_id',
@@ -85,5 +88,16 @@ class CompanySequence extends Model
     public static function nextQuoteNumber(int $companyId): string
     {
         return sprintf('COT-%08d', static::nextValue($companyId, static::QUOTE));
+    }
+    public static function nextLayawayNumber(int $companyId): string { return sprintf('APT-%08d', static::nextValue($companyId, static::LAYAWAY)); }
+
+    public static function nextOrderNumber(int $companyId): string
+    {
+        return sprintf('PED-%08d', static::nextValue($companyId, static::ORDER));
+    }
+
+    public static function nextPurchaseOrderNumber(int $companyId): string
+    {
+        return sprintf('OC-%08d', static::nextValue($companyId, static::PURCHASE_ORDER));
     }
 }

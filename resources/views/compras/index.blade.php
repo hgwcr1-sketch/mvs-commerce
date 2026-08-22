@@ -171,7 +171,7 @@
                                 </td>
 
                                 <td class="px-4 py-3 text-right font-semibold text-slate-800">
-                                    ₡{{ number_format((float) $purchase->total, 2, ',', '.') }}
+                                    ₡{{ number_format((float) $purchase->total, 0, ',', '.') }}
                                 </td>
 
                                 <td class="px-4 py-3 text-center text-sm">

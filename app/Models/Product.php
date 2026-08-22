@@ -117,4 +117,26 @@ class Product extends Model
     {
         return $this->hasMany(InventoryLot::class);
     }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function productSuppliers(): HasMany
+    {
+        return $this->hasMany(ProductSupplier::class);
+    }
+
+    public function suppliers(): BelongsToMany
+    {
+        return $this->belongsToMany(Supplier::class, 'product_suppliers')
+            ->withPivot(['company_id', 'supplier_product_code', 'current_cost', 'is_primary', 'is_active', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function purchaseOrderItems(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderItem::class);
+    }
 }

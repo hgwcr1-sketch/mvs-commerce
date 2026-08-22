@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -89,4 +90,10 @@ class Customer extends Model
     {
         return $this->hasMany(CustomerAddress::class);
     }
+
+    public function accountsReceivable(): HasMany
+    {
+        return $this->hasMany(AccountReceivable::class);
+    }
+
 }

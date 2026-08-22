@@ -441,8 +441,8 @@ window.purchaseEdit = {
                                 <td class="px-3 py-3">
                                     <input
                                         type="number"
-                                        min="0.0001"
-                                        step="0.0001"
+                                        :min="(item.allows_decimals ?? item.product?.unit?.allows_decimals) ? 0.0001 : 1"
+                                        :step="(item.allows_decimals ?? item.product?.unit?.allows_decimals) ? 0.0001 : 1"
                                         x-model.number="item.quantity"
                                         class="w-24 rounded-lg border border-slate-300 px-2 py-2 text-right">
                                 </td>
@@ -451,7 +451,7 @@ window.purchaseEdit = {
                                     <input
                                         type="number"
                                         min="0"
-                                        step="0.0001"
+                                        step="1"
                                         x-model.number="item.unit_cost"
                                         class="w-28 rounded-lg border border-slate-300 px-2 py-2 text-right">
                                 </td>
@@ -465,7 +465,7 @@ window.purchaseEdit = {
                                     <input
                                         type="number"
                                         min="0"
-                                        step="0.01"
+                                        step="1"
                                         x-model.number="item.new_sale_price"
                                         placeholder="Opcional"
                                         class="w-28 rounded-lg border border-slate-300 px-2 py-2 text-right">
@@ -834,7 +834,7 @@ window.purchaseEdit = {
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         x-model.number="newProduct.cost"
                         class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
@@ -847,7 +847,7 @@ window.purchaseEdit = {
                     <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         x-model.number="newProduct.sale_price"
                         class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>

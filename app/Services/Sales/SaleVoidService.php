@@ -4,6 +4,7 @@ namespace App\Services\Sales;
 
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Models\AccountReceivable;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +50,12 @@ class SaleVoidService
             $sale->load([
                 'items.product',
                 'payments',
+                'accountReceivable.payments',
             ]);
+
+            if ($sale->accountReceivable?->payments->isNotEmpty()) {
+                throw ValidationException::withMessages(['sale' => 'No se puede anular una venta a crédito que ya tiene abonos registrados.']);
+            }
 
             foreach ($sale->items as $item) {
                 if (
@@ -75,6 +81,8 @@ class SaleVoidService
                     ]);
                 }
             }
+
+            $sale->accountReceivable?->update(['status' => AccountReceivable::STATUS_CANCELLED, 'balance_due' => 0]);
 
             $sale->update([
                 'status' => Sale::STATUS_VOIDED,

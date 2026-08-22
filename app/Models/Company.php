@@ -21,6 +21,10 @@ use Illuminate\Database\Eloquent\Model;
     'logo',
     'currency',
     'timezone',
+    'credit_alert_days',
+    'layaway_validity_days',
+    'layaway_alert_days',
+    'payable_alert_days',
     'is_active',
 ])]
 
@@ -30,6 +34,10 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'credit_alert_days' => 'integer',
+            'layaway_validity_days' => 'integer',
+            'layaway_alert_days' => 'integer',
+            'payable_alert_days' => 'integer',
         ];
     }
 

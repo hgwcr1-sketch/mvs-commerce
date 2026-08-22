@@ -179,6 +179,10 @@
                                 Documento
                             </th>
 
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">
+                                Condición
+                            </th>
+
                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600">
                                 Total
                             </th>
@@ -223,8 +227,12 @@
                                     @endif
                                 </td>
 
+                                <td class="px-4 py-3 text-sm font-medium text-slate-700">
+                                    {{ $sale->sale_condition === \App\Models\Sale::CONDITION_CREDIT ? 'Crédito' : 'Contado' }}
+                                </td>
+
                                 <td class="px-4 py-3 text-right font-semibold text-slate-800">
-                                    ₡{{ number_format((float) $sale->total, 2, ',', '.') }}
+                                    ₡{{ number_format((float) $sale->total, 0, ',', '.') }}
                                 </td>
 
                                 <td class="px-4 py-3 text-center">

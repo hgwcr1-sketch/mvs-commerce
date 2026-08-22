@@ -16,15 +16,15 @@ class PaymentMethodProvisioningTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_existing_company_receives_exactly_the_three_initial_methods(): void
+    public function test_existing_company_receives_exactly_the_four_initial_methods(): void
     {
         $company = $this->createCompany('Empresa existente');
 
         $this->seed(PaymentMethodSeeder::class);
 
-        $this->assertSame(3, PaymentMethod::forCompany($company->id)->count());
+        $this->assertSame(4, PaymentMethod::forCompany($company->id)->count());
         $this->assertEqualsCanonicalizing(
-            ['cash', 'card', 'sinpe'],
+            ['cash', 'card', 'sinpe', 'credit'],
             PaymentMethod::forCompany($company->id)->pluck('code')->all(),
         );
     }
@@ -36,10 +36,11 @@ class PaymentMethodProvisioningTest extends TestCase
         $this->seed(PaymentMethodSeeder::class);
         $this->seed(PaymentMethodSeeder::class);
 
-        $this->assertSame(3, PaymentMethod::forCompany($company->id)->count());
+        $this->assertSame(4, PaymentMethod::forCompany($company->id)->count());
         $this->assertSame(1, PaymentMethod::forCompany($company->id)->where('code', 'cash')->count());
         $this->assertSame(1, PaymentMethod::forCompany($company->id)->where('code', 'card')->count());
         $this->assertSame(1, PaymentMethod::forCompany($company->id)->where('code', 'sinpe')->count());
+        $this->assertSame(1, PaymentMethod::forCompany($company->id)->where('code', 'credit')->count());
     }
 
     public function test_existing_customization_is_not_overwritten(): void
@@ -69,7 +70,7 @@ class PaymentMethodProvisioningTest extends TestCase
         $this->assertSame(99, $cash->sort_order);
     }
 
-    public function test_newly_provisioned_company_receives_the_three_methods(): void
+    public function test_newly_provisioned_company_receives_the_four_methods(): void
     {
         $this->seed(PermissionSeeder::class);
         $owner = User::factory()->create();
@@ -79,9 +80,9 @@ class PaymentMethodProvisioningTest extends TestCase
             ['trade_name' => 'Empresa nueva'],
         );
 
-        $this->assertSame(3, PaymentMethod::forCompany($company->id)->count());
+        $this->assertSame(4, PaymentMethod::forCompany($company->id)->count());
         $this->assertEqualsCanonicalizing(
-            ['cash', 'card', 'sinpe'],
+            ['cash', 'card', 'sinpe', 'credit'],
             PaymentMethod::forCompany($company->id)->pluck('code')->all(),
         );
     }
@@ -96,8 +97,8 @@ class PaymentMethodProvisioningTest extends TestCase
         $firstIds = PaymentMethod::forCompany($firstCompany->id)->pluck('id');
         $secondIds = PaymentMethod::forCompany($secondCompany->id)->pluck('id');
 
-        $this->assertCount(3, $firstIds);
-        $this->assertCount(3, $secondIds);
+        $this->assertCount(4, $firstIds);
+        $this->assertCount(4, $secondIds);
         $this->assertEmpty($firstIds->intersect($secondIds));
     }
 
@@ -143,6 +144,7 @@ class PaymentMethodProvisioningTest extends TestCase
             'cash' => ['Efectivo', 'cash', true, true, true, false, true, 10],
             'card' => ['Tarjeta', 'card', true, true, false, true, false, 20],
             'sinpe' => ['SINPE', 'sinpe', true, true, false, true, false, 30],
+            'credit' => ['Crédito', 'credit', true, true, false, false, false, 40],
         ];
 
         foreach ($expected as $code => $values) {

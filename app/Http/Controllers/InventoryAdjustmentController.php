@@ -66,6 +66,12 @@ class InventoryAdjustmentController extends Controller
             ],
         ]);
 
+        if (! $product->unit?->allows_decimals && floor((float) $data['quantity']) !== (float) $data['quantity']) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'quantity' => 'Este producto solo admite cantidades enteras.',
+            ]);
+        }
+
         DB::transaction(function () use (
             $data,
             $companyId,

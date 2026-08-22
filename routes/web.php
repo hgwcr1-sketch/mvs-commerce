@@ -18,6 +18,7 @@ use App\Http\Controllers\BranchController;
 
 // Catálogos
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\UnitController;
@@ -43,11 +44,11 @@ use App\Http\Controllers\SaleController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\LayawayController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ReturnController;
 
 // Finanzas
 use App\Http\Controllers\AccountsReceivableController;
-use App\Http\Controllers\AccountsPayableController;
 
 // Administración
 use App\Http\Controllers\UserController;
@@ -205,6 +206,22 @@ Route::resource('productos', ProductController::class)
 Route::resource('productos', ProductController::class)
     ->only(['destroy'])
     ->middleware(['active.branch', 'permission:productos.eliminar']);
+
+Route::get('/productos/{producto}/proveedores', [ProductSupplierController::class, 'index'])
+    ->middleware(['active.branch', 'permission:productos.ver'])
+    ->name('productos.proveedores.index');
+
+Route::post('/productos/{producto}/proveedores', [ProductSupplierController::class, 'store'])
+    ->middleware(['active.branch', 'permission:productos.editar'])
+    ->name('productos.proveedores.store');
+
+Route::put('/productos/{producto}/proveedores/{productSupplier}', [ProductSupplierController::class, 'update'])
+    ->middleware(['active.branch', 'permission:productos.editar'])
+    ->name('productos.proveedores.update');
+
+Route::delete('/productos/{producto}/proveedores/{productSupplier}', [ProductSupplierController::class, 'destroy'])
+    ->middleware(['active.branch', 'permission:productos.editar'])
+    ->name('productos.proveedores.destroy');
 
 /*
 |--------------------------------------------------------------------------
@@ -422,7 +439,12 @@ Route::get('compras/{compra}/pdf', [PurchaseController::class, 'pdf'])
     ->name('compras.print');
 
 
-Route::resource('ordenes-compra', PurchaseOrderController::class);
+Route::get('/pedidos/preparar-compra', [PurchaseOrderController::class, 'prepare'])->middleware(['active.branch', 'permission:pedidos.preparar_compra'])->name('pedidos.preparar-compra');
+Route::post('/pedidos/preparar-compra', [PurchaseOrderController::class, 'store'])->middleware(['active.branch', 'permission:pedidos.preparar_compra'])->name('pedidos.preparar-compra.store');
+Route::get('/ordenes-compra', [PurchaseOrderController::class, 'index'])->middleware(['active.branch', 'permission:compras.ordenes'])->name('ordenes-compra.index');
+Route::get('/ordenes-compra/{purchaseOrder}/convertir', [PurchaseOrderController::class, 'convertForm'])->middleware(['active.branch', 'permission:compras.ordenes', 'permission:compras.crear'])->name('ordenes-compra.convertir');
+Route::post('/ordenes-compra/{purchaseOrder}/convertir', [PurchaseOrderController::class, 'convert'])->middleware(['active.branch', 'permission:compras.ordenes', 'permission:compras.crear'])->name('ordenes-compra.convertir.store');
+Route::get('/ordenes-compra/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware(['active.branch', 'permission:compras.ordenes'])->name('ordenes-compra.show');
 
 /*
 |--------------------------------------------------------------------------
@@ -439,6 +461,12 @@ Route::post('/ventas/{venta}/anular', [SaleController::class, 'void'])
     ->name('ventas.void');
 
 Route::middleware('active.branch')->group(function () {
+    Route::get('/pedidos', [OrderController::class, 'index'])->middleware('permission:pedidos.ver')->name('pedidos.index');
+    Route::post('/pedidos', [OrderController::class, 'store'])->middleware('permission:pedidos.crear')->name('pedidos.store');
+    Route::get('/pedidos/{order}', [OrderController::class, 'show'])->middleware('permission:pedidos.ver')->name('pedidos.show');
+    Route::post('/pedidos/{order}/lineas/{item}/asociar-proveedor', [ProductSupplierController::class, 'storeFromOrder'])->middleware('permission:productos.editar')->name('pedidos.items.suppliers.store');
+    Route::patch('/pedidos/{order}/lineas/{item}/revision', [OrderController::class, 'reviewItem'])->name('pedidos.items.review');
+
     Route::get('/cotizaciones', [QuoteController::class, 'index'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.index');
     Route::post('/cotizaciones', [QuoteController::class, 'store'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.store');
     Route::get('/cotizaciones/{cotizacione}', [QuoteController::class, 'show'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.show');
@@ -449,7 +477,21 @@ Route::middleware('active.branch')->group(function () {
 
 Route::resource('facturas', InvoiceController::class);
 
-Route::resource('apartados', LayawayController::class);
+Route::middleware('active.branch')->group(function () {
+    Route::get('cuentas-por-pagar', [\App\Http\Controllers\AccountsPayableController::class, 'index'])->middleware('permission:cuentas_pagar.ver')->name('cuentas-por-pagar.index');
+    Route::get('cuentas-por-pagar/{accountPayable}', [\App\Http\Controllers\AccountsPayableController::class, 'show'])->middleware('permission:cuentas_pagar.ver')->name('cuentas-por-pagar.show');
+    Route::post('cuentas-por-pagar/{accountPayable}/abonos', [\App\Http\Controllers\AccountsPayableController::class, 'payment'])->middleware('permission:cuentas_pagar.pagar')->name('cuentas-por-pagar.payments.store');
+    Route::put('cuentas-por-pagar-configuracion', [\App\Http\Controllers\AccountsPayableController::class, 'updateAlertDays'])->middleware('permission:cuentas_pagar.editar')->name('cuentas-por-pagar.alert-days.update');
+
+    Route::get('apartados', [LayawayController::class, 'index'])->middleware('permission:apartados.ver')->name('apartados.index');
+    Route::get('apartados/crear', [LayawayController::class, 'create'])->middleware('permission:apartados.crear')->name('apartados.create');
+    Route::post('apartados', [LayawayController::class, 'store'])->middleware('permission:apartados.crear')->name('apartados.store');
+    Route::get('apartados/{apartado}', [LayawayController::class, 'show'])->middleware('permission:apartados.ver')->name('apartados.show');
+    Route::post('apartados/{apartado}/abonos', [LayawayController::class, 'payment'])->middleware('permission:apartados.abonar')->name('apartados.payments.store');
+    Route::post('apartados/{apartado}/cancelar', [LayawayController::class, 'cancel'])->middleware('permission:apartados.cancelar')->name('apartados.cancel');
+    Route::post('apartados/{apartado}/entregar', [LayawayController::class, 'deliver'])->middleware('permission:apartados.entregar')->name('apartados.deliver');
+    Route::put('apartados-configuracion', [LayawayController::class, 'updateSettings'])->middleware('permission:empresa.editar')->name('apartados.settings.update');
+});
 
 Route::get('/ventas/{venta}/devolucion', [ReturnController::class, 'create'])
     ->middleware(['active.branch', 'permission:devoluciones.crear'])
@@ -464,9 +506,13 @@ Route::post('/ventas/{venta}/devolucion', [ReturnController::class, 'store'])
 |--------------------------------------------------------------------------
 */
 
-Route::resource('cuentas-por-cobrar', AccountsReceivableController::class);
+Route::middleware(['active.branch', 'permission:cuentas_cobrar.ver'])->group(function () {
+    Route::get('cuentas-por-cobrar', [AccountsReceivableController::class, 'index'])->name('cuentas-por-cobrar.index');
+    Route::get('cuentas-por-cobrar/{accountReceivable}', [AccountsReceivableController::class, 'show'])->name('cuentas-por-cobrar.show');
+    Route::post('cuentas-por-cobrar/{accountReceivable}/abonos', [AccountsReceivableController::class, 'payment'])->middleware('permission:cuentas_cobrar.abonar')->name('cuentas-por-cobrar.payments.store');
+    Route::put('cuentas-por-cobrar-configuracion', [AccountsReceivableController::class, 'updateAlertDays'])->middleware('permission:cuentas_cobrar.editar')->name('cuentas-por-cobrar.alert-days.update');
+});
 
-Route::resource('cuentas-por-pagar', AccountsPayableController::class);
 
 /*
 |--------------------------------------------------------------------------

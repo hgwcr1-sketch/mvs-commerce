@@ -520,7 +520,12 @@ const data = JSON.parse(responseText);
 
 alert(data.message);
 
-window.location.href = data.redirect;
+window.location.href = isEditing
+    ? data.redirect
+    : this.$root.dataset.purchaseShowUrl.replace(
+        '__PURCHASE_ID__',
+        data.purchase_id
+    );
 
     } catch (error) {
 
@@ -542,7 +547,8 @@ window.location.href = data.redirect;
             return new Intl.NumberFormat('es-CR', {
                 style: 'currency',
                 currency: 'CRC',
-                minimumFractionDigits: 2
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
             }).format(Number(value || 0));
         },
 

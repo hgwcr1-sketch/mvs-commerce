@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Sale extends Model
 {
@@ -103,6 +104,11 @@ class Sale extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(SalePayment::class);
+    }
+
+    public function accountReceivable(): HasOne
+    {
+        return $this->hasOne(AccountReceivable::class);
     }
 
     public function returns(): HasMany

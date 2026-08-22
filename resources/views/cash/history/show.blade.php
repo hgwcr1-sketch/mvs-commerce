@@ -272,6 +272,10 @@
                     <thead>
                         <tr>
                             <th class="p-3 text-left">Método snapshot</th>
+                            <th class="p-3 text-right">Ventas</th>
+                            <th class="p-3 text-right">CxC</th>
+                            <th class="p-3 text-right">Apartados</th>
+                            <th class="p-3 text-right">CxP</th>
                             <th class="p-3 text-right">Esperado</th>
                             <th class="p-3 text-right">Reportado</th>
                             <th class="p-3 text-right">Diferencia</th>
@@ -285,6 +289,11 @@
                                     {{ $item->payment_method_name_snapshot }}
                                     ({{ $item->payment_method_code_snapshot }})
                                 </td>
+
+                                <td class="p-3 text-right">{{ $money($item->sales_amount) }}</td>
+                                <td class="p-3 text-right">{{ $money($item->receivables_amount) }}</td>
+                                <td class="p-3 text-right">{{ $money($item->layaways_amount) }}</td>
+                                <td class="p-3 text-right">{{ $money($item->payables_amount) }}</td>
 
                                 <td class="p-3 text-right">
                                     {{ $money($item->expected_amount) }}
@@ -300,7 +309,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="p-4 text-center text-slate-500">
+                                <td colspan="8" class="p-4 text-center text-slate-500">
                                     Sin conciliaciones.
                                 </td>
                             </tr>

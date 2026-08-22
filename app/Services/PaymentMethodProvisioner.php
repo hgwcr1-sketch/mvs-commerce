@@ -46,6 +46,17 @@ class PaymentMethodProvisioner
                 'allows_change' => false,
                 'sort_order' => 30,
             ],
+            [
+                'code' => 'credit',
+                'name' => 'Crédito',
+                'type' => PaymentMethod::TYPE_CREDIT,
+                'is_system' => true,
+                'is_active' => true,
+                'affects_cash' => false,
+                'requires_reference' => false,
+                'allows_change' => false,
+                'sort_order' => 40,
+            ],
         ];
 
         foreach ($methods as $method) {

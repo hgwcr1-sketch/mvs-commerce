@@ -1,0 +1,3 @@
+<?php
+namespace App\Notifications; use App\Models\Layaway; use Illuminate\Bus\Queueable; use Illuminate\Notifications\Messages\MailMessage; use Illuminate\Notifications\Notification;
+class LayawayUpcomingNotification extends Notification {use Queueable; public function __construct(public Layaway $layaway){} public function via(object $notifiable):array{return['mail'];} public function toMail(object $notifiable):MailMessage{return(new MailMessage)->subject('Apartado próximo a vencer')->line("El apartado {$this->layaway->number} vence el {$this->layaway->expires_at->format('d/m/Y')}.")->action('Ver apartado',route('apartados.show',$this->layaway));}}

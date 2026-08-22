@@ -186,14 +186,14 @@
 
                         <td class="px-4 py-4 text-right text-slate-600">
 
-                            ₡{{ number_format($item->unit_cost,2,',','.') }}
+                            ₡{{ number_format($item->unit_cost,0,',','.') }}
 
                         </td>
 
 
                         <td class="px-4 py-4 text-right font-semibold text-slate-800">
 
-                            ₡{{ number_format($item->total,2,',','.') }}
+                            ₡{{ number_format($item->total,0,',','.') }}
 
                         </td>
 
@@ -226,7 +226,7 @@
 
         <p class="text-2xl font-bold text-slate-800">
 
-            ₡{{ number_format($purchase->total,2,',','.') }}
+            ₡{{ number_format($purchase->total,0,',','.') }}
 
         </p>
 

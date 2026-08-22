@@ -137,7 +137,7 @@
 
             <div>
                 <label class="text-sm text-slate-500">Límite de Crédito</label>
-                <p>₡ {{ number_format($customer->credit_limit,2) }}</p>
+                <p>₡ {{ number_format($customer->credit_limit,0) }}</p>
             </div>
 
             <div>

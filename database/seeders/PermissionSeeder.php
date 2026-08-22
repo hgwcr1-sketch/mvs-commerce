@@ -77,6 +77,14 @@ class PermissionSeeder extends Seeder
             ['name' => 'ventas.editar', 'label' => 'Editar ventas', 'module' => 'Ventas'],
             ['name' => 'ventas.anular', 'label' => 'Anular ventas', 'module' => 'Ventas'],
 
+            // Pedidos
+            ['name' => 'pedidos.ver', 'label' => 'Ver pedidos', 'module' => 'Pedidos'],
+            ['name' => 'pedidos.crear', 'label' => 'Crear pedidos', 'module' => 'Pedidos'],
+            ['name' => 'pedidos.aprobar', 'label' => 'Aprobar pedidos', 'module' => 'Pedidos'],
+            ['name' => 'pedidos.rechazar', 'label' => 'Rechazar pedidos', 'module' => 'Pedidos'],
+            ['name' => 'pedidos.cancelar', 'label' => 'Cancelar pedidos', 'module' => 'Pedidos'],
+            ['name' => 'pedidos.preparar_compra', 'label' => 'Preparar pedidos a proveedor', 'module' => 'Pedidos'],
+
             // Caja
             ['name' => 'caja.abrir', 'label' => 'Abrir caja', 'module' => 'Caja'],
             ['name' => 'caja.ver', 'label' => 'Ver caja', 'module' => 'Caja'],
@@ -103,6 +111,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'apartados.crear', 'label' => 'Crear apartados', 'module' => 'Apartados'],
             ['name' => 'apartados.abonar', 'label' => 'Registrar abonos', 'module' => 'Apartados'],
             ['name' => 'apartados.cancelar', 'label' => 'Cancelar apartados', 'module' => 'Apartados'],
+            ['name' => 'apartados.entregar', 'label' => 'Entregar apartados', 'module' => 'Apartados'],
 
             // Devoluciones
             ['name' => 'devoluciones.ver', 'label' => 'Ver devoluciones', 'module' => 'Devoluciones'],
@@ -165,6 +174,13 @@ class PermissionSeeder extends Seeder
                 ]
             );
         }
+
+        Permission::query()
+            ->where('name', 'pedidos.confirmar')
+            ->each(function (Permission $permission) {
+                $permission->roles()->detach();
+                $permission->delete();
+            });
 
         $administratorPermissionIds = Permission::query()
             ->where('is_active', true)

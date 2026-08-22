@@ -7,6 +7,7 @@ use App\Http\Requests\ResuspendSaleRequest;
 use App\Http\Requests\StorePosSaleRequest;
 use App\Http\Requests\StoreSuspendedSaleRequest;
 use App\Models\Branch;
+use App\Models\AccountReceivable;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
@@ -31,6 +32,7 @@ class PosController extends Controller
         $branchId = (int) session('active_branch_id');
 
         $company = Company::query()->findOrFail($companyId);
+        app(\App\Services\PaymentMethodProvisioner::class)->provision($company);
         $branch = Branch::query()
             ->where('company_id', $companyId)
             ->findOrFail($branchId);
@@ -87,7 +89,7 @@ class PosController extends Controller
                             ->where('barcode', 'like', $like);
                     });
             })
-            ->with(['barcodes' => function ($query) use ($like) {
+            ->with(['unit:id,abbreviation,allows_decimals', 'barcodes' => function ($query) use ($like) {
                 $query
                     ->where('is_active', true)
                     ->where('barcode', 'like', $like)
@@ -95,6 +97,7 @@ class PosController extends Controller
             }])
             ->select([
                 'products.id',
+                'products.unit_id',
                 'products.name',
                 'products.internal_code',
                 'products.barcode',
@@ -182,6 +185,8 @@ class PosController extends Controller
     : null,
 'tax_rate' => (float) ($product->tax_rate ?? 0),'controls_inventory' => (bool) $product->track_inventory,
                 'available_stock' => $availableStock,
+                'unit' => $product->unit?->abbreviation,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
                 'can_add_to_cart' => !$product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
                 'image_url' => $hasImage ? Storage::disk('public')->url($imagePath) : null,
@@ -248,6 +253,8 @@ class PosController extends Controller
             'customer_type' => $customer->customer_type,
             'credit_limit' => (float) $customer->credit_limit,
 'credit_days' => (int) ($customer->credit_days ?? 0),
+'credit_used' => (float) AccountReceivable::query()->forCompany((int) session('active_company_id'))->where('customer_id',$customer->id)->whereNotIn('status',[AccountReceivable::STATUS_PAID,AccountReceivable::STATUS_CANCELLED])->sum('balance_due'),
+'credit_due_date' => (int) ($customer->credit_days ?? 0) > 0 ? today()->addDays((int)$customer->credit_days)->toDateString() : null,
 'price_level' => $customer->price_level ?? 'normal',
         ])->values());
     }

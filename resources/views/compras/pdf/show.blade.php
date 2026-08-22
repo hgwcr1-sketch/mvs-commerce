@@ -504,14 +504,14 @@ Total
 
 <td class="right">
 
-₡{{ number_format($item->unit_cost,2,',','.') }}
+₡{{ number_format($item->unit_cost,0,',','.') }}
 
 </td>
 
 
 <td class="right">
 
-₡{{ number_format($item->total,2,',','.') }}
+₡{{ number_format($item->total,0,',','.') }}
 
 </td>
 
@@ -542,7 +542,7 @@ Subtotal
 
 <td class="right">
 
-₡{{ number_format($purchase->subtotal,2,',','.') }}
+₡{{ number_format($purchase->subtotal,0,',','.') }}
 
 </td>
 
@@ -559,7 +559,7 @@ Impuesto
 
 <td class="right">
 
-₡{{ number_format($purchase->tax,2,',','.') }}
+₡{{ number_format($purchase->tax,0,',','.') }}
 
 </td>
 
@@ -576,7 +576,7 @@ TOTAL COMPRA
 
 <td class="right">
 
-₡{{ number_format($purchase->total,2,',','.') }}
+₡{{ number_format($purchase->total,0,',','.') }}
 
 </td>
 

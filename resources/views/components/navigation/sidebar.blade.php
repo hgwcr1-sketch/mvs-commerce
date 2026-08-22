@@ -48,43 +48,51 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
 @endif
 
-    {{-- POS --}}
-    @can('pos.acceder')
-        <x-navigation.item
-            route="pos.index"
+    {{-- VENTAS --}}
+    @canany(['pos.acceder', 'ventas.ver', 'cotizaciones.ver', 'pedidos.ver', 'cuentas_cobrar.ver', 'cuentas_pagar.ver', 'apartados.ver', 'devoluciones.ver'])
+        <x-navigation.dropdown
             icon="tag"
-            label="POS"
-            :active="request()->routeIs('pos.*')" />
-    @endcan
+            label="Ventas"
+            :active="request()->routeIs('pos.*', 'ventas.*', 'cotizaciones.*', 'pedidos.*', 'cuentas-por-cobrar.*', 'cuentas-por-pagar.*', 'apartados.*')">
 
-@can('ventas.ver')
-    <x-navigation.item
-        route="ventas.index"
-        icon="tag"
-        label="Historial de ventas"
-        :active="request()->routeIs('ventas.*')" />
-@endcan
+            @can('pos.acceder')
+                <x-navigation.submenu route="pos.index" label="POS" />
+            @endcan
 
-@can('cotizaciones.ver')
-    <x-navigation.item route="cotizaciones.index" icon="tag" label="Cotizaciones" :active="request()->routeIs('cotizaciones.*')" />
-@endcan
+            @can('ventas.ver')
+                <x-navigation.submenu route="ventas.index" label="Ventas" :active="request()->routeIs('ventas.*') && !request()->boolean('with_returns')" />
+            @endcan
+
+            @can('cotizaciones.ver')
+                <x-navigation.submenu route="cotizaciones.index" label="Cotizaciones" />
+            @endcan
+
+            @can('pedidos.ver')
+                <x-navigation.submenu route="pedidos.index" label="Pedidos" />
+            @endcan
+
+            @can('cuentas_cobrar.ver')
+                <x-navigation.submenu route="cuentas-por-cobrar.index" label="Cuentas por cobrar" />
+            @endcan
+
+            @can('cuentas_pagar.ver')
+                <x-navigation.submenu route="cuentas-por-pagar.index" label="Cuentas por pagar" />
+            @endcan
+
+            @can('apartados.ver')
+                <x-navigation.submenu route="apartados.index" label="Apartados" />
+            @endcan
+
+            @can('devoluciones.ver')
+                <x-navigation.submenu route="ventas.index" label="Devoluciones" :parameters="['with_returns' => 1]" :active="request()->routeIs('ventas.index') && request()->boolean('with_returns')" />
+            @endcan
+
+        </x-navigation.dropdown>
+    @endcanany
 
     @canany(['caja.abrir', 'caja.ver'])
         <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
     @endcanany
-
-    {{-- USUARIOS --}}
-    @can('usuarios.ver')
-
-        <x-navigation.item
-            route="usuarios.index"
-            icon="users"
-            label="Usuarios"
-            :active="request()->routeIs('usuarios.*')" />
-
-    @endcan
-
-
 
         {{-- PRODUCTOS --}}
     @canany([
@@ -202,6 +210,10 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             label="Compras"
             :active="request()->routeIs('compras.*')" />
 
+    @endcan
+
+    @can('compras.ordenes')
+        <x-navigation.item route="ordenes-compra.index" icon="tag" label="Pedidos a proveedor" :active="request()->routeIs('ordenes-compra.*')" />
     @endcan
 
 

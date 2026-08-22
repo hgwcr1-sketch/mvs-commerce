@@ -386,6 +386,7 @@ if ($branchId) {
         $companyId = session('active_company_id');
 
         $products = Product::where('company_id', $companyId)
+            ->with('unit:id,allows_decimals')
             ->where('is_active', true)
             ->where(function ($query) use ($search) {
                 $query->where('name', 'like', "%{$search}%")
@@ -399,9 +400,16 @@ if ($branchId) {
                 'name',
                 'internal_code',
                 'barcode',
+                'unit_id',
             ]);
 
-        return response()->json($products);
+        return response()->json($products->map(fn (Product $product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'internal_code' => $product->internal_code,
+            'barcode' => $product->barcode,
+            'allows_decimals' => (bool) $product->unit?->allows_decimals,
+        ]));
     }
 
     public function createProduct(Request $request)

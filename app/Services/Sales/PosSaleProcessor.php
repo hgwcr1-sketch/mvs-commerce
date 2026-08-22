@@ -26,6 +26,7 @@ class PosSaleProcessor
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
+        private readonly AccountsReceivableService $accountsReceivableService,
     ) {}
 
     /** @return array{sale: Sale, duplicate: bool} */
@@ -374,6 +375,10 @@ class PosSaleProcessor
                     $paymentMethods,
                     $total,
                 );
+                $isCredit = count($resolvedPayments) === 1 && $resolvedPayments[0]['method']->type === PaymentMethod::TYPE_CREDIT;
+                if ($isCredit && $customer === null) {
+                    throw ValidationException::withMessages(['customer_id' => 'Para vender a crédito debe seleccionar un cliente.']);
+                }
 
                 $sale = Sale::create([
                     'company_id' => $companyId,
@@ -387,7 +392,7 @@ class PosSaleProcessor
                         $companyId,
                     ),
                     'document_type' => $data['document_type'],
-                    'sale_condition' => Sale::CONDITION_CASH,
+                    'sale_condition' => $isCredit ? Sale::CONDITION_CREDIT : Sale::CONDITION_CASH,
                     'status' => Sale::STATUS_COMPLETED,
                     'currency_code' => $company->currency,
                     'exchange_rate' => 1,
@@ -396,9 +401,9 @@ class PosSaleProcessor
                     'tax_total' => $taxTotal,
                     'rounding_total' => $roundingTotal,
                     'total' => $total,
-                    'paid_total' => $total,
-                    'balance_due' => 0,
-                    'due_date' => null,
+                    'paid_total' => $isCredit ? 0 : $total,
+                    'balance_due' => $isCredit ? $total : 0,
+                    'due_date' => $isCredit ? now()->startOfDay()->addDays((int) $customer->credit_days) : null,
                     'notes' => null,
                     'completed_at' => now(),
                 ]);
@@ -435,6 +440,7 @@ class PosSaleProcessor
                 }
 
                 foreach ($resolvedPayments as $payment) {
+                    if ($payment['method']->type === PaymentMethod::TYPE_CREDIT) continue;
                     SalePayment::create([
                         'sale_id' => $sale->id,
                         'cash_session_id' => $cashSession?->id,
@@ -450,6 +456,10 @@ class PosSaleProcessor
                         'reference' => $payment['reference'],
                         'status' => SalePayment::STATUS_COMPLETED,
                     ]);
+                }
+
+                if ($isCredit) {
+                    $this->accountsReceivableService->createForSale($sale, $customer);
                 }
 
                 if ($suspendedSale !== null) {
@@ -801,6 +811,15 @@ class PosSaleProcessor
         $paymentMethods,
         float $total,
     ): array {
+        $creditPayments = array_filter($payments, fn ($payment) => $paymentMethods->get($payment['payment_method_id'])?->type === PaymentMethod::TYPE_CREDIT);
+        if ($creditPayments !== []) {
+            if (count($payments) !== 1 || count($creditPayments) !== 1 || (float) array_values($creditPayments)[0]['amount'] !== $total) {
+                throw ValidationException::withMessages(['payments' => 'En Crédito V1 la venta debe pagarse completamente a crédito; el crédito mixto no está disponible.']);
+            }
+            $payment = array_values($creditPayments)[0];
+            return [['method' => $paymentMethods->get($payment['payment_method_id']), 'amount' => $total, 'received_amount' => null, 'change_amount' => 0, 'reference' => $payment['reference']]];
+        }
+
         $resolved = [];
         $applied = 0.0;
         $changeProducerSeen = false;
@@ -814,7 +833,6 @@ class PosSaleProcessor
                 in_array(
                     $method->type,
                     [
-                        PaymentMethod::TYPE_CREDIT,
                         PaymentMethod::TYPE_LOYALTY_POINTS,
                     ],
                     true,

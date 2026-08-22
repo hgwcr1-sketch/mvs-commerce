@@ -122,9 +122,10 @@
                     <input
                         type="number"
                         name="quantity"
+                        id="quantity"
                         value="{{ old('quantity') }}"
-                        min="0.01"
-                        step="0.01"
+                        min="1"
+                        step="1"
                         required
                         class="w-full rounded-xl border border-slate-300 px-4 py-3">
 
@@ -186,6 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const selectedName =
         document.getElementById('selected_product_name');
+    const quantityInput = document.getElementById('quantity');
 
     let timer;
 
@@ -266,6 +268,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     item.addEventListener('click', function () {
 
                         productId.value = product.id;
+                        quantityInput.min = product.allows_decimals ? '0.0001' : '1';
+                        quantityInput.step = product.allows_decimals ? '0.0001' : '1';
 
                         searchInput.value = product.name;
 
