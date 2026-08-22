@@ -21,6 +21,7 @@ class Customer extends Model
         'commercial_name',
         'taxpayer_name',
         'phone',
+        'phone_country_code',
         'mobile',
         'email',
         'accepts_email_invoice',
@@ -31,10 +32,10 @@ class Customer extends Model
         'address',
         'notes',
         'credit_limit',
-'credit_days',
-'price_level',
-'points',
-'birth_date',
+        'credit_days',
+        'price_level',
+        'points',
+        'birth_date',
         'is_active',
     ];
 
@@ -96,4 +97,8 @@ class Customer extends Model
         return $this->hasMany(AccountReceivable::class);
     }
 
+    public function loyaltyContacts(): HasMany
+    {
+        return $this->hasMany(LoyaltyCustomerContact::class);
+    }
 }

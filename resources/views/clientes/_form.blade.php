@@ -95,10 +95,20 @@
             label="Nombre para Facturación"
             :value="old('taxpayer_name', $customer->taxpayer_name ?? '')" />
 
-        <x-input
-            name="phone"
-            label="Teléfono"
-            :value="old('phone', $customer->phone ?? '')" />
+        <div>
+            <label class="form-label">Teléfono</label>
+            <div class="grid grid-cols-[7rem_1fr] gap-2">
+                <div>
+                    <input name="phone_country_code" type="text" inputmode="tel" maxlength="5" placeholder="+506" aria-label="Código de país" value="{{ old('phone_country_code', $customer->phone_country_code ?? $defaultPhoneCountryCode ?? '') }}" class="form-input">
+                    @error('phone_country_code')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <input name="phone" type="text" inputmode="tel" maxlength="30" placeholder="83526142" aria-label="Número de teléfono" value="{{ old('phone', $customer->phone ?? '') }}" class="form-input">
+                    @error('phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Código país | Número</p>
+        </div>
 
         <x-input
             name="mobile"

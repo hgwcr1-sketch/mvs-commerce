@@ -97,7 +97,7 @@
 
             <div>
                 <label class="text-sm text-slate-500">Teléfono</label>
-                <p>{{ $customer->phone ?: '-' }}</p>
+                <p>{{ $customer->phone ? trim(($customer->phone_country_code ?? '').' '.$customer->phone) : '-' }}</p>
             </div>
 
             <div>

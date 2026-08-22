@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Model;
     'identification_type',
     'identification_number',
     'phone',
+    'whatsapp_enabled',
+    'default_phone_country_code',
+    'whatsapp_phone_country_code',
+    'whatsapp_phone',
     'email',
     'country_id',
     'province_id',
@@ -34,6 +38,7 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'whatsapp_enabled' => 'boolean',
             'credit_alert_days' => 'integer',
             'layaway_validity_days' => 'integer',
             'layaway_alert_days' => 'integer',

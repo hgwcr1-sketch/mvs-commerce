@@ -16,6 +16,10 @@ use App\Models\SuspendedSale;
 use App\Models\User;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\Inventory\InventoryPostingService;
+use App\Services\Loyalty\LoyaltyBirthdayService;
+use App\Services\Loyalty\LoyaltyEarningService;
+use App\Services\Loyalty\LoyaltyOfferEligibilityService;
+use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +31,10 @@ class PosSaleProcessor
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
         private readonly AccountsReceivableService $accountsReceivableService,
+        private readonly LoyaltyEarningService $loyaltyEarningService,
+        private readonly LoyaltyOfferEligibilityService $loyaltyOfferEligibilityService,
+        private readonly LoyaltyBirthdayService $loyaltyBirthdayService,
+        private readonly LoyaltyReturningCustomerService $loyaltyReturningCustomerService,
     ) {}
 
     /** @return array{sale: Sale, duplicate: bool} */
@@ -205,7 +213,8 @@ class PosSaleProcessor
                         $quantity,
                     );
 
-                    $basePrice = match ($customer?->price_level ?? 'normal') {
+                    $isOffer = $product->special_price !== null && $lineData['unit_price'] === null;
+                    $basePrice = $isOffer ? (float) $product->special_price : match ($customer?->price_level ?? 'normal') {
                         'wholesale' => $product->wholesale_price !== null
                             ? (float) $product->wholesale_price
                             : (float) $product->sale_price,
@@ -260,6 +269,7 @@ class PosSaleProcessor
                         'lineDiscount' => $lineDiscount,
                         'lineBase' => $lineBase,
                         'generalDiscount' => 0.0,
+                        'isOffer' => $isOffer,
                     ];
 
                     $baseAfterLineDiscounts += $lineBase;
@@ -421,6 +431,7 @@ class PosSaleProcessor
                         'unit_code' => $product->unit?->abbreviation,
                         'quantity' => $line['quantity'],
                         'unit_price' => $line['unitPrice'],
+                        'is_offer' => $line['isOffer'],
                         'gross_total' => $line['grossTotal'],
                         'discount_total' => $line['discountTotal'],
                         'subtotal' => $line['lineSubtotal'],
@@ -474,6 +485,10 @@ class PosSaleProcessor
                     $quote->update(['status' => Quote::STATUS_CONVERTED, 'converted_sale_id' => $sale->id, 'converted_at' => now()]);
                 }
 
+                $this->awardReturningCustomerLoyalty($sale, $customer, $company, $branch, $user);
+                $this->accrueLoyalty($sale, $customer, $company, $branch, $user);
+                $this->awardBirthdayLoyalty($sale, $customer, $company, $branch, $user);
+
                 return $sale;
             }, 3);
         } catch (QueryException $exception) {
@@ -505,6 +520,85 @@ class PosSaleProcessor
             'sale' => $sale,
             'duplicate' => false,
         ];
+    }
+
+    private function accrueLoyalty(Sale $sale, ?Customer $customer, Company $company, Branch $branch, User $user): void
+    {
+        if ($customer === null || $sale->status !== Sale::STATUS_COMPLETED) {
+            return;
+        }
+
+        try {
+            $setting = \App\Models\LoyaltySetting::query()->where('company_id', $company->id)->first();
+            $offerEligibility = $this->loyaltyOfferEligibilityService->forSale($sale, (bool) $setting?->earn_on_offers);
+            $this->loyaltyEarningService->earnFromEligibleAmount(
+                $customer,
+                $company,
+                $offerEligibility['eligible_amount'],
+                [
+                    'branch' => $branch,
+                    'user' => $user,
+                    'source_type' => Sale::class,
+                    'source_id' => $sale->id,
+                    'event_key' => "sale:{$sale->id}:loyalty:earn",
+                    'description' => "Puntos por venta {$sale->sale_number}",
+                    'effective_at' => $sale->completed_at,
+                    'metadata' => [
+                        'sale_number' => $sale->sale_number,
+                        'document_type' => $sale->document_type,
+                        'offer_eligibility' => $offerEligibility,
+                    ],
+                ],
+            );
+        } catch (ValidationException $exception) {
+            if (array_key_exists('loyalty', $exception->errors())) {
+                return;
+            }
+
+            throw $exception;
+        }
+    }
+
+    private function awardBirthdayLoyalty(Sale $sale, ?Customer $customer, Company $company, Branch $branch, User $user): void
+    {
+        if ($customer === null || $sale->status !== Sale::STATUS_COMPLETED) {
+            return;
+        }
+
+        $this->loyaltyBirthdayService->awardIfEligible(
+            $customer,
+            $company,
+            $sale->completed_at,
+            [
+                'branch' => $branch,
+                'user' => $user,
+                'source_type' => Sale::class,
+                'source_id' => $sale->id,
+                'description' => "Bono de cumpleaños por venta {$sale->sale_number}",
+                'metadata' => ['sale_number' => $sale->sale_number],
+            ],
+        );
+    }
+
+    private function awardReturningCustomerLoyalty(Sale $sale, ?Customer $customer, Company $company, Branch $branch, User $user): void
+    {
+        if ($customer === null || $sale->status !== Sale::STATUS_COMPLETED) {
+            return;
+        }
+
+        $this->loyaltyReturningCustomerService->awardIfEligible(
+            $customer,
+            $company,
+            $sale->id,
+            $sale->completed_at,
+            [
+                'branch' => $branch,
+                'user' => $user,
+                'source_type' => Sale::class,
+                'description' => "Bono por retorno en venta {$sale->sale_number}",
+                'metadata' => ['sale_number' => $sale->sale_number],
+            ],
+        );
     }
 
     private function consolidateItems(array $items): array

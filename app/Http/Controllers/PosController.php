@@ -103,6 +103,7 @@ class PosController extends Controller
                 'products.barcode',
                 'products.image',
                 'products.sale_price',
+'products.special_price',
 'products.wholesale_price',
 'products.price_a',
 'products.price_b',
@@ -170,7 +171,8 @@ class PosController extends Controller
                 'name' => $product->name,
                 'internal_code' => $product->internal_code,
                 'matched_barcode' => $matchedBarcode,
-                'sale_price' => (float) $product->sale_price,
+                'sale_price' => (float) ($product->special_price ?? $product->sale_price),
+                'is_offer' => $product->special_price !== null,
 'wholesale_price' => $product->wholesale_price !== null
     ? (float) $product->wholesale_price
     : null,

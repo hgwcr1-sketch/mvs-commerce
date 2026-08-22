@@ -17,6 +17,7 @@ class SaleItem extends Model
         'unit_code',
         'quantity',
         'unit_price',
+        'is_offer',
         'gross_total',
         'discount_total',
         'subtotal',
@@ -31,6 +32,7 @@ class SaleItem extends Model
         return [
             'quantity' => 'decimal:4',
             'unit_price' => 'decimal:4',
+            'is_offer' => 'boolean',
             'gross_total' => 'decimal:4',
             'discount_total' => 'decimal:4',
             'subtotal' => 'decimal:4',

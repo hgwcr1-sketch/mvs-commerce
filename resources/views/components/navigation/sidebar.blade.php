@@ -190,6 +190,26 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     @endcan
 
+    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.multiplicadores'])
+        <x-navigation.dropdown icon="users" label="Fidelización" :active="request()->routeIs('loyalty.*')">
+            @can('fidelidad.dashboard')
+                <x-navigation.submenu route="loyalty.dashboard" label="Dashboard" />
+            @endcan
+            @can('fidelidad.oportunidades')
+                <x-navigation.submenu route="loyalty.opportunities.index" label="Oportunidades" />
+            @endcan
+            @can('fidelidad.ver')
+                <x-navigation.submenu route="loyalty.kardex.index" label="Kardex" />
+            @endcan
+            @can('fidelidad.multiplicadores')
+                <x-navigation.submenu route="loyalty.multipliers.index" label="Multiplicadores" />
+            @endcan
+            @can('fidelidad.configuracion')
+                <x-navigation.submenu route="loyalty.settings" label="Configuración" />
+            @endcan
+        </x-navigation.dropdown>
+    @endcanany
+
         {{-- PROVEEDORES --}}
     @can('proveedores.ver')
 
@@ -253,7 +273,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     {{-- FOOTER --}}
 
-@canany(['formas_pago.administrar', 'caja.administrar'])
+@canany(['configuracion.ver', 'formas_pago.administrar', 'caja.administrar'])
 <div x-data="{ open: false }" class="mb-2 px-3">
     <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-xs text-slate-400 transition hover:text-white {{ request()->routeIs('settings.pos.payment-methods.*', 'settings.cash-registers.*') ? 'text-amber-400' : '' }}">
         <span class="flex items-center gap-2">
@@ -276,6 +296,9 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
         <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="transition">▼</span>
     </button>
     <div x-cloak x-show="open" x-transition class="mt-2 space-y-1 pl-5">
+        @can('configuracion.ver')
+            <a href="{{ route('configuracion.index') }}" class="block py-1 text-xs {{ request()->routeIs('configuracion.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración general</a>
+        @endcan
         @can('caja.administrar')
             <a href="{{ route('settings.cash.edit') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash.edit', 'settings.cash.update') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración de Caja</a>
             <a href="{{ route('settings.cash-registers.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash-registers.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Cajas</a>

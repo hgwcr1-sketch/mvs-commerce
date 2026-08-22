@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
 
 class PermissionSeeder extends Seeder
@@ -34,22 +35,22 @@ class PermissionSeeder extends Seeder
             ['name' => 'productos.editar', 'label' => 'Editar productos', 'module' => 'Productos'],
             ['name' => 'productos.eliminar', 'label' => 'Eliminar productos', 'module' => 'Productos'],
             // Categorías
-['name' => 'categorias.ver', 'label' => 'Ver categorías', 'module' => 'Productos'],
-['name' => 'categorias.crear', 'label' => 'Crear categorías', 'module' => 'Productos'],
-['name' => 'categorias.editar', 'label' => 'Editar categorías', 'module' => 'Productos'],
-['name' => 'categorias.eliminar', 'label' => 'Eliminar categorías', 'module' => 'Productos'],
+            ['name' => 'categorias.ver', 'label' => 'Ver categorías', 'module' => 'Productos'],
+            ['name' => 'categorias.crear', 'label' => 'Crear categorías', 'module' => 'Productos'],
+            ['name' => 'categorias.editar', 'label' => 'Editar categorías', 'module' => 'Productos'],
+            ['name' => 'categorias.eliminar', 'label' => 'Eliminar categorías', 'module' => 'Productos'],
 
-// Marcas
-['name' => 'marcas.ver', 'label' => 'Ver marcas', 'module' => 'Productos'],
-['name' => 'marcas.crear', 'label' => 'Crear marcas', 'module' => 'Productos'],
-['name' => 'marcas.editar', 'label' => 'Editar marcas', 'module' => 'Productos'],
-['name' => 'marcas.eliminar', 'label' => 'Eliminar marcas', 'module' => 'Productos'],
+            // Marcas
+            ['name' => 'marcas.ver', 'label' => 'Ver marcas', 'module' => 'Productos'],
+            ['name' => 'marcas.crear', 'label' => 'Crear marcas', 'module' => 'Productos'],
+            ['name' => 'marcas.editar', 'label' => 'Editar marcas', 'module' => 'Productos'],
+            ['name' => 'marcas.eliminar', 'label' => 'Eliminar marcas', 'module' => 'Productos'],
 
-// Unidades
-['name' => 'unidades.ver', 'label' => 'Ver unidades de medida', 'module' => 'Productos'],
-['name' => 'unidades.crear', 'label' => 'Crear unidades de medida', 'module' => 'Productos'],
-['name' => 'unidades.editar', 'label' => 'Editar unidades de medida', 'module' => 'Productos'],
-['name' => 'unidades.eliminar', 'label' => 'Eliminar unidades de medida', 'module' => 'Productos'],
+            // Unidades
+            ['name' => 'unidades.ver', 'label' => 'Ver unidades de medida', 'module' => 'Productos'],
+            ['name' => 'unidades.crear', 'label' => 'Crear unidades de medida', 'module' => 'Productos'],
+            ['name' => 'unidades.editar', 'label' => 'Editar unidades de medida', 'module' => 'Productos'],
+            ['name' => 'unidades.eliminar', 'label' => 'Eliminar unidades de medida', 'module' => 'Productos'],
 
             // Proveedores
             ['name' => 'proveedores.ver', 'label' => 'Ver proveedores', 'module' => 'Proveedores'],
@@ -160,6 +161,16 @@ class PermissionSeeder extends Seeder
             // Reportes
             ['name' => 'reportes.ver', 'label' => 'Ver reportes', 'module' => 'Reportes'],
             ['name' => 'reportes.exportar', 'label' => 'Exportar reportes', 'module' => 'Reportes'],
+
+            // Fidelidad
+            ['name' => 'fidelidad.ver', 'label' => 'Ver Kardex de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.dashboard', 'label' => 'Ver dashboard de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.oportunidades', 'label' => 'Ver oportunidades de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.clientes', 'label' => 'Ver clientes y puntos de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.whatsapp', 'label' => 'Abrir WhatsApp asistido', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.contactar', 'label' => 'Registrar contacto de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.configuracion', 'label' => 'Configurar comunicaciones de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.multiplicadores', 'label' => 'Administrar multiplicadores de Fidelidad', 'module' => 'Fidelidad'],
         ];
 
         foreach ($permissions as $permission) {
@@ -187,10 +198,10 @@ class PermissionSeeder extends Seeder
             ->pluck('id')
             ->all();
 
-        \App\Models\Role::query()
+        Role::query()
             ->where('name', 'Administrador')
             ->where('is_active', true)
-            ->each(function (\App\Models\Role $role) use ($administratorPermissionIds) {
+            ->each(function (Role $role) use ($administratorPermissionIds) {
                 $role->permissions()->syncWithoutDetaching(
                     $administratorPermissionIds
                 );

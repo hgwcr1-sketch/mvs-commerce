@@ -2,16 +2,41 @@
 
 namespace App\Http\Requests;
 
+use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateCustomerRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $phoneNumbers = app(PhoneNumberService::class);
+        $normalized = [];
+
+        if ($this->exists('phone')) {
+            $normalized['phone'] = $phoneNumbers->normalizePhone($this->input('phone'));
+        }
+
+        if ($this->exists('phone_country_code')) {
+            $normalized['phone_country_code'] = $phoneNumbers->normalizeCountryCode($this->input('phone_country_code'));
+        }
+
+        if ($normalized !== []) {
+            $this->merge($normalized);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
+        $customer = $this->route('cliente');
+
+        if ($customer && (int) $customer->company_id !== (int) session('active_company_id')) {
+            abort(404);
+        }
+
         return true;
     }
 
@@ -26,16 +51,16 @@ class UpdateCustomerRequest extends FormRequest
 
             'customer_type' => ['required', Rule::in(['individual', 'company'])],
 
-            'identification_type' => ['nullable', Rule::in(['01','02','03','04','05'])],
+            'identification_type' => ['nullable', Rule::in(['01', '02', '03', '04', '05'])],
 
             'identification' => [
-    'nullable',
-    'string',
-    'max:50',
-    Rule::unique('customers', 'identification')
-        ->where('company_id', session('active_company_id'))
-        ->ignore($customer),
-],
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('customers', 'identification')
+                    ->where('company_id', session('active_company_id'))
+                    ->ignore($customer),
+            ],
 
             'name' => 'required|string|max:150',
 
@@ -43,7 +68,9 @@ class UpdateCustomerRequest extends FormRequest
 
             'taxpayer_name' => 'nullable|string|max:255',
 
-            'phone' => 'nullable|string|max:30',
+            'phone_country_code' => ['nullable', 'regex:/^\+[1-9]\d{0,3}$/'],
+
+            'phone' => ['nullable', 'regex:/^\d{4,15}$/'],
 
             'mobile' => 'nullable|string|max:30',
 
@@ -67,18 +94,18 @@ class UpdateCustomerRequest extends FormRequest
 
             'credit_days' => 'nullable|integer|min:0',
 
-'price_level' => [
-    'required',
-    Rule::in([
-        'normal',
-        'wholesale',
-        'a',
-        'b',
-        'c',
-    ]),
-],
+            'price_level' => [
+                'required',
+                Rule::in([
+                    'normal',
+                    'wholesale',
+                    'a',
+                    'b',
+                    'c',
+                ]),
+            ],
 
-'points' => 'nullable|integer|min:0',
+            'points' => 'nullable|integer|min:0',
             'birth_date' => 'nullable|date',
 
             'is_active' => 'nullable|boolean',
@@ -87,47 +114,47 @@ class UpdateCustomerRequest extends FormRequest
     }
 
     /**
- * Mensajes de validación.
- */
-public function messages(): array
-{
-    return [
+     * Mensajes de validación.
+     */
+    public function messages(): array
+    {
+        return [
 
-        'customer_type.required' => 'Debe seleccionar el tipo de cliente.',
-        'customer_type.in' => 'El tipo de cliente seleccionado no es válido.',
+            'customer_type.required' => 'Debe seleccionar el tipo de cliente.',
+            'customer_type.in' => 'El tipo de cliente seleccionado no es válido.',
 
-        'identification_type.in' => 'El tipo de identificación no es válido.',
+            'identification_type.in' => 'El tipo de identificación no es válido.',
 
-        'identification.unique' => 'Ya existe otro cliente con esta identificación.',
-        'identification.max' => 'La identificación no puede superar los 50 caracteres.',
+            'identification.unique' => 'Ya existe otro cliente con esta identificación.',
+            'identification.max' => 'La identificación no puede superar los 50 caracteres.',
 
-        'name.required' => 'El nombre del cliente es obligatorio.',
-        'name.max' => 'El nombre no puede superar los 150 caracteres.',
+            'name.required' => 'El nombre del cliente es obligatorio.',
+            'name.max' => 'El nombre no puede superar los 150 caracteres.',
 
-        'commercial_name.max' => 'El nombre comercial no puede superar los 150 caracteres.',
+            'commercial_name.max' => 'El nombre comercial no puede superar los 150 caracteres.',
 
-        'phone.max' => 'El teléfono no puede superar los 30 caracteres.',
-        'mobile.max' => 'El celular no puede superar los 30 caracteres.',
+            'phone.max' => 'El teléfono no puede superar los 30 caracteres.',
+            'mobile.max' => 'El celular no puede superar los 30 caracteres.',
 
-        'email.email' => 'Debe ingresar un correo electrónico válido.',
-        'email.max' => 'El correo no puede superar los 150 caracteres.',
+            'email.email' => 'Debe ingresar un correo electrónico válido.',
+            'email.max' => 'El correo no puede superar los 150 caracteres.',
 
-        'country_id.exists' => 'El país seleccionado no es válido.',
-        'province_id.exists' => 'La provincia seleccionada no es válida.',
-        'canton_id.exists' => 'El cantón seleccionado no es válido.',
-        'district_id.exists' => 'El distrito seleccionado no es válido.',
+            'country_id.exists' => 'El país seleccionado no es válido.',
+            'province_id.exists' => 'La provincia seleccionada no es válida.',
+            'canton_id.exists' => 'El cantón seleccionado no es válido.',
+            'district_id.exists' => 'El distrito seleccionado no es válido.',
 
-        'credit_limit.numeric' => 'El límite de crédito debe ser un número.',
-        'credit_limit.min' => 'El límite de crédito no puede ser negativo.',
+            'credit_limit.numeric' => 'El límite de crédito debe ser un número.',
+            'credit_limit.min' => 'El límite de crédito no puede ser negativo.',
 
-        'credit_days.integer' => 'Los días de crédito deben ser un número entero.',
-        'credit_days.min' => 'Los días de crédito no pueden ser negativos.',
+            'credit_days.integer' => 'Los días de crédito deben ser un número entero.',
+            'credit_days.min' => 'Los días de crédito no pueden ser negativos.',
 
-        'points.integer' => 'Los puntos deben ser un número entero.',
-        'points.min' => 'Los puntos no pueden ser negativos.',
+            'points.integer' => 'Los puntos deben ser un número entero.',
+            'points.min' => 'Los puntos no pueden ser negativos.',
 
-        'birth_date.date' => 'La fecha de nacimiento no es válida.',
+            'birth_date.date' => 'La fecha de nacimiento no es válida.',
 
-    ];
-}
+        ];
+    }
 }
