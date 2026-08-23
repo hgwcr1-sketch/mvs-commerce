@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F20 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F21 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -415,6 +415,7 @@ Entre las fases recientes se encuentran:
 - forma de pago Puntos integrada al POS (F18)
 - premios por puntos: catálogo administrable de producto/descuento/servicio/regalo (F19)
 - disponibilidad de premios: ilimitada, cupo propio o vinculada a stock real por sucursal (F20)
+- canje de premios con historial auditable y coherencia Kardex (F21)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -471,6 +472,18 @@ Evidencia: migración `2026_08_23_000002_add_availability_to_loyalty_rewards_tab
 
 Nota: el canje de premios por puntos corresponde a F21; esta fase cubre únicamente la administración del catálogo.
 
+#### F21 — Historial de canjes de premios — COMPLETADO
+
+- tabla `loyalty_reward_redemptions`: empresa, sucursal origen, cliente, usuario, premio, producto, puntos consumidos, movimiento de fidelización vinculado (`loyalty_movement_id`), `event_key` único por empresa y snapshots (nombre/tipo/modo del premio y nombre del producto) para trazabilidad histórica aunque el premio cambie después;
+- servicio atómico `LoyaltyRewardRedemptionService::redeem()`: valida pertenencia a empresa/premio activo → consulta disponibilidad (`LoyaltyRewardAvailabilityService`) → cupo `limited` con `lockForUpdate`, re-verificación en transacción y descuento exacto de 1 unidad (nunca negativo) → historial → inventario exclusivamente vía `InventoryPostingService::postRewardRedemption` (tipo `reward_redemption`, referencia al canje) → puntos vía `LoyaltyAccountService` con el tipo existente `TYPE_REWARD`; cualquier fallo revierte todo;
+- idempotencia doble: `(company_id, event_key)` único en historial y mecanismo `event_key` de movimientos; reintentos devuelven el canje original sin duplicar puntos, cupo, inventario ni historial;
+- interfaz "Canjes de premios" (ejecutar + historial paginado) bajo permiso nuevo `fidelidad.canjes`, con aislamiento por empresa;
+- criterio de cierre verificado: Kardex y registro de canje coinciden (puntos negativos, balance_after = saldo de cuenta, total_redeemed incrementado, referencias cruzadas).
+
+Evidencia: migración `2026_08_23_000003_create_loyalty_reward_redemptions_table`, `LoyaltyRewardRedemption`, `LoyaltyRewardRedemptionService`, `InventoryPostingService::postRewardRedemption`, rutas `loyalty.redemptions.*`, vista `loyalty/redemptions/index`; `LoyaltyRewardRedemptionTest` (11 tests, 61 aserciones).
+
+Nota: no se implementan vencimiento (F22–F23), portal (F30+), online (F36–F37) ni devoluciones de canjes (F29).
+
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
 Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
@@ -488,7 +501,7 @@ Evidencia histórica:
 
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F21–F27.
+- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F22–F27.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
@@ -505,11 +518,11 @@ Evidencia histórica:
 
 ### Estado reciente
 
-F01–F20 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+F01–F21 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
 
-Último hito confirmado: F20 — Stock / disponibilidad de premios.
+Último hito confirmado: F21 — Historial de canjes de premios.
 
-Siguiente fase según cronograma: **F21 — Historial de canjes** (canje de premios). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F22 — Vencimiento configurable** (etapa 6). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

@@ -41,6 +41,7 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyRewardController;
+use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
 // Finanzas
@@ -387,6 +388,10 @@ Route::middleware(['auth', 'active.company'])->group(function () {
             Route::post('/', [LoyaltyRewardController::class, 'store'])->name('store');
             Route::put('/{reward}', [LoyaltyRewardController::class, 'update'])->name('update');
             Route::patch('/{reward}/estado', [LoyaltyRewardController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.canjes')->prefix('canjes')->name('redemptions.')->group(function () {
+            Route::get('/', [LoyaltyRewardRedemptionController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyRewardRedemptionController::class, 'store'])->name('store');
         });
     });
 

@@ -5,6 +5,7 @@ namespace App\Services\Inventory;
 use App\Data\Purchases\PurchaseLineData;
 use App\Models\InventoryLot;
 use App\Models\InventoryMovement;
+use App\Models\LoyaltyRewardRedemption;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
@@ -177,6 +178,68 @@ public function saleReturn(
             'reference_type' => SaleReturn::class,
             'reference_id' => $saleReturn->id,
             'notes' => 'Devolución '.$saleReturn->return_number.' de la venta '.$sale->sale_number,
+        ]);
+    }
+
+    /**
+     * Descuenta exactamente 1 unidad por canje de premio vinculado a producto.
+     * Es el único punto de escritura de inventario autorizado para premios (F21).
+     */
+    public function postRewardRedemption(LoyaltyRewardRedemption $redemption, int $userId): InventoryMovement
+    {
+        $product = Product::query()->findOrFail($redemption->product_id);
+
+        if ($redemption->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'El producto del premio no pertenece a la empresa del canje.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $redemption->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $redemption->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        $previousStock = $branchProduct === null ? 0.0 : (float) $branchProduct->stock;
+
+        if ($previousStock < 1) {
+            throw ValidationException::withMessages([
+                'items' => "Stock insuficiente para {$product->name}. Disponible: ".number_format($previousStock, 4, '.', ''),
+            ]);
+        }
+
+        $newStock = round($previousStock - 1, 4);
+
+        DB::table('branch_product')->where('id', $branchProduct->id)->update([
+            'stock' => $newStock,
+            'updated_at' => now(),
+        ]);
+
+        return InventoryMovement::create([
+            'company_id' => $redemption->company_id,
+            'branch_id' => $redemption->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'reward_redemption',
+            'quantity' => 1,
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Salida por canje de premio',
+            'reference_type' => LoyaltyRewardRedemption::class,
+            'reference_id' => $redemption->id,
+            'notes' => 'Canje de premio '.$redemption->reward_name,
         ]);
     }
 
