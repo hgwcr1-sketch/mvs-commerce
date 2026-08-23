@@ -13,10 +13,15 @@ Su arquitectura está orientada a:
 * ventas mediante POS;
 * caja;
 * compras;
+* pedidos internos;
+* órdenes de compra y su conversión a compras;
 * clientes;
 * proveedores;
 * cuentas por cobrar;
+* cuentas por pagar;
 * cotizaciones;
+* apartados;
+* devoluciones de venta;
 * fidelización;
 * futuras integraciones con comercio electrónico;
 * futuros módulos administrativos, contables y de recursos humanos.
@@ -31,8 +36,8 @@ Principio del producto:
 
 Estado conocido actual:
 
-* Laravel 13.x
-* PHP 8.5.x
+* Laravel (`composer.json` exige `laravel/framework ^13.8`)
+* PHP (`composer.json` exige `^8.3`; la versión instalada en el entorno debe verificarse con `php -v`)
 * Blade
 * Tailwind CSS
 * Vite
@@ -420,7 +425,138 @@ No asumir que una cotización debe afectar inventario de la misma manera que una
 
 ---
 
-## 19. Fidelización
+## 19. Pedidos internos
+
+Elementos conocidos:
+
+* `Order`
+* `OrderItem`
+* `OrderService`
+* `OrderController`
+
+Características confirmadas en código:
+
+* pedidos con estado pendiente al crearse;
+* creación desde el flujo del POS mediante la ruta `pedidos.store`, con cantidades enteras o fraccionarias;
+* revisión de líneas de pedido;
+* asociación de proveedor por línea de producto;
+* permisos propios (`pedidos.ver`, `pedidos.crear`).
+
+Los pedidos internos alimentan la preparación de órdenes de compra.
+
+---
+
+## 20. Órdenes de compra y conversión
+
+Elementos conocidos:
+
+* `PurchaseOrder`
+* `PurchaseOrderItem`
+* `PurchaseOrderItemSource`
+* `PurchaseOrderSourceConversion`
+* `PurchaseOrderPreparationService`
+* `PurchaseOrderConversionService`
+* `PurchaseOrderController`
+
+Características confirmadas:
+
+* estados: draft, prepared, sent, received, cancelled;
+* preparación de órdenes a partir de pedidos internos (permiso `pedidos.preparar_compra`);
+* conversión de una orden preparada en compras reales, incluyendo conversión parcial por cantidades pendientes;
+* trazabilidad entre pedido interno, orden de compra y compra generada;
+* permisos relacionados (`compras.ordenes`, `compras.crear`).
+
+Flujo conceptual:
+
+Pedido interno → orden de compra → compra → inventario → cuenta por pagar cuando corresponda
+
+---
+
+## 21. Apartados (Layaway)
+
+Elementos conocidos:
+
+* `Layaway`
+* `LayawayItem`
+* `LayawayPayment`
+* `LayawayAlert`
+* `CompanyAllowance`
+* `LayawayService`
+* `LayawayController`
+
+Flujo confirmado en código:
+
+* creación de apartado con reserva de inventario;
+* abonos con bloqueo optimista del registro;
+* cancelación con liberación de inventario;
+* vencimiento automático de apartados expirados (`expireDue`);
+* entrega: genera una venta cuando el apartado está completamente pagado;
+* alertas de vencimiento próximo por empresa, con días configurables (`layaway_alert_days`);
+* permisos propios (`apartados.*`).
+
+---
+
+## 22. Devoluciones y anulación de ventas
+
+Elementos conocidos:
+
+* `SaleReturn`
+* `SaleReturnItem`
+* `SaleReturnService`
+* `SaleVoidService`
+* `ReturnController`
+
+Características confirmadas:
+
+* devolución sobre una venta existente con motivo y líneas específicas (permiso `devoluciones.crear`);
+* anulación de ventas (permiso `ventas.anular`);
+
+Ambas operaciones deben mantener trazabilidad e impacto correcto en inventario.
+
+---
+
+## 23. Cuentas por pagar
+
+Elementos conocidos:
+
+* `AccountPayable`
+* `AccountPayablePayment`
+* `AccountPayableAlert`
+* `AccountsPayableService`
+* `AccountPayableAlertService`
+* `PurchaseAccountPayableService`
+* `AccountsPayableController`
+
+Características confirmadas:
+
+* cuentas por pagar asociadas a compras;
+* abonos con afectación de sesión de caja mediante resolución de sesión activa (`CashSessionResolver`);
+* alertas de vencimiento con días configurables por empresa;
+* panel con alertas para el dashboard;
+* permisos propios (`cuentas_pagar.*`).
+
+---
+
+## 24. Facturación y reportes
+
+Estado real verificado en código:
+
+* `InvoiceController` y `ReportController` son esqueletos vacíos;
+* las rutas `facturas` y `reportes` existen sin middleware de permisos.
+
+No debe asumirse que exista facturación electrónica ni un módulo de reportes implementado.
+
+Lo que sí existe como funcionalidad interna:
+
+* comprobante de venta del POS (`pos.receipt`);
+* impresión y PDF de compras;
+* impresión de cotizaciones.
+
+Pendiente de diseño e implementación futura; las rutas actuales deberían protegerse cuando se desarrolle la funcionalidad.
+
+---
+
+## 25. Fidelización
 
 Existe infraestructura de fidelización en desarrollo activo.
 
@@ -458,7 +594,7 @@ Consultar `docs/PROGRESO.md` para conocer la fase exacta implementada.
 
 ---
 
-## 20. Precisión monetaria
+## 26. Precisión monetaria
 
 MVS Commerce maneja operaciones monetarias críticas.
 
@@ -475,7 +611,7 @@ Se utilizan campos monetarios de alta precisión, incluyendo `DECIMAL(19,4)` en 
 
 ---
 
-## 21. Servicios
+## 27. Servicios
 
 La lógica empresarial compleja debe preferir servicios especializados.
 
@@ -499,7 +635,7 @@ Los servicios deben:
 
 ---
 
-## 22. Requests y validación
+## 28. Requests y validación
 
 Las validaciones HTTP deben preferir clases Request dedicadas cuando el módulo ya utilice este patrón.
 
@@ -511,7 +647,7 @@ Evitar trasladar validaciones complejas directamente a controladores si existe u
 
 ---
 
-## 23. Pruebas
+## 29. Pruebas
 
 Las pruebas de integración y negocio utilizan principalmente:
 
@@ -529,7 +665,7 @@ Antes de declarar una tarea terminada:
 
 ---
 
-## 24. Git
+## 30. Git
 
 Rama principal de trabajo conocida actualmente:
 
@@ -548,7 +684,7 @@ Reglas:
 
 ---
 
-## 25. Comercio electrónico
+## 31. Comercio electrónico
 
 Existe una meta estratégica de conectar MVS Commerce con comercio electrónico.
 
@@ -577,7 +713,7 @@ La integración todavía debe diseñarse formalmente antes de implementarse.
 
 ---
 
-## 26. Inteligencia artificial
+## 32. Inteligencia artificial
 
 La arquitectura futura debe permitir agentes de IA.
 
@@ -612,7 +748,7 @@ La IA no debe alterar información crítica sin permisos y controles.
 
 ---
 
-## 27. Proyectos paralelos
+## 33. Proyectos paralelos
 
 Existen desarrollos paralelos realizados fuera del repositorio principal.
 
@@ -633,7 +769,7 @@ Antes de desarrollar funcionalidades equivalentes dentro de MVS Commerce:
 
 ---
 
-## 28. Principios arquitectónicos
+## 34. Principios arquitectónicos
 
 Toda nueva implementación debe intentar respetar:
 
@@ -652,7 +788,7 @@ Toda nueva implementación debe intentar respetar:
 
 ---
 
-## 29. Fuente de verdad
+## 35. Fuente de verdad
 
 Este archivo describe la arquitectura conocida del proyecto.
 

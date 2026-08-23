@@ -43,12 +43,13 @@ Antes de realizar una tarea:
 
 1. Leer este `AGENTS.md`.
 2. Revisar los documentos de `docs/` relacionados con la tarea.
-3. Inspeccionar el código real involucrado.
-4. Revisar `git status`.
-5. Entender la implementación existente antes de modificarla.
-6. Hacer cambios mínimos y compatibles con la arquitectura existente.
-7. Ejecutar pruebas relevantes.
-8. Informar claramente qué se modificó y qué quedó pendiente.
+3. Revisar `docs/ESTADO_ACTUAL.md` para conocer el estado de relevo entre agentes, especialmente al iniciar una sesión o al tomar una tarea que otro agente dejó a medias.
+4. Inspeccionar el código real involucrado.
+5. Revisar `git status`.
+6. Entender la implementación existente antes de modificarla.
+7. Hacer cambios mínimos y compatibles con la arquitectura existente.
+8. Ejecutar pruebas relevantes.
+9. Informar claramente qué se modificó y qué quedó pendiente.
 
 Nunca inventar arquitectura, tablas, servicios, permisos, rutas o reglas de negocio sin comprobar primero lo existente.
 
@@ -217,6 +218,10 @@ Visión del producto, procesos empresariales y reglas generales del negocio.
 
 Sistemas externos, proyectos paralelos e integraciones actuales o futuras.
 
+### `docs/ESTADO_ACTUAL.md`
+
+Fotografía corta del estado del relevo entre agentes: rama actual, estado del repositorio, prioridades, último trabajo terminado, trabajo en curso y próximos pasos. Debe leerse al comenzar una sesión y mantenerse actualizada tras tareas importantes.
+
 No llenar `AGENTS.md` con detalles que correspondan a esos documentos.
 
 ---
@@ -252,7 +257,7 @@ Ejemplos:
 
 Ningún modelo debe asumir que es el único agente trabajando en el proyecto.
 
-Al comenzar una nueva sesión, reconstruir el contexto desde el repositorio y su documentación.
+Al comenzar una nueva sesión o tomar una tarea a medias, reconstruir el contexto desde el repositorio y su documentación, comenzando por `AGENTS.md` y `docs/ESTADO_ACTUAL.md`.
 
 Al finalizar una tarea importante, dejar el repositorio y la documentación en un estado que otro agente pueda comprender y continuar.
 

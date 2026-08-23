@@ -225,7 +225,8 @@ Incluye trabajo relacionado con:
 - clientes
 - pagos
 - abonos
-- apartados
+
+Los apartados tienen módulo propio (ver sección Apartados).
 
 Debe integrarse con POS sin duplicar lógica.
 
@@ -244,6 +245,134 @@ Existe estructura y trabajo relacionado con:
 - integración con POS
 
 No asumir que todo el flujo está terminado.
+
+---
+
+## Pedidos internos
+
+Estado: ACTIVO
+
+Incluye:
+
+- pedidos internos con estado pendiente al crearse
+- creación desde el flujo del POS mediante `pedidos.store`
+- cantidades enteras o fraccionarias
+- revisión de líneas de pedido
+- asociación de proveedor por línea de producto
+
+Elementos conocidos:
+
+- `Order`
+- `OrderItem`
+- `OrderService`
+- `OrderController`
+- permisos `pedidos.ver`, `pedidos.crear`
+
+Pruebas relacionadas: `OrderV1BaseTest`, `OrderPosCreationTest`, `OrderReviewTest`, `OrderSupplierAssignmentTest`, `OrderPermissionSeederTest`.
+
+---
+
+## Órdenes de compra
+
+Estado: ACTIVO
+
+Incluye:
+
+- preparación de órdenes de compra a partir de pedidos internos
+- estados: draft, prepared, sent, received, cancelled
+- conversión de una orden preparada en compras reales, incluyendo conversión parcial
+- trazabilidad entre pedido interno, orden de compra y compra
+
+Elementos conocidos:
+
+- `PurchaseOrder`, `PurchaseOrderItem`, `PurchaseOrderItemSource`, `PurchaseOrderSourceConversion`
+- `PurchaseOrderPreparationService`
+- `PurchaseOrderConversionService`
+- `PurchaseOrderController`
+- permisos `pedidos.preparar_compra`, `compras.ordenes`, `compras.crear`
+
+Pruebas relacionadas: `PurchaseOrderTest`, `PurchaseOrderConversionTest`.
+
+---
+
+## Apartados
+
+Estado: ACTIVO
+
+Incluye:
+
+- creación de apartados con reserva de inventario
+- abonos
+- cancelación con liberación de inventario
+- vencimiento automático de apartados expirados
+- entrega que genera una venta cuando el apartado está completamente pagado
+- alertas de vencimiento próximo, con días configurables por empresa
+
+Elementos conocidos:
+
+- `Layaway`, `LayawayItem`, `LayawayPayment`, `LayawayAlert`
+- `CompanyAllowance`
+- `LayawayService`
+- `LayawayController`
+- permisos `apartados.*`
+
+Nota: los apartados son un módulo propio con permisos independientes; no deben mezclarse con la lógica de cuentas por cobrar.
+
+Pruebas relacionadas: `LayawayV1Test`.
+
+---
+
+## Devoluciones y anulación de ventas
+
+Estado: ACTIVO
+
+Incluye:
+
+- devoluciones sobre ventas existentes con motivo y líneas específicas
+- anulación de ventas
+
+Elementos conocidos:
+
+- `SaleReturn`, `SaleReturnItem`, `SaleReturnService`
+- `SaleVoidService`
+- `ReturnController`
+- permisos `devoluciones.crear`, `ventas.anular`
+
+Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
+
+---
+
+## Cuentas por pagar
+
+Estado: ACTIVO
+
+Incluye:
+
+- cuentas por pagar asociadas a compras
+- abonos con afectación de sesión de caja activa
+- alertas de vencimiento con días configurables por empresa
+
+Elementos conocidos:
+
+- `AccountPayable`, `AccountPayablePayment`, `AccountPayableAlert`
+- `AccountsPayableService`
+- `AccountPayableAlertService`
+- `PurchaseAccountPayableService`
+- `AccountsPayableController`
+- permisos `cuentas_pagar.*`
+
+Pruebas relacionadas: `AccountsPayableModelsTest`, `AccountsPayablePaymentsTest`, `AccountsPayableDashboardAlertsTest`, `AccountsPayableInterfaceTest`, `PurchaseAccountPayableIntegrationTest`.
+
+---
+
+## Facturación y reportes
+
+Estado: NO IMPLEMENTADO
+
+- `InvoiceController` y `ReportController` son esqueletos vacíos.
+- Las rutas `facturas` y `reportes` existen actualmente sin middleware de permisos; deben protegerse o retirarse cuando se desarrolle el área.
+
+Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/PDF de compras e impresión de cotizaciones. No asumir facturación electrónica ni reportes gerenciales implementados.
 
 ---
 
