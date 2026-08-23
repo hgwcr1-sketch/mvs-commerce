@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F19 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F20 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -414,6 +414,7 @@ Entre las fases recientes se encuentran:
 - canje sobre ofertas (F17, `redeem_on_offers`)
 - forma de pago Puntos integrada al POS (F18)
 - premios por puntos: catálogo administrable de producto/descuento/servicio/regalo (F19)
+- disponibilidad de premios: ilimitada, cupo propio o vinculada a stock real por sucursal (F20)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -453,10 +454,20 @@ Nota sobre subfases: las denominaciones F18A–F18F se utilizaron durante el des
 - estructura persistente `loyalty_rewards` con aislamiento por empresa, costo en puntos DECIMAL(19,4) y tipos: producto, descuento, servicio, regalo;
 - administración básica: crear, editar y activar/desactivar desde la interfaz de Fidelización;
 - permiso propio `fidelidad.premios` sembrado para Administrador y entrada "Premios" en el sidebar condicionada por permisos;
-- validaciones: nombre, tipo permitido, costo positivo con máximo cuatro decimales, descripción opcional;
-- preparación para F20 (stock/disponibilidad) y F21 (historial/canje) sin implementarlas.
+- validaciones: nombre, tipo permitido, costo positivo con máximo cuatro decimales, descripción opcional.
 
-Evidencia: migración `2026_08_23_000001_create_loyalty_rewards_table`, `LoyaltyReward`, `LoyaltyRewardController`, `SaveLoyaltyRewardRequest`, rutas `loyalty.rewards.*`, vista `loyalty/rewards/index`; `LoyaltyRewardTest` (5 tests, 49 aserciones).
+Evidencia: migración `2026_08_23_000001_create_loyalty_rewards_table`, `LoyaltyReward`, `LoyaltyRewardController`, `SaveLoyaltyRewardRequest`, rutas `loyalty.rewards.*`, vista `loyalty/rewards/index`; `LoyaltyRewardTest`.
+
+#### F20 — Stock / disponibilidad de premios — COMPLETADO
+
+- `availability_mode` en `loyalty_rewards`: `unlimited` (default), `limited` (cupo propio global por empresa, `stock_quantity` DECIMAL(15,4) nullable) y `product` (premio vinculado a producto real, `product_id` FK restrictOnDelete);
+- la disponibilidad efectiva del modo `product` se deriva del stock en `branch_product` según la sucursal; sin contadores paralelos de inventario en Loyalty;
+- servicio central reutilizable y de solo lectura: `LoyaltyRewardAvailabilityService::evaluate()` (unidad por redención V1 = 1); F21 lo consultará antes de canjear;
+- validaciones condicionales: cupo > 0 para `limited`; producto activo de la misma empresa para `product`; campos prohibidos entre modos; cambio de modo limpia el dato del modo anterior;
+- la administración de premios permite elegir modo y configurar cupo o producto (Alpine condicional, estilo MVS);
+- F20 NO consume stock ni registra canjes: el descuento atómico (lock de cupo e `InventoryPostingService`) corresponde a F21.
+
+Evidencia: migración `2026_08_23_000002_add_availability_to_loyalty_rewards_table`, cambios en `LoyaltyReward`, `SaveLoyaltyRewardRequest`, `LoyaltyRewardController`, vista de premios; `LoyaltyRewardAvailabilityTest` (7 tests).
 
 Nota: el canje de premios por puntos corresponde a F21; esta fase cubre únicamente la administración del catálogo.
 
@@ -466,7 +477,7 @@ Implementada durante la integración POS, antes de su posición en el cronograma
 
 Evidencia: commit `7be1f80`; `SaleVoidService`; `SaleVoidLoyaltyTest`.
 
-Importante: el adelanto de F28 **NO** altera el orden del cronograma. La siguiente fase sigue siendo **F19 — Premios por puntos**.
+Importante: el adelanto de F28 **NO** altera el orden del cronograma.
 
 Auditoría posterior a la integración POS: se ejecutaron 152 tests relacionados con Loyalty / POS-Loyalty con 0 fallos.
 
@@ -477,7 +488,7 @@ Evidencia histórica:
 
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F20–F27.
+- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F21–F27.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
@@ -494,11 +505,11 @@ Evidencia histórica:
 
 ### Estado reciente
 
-F01–F19 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+F01–F20 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
 
-Último hito confirmado: F19 — Premios por puntos (administración básica).
+Último hito confirmado: F20 — Stock / disponibilidad de premios.
 
-Siguiente fase según cronograma: **F20 — Stock / disponibilidad** de premios. No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F21 — Historial de canjes** (canje de premios). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

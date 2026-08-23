@@ -82,7 +82,7 @@ Estados tomados del Excel maestro del 23-08-2026. La columna "Evidencia" agrega 
 | F17 | 4. Canje | Usar puntos en ofertas | COMPLETADO | ALTA | F15-F16 | Regla respetada al canjear sobre ofertas | `8392dd4`; `redeem_on_offers`, `LoyaltyRedemptionServiceTest` |
 | F18 | 4. Canje | Forma de pago Puntos | COMPLETADO | CRÍTICA | F14-F17 | Venta completa con puntos como forma de pago en POS | `7be1f80`; suite POS-Loyalty completa |
 | F19 | 5. Premios | Premios por puntos | COMPLETADO | CRÍTICA | F14 | Crear, activar, desactivar y canjear premios directos | administración implementada (`loyalty_rewards`, `LoyaltyRewardController`, permiso `fidelidad.premios`, `LoyaltyRewardTest`); el canje de premios corresponde a F21 |
-| F20 | 5. Premios | Stock / disponibilidad | PENDIENTE | ALTA | F19 | No permite canje de premio agotado | — |
+| F20 | 5. Premios | Stock / disponibilidad | COMPLETADO | ALTA | F19 | No permite canje de premio agotado | `availability_mode` (unlimited/limited/product) + `stock_quantity` + `product_id` en `loyalty_rewards`; consulta central en `LoyaltyRewardAvailabilityService`; `LoyaltyRewardAvailabilityTest` (7 tests). El consumo atómico (lock de cupo y descuento vía `InventoryPostingService`) corresponde al canje F21 |
 | F21 | 5. Premios | Historial de canjes | PENDIENTE | CRÍTICA | F07,F19 | Kardex + canje coinciden | — |
 | F22 | 6. Vencimiento | Vencimiento configurable | PENDIENTE | ALTA | F07 | Sí/No + meses libres de inactividad, sin opciones rígidas | — |
 | F23 | 6. Vencimiento | Vencimiento automático | PENDIENTE | ALTA | F22 | Salida de puntos trazable en Kardex al vencer | — |
@@ -157,8 +157,8 @@ Fases que el maestro mantiene PENDIENTES pero donde código/tests ya muestran av
 
 ## Estado y próxima fase
 
-- **Completadas:** F01–F19 según maestro; F28 completada de forma adelantada durante la integración POS (`7be1f80`).
-- **F19 — Premios por puntos: COMPLETADO** (administración básica). Evidencia: migración `loyalty_rewards`, modelo `LoyaltyReward` con tipos product/discount/service/gift, `LoyaltyRewardController` + `SaveLoyaltyRewardRequest`, rutas `loyalty.rewards.*` bajo permiso `fidelidad.premios`, vista `loyalty/rewards/index`, entrada en sidebar y `LoyaltyRewardTest` (5 tests, 49 aserciones). Preparado para F20 (stock) y F21 (historial/canje).
-- **SIGUIENTE:** **F20 — Stock / disponibilidad** de premios. Única fase autorizada para iniciar.
-- **F29 — Ajuste por devolución:** PENDIENTE. Existe una brecha técnica conocida (`SaleReturnService` no ajusta fidelización en devoluciones parciales; la anulación completa sí revierte). Mantener registrada, pero **NO es la siguiente fase** y no debe adelantarse sobre F20–F27.
-- Auditoría de referencia: suite Loyalty/POS-Loyalty en verde tras F18; regresión Loyalty en verde tras F19.
+- **Completadas:** F01–F20 según maestro; F28 completada de forma adelantada durante la integración POS (`7be1f80`).
+- **F20 — Stock / disponibilidad: COMPLETADO.** Tres modos en `LoyaltyReward`: `unlimited` (default), `limited` (cupo global por empresa, `stock_quantity` DECIMAL(15,4)) y `product` (disponibilidad derivada de `branch_product` por sucursal; sin contador paralelo). Consulta central reutilizable: `LoyaltyRewardAvailabilityService::evaluate()` (solo lectura; unidad por redención V1 = 1). Validaciones condicionales con aislamiento por empresa y rechazo de productos ajenos/inactivos. F20 no consume stock ni registra canjes.
+- **SIGUIENTE:** **F21 — Historial de canjes** (canje de premios). Única fase autorizada para iniciar. Debe: consultar disponibilidad vía `LoyaltyRewardAvailabilityService`, descontar cupo `limited` con `lockForUpdate` dentro de transacción única junto al movimiento de puntos, descontar producto mediante `InventoryPostingService` (nuevo tipo de movimiento p. ej. `reward_redemption`), registrar historial auditable y mantener idempotencia `event_key`.
+- **F29 — Ajuste por devolución:** PENDIENTE. Existe una brecha técnica conocida (`SaleReturnService` no ajusta fidelización en devoluciones parciales; la anulación completa sí revierte). Mantener registrada, pero **NO es la siguiente fase** y no debe adelantarse sobre F21–F27.
+- Auditoría de referencia: suite Loyalty/POS-Loyalty en verde tras F18/F19; regresión Loyalty en verde tras F20 (117 tests) más POS-Loyalty (48 tests).

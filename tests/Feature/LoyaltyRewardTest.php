@@ -40,6 +40,7 @@ class LoyaltyRewardTest extends TestCase
                 'name' => $name,
                 'type' => $type,
                 'points_cost' => '100.0000',
+                'availability_mode' => 'unlimited',
             ])->assertRedirect();
 
             $reward = LoyaltyReward::query()->where('company_id', $company->id)->where('name', $name)->firstOrFail();
@@ -47,6 +48,7 @@ class LoyaltyRewardTest extends TestCase
             $this->assertSame('100.0000', $reward->points_cost);
             $this->assertTrue($reward->is_active);
             $this->assertNull($reward->description);
+            $this->assertSame('unlimited', $reward->availability_mode);
         }
     }
 
@@ -56,7 +58,7 @@ class LoyaltyRewardTest extends TestCase
         $user = $this->user($company, $branch, ['fidelidad.premios']);
         $session = $this->activeSession($company, $branch);
 
-        $payload = ['name' => 'Combo desayuno', 'type' => 'product', 'points_cost' => '250.5', 'description' => 'Incluye café y pan'];
+        $payload = ['name' => 'Combo desayuno', 'type' => 'product', 'points_cost' => '250.5', 'description' => 'Incluye café y pan', 'availability_mode' => 'unlimited'];
         $this->actingAs($user)->withSession($session)->post(route('loyalty.rewards.store'), $payload)->assertRedirect();
         $reward = LoyaltyReward::query()->where('company_id', $company->id)->where('name', 'Combo desayuno')->firstOrFail();
         $this->assertSame('250.5000', $reward->points_cost);
@@ -66,6 +68,7 @@ class LoyaltyRewardTest extends TestCase
             'type' => 'service',
             'points_cost' => '300',
             'description' => null,
+            'availability_mode' => 'unlimited',
         ])->assertRedirect();
         $reward->refresh();
         $this->assertSame('Combo almuerzo', $reward->name);
@@ -85,12 +88,12 @@ class LoyaltyRewardTest extends TestCase
         [$company, $branch] = $this->context();
         $user = $this->user($company, $branch, ['fidelidad.premios']);
         $session = $this->activeSession($company, $branch);
-        $base = ['name' => 'Premio válido', 'type' => 'product', 'points_cost' => '50'];
+        $base = ['name' => 'Premio válido', 'type' => 'product', 'points_cost' => '50', 'availability_mode' => 'unlimited'];
 
         $cases = [
             'name' => array_replace_recursive($base, ['name' => '']),
             'type' => array_replace_recursive($base, ['type' => 'cash']),
-            'type_missing' => ['name' => 'Sin tipo', 'points_cost' => '50'],
+            'type_missing' => ['name' => 'Sin tipo', 'points_cost' => '50', 'availability_mode' => 'unlimited'],
             'cost_zero' => array_replace_recursive($base, ['points_cost' => '0']),
             'cost_negative' => array_replace_recursive($base, ['points_cost' => '-1']),
             'cost_fraction' => array_replace_recursive($base, ['points_cost' => '10.12345']),
@@ -113,14 +116,14 @@ class LoyaltyRewardTest extends TestCase
         $without = $this->user($company, $branch, []);
         $sessionWithout = $this->activeSession($company, $branch);
         $this->actingAs($without)->withSession($sessionWithout)->get(route('loyalty.rewards.index'))->assertForbidden();
-        $this->actingAs($without)->withSession($sessionWithout)->post(route('loyalty.rewards.store'), ['name' => 'X', 'type' => 'gift', 'points_cost' => '1'])->assertForbidden();
+        $this->actingAs($without)->withSession($sessionWithout)->post(route('loyalty.rewards.store'), ['name' => 'X', 'type' => 'gift', 'points_cost' => '1', 'availability_mode' => 'unlimited'])->assertForbidden();
 
         $user = $this->user($company, $branch, ['fidelidad.premios']);
         $session = $this->activeSession($company, $branch);
         $response = $this->actingAs($user)->withSession($session)->get(route('loyalty.rewards.index'));
         $response->assertOk()->assertDontSee('Premio ajeno');
 
-        $this->actingAs($user)->withSession($session)->put(route('loyalty.rewards.update', $foreign), ['name' => 'Hackeado', 'type' => 'gift', 'points_cost' => '1'])->assertNotFound();
+        $this->actingAs($user)->withSession($session)->put(route('loyalty.rewards.update', $foreign), ['name' => 'Hackeado', 'type' => 'gift', 'points_cost' => '1', 'availability_mode' => 'unlimited'])->assertNotFound();
         $this->actingAs($user)->withSession($session)->patch(route('loyalty.rewards.toggle', $foreign))->assertNotFound();
         $this->assertSame('Premio ajeno', $foreign->fresh()->name);
         $this->assertSame('999.0000', $foreign->fresh()->points_cost);
