@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO
+Estado: DESARROLLO ACTIVO — F01–F18 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -404,15 +404,69 @@ Entre las fases recientes se encuentran:
 - infraestructura de fidelización
 - cuentas
 - movimientos
-- acumulación de puntos
-- valor monetario del punto
-- reglas de acumulación
-- earn_on_offers
-- precisión decimal
-- idempotencia
-- última compra calificadora
-- Kardex de movimientos
-- mínimo monetario de canje
+- acumulación de puntos por porcentaje configurable (F08/F08.1)
+- bonos de cumpleaños (F10) y cliente recurrente (F11)
+- multiplicadores (F12)
+- reglas de ofertas en acumulación (F13, `earn_on_offers`)
+- valor monetario del punto (F14)
+- mínimo monetario de canje (F15)
+- máximo de una compra pagable con puntos (F16)
+- canje sobre ofertas (F17, `redeem_on_offers`)
+- forma de pago Puntos integrada al POS (F18)
+- reversión de puntos por anulación de venta (F28, adelantado)
+- dashboard operativo con oportunidades, contactos y plantillas
+- precisión decimal, idempotencia y última compra calificadora como propiedades transversales
+
+### Fases confirmadas por auditoría técnica
+
+Fuente de verdad utilizada (en orden): Git/commits → código actual → tests → cronograma maestro → documentación narrativa. El Excel maestro define el orden y la numeración oficiales.
+
+#### Canje — F14 a F17 — COMPLETADO
+
+- **F14 — Valor del punto:** equivalencia punto↔dinero configurable; `LoyaltyPointValueService`, `LoyaltyPointValueTest`.
+- **F15 — Mínimo para usar puntos:** bloqueo/permiso según configuración; `LoyaltyRedemptionEligibilityService`, `LoyaltyRedemptionMinimumTest`.
+- **F16 — Máximo de una compra:** porcentaje de la venta pagable con puntos; el canje nunca supera saldo disponible, porcentaje permitido ni monto aplicable; `LoyaltyRedemptionLimitService`, `LoyaltyRedemptionLimitTest`.
+- **F17 — Usar puntos en ofertas:** configuración contextual del canje sobre ofertas; snapshots e idempotencia mediante `event_key` y atomicidad en `LoyaltyRedemptionService`; `LoyaltyRedemptionServiceTest`.
+
+#### F18 — Forma de pago Puntos en POS — COMPLETADO
+
+Capacidades verificadas:
+
+- panel/resumen de puntos en POS;
+- saldo, valor, mínimo y máximo visibles para el cajero (`LoyaltyPosSummaryService`);
+- `requested_points` en checkout con validación decimal e idempotencia por token;
+- ejecución real del canje durante el checkout mediante la forma de pago `loyalty_points`;
+- movimiento real de fidelización vinculado a la venta (`event_key` derivado de la venta);
+- rollback atómico del checkout si el canje falla o el cobro no cubre el total;
+- bloqueo del canje combinado con venta a crédito;
+- pagos mixtos con puntos respetando las reglas existentes de métodos, efectivo y cambio;
+- los puntos participan en la conciliación del cierre de caja sin alterar el efectivo esperado;
+- acceso a configuración de Fidelización según permisos.
+
+Evidencia: commit `7be1f80`; `PosSaleProcessor`, `PosController::loyaltySummary`, `PaymentMethodProvisioner`; tests `PosLoyaltyInterfaceTest`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyMixedPaymentsTest`, `LoyaltySettingsSidebarNavigationTest`.
+
+Nota sobre subfases: las denominaciones F18A–F18F se utilizaron durante el desarrollo, pero no están etiquetadas explícitamente dentro del repositorio. No corresponde inventar una correspondencia histórica exacta de letras; las capacidades verificadas son las listadas arriba.
+
+#### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
+
+Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
+
+Evidencia: commit `7be1f80`; `SaleVoidService`; `SaleVoidLoyaltyTest`.
+
+Importante: el adelanto de F28 **NO** altera el orden del cronograma. La siguiente fase sigue siendo **F19 — Premios por puntos**.
+
+Auditoría posterior a la integración POS: se ejecutaron 152 tests relacionados con Loyalty / POS-Loyalty con 0 fallos.
+
+Evidencia histórica:
+
+- `8392dd4` — completar canje de puntos.
+- `7be1f80` — integración de fidelización en POS.
+
+### Brechas detectadas pendientes
+
+- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F19–F27.
+- WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
+- Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
 ### Reglas importantes
 
@@ -427,7 +481,11 @@ Entre las fases recientes se encuentran:
 
 ### Estado reciente
 
-El trabajo de Fidelización ha avanzado hasta fases posteriores a acumulación y Kardex.
+F01–F18 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+
+Último hito confirmado: F18 — Forma de pago Puntos en POS.
+
+Siguiente fase según cronograma: **F19 — Premios por puntos** (crear, activar, desactivar y canjear premios directos). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 
@@ -435,6 +493,7 @@ Antes de continuar una fase nueva, revisar:
 - tests de Loyalty
 - último commit
 - servicios disponibles
+- `docs/CRONOGRAMA_FIDELIZACION.md` para determinar la fase real
 
 ---
 

@@ -222,6 +222,14 @@ Sistemas externos, proyectos paralelos e integraciones actuales o futuras.
 
 Fotografía corta del estado del relevo entre agentes: rama actual, estado del repositorio, prioridades, último trabajo terminado, trabajo en curso y próximos pasos. Debe leerse al comenzar una sesión y mantenerse actualizada tras tareas importantes.
 
+### `docs/CRONOGRAMA_FIDELIZACION.md`
+
+Control permanente de fases del módulo de Fidelización: orden previsto, estado confirmado por evidencia y próxima fase candidata. Refleja el Cronograma Maestro (`docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`), que es la fuente oficial del orden y la numeración de fases.
+
+Regla específica de Fidelización:
+
+> Toda tarea de Fidelización debe comenzar leyendo `docs/CRONOGRAMA_FIDELIZACION.md`, `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede saltar, retroceder, renumerar o inventar fases sin autorización. Si descubre una funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál fase corresponde ejecutar a continuación según el cronograma.
+
 No llenar `AGENTS.md` con detalles que correspondan a esos documentos.
 
 ---
