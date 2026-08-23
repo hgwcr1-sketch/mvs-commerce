@@ -11,3 +11,4 @@ Artisan::command('inspire', function () {
 Schedule::command('cash:notifications:dispatch-pending')->everyMinute()->withoutOverlapping();
 Schedule::command('layaways:process')->hourly()->withoutOverlapping();
 Schedule::command('payables:alerts')->hourly()->withoutOverlapping();
+Schedule::command('loyalty:expire-points')->daily()->withoutOverlapping();

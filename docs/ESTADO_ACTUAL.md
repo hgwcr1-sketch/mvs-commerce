@@ -10,19 +10,24 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F22: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
+**F01–F23: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F22 — Vencimiento configurable: COMPLETADO.**
+**F23 — Vencimiento automático: COMPLETADO.**
+
+- `LoyaltyExpirationService` + comando `loyalty:expire-points` + scheduler diario con `withoutOverlapping()` en `routes/console.php`.
+- Inactividad sobre `last_qualifying_purchase_at` en día local de la empresa; meses exactos con `addMonthsNoOverflow`; vence el saldo exacto bajo lock vía `LoyaltyAccountService` (`TYPE_EXPIRATION`, nunca negativo, `total_expired` correcto).
+- Idempotencia `expiration:{account_id}:{due_date}`; cuentas sin compra calificable o saldo cero no se tocan; metadata auditable (`due_date`, `expiration_months`, `last_qualifying_purchase_at`).
+- Evidencia: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty: 177 tests, 1160 aserciones, 0 fallos.
 
 Además:
 
-- **F23 — Vencimiento automático: SIGUIENTE.** Es la única fase autorizada para iniciar. Debe respetar la política F22 (`expiration_enabled` + `expiration_months`), calcular inactividad sobre compras calificables (`last_qualifying_purchase_at`), generar salida trazable en Kardex con tipo `expiration` vía `LoyaltyAccountService`, con idempotencia y ejecución controlada (command/job).
+- **F24 — Centro de reglas: SIGUIENTE.** Es la única fase autorizada para iniciar.
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`). El adelanto NO altera el orden del cronograma.
-- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F23–F27.
+- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F24–F27.
 
-Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones.
+Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde.
 
 Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están etiquetadas dentro del repositorio; no inventar correspondencia exacta de letras.
 
@@ -59,7 +64,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: fases confirmadas hasta F22 (vencimiento configurable) más F28 adelantada. Siguiente fase según cronograma: F23 — Vencimiento automático. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
+- Fidelización: fases confirmadas hasta F23 (vencimiento automático) más F28 adelantada. Siguiente fase según cronograma: F24 — Centro de reglas. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
@@ -87,7 +92,7 @@ No asumir que el último estado conocido sigue vigente.
 Suite principal: `tests/Feature`.
 
 - POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`.
-- Fidelización: `tests/Feature/Loyalty*Test.php`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`, `LoyaltyExpirationSettingTest`.
+- Fidelización: `tests/Feature/Loyalty*Test.php` (incluye `LoyaltyExpirationTest`, `LoyaltyExpirationSettingTest`), `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
 - Caja: `Cash*Test.php`.
 - Módulos recientes: `Order*Test.php`, `PurchaseOrderTest`, `PurchaseOrderConversionTest`, `LayawayV1Test`, `SaleReturnTest`, `SaleVoidTest`, `AccountsPayable*Test.php`.
 

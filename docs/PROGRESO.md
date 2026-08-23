@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F22 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F23 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -417,6 +417,7 @@ Entre las fases recientes se encuentran:
 - disponibilidad de premios: ilimitada, cupo propio o vinculada a stock real por sucursal (F20)
 - canje de premios con historial auditable y coherencia Kardex (F21)
 - vencimiento configurable: Sí/No + meses enteros libres de inactividad (F22)
+- vencimiento automático de puntos por inactividad, trazable en Kardex e idempotente (F23)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -494,6 +495,20 @@ Nota: no se implementan vencimiento (F22–F23), portal (F30+), online (F36–F3
 - F22 SOLO configura la política: no vence puntos, no crea movimientos ni procesos automáticos.
 
 Evidencia: cambios en `UpdateLoyaltySettingRequest`, `SettingController` y vista `settings/index`; `LoyaltyExpirationSettingTest` (7 tests, 62 aserciones).
+
+#### F23 — Vencimiento automático — COMPLETADO
+
+- servicio central `LoyaltyExpirationService`: procesa únicamente empresas con Fidelización activa, `expiration_enabled` y `expiration_months` ≥ 1 (empresas inactivas se omiten);
+- inactividad medida sobre `last_qualifying_purchase_at` normalizado al día local de la empresa (timezone validada contra identificadores válidos con fallback a `config('app.timezone')`);
+- fecha límite = día local de la última compra calificable + meses mediante `addMonthsNoOverflow` (sin aproximación a días ni overflow: 31-ene + 1 mes vence el último día válido de febrero); vence cuando el día local actual alcanzó o superó la fecha límite;
+- cuentas sin compra calificable (`last_qualifying_purchase_at` null) o con saldo cero no generan movimientos;
+- expiración del saldo exacto bajo transacción y `lockForUpdate`, vía `LoyaltyAccountService::subtractPoints` con `TYPE_EXPIRATION`: saldo nunca negativo, `total_expired` actualizado automáticamente y movimiento coherente en Kardex (descripción "Vencimiento de puntos por inactividad", sin usuario ni sucursal, `source_type` `loyalty_expiration`);
+- metadata auditable: `due_date`, `expiration_months`, `last_qualifying_purchase_at`;
+- idempotencia por `event_key` único determinista `expiration:{account_id}:{fecha_limite}`: reintentos del mismo período no duplican movimiento, puntos ni totales; un nuevo período de inactividad produce una clave distinta;
+- comando `loyalty:expire-points` (`ExpireLoyaltyPoints`) delega en el servicio, continúa aunque una cuenta individual se omita y reporta contadores: cuentas vencidas, puntos vencidos y omitidas;
+- scheduler registrado una sola vez en `routes/console.php`: ejecución diaria con `withoutOverlapping()`, usando la infraestructura existente.
+
+Evidencia: `app/Services/Loyalty/LoyaltyExpirationService.php`, `app/Console/Commands/ExpireLoyaltyPoints.php`, `routes/console.php`; `LoyaltyExpirationTest` (13 tests, 78 aserciones). Regresión Loyalty + POS-Loyalty: 177 tests, 1160 aserciones, 0 fallos.
 
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
