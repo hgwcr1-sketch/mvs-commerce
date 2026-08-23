@@ -204,8 +204,8 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             @can('fidelidad.multiplicadores')
                 <x-navigation.submenu route="loyalty.multipliers.index" label="Multiplicadores" />
             @endcan
-            @can('fidelidad.configuracion')
-                <x-navigation.submenu route="loyalty.settings" label="Configuración" />
+            @can('configuracion.editar')
+                <x-navigation.submenu route="configuracion.index" label="Configuración" />
             @endcan
         </x-navigation.dropdown>
     @endcanany

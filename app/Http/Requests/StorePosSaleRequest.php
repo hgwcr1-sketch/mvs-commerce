@@ -64,6 +64,13 @@ class StorePosSaleRequest extends FormRequest
                     ? 'required'
                     : 'nullable',
                 'integer',
+                'required_with:requested_points',
+            ],
+            'requested_points' => [
+                'nullable',
+                'numeric',
+                'gt:0',
+                'regex:/^\d+(?:\.\d{1,4})?$/',
             ],
             'document_type' => [
                 'required',
@@ -145,6 +152,8 @@ class StorePosSaleRequest extends FormRequest
             'cash_effect_amount' => ['prohibited'],
             'payments.*.affects_cash_snapshot' => ['prohibited'],
             'payments.*.cash_effect_amount' => ['prohibited'],
+            'redeemed_amount' => ['prohibited'],
+            'point_value' => ['prohibited'],
 
             'items.*.price' => ['prohibited'],
             'items.*.sale_price' => ['prohibited'],

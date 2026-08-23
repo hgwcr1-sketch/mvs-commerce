@@ -29,7 +29,7 @@ class LoyaltyPercentageSettingTest extends TestCase
             ->get(route('configuracion.index'))
             ->assertOk()
             ->assertSee('Porcentaje de acumulación')
-            ->assertSee('value="5.0000"', false);
+            ->assertSee('value="5.00"', false);
 
         $this->actingAs($user)
             ->withSession(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id])
@@ -169,6 +169,112 @@ class LoyaltyPercentageSettingTest extends TestCase
 
         $this->assertTrue($setting->fresh()->earn_on_offers);
         $this->assertFalse($otherSetting->fresh()->earn_on_offers);
+    }
+
+    public function test_settings_page_renders_all_loyalty_fields_inside_the_form(): void
+    {
+        [$company, $branch, $user] = $this->authorizedContext();
+        $this->setting($company, '5.0000');
+
+        $content = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('configuracion.index'))
+            ->getContent();
+
+        $formOpen = strpos($content, '<form method="POST" action="'.route('configuracion.update', 'fidelidad').'"');
+        $this->assertNotFalse($formOpen);
+        $formClose = strpos($content, '</form>', $formOpen);
+        $this->assertNotFalse($formClose);
+
+        foreach (
+            [
+                'name="earning_percentage"',
+                'name="is_active"',
+                'name="birthday_enabled"',
+                'name="birthday_points"',
+                'name="returning_customer_enabled"',
+                'name="returning_customer_days"',
+                'name="returning_customer_points"',
+                'name="point_value"',
+                'name="redemption_minimum_enabled"',
+                'name="redemption_minimum_amount"',
+                'name="maximum_redemption_percent"',
+            ] as $field
+        ) {
+            $position = strpos($content, $field);
+            $this->assertNotFalse($position, "El campo {$field} no aparece en la página.");
+            $this->assertTrue(
+                $position > $formOpen && $position < $formClose,
+                "El campo {$field} está fuera del formulario de Fidelización.",
+            );
+        }
+    }
+
+    public function test_validation_errors_for_missing_fields_are_displayed_in_spanish(): void
+    {
+        [$company, $branch, $user] = $this->authorizedContext();
+        $setting = $this->setting($company, '5.0000');
+
+        $response = $this->followingRedirects()
+            ->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->from(route('configuracion.index'))
+            ->put(route('configuracion.update', 'fidelidad'), [
+                'earning_percentage' => '5',
+                'is_active' => '1',
+            ]);
+
+        $response->assertOk()
+            ->assertSee('El campo de puntos de cumpleaños es obligatorio.')
+            ->assertSee('El campo de días sin comprar es obligatorio.')
+            ->assertSee('El campo de puntos por retorno es obligatorio.');
+
+        $this->assertSame('5.0000', $setting->fresh()->earning_percentage);
+    }
+
+    public function test_loyalty_activation_toggle_is_saved_only_for_the_active_company(): void
+    {
+        [$companyA, $branchA, $user] = $this->authorizedContext();
+        [$companyB] = $this->companyContext('Empresa B');
+        $settingA = $this->setting($companyA, '5.0000');
+        $settingB = $this->setting($companyB, '10.0000');
+        $settingB->update(['is_active' => false]);
+
+        $permission = Permission::firstOrCreate(
+            ['name' => 'fidelidad.configuracion'],
+            ['label' => 'fidelidad.configuracion', 'module' => 'Fidelización', 'is_active' => true],
+        );
+        foreach ($user->roles as $role) {
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
+        }
+
+        $session = fn () => $this->actingAs($user)
+            ->withSession(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id]);
+
+        $session()->get(route('loyalty.settings'))->assertRedirect(route('configuracion.index'));
+
+        $payload = [
+            'is_active' => '1',
+            'earning_percentage' => '5',
+            'birthday_enabled' => '0',
+            'birthday_points' => '0',
+            'returning_customer_enabled' => '0',
+            'returning_customer_days' => '0',
+            'returning_customer_points' => '0',
+        ];
+
+        $session()->put(route('configuracion.update', 'fidelidad'), $payload)
+            ->assertRedirect(route('configuracion.index'));
+        $settingA->refresh();
+        $this->assertTrue($settingA->is_active);
+        $this->assertFalse($settingB->fresh()->is_active);
+
+        $payload['is_active'] = '0';
+
+        $session()->put(route('configuracion.update', 'fidelidad'), $payload)
+            ->assertRedirect(route('configuracion.index'));
+        $this->assertFalse($settingA->fresh()->is_active);
+        $this->assertFalse($settingB->fresh()->is_active);
     }
 
     private function authorizedContext(): array

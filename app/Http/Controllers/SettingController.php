@@ -58,6 +58,9 @@ class SettingController extends Controller
             'returning_customer_days' => $request->validated('returning_customer_days'),
             'returning_customer_points' => $request->validated('returning_customer_points'),
         ];
+        if (array_key_exists('is_active', $request->validated())) {
+            $values['is_active'] = $request->boolean('is_active');
+        }
         if ($request->filled('point_value')) {
             $values['point_value'] = $request->validated('point_value');
         }
@@ -103,10 +106,8 @@ class SettingController extends Controller
         return back()->with('success', 'Plantillas de Fidelidad actualizadas correctamente.');
     }
 
-    public function loyaltySettings(LoyaltyMessageTemplateService $messageTemplates): View
+    public function loyaltySettings(): RedirectResponse
     {
-        return view('loyalty.settings', [
-            'loyaltyMessageTemplates' => $messageTemplates->templates((int) session('active_company_id')),
-        ]);
+        return redirect()->route('configuracion.index');
     }
 }

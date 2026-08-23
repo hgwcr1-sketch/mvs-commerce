@@ -19,6 +19,7 @@ use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyBirthdayService;
 use App\Services\Loyalty\LoyaltyEarningService;
 use App\Services\Loyalty\LoyaltyOfferEligibilityService;
+use App\Services\Loyalty\LoyaltyRedemptionService;
 use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,7 @@ class PosSaleProcessor
         private readonly LoyaltyOfferEligibilityService $loyaltyOfferEligibilityService,
         private readonly LoyaltyBirthdayService $loyaltyBirthdayService,
         private readonly LoyaltyReturningCustomerService $loyaltyReturningCustomerService,
+        private readonly LoyaltyRedemptionService $loyaltyRedemptionService,
     ) {}
 
     /** @return array{sale: Sale, duplicate: bool} */
@@ -42,11 +44,13 @@ class PosSaleProcessor
     {
         $items = $this->consolidateItems($data['items']);
         $payments = $this->canonicalPayments($data['payments']);
+        $requestedPoints = $this->canonicalRequestedPoints($data);
 
         $fingerprint = $this->fingerprint(
             $data,
             $items,
             $payments,
+            $requestedPoints,
             $user->id,
             $companyId,
             $branchId,
@@ -79,6 +83,7 @@ class PosSaleProcessor
                 $items,
                 $payments,
                 $fingerprint,
+                $requestedPoints,
                 $user,
                 $companyId,
                 $branchId
@@ -384,6 +389,8 @@ class PosSaleProcessor
                     $payments,
                     $paymentMethods,
                     $total,
+                    null,
+                    $requestedPoints === null,
                 );
                 $isCredit = count($resolvedPayments) === 1 && $resolvedPayments[0]['method']->type === PaymentMethod::TYPE_CREDIT;
                 if ($isCredit && $customer === null) {
@@ -448,6 +455,84 @@ class PosSaleProcessor
                             $line['quantity'],
                         );
                     }
+                }
+
+                if ($requestedPoints !== null) {
+                    if ($customer === null) {
+                        throw ValidationException::withMessages([
+                            'customer_id' => 'Debe seleccionar un cliente para canjear puntos.',
+                        ]);
+                    }
+
+                    if ($isCredit) {
+                        throw ValidationException::withMessages([
+                            'payments' => 'No es posible combinar el canje de puntos con una venta a crédito.',
+                        ]);
+                    }
+
+                    $loyaltyMethod = PaymentMethod::query()
+                        ->where('company_id', $companyId)
+                        ->where('is_active', true)
+                        ->where('type', PaymentMethod::TYPE_LOYALTY_POINTS)
+                        ->orderBy('id')
+                        ->first();
+
+                    if ($loyaltyMethod === null) {
+                        throw ValidationException::withMessages([
+                            'payments' => 'El método de pago con puntos de fidelidad no está disponible.',
+                        ]);
+                    }
+
+                    $hasOffers = array_reduce(
+                        $resolvedLines,
+                        fn (bool $carry, array $line) => $carry || $line['isOffer'],
+                        false,
+                    );
+
+                    $redemption = $this->loyaltyRedemptionService->redeem(
+                        $customer,
+                        $company,
+                        $requestedPoints,
+                        number_format($total, 4, '.', ''),
+                        [
+                            'branch' => $branch,
+                            'user' => $user,
+                            'source_type' => Sale::class,
+                            'source_id' => $sale->id,
+                            'event_key' => "sale:{$sale->id}:loyalty:redemption",
+                            'description' => "Canje de puntos en venta {$sale->sale_number}",
+                            'effective_at' => $sale->completed_at,
+                            'metadata' => ['sale_number' => $sale->sale_number],
+                            'is_offer' => $hasOffers,
+                        ],
+                    );
+
+                    $cashApplied = $this->decimal4(
+                        array_sum(array_map(
+                            fn (array $payment) => $payment['amount'],
+                            $resolvedPayments,
+                        )),
+                    );
+
+                    if ($cashApplied !== $this->decimal4($total - (float) $redemption['redeemed_amount'])) {
+                        throw ValidationException::withMessages([
+                            'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta menos el monto canjeado con puntos.',
+                        ]);
+                    }
+
+                    SalePayment::create([
+                        'sale_id' => $sale->id,
+                        'cash_session_id' => $cashSession?->id,
+                        'payment_method_id' => $loyaltyMethod->id,
+                        'affects_cash_snapshot' => false,
+                        'created_by' => $user->id,
+                        'amount' => $redemption['redeemed_amount'],
+                        'received_amount' => $redemption['redeemed_amount'],
+                        'change_amount' => 0,
+                        'cash_effect_amount' => 0,
+                        'reference' => null,
+                        'status' => SalePayment::STATUS_COMPLETED,
+                    ]);
                 }
 
                 foreach ($resolvedPayments as $payment) {
@@ -900,10 +985,31 @@ class PosSaleProcessor
         return $canonical;
     }
 
+    private function canonicalRequestedPoints(
+        array $data,
+    ): ?string {
+        if (
+            ! array_key_exists('requested_points', $data)
+            || $data['requested_points'] === null
+            || trim((string) $data['requested_points']) === ''
+        ) {
+            return null;
+        }
+
+        return number_format(
+            (float) $data['requested_points'],
+            4,
+            '.',
+            '',
+        );
+    }
+
     private function resolvePayments(
         array $payments,
         $paymentMethods,
         float $total,
+        ?float $coverageTarget = null,
+        bool $enforceCoverage = true,
     ): array {
         $creditPayments = array_filter($payments, fn ($payment) => $paymentMethods->get($payment['payment_method_id'])?->type === PaymentMethod::TYPE_CREDIT);
         if ($creditPayments !== []) {
@@ -917,6 +1023,7 @@ class PosSaleProcessor
         $resolved = [];
         $applied = 0.0;
         $changeProducerSeen = false;
+        $coverage = $coverageTarget ?? $total;
 
         foreach ($payments as $index => $payment) {
             $method = $paymentMethods->get(
@@ -949,7 +1056,7 @@ class PosSaleProcessor
             $amount = (float) $payment['amount'];
 
             $pending = $this->decimal4(
-                $total - $applied,
+                $coverage - $applied,
             );
 
             if ($amount > $pending) {
@@ -1005,8 +1112,8 @@ class PosSaleProcessor
         }
 
         if (
-            $applied
-            !== $this->decimal4($total)
+            $enforceCoverage
+            && $applied !== $this->decimal4($coverage)
         ) {
             throw ValidationException::withMessages([
                 'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta.',
@@ -1020,6 +1127,7 @@ class PosSaleProcessor
         array $data,
         array $items,
         array $payments,
+        ?string $requestedPoints,
         int $userId,
         int $companyId,
         int $branchId,
@@ -1040,6 +1148,8 @@ class PosSaleProcessor
                         : null,
 
                 'payments' => $payments,
+
+                'requested_points' => $requestedPoints,
 
                 'items' => array_map(
                     fn (array $line) => [

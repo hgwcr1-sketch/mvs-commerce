@@ -122,6 +122,8 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::post('/pos/clientes/rapido', [PosController::class, 'storeQuickCustomer'])
             ->middleware('permission:clientes.crear')
             ->name('pos.customers.quick-store');
+        Route::get('/pos/fidelidad/consulta', [PosController::class, 'loyaltySummary'])
+            ->name('pos.loyalty.summary');
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
             ->middleware('permission:ventas.crear')
             ->name('pos.checkout');

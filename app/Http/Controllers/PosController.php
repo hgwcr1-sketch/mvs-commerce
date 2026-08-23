@@ -16,6 +16,7 @@ use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\Sales\PosSaleProcessor;
+use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\Sales\SuspendedSaleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -296,6 +297,35 @@ class PosController extends Controller
     'price_level' => $customer->price_level,
 ],
         ], 201);
+    }
+
+    public function loyaltySummary(Request $request, LoyaltyPosSummaryService $service): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer'],
+            'total' => ['required', 'numeric', 'min:0'],
+            'has_offers' => ['nullable', 'boolean'],
+        ]);
+
+        $companyId = (int) session('active_company_id');
+
+        $customer = Customer::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->find($validated['customer_id']);
+
+        if ($customer === null) {
+            return response()->json(['available' => false, 'reason' => 'customer'], 404);
+        }
+
+        $company = Company::query()->findOrFail($companyId);
+
+        return response()->json($service->summary(
+            $customer,
+            $company,
+            number_format((float) $validated['total'], 4, '.', ''),
+            (bool) ($validated['has_offers'] ?? false),
+        ));
     }
 
     public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse

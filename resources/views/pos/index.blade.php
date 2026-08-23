@@ -456,6 +456,28 @@
                             <section class="space-y-4" aria-label="Monto y formas de pago">
                                 <div class="rounded-2xl border-2 border-[#B1922D] p-5"><div class="flex items-center justify-between gap-3"><label for="checkout-amount" class="font-black text-[#111111]">Monto a aplicar</label><button type="button" @click="usePendingBalance" class="text-sm font-bold text-[#806817] underline">Usar saldo pendiente</button></div><div class="mt-2 flex min-w-0 items-center rounded-xl bg-slate-50 px-4"><span class="shrink-0 text-3xl font-black text-[#806817]">₡</span><input id="checkout-amount" x-ref="checkoutAmount" x-model="checkout.draft.amount" @focus="$event.target.select()" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="min-w-0 w-full border-0 bg-transparent py-4 pl-2 text-right text-3xl font-black text-[#111111] focus:ring-0 sm:text-4xl"></div></div>
                                 <div><div class="flex items-end justify-between"><div><h3 class="text-lg font-black">Formas de pago</h3><p class="text-xs text-slate-500">Seleccione un método para aplicar el monto.</p></div><span class="text-xs font-semibold text-slate-500">Sin apertura de caja</span></div>
+                                    <div x-show="selectedCustomer" x-transition class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
+                                        <div class="flex items-center justify-between gap-3"><h4 class="text-sm font-black text-[#111111]">Puntos de fidelización</h4><span x-show="loyalty.loading" class="text-xs font-semibold text-slate-400">Consultando…</span></div>
+                                        <p x-show="!loyalty.loading && loyaltyBlockedReason" class="mt-1 text-xs font-medium text-slate-500" x-text="loyaltyBlockedReason"></p>
+                                        <div x-show="!loyalty.loading && loyaltyUsable" class="mt-3 space-y-3">
+                                            <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Saldo</p><p class="mt-0.5 font-bold text-slate-800"><span x-text="formatPoints(loyalty.available_points)"></span> pts</p></div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Valor</p><p class="mt-0.5 font-bold text-slate-800" x-text="money2(loyalty.available_money)"></p></div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Máximo utilizable</p><p class="mt-0.5 font-bold text-slate-800" x-text="money2(loyalty.max_redeemable_money)"></p></div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Mínimo requerido</p><p class="mt-0.5 font-bold text-slate-800" x-text="loyalty.minimum_enabled ? money2(loyalty.minimum_amount) : 'No aplica'"></p></div>
+                                            </div>
+                                            <div class="grid items-start gap-3 sm:grid-cols-2">
+                                                <label class="block text-xs font-semibold uppercase text-slate-500">Usar puntos
+                                                    <input type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0" x-model="loyalty.requested" :disabled="checkout.processing" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-base font-bold text-[#111111] focus:border-[#B1922D] focus:ring-2 focus:ring-amber-500/30 focus:outline-none">
+                                                </label>
+                                                <div class="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                                                    <div class="flex justify-between"><span class="text-slate-500">Valor del canje</span><strong class="text-slate-800" x-text="money2(loyaltyRedeemedEstimate)"></strong></div>
+                                                    <div class="flex justify-between"><span class="text-slate-500">Pendiente por pagar</span><strong class="text-slate-800" x-text="money2(pendingBalance)"></strong></div>
+                                                    <p x-show="loyaltyFractionalPending" class="font-semibold text-red-600">El canje genera un pendiente con centavos. Ajuste los puntos a un valor exacto en colones.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-black ring-4 ring-amber-500/30 hover:bg-amber-600' : 'border-amber-500 bg-amber-500 text-black hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Próximamente' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
                                 </div>
 
@@ -631,10 +653,14 @@ document.addEventListener('alpine:init', () => {
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
+        loyaltyRequestNumber: 0,
+        loyalty: { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' },
 
         init() {
             const quoteId = new URLSearchParams(window.location.search).get('quote_id');
             if (quoteId) this.loadQuote(quoteId);
+            this.$watch('customerId', () => this.refreshLoyalty());
+            this.$watch('grandTotal', () => { if (this.customerId) this.refreshLoyalty(); });
         },
 
         get resultsOpen() {
@@ -727,9 +753,36 @@ document.addEventListener('alpine:init', () => {
         get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
-        get pendingBalance() { return Math.max(0, this.grandTotal - this.appliedTotal); },
+        get pendingBalance() { return Math.max(0, Math.round(this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate)); },
+        get loyaltyRequestedPoints() {
+            const value = Number(this.loyalty.requested);
+            if (!this.loyalty.available || !Number.isFinite(value) || value <= 0) return 0;
+            const max = Number(this.loyalty.max_redeemable_points);
+            if (Number.isFinite(max) && max > 0) return Math.min(value, max);
+            return value;
+        },
+        get loyaltyRedeemedEstimate() { return this.decimal4(this.loyaltyRequestedPoints * this.numberValue(this.loyalty.point_value)); },
+        get loyaltyUsable() { return this.loyalty.available && this.loyalty.eligible && this.loyalty.offers_allowed && Number(this.loyalty.max_redeemable_points) > 0; },
+        get loyaltyBlockedReason() {
+            if (!this.selectedCustomer) return 'Seleccione un cliente para consultar sus puntos.';
+            if (this.loyalty.loading) return '';
+            if (!this.loyalty.available) {
+                if (this.loyalty.reason === 'no_account') return 'El cliente no tiene cuenta de Fidelización.';
+                if (this.loyalty.reason === 'inactive') return 'Fidelización está desactivada para esta empresa.';
+                if (this.loyalty.reason === 'invalid_configuration') return 'La configuración de Fidelización no es válida.';
+                return 'Puntos no disponibles para este cliente.';
+            }
+            if (!this.loyalty.offers_allowed) return 'El canje de puntos no está permitido en ofertas.';
+            if (!this.loyalty.eligible) return 'El saldo no alcanza el mínimo requerido para canjear.';
+            return '';
+        },
+        get loyaltyFractionalPending() {
+            if (this.loyaltyRequestedPoints <= 0) return false;
+            const pending = this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate;
+            return Math.abs(pending - Math.round(pending)) > 0.000001;
+        },
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
-        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && (!this.creditPaymentSelected || this.creditEligible); },
+        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
@@ -964,6 +1017,8 @@ document.addEventListener('alpine:init', () => {
             return this.decimal4(this.lineSubtotal(item, index) + this.lineTax(item, index));
         },
         money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value) || 0); },
+        money2(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); },
+        formatPoints(value) { return new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4 }).format(Number(value) || 0); },
         formatQuantity(value) { return new Intl.NumberFormat('es-CR', { maximumFractionDigits: 4 }).format(Number(value) || 0); },
         otherStockLabel(product) { return product.other_branch_stock.map(stock => `${stock.branch_name} ${this.formatQuantity(stock.available_stock)}`).join(', '); },
         showStockLimit(item) { this.notice = `Existencia máxima disponible: ${this.formatQuantity(item.available_stock)}`; },
@@ -1047,6 +1102,7 @@ document.addEventListener('alpine:init', () => {
                         ...(this.quoteId ? { quote_id: this.quoteId } : {}),
                         customer_id: this.customerId,
                         document_type: this.documentType,
+                        ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
                         items: this.cart.map(item => ({
                             product_id: item.id,
@@ -1086,9 +1142,35 @@ document.addEventListener('alpine:init', () => {
             this.successMessage = '';
             this.clearSuspendedRecovery();
             this.quoteId = null;
+            this.refreshLoyalty();
             this.$nextTick(() => this.$refs.searchInput.focus());
         },
         clearSuspendedRecovery() { this.suspended.activeId = null; this.suspended.recoveryToken = null; this.suspended.warnings = []; this.suspended.customerInvalid = false; },
+        async refreshLoyalty() {
+            const currentRequest = ++this.loyaltyRequestNumber;
+            if (!this.customerId || this.grandTotal <= 0) {
+                this.loyalty = { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' };
+                return;
+            }
+            this.loyalty.loading = true;
+            try {
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.loyalty.summary')) }}, window.location.origin);
+                url.searchParams.set('customer_id', String(this.customerId));
+                url.searchParams.set('total', String(this.grandTotal));
+                url.searchParams.set('has_offers', this.cart.some(item => item.is_offer) ? '1' : '0');
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                const payload = await this.readFetchResponse(response);
+                if (currentRequest !== this.loyaltyRequestNumber) return;
+                const requested = this.loyalty.requested;
+                this.loyalty = Object.assign({}, payload, { loading: false, requested });
+            } catch (error) {
+                if (currentRequest === this.loyaltyRequestNumber) {
+                    this.loyalty.available = false;
+                    this.loyalty.reason = '';
+                    this.loyalty.loading = false;
+                }
+            }
+        },
         async createQuote() {
             if (!this.cart.length) { this.notice = 'Agregue al menos un producto antes de crear la cotización.'; return; }
             if (this.quoteId) { this.notice = 'Esta cotización ya está cargada como base editable.'; return; }

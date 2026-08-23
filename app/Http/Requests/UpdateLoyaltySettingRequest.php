@@ -15,6 +15,7 @@ class UpdateLoyaltySettingRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'is_active' => ['nullable', 'boolean'],
             'earning_percentage' => ['required', 'numeric', 'gt:0', 'lte:100', 'decimal:0,4'],
             'point_value' => ['nullable', 'numeric', 'gt:0', 'decimal:0,4'],
             'redemption_minimum_enabled' => ['nullable', 'boolean'],
@@ -45,15 +46,36 @@ class UpdateLoyaltySettingRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'is_active.boolean' => 'El estado de Fidelización no es válido.',
             'earning_percentage.required' => 'Ingrese el porcentaje de acumulación.',
             'earning_percentage.numeric' => 'El porcentaje de acumulación debe ser numérico.',
             'earning_percentage.gt' => 'El porcentaje de acumulación debe ser mayor que cero.',
             'earning_percentage.lte' => 'El porcentaje de acumulación no puede superar 100%.',
             'earning_percentage.decimal' => 'El porcentaje admite como máximo cuatro decimales.',
+            'point_value.numeric' => 'El valor monetario del punto debe ser numérico.',
+            'point_value.gt' => 'El valor monetario del punto debe ser mayor que cero.',
+            'point_value.decimal' => 'El valor del punto admite como máximo cuatro decimales.',
+            'redemption_minimum_enabled.boolean' => 'El estado del monto mínimo no es válido.',
+            'redemption_minimum_amount.required' => 'Ingrese el monto monetario mínimo para utilizar puntos.',
+            'redemption_minimum_amount.numeric' => 'El monto monetario mínimo debe ser numérico.',
+            'redemption_minimum_amount.min' => 'El monto monetario mínimo no puede ser negativo.',
+            'redemption_minimum_amount.gt' => 'El monto monetario mínimo debe ser mayor que cero.',
+            'redemption_minimum_amount.decimal' => 'El monto mínimo admite como máximo cuatro decimales.',
+            'maximum_redemption_percent.numeric' => 'El porcentaje máximo de canje debe ser numérico.',
+            'maximum_redemption_percent.gt' => 'El porcentaje máximo de canje debe ser mayor que cero.',
+            'maximum_redemption_percent.lte' => 'El porcentaje máximo de canje no puede superar 100%.',
+            'maximum_redemption_percent.decimal' => 'El porcentaje máximo de canje admite como máximo cuatro decimales.',
+            'earn_on_offers.boolean' => 'El estado de acumulación en ofertas no es válido.',
+            'birthday_enabled.required' => 'El estado del bono de cumpleaños es obligatorio.',
+            'birthday_enabled.boolean' => 'El estado del bono de cumpleaños no es válido.',
+            'birthday_points.required' => 'El campo de puntos de cumpleaños es obligatorio.',
             'birthday_points.numeric' => 'Los puntos de cumpleaños deben ser numéricos.',
             'birthday_points.min' => 'Los puntos de cumpleaños no pueden ser negativos.',
             'birthday_points.gt' => 'Ingrese una cantidad mayor que cero para activar el bono.',
             'birthday_points.decimal' => 'Los puntos de cumpleaños admiten como máximo cuatro decimales.',
+            'returning_customer_enabled.required' => 'El estado del bono por retorno es obligatorio.',
+            'returning_customer_enabled.boolean' => 'El estado del bono por retorno no es válido.',
+            'returning_customer_days.required' => 'El campo de días sin comprar es obligatorio.',
             'returning_customer_days.integer' => 'Los días de inactividad deben ser un número entero.',
             'returning_customer_days.min' => 'Ingrese al menos un día para activar el bono de retorno.',
             'returning_customer_days.max' => 'Los días de inactividad no pueden superar 3650.',
@@ -61,6 +83,7 @@ class UpdateLoyaltySettingRequest extends FormRequest
             'returning_customer_points.min' => 'Los puntos de retorno no pueden ser negativos.',
             'returning_customer_points.gt' => 'Ingrese puntos mayores que cero para activar el bono de retorno.',
             'returning_customer_points.decimal' => 'Los puntos de retorno admiten como máximo cuatro decimales.',
+            'returning_customer_points.required' => 'El campo de puntos por retorno es obligatorio.',
         ];
     }
 }

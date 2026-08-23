@@ -2,11 +2,13 @@
 
 namespace App\Services\Sales;
 
+use App\Models\LoyaltyMovement;
 use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\AccountReceivable;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
+use App\Services\Loyalty\LoyaltyAccountService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,6 +16,7 @@ class SaleVoidService
 {
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
+        private readonly LoyaltyAccountService $loyaltyAccountService,
     ) {
     }
 
@@ -82,6 +85,8 @@ class SaleVoidService
                 }
             }
 
+            $this->reverseLoyaltyRedemption($sale, $user, $reason);
+
             $sale->accountReceivable?->update(['status' => AccountReceivable::STATUS_CANCELLED, 'balance_due' => 0]);
 
             $sale->update([
@@ -96,5 +101,33 @@ class SaleVoidService
                 'payments',
             ]);
         });
+    }
+
+    private function reverseLoyaltyRedemption(Sale $sale, User $user, string $reason): void
+    {
+        $movement = LoyaltyMovement::query()
+            ->where('company_id', $sale->company_id)
+            ->where('source_type', Sale::class)
+            ->where('source_id', $sale->id)
+            ->where('type', LoyaltyMovement::TYPE_REDEMPTION)
+            ->first();
+
+        if ($movement === null) {
+            return;
+        }
+
+        $this->loyaltyAccountService->reverseMovement($movement, LoyaltyMovement::TYPE_VOID, [
+            'branch' => $sale->branch_id,
+            'user' => $user->id,
+            'source_type' => Sale::class,
+            'source_id' => $sale->id,
+            'event_key' => "sale:{$sale->id}:loyalty:redemption:void",
+            'description' => "Reversión de canje por anulación de venta {$sale->sale_number}",
+            'effective_at' => now(),
+            'metadata' => [
+                'sale_number' => $sale->sale_number,
+                'void_reason' => $reason,
+            ],
+        ]);
     }
 }
