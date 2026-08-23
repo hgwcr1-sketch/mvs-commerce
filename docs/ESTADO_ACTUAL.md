@@ -10,19 +10,19 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F21: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
+**F01–F22: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F21 — Historial de canjes de premios: COMPLETADO.**
+**F22 — Vencimiento configurable: COMPLETADO.**
 
 Además:
 
-- **F22 — Vencimiento configurable: SIGUIENTE.** Es la única fase autorizada para iniciar (etapa 6 del cronograma).
+- **F23 — Vencimiento automático: SIGUIENTE.** Es la única fase autorizada para iniciar. Debe respetar la política F22 (`expiration_enabled` + `expiration_months`), calcular inactividad sobre compras calificables (`last_qualifying_purchase_at`), generar salida trazable en Kardex con tipo `expiration` vía `LoyaltyAccountService`, con idempotencia y ejecución controlada (command/job).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`). El adelanto NO altera el orden del cronograma.
-- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F22–F27.
+- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F23–F27.
 
-Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F21: regresión Loyalty en verde (128 tests) más POS-Loyalty (48 tests); canjes de premios: 11 tests, 61 aserciones.
+Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones.
 
 Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están etiquetadas dentro del repositorio; no inventar correspondencia exacta de letras.
 
@@ -59,7 +59,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: fases confirmadas hasta F21 (canje de premios con historial) más F28 adelantada. Siguiente fase según cronograma: F22 — Vencimiento configurable. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
+- Fidelización: fases confirmadas hasta F22 (vencimiento configurable) más F28 adelantada. Siguiente fase según cronograma: F23 — Vencimiento automático. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
@@ -87,7 +87,7 @@ No asumir que el último estado conocido sigue vigente.
 Suite principal: `tests/Feature`.
 
 - POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`.
-- Fidelización: `tests/Feature/Loyalty*Test.php`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad y canjes: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
+- Fidelización: `tests/Feature/Loyalty*Test.php`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`, `LoyaltyExpirationSettingTest`.
 - Caja: `Cash*Test.php`.
 - Módulos recientes: `Order*Test.php`, `PurchaseOrderTest`, `PurchaseOrderConversionTest`, `LayawayV1Test`, `SaleReturnTest`, `SaleVoidTest`, `AccountsPayable*Test.php`.
 

@@ -57,6 +57,8 @@ class SettingController extends Controller
             'returning_customer_enabled' => $request->boolean('returning_customer_enabled'),
             'returning_customer_days' => $request->validated('returning_customer_days'),
             'returning_customer_points' => $request->validated('returning_customer_points'),
+            'expiration_enabled' => $request->boolean('expiration_enabled'),
+            'expiration_months' => $request->validated('expiration_months'),
         ];
         if (array_key_exists('is_active', $request->validated())) {
             $values['is_active'] = $request->boolean('is_active');

@@ -40,6 +40,10 @@ class UpdateLoyaltySettingRequest extends FormRequest
                 'required', 'numeric', 'min:0', 'decimal:0,4',
                 Rule::when($this->boolean('returning_customer_enabled'), ['gt:0']),
             ],
+            'expiration_enabled' => ['nullable', 'boolean'],
+            'expiration_months' => $this->boolean('expiration_enabled')
+                ? ['required', 'integer', 'min:1', 'max:120']
+                : ['nullable', 'prohibited'],
         ];
     }
 
@@ -84,6 +88,12 @@ class UpdateLoyaltySettingRequest extends FormRequest
             'returning_customer_points.gt' => 'Ingrese puntos mayores que cero para activar el bono de retorno.',
             'returning_customer_points.decimal' => 'Los puntos de retorno admiten como máximo cuatro decimales.',
             'returning_customer_points.required' => 'El campo de puntos por retorno es obligatorio.',
+            'expiration_enabled.boolean' => 'El estado del vencimiento de puntos no es válido.',
+            'expiration_months.required' => 'Ingrese la cantidad de meses de inactividad para el vencimiento.',
+            'expiration_months.integer' => 'Los meses de inactividad deben ser un número entero.',
+            'expiration_months.min' => 'Los meses de inactividad deben ser al menos 1.',
+            'expiration_months.max' => 'Los meses de inactividad no pueden superar 120 (10 años).',
+            'expiration_months.prohibited' => 'No puede indicar meses de inactividad con el vencimiento desactivado.',
         ];
     }
 }

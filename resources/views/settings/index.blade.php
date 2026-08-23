@@ -124,6 +124,20 @@
                 <p class="mt-2 text-sm text-slate-500">Define cuánto del total elegible puede cubrir el cliente con sus puntos.</p>
             </div>
 
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="expiration_enabled" value="0">
+                <label class="flex items-start gap-3">
+                    <input type="checkbox" name="expiration_enabled" value="1" @checked(old('expiration_enabled', $loyaltySetting->expiration_enabled)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+                    <span><span class="block font-semibold text-slate-800">Los puntos vencen por inactividad</span><span class="block text-sm text-slate-500">Con el vencimiento desactivado, los puntos acumulados nunca expiran. Al activarlo, indique los meses sin compras calificables tras los cuales vencerán.</span></span>
+                </label>
+                <div class="mt-4">
+                    <label for="expiration_months" class="mb-1 block text-sm font-semibold text-slate-700">Meses de inactividad para el vencimiento</label>
+                    <input id="expiration_months" name="expiration_months" type="number" min="1" max="120" step="1" value="{{ old('expiration_months', $loyaltySetting->expiration_months) }}" class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
+                    @error('expiration_months')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    <p class="mt-2 text-sm text-slate-500">Meses enteros libres entre 1 y 120 (ejemplos: 1, 2, 7, 12). La expiración automática se activará en una fase posterior.</p>
+                </div>
+            </div>
+
             @can('configuracion.editar')
                 <button type="submit" class="rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar configuración de Fidelización</button>
             @endcan

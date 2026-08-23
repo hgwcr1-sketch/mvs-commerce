@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F21 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F22 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -416,6 +416,7 @@ Entre las fases recientes se encuentran:
 - premios por puntos: catálogo administrable de producto/descuento/servicio/regalo (F19)
 - disponibilidad de premios: ilimitada, cupo propio o vinculada a stock real por sucursal (F20)
 - canje de premios con historial auditable y coherencia Kardex (F21)
+- vencimiento configurable: Sí/No + meses enteros libres de inactividad (F22)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -484,6 +485,16 @@ Evidencia: migración `2026_08_23_000003_create_loyalty_reward_redemptions_table
 
 Nota: no se implementan vencimiento (F22–F23), portal (F30+), online (F36–F37) ni devoluciones de canjes (F29).
 
+#### F22 — Vencimiento configurable — COMPLETADO
+
+- política de vencimiento Sí/No con cantidad libre de meses enteros de inactividad (1–120, sin opciones rígidas tipo 3/6/12);
+- campos `expiration_enabled` (boolean) y `expiration_months` (unsignedInteger nullable) **reutilizados de la infraestructura base**; sin migraciones nuevas ni duplicación;
+- validación condicional en `UpdateLoyaltySettingRequest`: meses obligatorios, enteros, ≥ 1 y ≤ 120 solo cuando está activado; prohibido indicar meses con el vencimiento desactivado; desactivar limpia los meses para representar claramente que los puntos no vencen;
+- tarjeta nueva en la pantalla de configuración de Fidelización, consistente con el estilo MVS y protegida por los permisos existentes de configuración;
+- F22 SOLO configura la política: no vence puntos, no crea movimientos ni procesos automáticos.
+
+Evidencia: cambios en `UpdateLoyaltySettingRequest`, `SettingController` y vista `settings/index`; `LoyaltyExpirationSettingTest` (7 tests, 62 aserciones).
+
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
 Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
@@ -501,7 +512,7 @@ Evidencia histórica:
 
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F22–F27.
+- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F23–F27.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
@@ -518,11 +529,11 @@ Evidencia histórica:
 
 ### Estado reciente
 
-F01–F21 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+F01–F22 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
 
-Último hito confirmado: F21 — Historial de canjes de premios.
+Último hito confirmado: F22 — Vencimiento configurable.
 
-Siguiente fase según cronograma: **F22 — Vencimiento configurable** (etapa 6). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F23 — Vencimiento automático** (salida trazable de puntos por inactividad respetando la política F22). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 
