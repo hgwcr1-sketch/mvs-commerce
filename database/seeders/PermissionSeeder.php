@@ -171,6 +171,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'fidelidad.contactar', 'label' => 'Registrar contacto de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.configuracion', 'label' => 'Configurar comunicaciones de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.multiplicadores', 'label' => 'Administrar multiplicadores de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.premios', 'label' => 'Administrar premios de Fidelidad', 'module' => 'Fidelidad'],
         ];
 
         foreach ($permissions as $permission) {

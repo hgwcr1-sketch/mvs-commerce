@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F18 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F19 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -413,6 +413,7 @@ Entre las fases recientes se encuentran:
 - máximo de una compra pagable con puntos (F16)
 - canje sobre ofertas (F17, `redeem_on_offers`)
 - forma de pago Puntos integrada al POS (F18)
+- premios por puntos: catálogo administrable de producto/descuento/servicio/regalo (F19)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -447,6 +448,18 @@ Evidencia: commit `7be1f80`; `PosSaleProcessor`, `PosController::loyaltySummary`
 
 Nota sobre subfases: las denominaciones F18A–F18F se utilizaron durante el desarrollo, pero no están etiquetadas explícitamente dentro del repositorio. No corresponde inventar una correspondencia histórica exacta de letras; las capacidades verificadas son las listadas arriba.
 
+#### F19 — Premios por puntos — COMPLETADO (administración)
+
+- estructura persistente `loyalty_rewards` con aislamiento por empresa, costo en puntos DECIMAL(19,4) y tipos: producto, descuento, servicio, regalo;
+- administración básica: crear, editar y activar/desactivar desde la interfaz de Fidelización;
+- permiso propio `fidelidad.premios` sembrado para Administrador y entrada "Premios" en el sidebar condicionada por permisos;
+- validaciones: nombre, tipo permitido, costo positivo con máximo cuatro decimales, descripción opcional;
+- preparación para F20 (stock/disponibilidad) y F21 (historial/canje) sin implementarlas.
+
+Evidencia: migración `2026_08_23_000001_create_loyalty_rewards_table`, `LoyaltyReward`, `LoyaltyRewardController`, `SaveLoyaltyRewardRequest`, rutas `loyalty.rewards.*`, vista `loyalty/rewards/index`; `LoyaltyRewardTest` (5 tests, 49 aserciones).
+
+Nota: el canje de premios por puntos corresponde a F21; esta fase cubre únicamente la administración del catálogo.
+
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
 Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
@@ -464,7 +477,7 @@ Evidencia histórica:
 
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F19–F27.
+- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F20–F27.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
@@ -481,11 +494,11 @@ Evidencia histórica:
 
 ### Estado reciente
 
-F01–F18 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+F01–F19 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
 
-Último hito confirmado: F18 — Forma de pago Puntos en POS.
+Último hito confirmado: F19 — Premios por puntos (administración básica).
 
-Siguiente fase según cronograma: **F19 — Premios por puntos** (crear, activar, desactivar y canjear premios directos). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F20 — Stock / disponibilidad** de premios. No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

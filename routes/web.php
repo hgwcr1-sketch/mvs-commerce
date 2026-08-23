@@ -40,6 +40,7 @@ use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
+use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
 // Finanzas
@@ -380,6 +381,12 @@ Route::middleware(['auth', 'active.company'])->group(function () {
             Route::post('/', [LoyaltyMultiplierController::class, 'store'])->name('store');
             Route::put('/{multiplier}', [LoyaltyMultiplierController::class, 'update'])->name('update');
             Route::patch('/{multiplier}/estado', [LoyaltyMultiplierController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.premios')->prefix('premios')->name('rewards.')->group(function () {
+            Route::get('/', [LoyaltyRewardController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyRewardController::class, 'store'])->name('store');
+            Route::put('/{reward}', [LoyaltyRewardController::class, 'update'])->name('update');
+            Route::patch('/{reward}/estado', [LoyaltyRewardController::class, 'toggle'])->name('toggle');
         });
     });
 

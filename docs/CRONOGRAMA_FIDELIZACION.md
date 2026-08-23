@@ -81,7 +81,7 @@ Estados tomados del Excel maestro del 23-08-2026. La columna "Evidencia" agrega 
 | F16 | 4. Canje | Máximo de una compra | COMPLETADO | ALTA | F15 | POS respeta límite: % de la compra pagable con puntos | `8392dd4`; `LoyaltyRedemptionLimitTest` |
 | F17 | 4. Canje | Usar puntos en ofertas | COMPLETADO | ALTA | F15-F16 | Regla respetada al canjear sobre ofertas | `8392dd4`; `redeem_on_offers`, `LoyaltyRedemptionServiceTest` |
 | F18 | 4. Canje | Forma de pago Puntos | COMPLETADO | CRÍTICA | F14-F17 | Venta completa con puntos como forma de pago en POS | `7be1f80`; suite POS-Loyalty completa |
-| **F19** | **5. Premios** | **Premios por puntos** | **SIGUIENTE** | CRÍTICA | F14 | Crear, activar, desactivar y canjear premios directos (productos, descuentos, servicios, regalos) | pendiente de implementar |
+| F19 | 5. Premios | Premios por puntos | COMPLETADO | CRÍTICA | F14 | Crear, activar, desactivar y canjear premios directos | administración implementada (`loyalty_rewards`, `LoyaltyRewardController`, permiso `fidelidad.premios`, `LoyaltyRewardTest`); el canje de premios corresponde a F21 |
 | F20 | 5. Premios | Stock / disponibilidad | PENDIENTE | ALTA | F19 | No permite canje de premio agotado | — |
 | F21 | 5. Premios | Historial de canjes | PENDIENTE | CRÍTICA | F07,F19 | Kardex + canje coinciden | — |
 | F22 | 6. Vencimiento | Vencimiento configurable | PENDIENTE | ALTA | F07 | Sí/No + meses libres de inactividad, sin opciones rígidas | — |
@@ -157,7 +157,8 @@ Fases que el maestro mantiene PENDIENTES pero donde código/tests ya muestran av
 
 ## Estado y próxima fase
 
-- **Completadas:** F01–F18 según maestro; F28 completada de forma adelantada durante la integración POS (`7be1f80`).
-- **SIGUIENTE:** **F19 — Premios por puntos** (crear, activar, desactivar y canjear premios directos). Única fase autorizada para iniciar.
-- **F29 — Ajuste por devolución:** PENDIENTE. Existe una brecha técnica conocida (`SaleReturnService` no ajusta fidelización en devoluciones parciales; la anulación completa sí revierte). Mantener registrada, pero **NO es la siguiente fase** y no debe adelantarse sobre F19–F27.
-- Auditoría de referencia: 152 tests relacionados con Loyalty / POS-Loyalty ejecutados con 0 fallos tras la integración POS.
+- **Completadas:** F01–F19 según maestro; F28 completada de forma adelantada durante la integración POS (`7be1f80`).
+- **F19 — Premios por puntos: COMPLETADO** (administración básica). Evidencia: migración `loyalty_rewards`, modelo `LoyaltyReward` con tipos product/discount/service/gift, `LoyaltyRewardController` + `SaveLoyaltyRewardRequest`, rutas `loyalty.rewards.*` bajo permiso `fidelidad.premios`, vista `loyalty/rewards/index`, entrada en sidebar y `LoyaltyRewardTest` (5 tests, 49 aserciones). Preparado para F20 (stock) y F21 (historial/canje).
+- **SIGUIENTE:** **F20 — Stock / disponibilidad** de premios. Única fase autorizada para iniciar.
+- **F29 — Ajuste por devolución:** PENDIENTE. Existe una brecha técnica conocida (`SaleReturnService` no ajusta fidelización en devoluciones parciales; la anulación completa sí revierte). Mantener registrada, pero **NO es la siguiente fase** y no debe adelantarse sobre F20–F27.
+- Auditoría de referencia: suite Loyalty/POS-Loyalty en verde tras F18; regresión Loyalty en verde tras F19.

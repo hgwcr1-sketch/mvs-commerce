@@ -10,19 +10,19 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F18: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
+**F01–F19: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F18 — Forma de pago Puntos: COMPLETADO.**
+**F19 — Premios por puntos: COMPLETADO** (administración básica del catálogo).
 
 Además:
 
-- **F19 — Premios por puntos: SIGUIENTE.** Es la única fase autorizada para iniciar.
+- **F20 — Stock / disponibilidad de premios: SIGUIENTE.** Es la única fase autorizada para iniciar.
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`). El adelanto NO altera el orden del cronograma.
-- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F19–F27.
+- **F29 — Ajuste por devolución: PENDIENTE. NO es la siguiente fase.** Existe una brecha técnica conocida: `SaleReturnService` no ajusta fidelización en devoluciones parciales (la anulación completa sí revierte puntos). Debe ejecutarse respetando el orden F20–F27.
 
-Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior: 152 tests relacionados con Loyalty / POS-Loyalty ejecutados con 0 fallos.
+Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F19: regresión Loyalty en verde (110 + 48 tests POS-Loyalty) y 5 tests nuevos de premios (49 aserciones).
 
 Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están etiquetadas dentro del repositorio; no inventar correspondencia exacta de letras.
 
@@ -59,7 +59,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: fase confirmada hasta F18 (Forma de pago Puntos) más F28 adelantada. Siguiente fase según cronograma: F19 — Premios por puntos. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
+- Fidelización: fases confirmadas hasta F19 (premios, administración) más F28 adelantada. Siguiente fase según cronograma: F20 — Stock/disponibilidad de premios. F29 (devoluciones) permanece PENDIENTE y no debe adelantarse.
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
@@ -87,7 +87,7 @@ No asumir que el último estado conocido sigue vigente.
 Suite principal: `tests/Feature`.
 
 - POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`.
-- Fidelización: `tests/Feature/Loyalty*Test.php`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`.
+- Fidelización: `tests/Feature/Loyalty*Test.php`, `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios: `LoyaltyRewardTest`.
 - Caja: `Cash*Test.php`.
 - Módulos recientes: `Order*Test.php`, `PurchaseOrderTest`, `PurchaseOrderConversionTest`, `LayawayV1Test`, `SaleReturnTest`, `SaleVoidTest`, `AccountsPayable*Test.php`.
 
