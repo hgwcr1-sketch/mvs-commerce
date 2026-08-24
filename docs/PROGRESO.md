@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F27 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F29 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -422,6 +422,7 @@ Entre las fases recientes se encuentran:
 - ajuste manual de puntos con motivo obligatorio, permiso propio e idempotencia (F25)
 - saldo global por empresa verificado entre sucursales con aislamiento empresarial (F26)
 - canje cruzado entre sucursales: POS y premios, con cupo global e inventario por sucursal ejecutora (F27)
+- ajuste proporcional de puntos por devoluciones totales y parciales, trazable en Kardex (F29)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -554,6 +555,21 @@ Evidencia: `StoreLoyaltyAdjustmentRequest`, `LoyaltyAdjustmentController`, vista
 
 Evidencia: `tests/Feature/LoyaltyMultiBranchTest.php` (5 tests, 40 aserciones). Regresión tras F26-F27: 198 tests Loyalty + POS-Loyalty, 1295 aserciones, 0 fallos.
 
+#### F29 — Ajuste por devolución — COMPLETADO
+
+- nuevo `LoyaltySaleReturnAdjustmentService` invocado dentro de la transacción de `SaleReturnService::store()` (tras crear la devolución y sus líneas, antes de actualizar el estado de la venta): cualquier fallo de fidelización revuelve también inventario, caja y estado;
+- **regla proporcional documentada** (BCMath escala 4, sin floats, redondeo half-up explícito):
+  - puntos ganados: proporción = subtotal neto acumuladamente devuelto ÷ `base_amount` elegible del movimiento original de compra, con tope 1; objetivo = `round4(puntos_ganados × proporción)`; se aplica solo el delta contra lo ya revertido;
+  - puntos canjeados: proporción = total acumuladamente devuelto ÷ total de la venta, con tope 1; objetivo = `round4(puntos_canjeados × proporción)`; delta contra lo ya restaurado;
+- los deltas acumulativos garantizan que devoluciones parciales sucesivas nunca excedan lo originalmente ganado/canjeados, incluso con redondeo;
+- bonos fijos (cumpleaños/retorno/promoción/cliente nuevo) no se revierten: no son proporcionales a la mercancía devuelta;
+- idempotencia doble: `event_key` determinista `sale:return:{id}:earned` / `:redeemed` (índice único empresa+clave) y cálculo de deltas desde movimientos previos vía `related_movement_id`;
+- saldo insuficiente para revertir puntos ya gastados: la devolución se rechaza completa con "Saldo de puntos insuficiente" y rollback total — sin saldos negativos ni inconsistencias silenciosas;
+- Kardex: movimientos tipo existente `return` vinculados al earn/canje original, con sucursal, usuario, cliente, venta, devolución y metadata auditable (`kind`, `ratio`, montos acumulados, números de venta/devolución, motivo);
+- `LoyaltyAccountService::reverseMovement` generalizado con monto parcial opcional (retrocompatible: F28 intacto); `updatedTotals` ahora descuenta del total correspondiente el monto realmente aplicado.
+
+Evidencia: `app/Services/Loyalty/LoyaltySaleReturnAdjustmentService.php`, cambios en `SaleReturnService` y `LoyaltyAccountService`; `SaleReturnLoyaltyTest` (9 tests, 79 aserciones). Regresión tras F29: Devoluciones + F28 + Loyalty + POS-Loyalty: 228 tests, 1481 aserciones, 0 fallos.
+
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
 Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
@@ -569,9 +585,22 @@ Evidencia histórica:
 - `8392dd4` — completar canje de puntos.
 - `7be1f80` — integración de fidelización en POS.
 
+#### F30 — Portal del cliente — COMPLETADO
+
+- vista web responsive/mobile-first (`layouts/portal` + `loyalty/portal/show`) donde se consulta la fidelización de un cliente: saldo actual, valor monetario equivalente, historial de movimientos, premios activos y promociones vigentes;
+- ensamblado de datos centralizado y de solo lectura en `LoyaltyCustomerPortalService`: saldo desde `LoyaltyAccount`, valor monetario reutilizando `LoyaltyPointValueService::moneyFromPoints` (sin cálculos propios; `null` si la configuración del punto es inválida), historial paginado (15 por página, más recientes primero) acotado a `(company_id, customer_id)`, premios `is_active` de la empresa ordenados por costo y promociones = multiplicadores vigentes con la misma semántica temporal/zona horaria de `LoyaltyMultiplierResolver` (F12);
+- historial comprensible: fecha (d/m/Y H:i), tipo con etiqueta legible, descripción, referencia de origen (`source_type`/`source_id`) y puntos firmados; etiquetas centralizadas en `LoyaltyMovement::LABELS` (el Kardex administrativo ahora las reutiliza);
+- aislamiento multiempresa: ruta `fidelidad/portal/{cliente}` (`loyalty.portal.show`, nombre existente del grupo `loyalty.*`) bajo `auth` + `active.company` + `permission:fidelidad.ver`; el controlador resuelve al cliente siempre dentro de la empresa activa (404 para clientes ajenos) y ningún query sale de esa pareja empresa/cliente;
+- módulo inactivo o sin configuración: banner informativo, oculta saldo/catálogo/promociones y conserva el historial;
+- cliente sin cuenta ni movimientos: saldo 0 y estados vacíos por sección;
+- SIN QR, PIN, login especial, magic links ni identidad nueva de cliente (F31–F35 aportarán el acceso real); `LoyaltyCustomerPortalService` recibe empresa+cliente ya resueltos para que esas fases solo agreguen el mecanismo de resolución;
+- no modifica reglas de acumulación, canje, expiración, anulación ni devoluciones; sin migraciones nuevas.
+
+Evidencia: `app/Services/Loyalty/LoyaltyCustomerPortalService.php`, `app/Http/Controllers/LoyaltyCustomerPortalController.php`, `resources/views/layouts/portal.blade.php`, `resources/views/loyalty/portal/show.blade.php`, cambios en `routes/web.php`, `LoyaltyMovement::LABELS` y `LoyaltyMovementController`; `LoyaltyCustomerPortalTest` (7 tests, 51 aserciones). Regresión Loyalty/POS-Loyalty/Devoluciones tras F30: 244 tests, 1609 aserciones, 0 fallos.
+
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (SIGUIENTE FASE):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Es la única fase autorizada para iniciar tras F26-F27.
+- **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
@@ -588,11 +617,11 @@ Evidencia histórica:
 
 ### Estado reciente
 
-F01–F22 COMPLETADOS según el Cronograma Maestro, más F28 completada de forma adelantada.
+F01–F30 COMPLETADOS según el Cronograma Maestro (F28 completada de forma adelantada).
 
-Último hito confirmado: F22 — Vencimiento configurable.
+Último hito confirmado: F30 — Portal del cliente.
 
-Siguiente fase según cronograma: **F23 — Vencimiento automático** (salida trazable de puntos por inactividad respetando la política F22). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F31 — Identidad visual del portal** (logo/nombre de tienda, estilo único MVS Commerce). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

@@ -36,18 +36,6 @@ class LoyaltyMovementController extends Controller
 
     private function typeLabels(): array
     {
-        return [
-            LoyaltyMovement::TYPE_PURCHASE => 'Compra',
-            LoyaltyMovement::TYPE_NEW_CUSTOMER => 'Cliente nuevo',
-            LoyaltyMovement::TYPE_BIRTHDAY => 'Cumpleaños',
-            LoyaltyMovement::TYPE_RETURN_CUSTOMER => 'Cliente que retorna',
-            LoyaltyMovement::TYPE_PROMOTION => 'Promoción',
-            LoyaltyMovement::TYPE_REDEMPTION => 'Canje',
-            LoyaltyMovement::TYPE_REWARD => 'Premio',
-            LoyaltyMovement::TYPE_RETURN => 'Devolución',
-            LoyaltyMovement::TYPE_VOID => 'Anulación',
-            LoyaltyMovement::TYPE_EXPIRATION => 'Vencimiento',
-            LoyaltyMovement::TYPE_ADJUSTMENT => 'Ajuste',
-        ];
+        return LoyaltyMovement::LABELS;
     }
 }

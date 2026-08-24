@@ -38,6 +38,7 @@ use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
+use App\Http\Controllers\LoyaltyCustomerPortalController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
@@ -376,6 +377,9 @@ Route::middleware(['auth', 'active.company'])->group(function () {
 
     Route::prefix('fidelidad')->name('loyalty.')->group(function () {
         Route::get('/', LoyaltyDashboardController::class)->middleware('permission:fidelidad.dashboard')->name('dashboard');
+        Route::get('/portal/{cliente}', [LoyaltyCustomerPortalController::class, 'show'])
+            ->middleware('permission:fidelidad.ver')
+            ->name('portal.show');
         Route::get('/oportunidades', [LoyaltyOpportunityController::class, 'index'])->middleware('permission:fidelidad.oportunidades')->name('opportunities.index');
         Route::post('/oportunidades/{customer}/contactar', [LoyaltyOpportunityController::class, 'contact'])->middleware('permission:fidelidad.contactar')->name('opportunities.contact');
         Route::get('/configuracion', [SettingController::class, 'loyaltySettings'])->middleware('permission:fidelidad.configuracion')->name('settings');

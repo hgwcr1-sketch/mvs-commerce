@@ -34,6 +34,20 @@ class LoyaltyMovement extends Model
         self::TYPE_ADJUSTMENT,
     ];
 
+    public const LABELS = [
+        self::TYPE_PURCHASE => 'Compra',
+        self::TYPE_NEW_CUSTOMER => 'Cliente nuevo',
+        self::TYPE_BIRTHDAY => 'Cumpleaños',
+        self::TYPE_RETURN_CUSTOMER => 'Cliente que retorna',
+        self::TYPE_PROMOTION => 'Promoción',
+        self::TYPE_REDEMPTION => 'Canje',
+        self::TYPE_REWARD => 'Premio',
+        self::TYPE_RETURN => 'Devolución',
+        self::TYPE_VOID => 'Anulación',
+        self::TYPE_EXPIRATION => 'Vencimiento',
+        self::TYPE_ADJUSTMENT => 'Ajuste',
+    ];
+
     protected $fillable = [
         'company_id',
         'branch_id',
