@@ -184,6 +184,56 @@ class LoyaltyCustomerPortalTest extends TestCase
             ->assertSee('Historial de movimientos');
     }
 
+    public function test_portal_shows_own_brand_with_logo_or_elegant_fallback(): void
+    {
+        [$companyA, $branchA] = $this->companyContext('Marca Uno');
+        [$companyB, $branchB] = $this->companyContext('Marca Dos');
+        $this->setting($companyA);
+        $this->setting($companyB);
+        $user = $this->user($companyA, $branchA, true);
+        $customer = $this->customer($companyA, 'CLIENTE-MARCA');
+        $foreignCustomer = $this->customer($companyB, 'CLIENTE-FUERA-MARCA');
+
+        // Sin logo: fallback elegante con la inicial del nombre comercial.
+        $this->getAs($user, $companyA, $branchA, route('loyalty.portal.show', $customer))
+            ->assertOk()
+            ->assertSee($companyA->trade_name)
+            ->assertSee('data-brand-initial', false)
+            ->assertDontSee('Logo de ', false)
+            ->assertDontSee($companyB->trade_name)
+            ->assertDontSee($foreignCustomer->name);
+
+        // Con logo: la arquitectura existente lo sirve desde el disco público.
+        $companyA->logo = 'logos/portal-'.uniqid().'.png';
+        $companyA->save();
+
+        $this->getAs($user, $companyA, $branchA, route('loyalty.portal.show', $customer))
+            ->assertOk()
+            ->assertSee('storage/'.$companyA->logo, false)
+            ->assertSee('Logo de '.$companyA->trade_name)
+            ->assertDontSee('data-brand-initial', false);
+
+        // La identidad de otra empresa sigue inaccesible.
+        $this->getAs($user, $companyA, $branchA, route('loyalty.portal.show', $foreignCustomer))
+            ->assertNotFound();
+    }
+
+    public function test_portal_footer_shows_mvs_commerce_brand_discretely(): void
+    {
+        [$company, $branch] = $this->companyContext('Pie portal');
+        $this->setting($company);
+        $user = $this->user($company, $branch, true);
+        $customer = $this->customer($company, 'CLIENTE-PIE');
+
+        $response = $this->getAs($user, $company, $branch, route('loyalty.portal.show', $customer));
+
+        $content = (string) $response->assertOk()->getContent();
+        $this->assertStringContainsString('Hecho con MVS Commerce', $content);
+        $this->assertStringContainsString('<footer', $content);
+        $footer = substr($content, (int) strpos($content, '<footer'));
+        $this->assertStringNotContainsString('<a ', $footer);
+    }
+
     private function customer(Company $company, string $name): Customer
     {
         return Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => $name, 'credit_limit' => 0, 'is_active' => true]);

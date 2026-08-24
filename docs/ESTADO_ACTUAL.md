@@ -10,9 +10,17 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F30: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
+**F01–F32: COMPLETADO** según el cronograma maestro, sujeto al detalle documentado en `docs/PROGRESO.md`.
 
 Último hito confirmado:
+
+**F31 — Identidad visual + F32 — Marca MVS Commerce: COMPLETADOS.**
+
+- El portal muestra la identidad de la empresa con datos existentes: `trade_name` siempre y `logo` cuando existe (convención ya soportada `asset('storage/…')`, alt "Logo de {nombre}"); fallback elegante con la inicial del nombre comercial. Sin columnas nuevas ni temas por empresa; estilo único MVS Commerce.
+- Pie discreto "Hecho con MVS Commerce" en `layouts/portal`; texto plano sin enlace (no existe URL oficial configurada en el proyecto).
+- Evidencia: `LoyaltyCustomerPortalTest` ampliado a 9 tests, 66 aserciones (`test_portal_shows_own_brand_with_logo_or_elegant_fallback`, `test_portal_footer_shows_mvs_commerce_brand_discretely`); regresión Loyalty/POS-Loyalty/Devoluciones: 246 tests, 1624 aserciones, 0 fallos.
+
+Hito anterior:
 
 **F30 — Portal del cliente: COMPLETADO.**
 
@@ -22,18 +30,9 @@ Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Com
 - Sin QR, PIN, magic links ni identidad nueva de cliente: el mecanismo de acceso corresponde a F31–F35. No modifica reglas de acumulación/canje/expiración/anulación/devoluciones.
 - Evidencia: `LoyaltyCustomerPortalTest` (7 tests, 51 aserciones); regresión Loyalty/POS-Loyalty/Devoluciones: 244 tests, 1609 aserciones, 0 fallos.
 
-Hito anterior:
-
-**F29 — Ajuste por devolución: COMPLETADO.**
-
-- `LoyaltySaleReturnAdjustmentService` integrado a la transacción de `SaleReturnService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados en devoluciones totales/parciales sucesivas.
-- Regla proporcional con BCMath escala 4 y redondeo half-up; deltas acumulativos que nunca exceden lo original; idempotencia por `event_key` por devolución y tipo.
-- Saldo insuficiente rechaza la devolución de forma atómica (sin saldo negativo ni inconsistencias); Kardex auditable con metadata completa; F28 (anulación) sin regresión.
-- Evidencia: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty: 228 tests, 1481 aserciones, 0 fallos.
-
 Además:
 
-- **F31 — Identidad visual del portal: SIGUIENTE.** Es la única fase autorizada para iniciar.
+- **F33 — QR seguro: SIGUIENTE.** Es la única fase autorizada para iniciar.
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`). El adelanto NO altera el orden del cronograma.
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -73,7 +72,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: fases confirmadas hasta F30 (portal del cliente); etapa 10 (portal) en curso — pendientes F31–F35. Siguiente fase según cronograma: F31 — Identidad visual.
+- Fidelización: fases confirmadas hasta F32 (portal con identidad visual y marca MVS); etapa 10 (portal) en curso — pendientes F33–F35. Siguiente fase según cronograma: F33 — QR seguro.
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 

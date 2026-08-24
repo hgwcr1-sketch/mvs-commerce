@@ -18,6 +18,11 @@
 
     </main>
 
+    {{-- Marca discreta del portal (F32). Sin enlace: no existe URL oficial configurada. --}}
+    <footer class="px-4 pb-8 text-center sm:px-6">
+        <p class="text-xs font-medium tracking-wide text-slate-400">Hecho con MVS Commerce</p>
+    </footer>
+
 </body>
 
 </html>

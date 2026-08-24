@@ -1,6 +1,6 @@
 @extends('layouts.portal')
 
-@section('title', 'Programa de fidelización')
+@section('title', 'Programa de fidelización · '.$company->trade_name)
 
 @section('content')
 
@@ -18,11 +18,20 @@
 
 <div class="space-y-6">
 
-    {{-- Encabezado (la identidad visual del comercio corresponde a F31) --}}
+    {{-- Encabezado con la identidad visual de la empresa (F31) --}}
     <header class="rounded-2xl bg-slate-900 px-5 py-6 text-white shadow-sm sm:px-8">
-        <p class="text-sm font-medium text-amber-400">{{ $company->trade_name }}</p>
-        <h1 class="mt-1 text-2xl font-bold sm:text-3xl">Programa de fidelización</h1>
-        <p class="mt-2 text-sm text-slate-300">{{ $customer->name }}</p>
+        <div class="flex items-center gap-4">
+            @if($company->logo)
+                <img src="{{ asset('storage/'.$company->logo) }}" alt="Logo de {{ $company->trade_name }}" class="h-14 w-14 shrink-0 rounded-xl border border-white/10 bg-white object-contain p-1.5">
+            @else
+                <div data-brand-initial class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-xl font-bold text-black" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($company->trade_name), 0, 1)) }}</div>
+            @endif
+            <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-amber-400">{{ $company->trade_name }}</p>
+                <h1 class="mt-0.5 truncate text-xl font-bold sm:text-2xl">Programa de fidelización</h1>
+            </div>
+        </div>
+        <p class="mt-4 truncate border-t border-white/10 pt-3 text-sm text-slate-300">{{ $customer->name }}</p>
     </header>
 
     @unless($module_active)

@@ -598,6 +598,25 @@ Evidencia histórica:
 
 Evidencia: `app/Services/Loyalty/LoyaltyCustomerPortalService.php`, `app/Http/Controllers/LoyaltyCustomerPortalController.php`, `resources/views/layouts/portal.blade.php`, `resources/views/loyalty/portal/show.blade.php`, cambios en `routes/web.php`, `LoyaltyMovement::LABELS` y `LoyaltyMovementController`; `LoyaltyCustomerPortalTest` (7 tests, 51 aserciones). Regresión Loyalty/POS-Loyalty/Devoluciones tras F30: 244 tests, 1609 aserciones, 0 fallos.
 
+#### F31 — Identidad visual del portal — COMPLETADO
+
+- el encabezado del portal muestra la identidad de la empresa reutilizando únicamente datos existentes de `Company`: nombre comercial (`trade_name`) siempre y logo (`logo`, disco público) cuando existe;
+- logo servido con la convención ya soportada por la arquitectura (`asset('storage/'.$company->logo)`, misma que `empresa/edit` e impresiones), con alt "Logo de {nombre comercial}";
+- fallback elegante sin logo: avatar cuadrado redondeado (estilo MVS, ámbar/slate) con la inicial del nombre comercial;
+- estilo general único MVS Commerce: sin temas por empresa, sin columnas nuevas de branding, sin permitir que cada empresa redefina colores/tipografías/layout; título del documento incluye el nombre comercial;
+- aislamiento: cada portal muestra solo la identidad de la empresa activa del cliente consultado.
+
+Evidencia: cambios en `resources/views/loyalty/portal/show.blade.php`; `LoyaltyCustomerPortalTest::test_portal_shows_own_brand_with_logo_or_elegant_fallback` (fallback sin logo, logo presente, identidad ajena ausente, cross-company 404). Revisión visual fina pendiente para F43 (UI/usabilidad).
+
+#### F32 — Marca MVS Commerce — COMPLETADO
+
+- pie discreto "Hecho con MVS Commerce" en `layouts/portal`, visible en móvil y escritorio, texto pequeño gris (`text-xs text-slate-400`), legible y no invasivo;
+- sin enlace: no existe URL oficial de MVS Commerce configurada en el proyecto (única referencia hallada: correo del seeder administrativo), por lo que no se inventa destino.
+
+Evidencia: cambio en `resources/views/layouts/portal.blade.php`; `LoyaltyCustomerPortalTest::test_portal_footer_shows_mvs_commerce_brand_discretely` (presencia del `<footer>` con la marca y verificación de que no contiene enlaces).
+
+Regresión conjunta tras F31-F32: `LoyaltyCustomerPortalTest` (9 tests, 66 aserciones); suite Loyalty/POS-Loyalty/Devoluciones completa: 246 tests, 1624 aserciones, 0 fallos; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -617,11 +636,11 @@ Evidencia: `app/Services/Loyalty/LoyaltyCustomerPortalService.php`, `app/Http/Co
 
 ### Estado reciente
 
-F01–F30 COMPLETADOS según el Cronograma Maestro (F28 completada de forma adelantada).
+F01–F32 COMPLETADOS según el Cronograma Maestro (F28 completada de forma adelantada).
 
-Último hito confirmado: F30 — Portal del cliente.
+Último hito confirmado: F31 — Identidad visual + F32 — Marca MVS Commerce.
 
-Siguiente fase según cronograma: **F31 — Identidad visual del portal** (logo/nombre de tienda, estilo único MVS Commerce). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F33 — QR seguro** (portal, sin exponer información indebida). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 
