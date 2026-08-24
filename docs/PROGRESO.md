@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F36 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapa 10 (Portal cliente) completa; etapa 11 (Tienda online) en curso. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F37 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10 y 11 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -665,6 +665,17 @@ Regresión tras F35: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 265
 
 Evidencia: `app/Services/Loyalty/LoyaltyOnlineSaleService.php`; `LoyaltyOnlineSaleTest` nuevo (11 tests): acreditación con porcentaje exacto y metadata auditada, cuenta compartida con compra POS previa, F13 on/off, multiplicador x2 reutilizado, idempotencia ante evento duplicado, empresa inactiva/cliente ajeno/venta no confirmada bloqueados, sin cliente sin acreditación, inventario intacto, bono de cumpleaños fluyendo por el mismo pipeline. Regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 276 tests, 1846 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
 
+#### F37 — Canje online — COMPLETADO
+
+- ampliación de la capa online F36 (`LoyaltyOnlineSaleService::redeemForSale(Sale $sale, ?Customer $customer, string|int $requestedPoints, string $externalReference, string $channel)`): canje de puntos sobre una venta real confirmada, resolviendo empresa/sucursal desde la propia venta y sin confiar en IDs externos;
+- cero duplicación de reglas F14–F17: valor monetario del punto, mínimo de saldo (`LoyaltyRedemptionEligibilityService`), máximo pagable con puntos calculado sobre el total de la venta (`LoyaltyRedemptionLimitService`, mismo parámetro que pasa el POS), `redeem_on_offers` y precisión decimal viven en `LoyaltyRedemptionService::redeem`; saldo central compartido con POS (una sola cuenta por `(company_id, customer_id)`);
+- registro del pago con puntos idéntico al POS: `SalePayment` con el `PaymentMethod` tipo `loyalty_points` de la empresa (`affects_cash_snapshot=false`, `cash_effect_amount=0`, `created_by=sale->user_id`); movimiento y pago coordinados en UNA transacción — un fallo posterior al descuento revierte puntos y pago (probado inyectando fallo en la creación del pago);
+- regla adicional de tope: nunca se acepta un canje cuyo monto supere el total aplicable de la venta (defensa explícita complementaria a F16);
+- idempotencia determinista independiente del earn: `event_key` = `online_sale:{canal}:{referencia}:loyalty:redemption`; reintentos devuelven el resultado original (`duplicate=true`) sin duplicar movimiento ni pago; cliente obligatorio (null → error); venta no confirmada/empresa inactiva/sucursal inválida/cliente ajeno bloqueados;
+- orden deliberado dentro de la transacción: primero las reglas de canje, después resolución del método de puntos y creación del pago — así la ausencia de configuración de pago no deja efectos parciales.
+
+Evidencia: cambios en `LoyaltyOnlineSaleService` (+`redeemForSale`, +`paymentFor`, helper `reference()` compartido con F36); `LoyaltyOnlineRedemptionTest` nuevo (12 tests): canje exitoso con pago coherente, cuenta compartida POS/online, F15, F16 (rechazo y caso límite exacto), F17 on/off, saldo insuficiente, cliente null/ajeno, venta draft, duplicado sin doble efecto, rollback completo ante fallo, método de puntos ausente sin efectos, earn+redemption conviviendo con event_keys independientes. Regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 288 tests, 1907 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -684,11 +695,11 @@ Evidencia: `app/Services/Loyalty/LoyaltyOnlineSaleService.php`; `LoyaltyOnlineSa
 
 ### Estado reciente
 
-F01–F36 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapa 10 completa; etapa 11 (Tienda online) en curso.
+F01–F37 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10 y 11 completas.
 
-Último hito confirmado: F36 — Acumulación online sobre venta confirmada.
+Último hito confirmado: F37 — Canje online sobre venta confirmada.
 
-Siguiente fase según cronograma: **F37 — Canje online** (etapa 11). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F38 — Administrador** (etapa 12. Permisos). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

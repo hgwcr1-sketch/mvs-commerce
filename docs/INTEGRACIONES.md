@@ -107,14 +107,15 @@ Condiciones obligatorias del diseño futuro:
 
 No implementar sin diseño previo aprobado y registrado.
 
-### Punto de entrada de fidelización ya disponible (F36)
+### Punto de entrada de fidelización ya disponible (F36/F37)
 
-La capa de acumulación online existe desde F36 y debe reutilizarse cuando se construya el canal real:
+La capa online de fidelización existe desde F36 (acumulación) y F37 (canje); debe reutilizarse cuando se construya el canal real:
 
-* `App\Services\Loyalty\LoyaltyOnlineSaleService::accrueForSale(Sale $sale, ?Customer $customer, string $externalReference, string $channel = 'online')`.
-* Requiere una venta ya persistida y confirmada (`status=completed`) resuelta internamente (empresa/sucursal desde la venta); nunca confiar en IDs externos sin resolverlos.
-* Idempotencia por `event_key` `online_sale:{canal}:{referencia_externa}:loyalty:earn` (índice único `(company_id, event_key)`): reintentos no duplican puntos ni bonos.
-* La sincronización de productos/inventario/precios sigue pendiente de diseño (D013); F36 no la implementa.
+* `App\Services\Loyalty\LoyaltyOnlineSaleService::accrueForSale(Sale $sale, ?Customer $customer, string $externalReference, string $channel = 'online')` — acredita puntos por venta confirmada (F36).
+* `App\Services\Loyalty\LoyaltyOnlineSaleService::redeemForSale(Sale $sale, ?Customer $customer, string|int $requestedPoints, string $externalReference, string $channel = 'online')` — canjea puntos sobre venta confirmada y registra el pago con puntos como `SalePayment` (F37).
+* Ambos requieren una venta ya persistida y confirmada (`status=completed`) resuelta internamente (empresa/sucursal desde la venta); nunca confiar en IDs externos sin resolverlos.
+* Idempotencia por `event_key` determinista `online_sale:{canal}:{referencia}:loyalty:earn|redemption` (índice único `(company_id, event_key)`): reintentos no duplican nada; earn y redemption usan claves independientes.
+* La sincronización de productos/inventario/precios sigue pendiente de diseño (D013); F36–F37 no la implementan.
 
 ---
 
