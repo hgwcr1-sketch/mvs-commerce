@@ -107,6 +107,15 @@ Condiciones obligatorias del diseño futuro:
 
 No implementar sin diseño previo aprobado y registrado.
 
+### Punto de entrada de fidelización ya disponible (F36)
+
+La capa de acumulación online existe desde F36 y debe reutilizarse cuando se construya el canal real:
+
+* `App\Services\Loyalty\LoyaltyOnlineSaleService::accrueForSale(Sale $sale, ?Customer $customer, string $externalReference, string $channel = 'online')`.
+* Requiere una venta ya persistida y confirmada (`status=completed`) resuelta internamente (empresa/sucursal desde la venta); nunca confiar en IDs externos sin resolverlos.
+* Idempotencia por `event_key` `online_sale:{canal}:{referencia_externa}:loyalty:earn` (índice único `(company_id, event_key)`): reintentos no duplican puntos ni bonos.
+* La sincronización de productos/inventario/precios sigue pendiente de diseño (D013); F36 no la implementa.
+
 ---
 
 ## 6. Inteligencia artificial (futuro)

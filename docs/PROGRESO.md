@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F35 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapa 10 (Portal cliente) completa. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F36 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapa 10 (Portal cliente) completa; etapa 11 (Tienda online) en curso. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -654,6 +654,17 @@ Evidencia: migración `2026_08_24_000001_create_loyalty_promotions_table`, `Loya
 
 Regresión tras F35: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 265 tests, 1804 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
 
+#### F36 — Acumulación online — COMPLETADO
+
+- verificado primero: NO existe infraestructura ecommerce ni integración de tienda online en el stack (INTEGRACIONES §5 futuro, D013 sin diseño aprobado); se implementó únicamente la capa mínima reutilizable para acreditar fidelización desde un evento online confirmado;
+- `LoyaltyOnlineSaleService::accrueForSale(Sale $sale, ?Customer $customer, string $externalReference, string $channel = 'online')`: recibe una venta REAL ya persistida y confirmada (`status=completed`), resuelve empresa activa y sucursal válida desde la propia venta, exige referencia externa estable del pedido (`[A-Za-z0-9._:-]`, ≤100) y no inventa reglas nuevas sin cliente (no acredita, igual que hoy);
+- cero duplicación de reglas: monto elegible y `earn_on_offers` vía `LoyaltyOfferEligibilityService` (F13), porcentaje/redondeo/precisión decimal vía `LoyaltyEarningService::earnFromEligibleAmount` (F08), multiplicadores vigentes vía `LoyaltyMultiplierResolver` (F12), bonos por retorno y cumpleaños con sus servicios propios (F11/F10); misma cuenta central `(company_id, customer_id)` — sin cuentas web paralelas;
+- idempotencia determinista: `event_key` = `online_sale:{canal}:{referencia}:loyalty:earn` contra el índice único `(company_id, event_key)` de `loyalty_movements`; reintentos del mismo pedido/canal devuelven `duplicate=true` sin duplicar puntos, movimientos ni bonos; referencias distintas son eventos nuevos;
+- origen auditado sin columnas nuevas: metadata del movimiento con `channel`, `origin='online'`, `external_reference`, `sale_number`, elegibilidad de ofertas; `source_type=Sale::class` + `source_id`; descripción distingue canal;
+- seguridad: empresa inexistente/inactiva, venta no confirmada o sucursal inválida → ValidationException; cliente ajeno bloqueado por la validación central de acumulación; no toca inventario, no crea pedidos, checkout web ni API pública.
+
+Evidencia: `app/Services/Loyalty/LoyaltyOnlineSaleService.php`; `LoyaltyOnlineSaleTest` nuevo (11 tests): acreditación con porcentaje exacto y metadata auditada, cuenta compartida con compra POS previa, F13 on/off, multiplicador x2 reutilizado, idempotencia ante evento duplicado, empresa inactiva/cliente ajeno/venta no confirmada bloqueados, sin cliente sin acreditación, inventario intacto, bono de cumpleaños fluyendo por el mismo pipeline. Regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 276 tests, 1846 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -673,11 +684,11 @@ Regresión tras F35: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 265
 
 ### Estado reciente
 
-F01–F35 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapa 10 (Portal cliente) completa.
+F01–F36 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapa 10 completa; etapa 11 (Tienda online) en curso.
 
-Último hito confirmado: F35 — Publicidad/promociones administrables del portal.
+Último hito confirmado: F36 — Acumulación online sobre venta confirmada.
 
-Siguiente fase según cronograma: **F36 — Acumulación online** (etapa 11. Tienda online). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F37 — Canje online** (etapa 11). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 
