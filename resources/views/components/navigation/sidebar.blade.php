@@ -190,7 +190,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     @endcan
 
-    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes'])
+    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.ajustes', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes'])
         <x-navigation.dropdown icon="users" label="Fidelización" :active="request()->routeIs('loyalty.*')">
             @can('fidelidad.dashboard')
                 <x-navigation.submenu route="loyalty.dashboard" label="Dashboard" />
@@ -201,6 +201,9 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             @can('fidelidad.ver')
                 <x-navigation.submenu route="loyalty.kardex.index" label="Kardex" />
             @endcan
+            @can('fidelidad.configuracion')
+                <x-navigation.submenu route="loyalty.rules.index" label="Centro de reglas" />
+            @endcan
             @can('fidelidad.multiplicadores')
                 <x-navigation.submenu route="loyalty.multipliers.index" label="Multiplicadores" />
             @endcan
@@ -209,6 +212,9 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             @endcan
             @can('fidelidad.canjes')
                 <x-navigation.submenu route="loyalty.redemptions.index" label="Canjes de premios" />
+            @endcan
+            @can('fidelidad.ajustes')
+                <x-navigation.submenu route="loyalty.adjustments.index" label="Ajustes de puntos" />
             @endcan
             @can('configuracion.editar')
                 <x-navigation.submenu route="configuracion.index" label="Configuración" />

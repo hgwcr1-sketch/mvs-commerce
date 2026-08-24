@@ -37,11 +37,13 @@ use App\Http\Controllers\KardexController;
 // Ventas
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyDashboardController;
+use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
+use App\Http\Controllers\LoyaltyRuleCenterController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
 // Finanzas
@@ -377,6 +379,12 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::get('/oportunidades', [LoyaltyOpportunityController::class, 'index'])->middleware('permission:fidelidad.oportunidades')->name('opportunities.index');
         Route::post('/oportunidades/{customer}/contactar', [LoyaltyOpportunityController::class, 'contact'])->middleware('permission:fidelidad.contactar')->name('opportunities.contact');
         Route::get('/configuracion', [SettingController::class, 'loyaltySettings'])->middleware('permission:fidelidad.configuracion')->name('settings');
+        Route::get('/reglas', [LoyaltyRuleCenterController::class, 'index'])->middleware('permission:fidelidad.configuracion')->name('rules.index');
+        Route::put('/reglas', [LoyaltyRuleCenterController::class, 'update'])->middleware('permission:fidelidad.configuracion')->name('rules.update');
+        Route::middleware('permission:fidelidad.ajustes')->prefix('ajustes')->name('adjustments.')->group(function () {
+            Route::get('/', [LoyaltyAdjustmentController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyAdjustmentController::class, 'store'])->name('store');
+        });
         Route::middleware('permission:fidelidad.multiplicadores')->prefix('multiplicadores')->name('multipliers.')->group(function () {
             Route::get('/', [LoyaltyMultiplierController::class, 'index'])->name('index');
             Route::post('/', [LoyaltyMultiplierController::class, 'store'])->name('store');

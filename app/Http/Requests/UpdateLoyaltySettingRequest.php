@@ -12,6 +12,37 @@ class UpdateLoyaltySettingRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Valores normalizados de la configuración de Fidelización para persistir en la fila única por empresa.
+     */
+    public function toValues(): array
+    {
+        $values = [
+            'earning_percentage' => $this->validated('earning_percentage'),
+            'redemption_minimum_enabled' => $this->boolean('redemption_minimum_enabled'),
+            'redemption_minimum_amount' => $this->validated('redemption_minimum_amount') ?? '0',
+            'earn_on_offers' => $this->boolean('earn_on_offers'),
+            'birthday_enabled' => $this->boolean('birthday_enabled'),
+            'birthday_points' => $this->validated('birthday_points'),
+            'returning_customer_enabled' => $this->boolean('returning_customer_enabled'),
+            'returning_customer_days' => $this->validated('returning_customer_days'),
+            'returning_customer_points' => $this->validated('returning_customer_points'),
+            'expiration_enabled' => $this->boolean('expiration_enabled'),
+            'expiration_months' => $this->validated('expiration_months'),
+        ];
+        if (array_key_exists('is_active', $this->validated())) {
+            $values['is_active'] = $this->boolean('is_active');
+        }
+        if ($this->filled('point_value')) {
+            $values['point_value'] = $this->validated('point_value');
+        }
+        if ($this->filled('maximum_redemption_percent')) {
+            $values['maximum_redemption_percent'] = $this->validated('maximum_redemption_percent');
+        }
+
+        return $values;
+    }
+
     public function rules(): array
     {
         return [

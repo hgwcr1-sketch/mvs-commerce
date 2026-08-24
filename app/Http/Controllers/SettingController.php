@@ -47,32 +47,9 @@ class SettingController extends Controller
         abort_unless($id === 'fidelidad', 404);
         $companyId = (int) session('active_company_id');
 
-        $values = [
-            'earning_percentage' => $request->validated('earning_percentage'),
-            'redemption_minimum_enabled' => $request->boolean('redemption_minimum_enabled'),
-            'redemption_minimum_amount' => $request->validated('redemption_minimum_amount') ?? '0',
-            'earn_on_offers' => $request->boolean('earn_on_offers'),
-            'birthday_enabled' => $request->boolean('birthday_enabled'),
-            'birthday_points' => $request->validated('birthday_points'),
-            'returning_customer_enabled' => $request->boolean('returning_customer_enabled'),
-            'returning_customer_days' => $request->validated('returning_customer_days'),
-            'returning_customer_points' => $request->validated('returning_customer_points'),
-            'expiration_enabled' => $request->boolean('expiration_enabled'),
-            'expiration_months' => $request->validated('expiration_months'),
-        ];
-        if (array_key_exists('is_active', $request->validated())) {
-            $values['is_active'] = $request->boolean('is_active');
-        }
-        if ($request->filled('point_value')) {
-            $values['point_value'] = $request->validated('point_value');
-        }
-        if ($request->filled('maximum_redemption_percent')) {
-            $values['maximum_redemption_percent'] = $request->validated('maximum_redemption_percent');
-        }
-
         LoyaltySetting::query()->updateOrCreate(
             ['company_id' => $companyId],
-            $values,
+            $request->toValues(),
         );
 
         return redirect()->route('configuracion.index')->with('success', 'Porcentaje de acumulación actualizado correctamente.');

@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F23 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F27 COMPLETADOS según el Cronograma Maestro; F28 completada de forma adelantada. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -418,6 +418,10 @@ Entre las fases recientes se encuentran:
 - canje de premios con historial auditable y coherencia Kardex (F21)
 - vencimiento configurable: Sí/No + meses enteros libres de inactividad (F22)
 - vencimiento automático de puntos por inactividad, trazable en Kardex e idempotente (F23)
+- centro de reglas de Fidelización con configuración centralizada (F24)
+- ajuste manual de puntos con motivo obligatorio, permiso propio e idempotencia (F25)
+- saldo global por empresa verificado entre sucursales con aislamiento empresarial (F26)
+- canje cruzado entre sucursales: POS y premios, con cupo global e inventario por sucursal ejecutora (F27)
 - reversión de puntos por anulación de venta (F28, adelantado)
 - dashboard operativo con oportunidades, contactos y plantillas
 - precisión decimal, idempotencia y última compra calificadora como propiedades transversales
@@ -484,7 +488,7 @@ Nota: el canje de premios por puntos corresponde a F21; esta fase cubre únicame
 
 Evidencia: migración `2026_08_23_000003_create_loyalty_reward_redemptions_table`, `LoyaltyRewardRedemption`, `LoyaltyRewardRedemptionService`, `InventoryPostingService::postRewardRedemption`, rutas `loyalty.redemptions.*`, vista `loyalty/redemptions/index`; `LoyaltyRewardRedemptionTest` (11 tests, 61 aserciones).
 
-Nota: no se implementan vencimiento (F22–F23), portal (F30+), online (F36–F37) ni devoluciones de canjes (F29).
+Nota (alcance histórico de F21): el canje no incluyó vencimiento (cubierto después por F22-F23), portal (F30+), online (F36–F37) ni devoluciones de canjes (F29).
 
 #### F22 — Vencimiento configurable — COMPLETADO
 
@@ -510,6 +514,46 @@ Evidencia: cambios en `UpdateLoyaltySettingRequest`, `SettingController` y vista
 
 Evidencia: `app/Services/Loyalty/LoyaltyExpirationService.php`, `app/Console/Commands/ExpireLoyaltyPoints.php`, `routes/console.php`; `LoyaltyExpirationTest` (13 tests, 78 aserciones). Regresión Loyalty + POS-Loyalty: 177 tests, 1160 aserciones, 0 fallos.
 
+#### F24 — Centro de reglas — COMPLETADO
+
+- pantalla "Centro de reglas" dentro de Fidelización (`loyalty.rules.index` / `loyalty.rules.update`, permiso existente `fidelidad.configuracion`), con estilo MVS y aislamiento por empresa vía sesión activa;
+- edita directamente la fila única `LoyaltySetting` de la empresa (mismo registro que la configuración general): estado del módulo, porcentaje de acumulación, bono de cumpleaños, bono por retorno, acumulación en ofertas (`earn_on_offers`), valor del punto, canje (mínimo y máximo) y vencimiento;
+- sin duplicación de validaciones ni persistencia: el mapeo de valores se centralizó en `UpdateLoyaltySettingRequest::toValues()` y lo consumen tanto `SettingController::update` como el nuevo `LoyaltyRuleCenterController::update`;
+- tarjeta de accesos a reglas complementarias: Multiplicadores, Premios, Canjes de premios, Kardex y Configuración general (cada enlace respeta su permiso);
+- entrada nueva en el sidebar bajo Fidelización; las rutas existentes no cambiaron;
+- nota: el bono de cliente nuevo existe como tipo `new_customer` en la infraestructura (F09) sin política configurable propia; el centro queda listo para alojarla cuando se defina.
+
+Evidencia: `LoyaltyRuleCenterController`, vista `loyalty/rules/index`, cambios en `UpdateLoyaltySettingRequest`, `SettingController`, `routes/web.php` y sidebar; `LoyaltyRuleCenterTest` (6 tests).
+
+#### F25 — Ajuste manual de puntos — COMPLETADO
+
+- pantalla "Ajustes de puntos" dentro de Fidelización (`loyalty.adjustments.index` / `store`) con permiso nuevo sembrado `fidelidad.ajustes`;
+- formulario: cliente (solo de la empresa activa y activo), operación sumar/restar, cantidad de puntos (positiva, hasta cuatro decimales, DECIMAL(19,4)) y motivo obligatorio;
+- persistencia exclusivamente vía `LoyaltyAccountService::adjustPoints` con `TYPE_ADJUSTMENT`: nunca edita saldo directo, sin floats, bloquea saldo negativo ("Saldo de puntos insuficiente") y actualiza balance/balance_before/balance_after;
+- trazabilidad completa: usuario que ajusta, empresa, sucursal origen (sesión activa) y motivo como descripción del movimiento; metadata con dirección, puntos solicitados y motivo;
+- idempotencia HTTP por token único del formulario: `event_key` = `adjustment:{uuid}` aprovechando el índice único `(company_id, event_key)` — un doble envío no duplica movimiento ni puntos;
+- historial paginado de ajustes en la misma pantalla y movimiento visible/coherente en el Kardex (etiqueta existente "Ajuste");
+- entrada nueva en el sidebar bajo Fidelización.
+
+Evidencia: `StoreLoyaltyAdjustmentRequest`, `LoyaltyAdjustmentController`, vista `loyalty/adjustments/index`, `PermissionSeeder`; `LoyaltyManualAdjustmentTest` (10 tests). Regresión tras F24-F25: 193 tests Loyalty + POS-Loyalty, 1255 aserciones, 0 fallos.
+
+#### F26 — Saldo global de empresa — COMPLETADO
+
+- ya implementado por diseño desde la base (F06): `LoyaltyAccountService::getOrCreateAccount` resuelve la cuenta por `(company_id, customer_id)` sin intervención de sucursal; `branch_id` se registra únicamente como origen del movimiento;
+- evidencia previa end-to-end: `LoyaltyPosIntegrationTest::test_customer_account_is_global_across_branches` (una sola cuenta, saldo suma ambas ventas, `branch_id` distinto por origen en Kardex);
+- brecha cerrada en esta fase (pruebas): aislamiento empresarial explícito — dos empresas con el mismo escenario mantienen cuentas y saldos independientes; intentar operar el cliente de otra empresa es rechazado sin mutaciones (`LoyaltyMultiBranchTest::test_each_company_keeps_a_fully_separate_balance`);
+- no hubo cambios de código de negocio: la cuenta global ya era la única fuente de verdad.
+
+#### F27 — Canje en cualquier sucursal — COMPLETADO
+
+- verificado sin cambios de código; los dos flujos de canje ya operan sobre el saldo empresarial y registran la sucursal ejecutora:
+  - canje POS (`LoyaltyRedemptionService` vía `PosSaleProcessor`): acumulación en sucursal A y canje HTTP en sucursal B descuentan la misma cuenta; el movimiento registra `branch_id` B; reintentos del mismo token permanecen idempotentes (`LoyaltyMultiBranchTest::test_pos_redemption_at_branch_b_spends_balance_earned_at_branch_a`);
+  - premios F21 (`LoyaltyRewardRedemptionService`): premio `unlimited` canjeable desde cualquier sucursal activa de la empresa; cupo `limited` es global por empresa (lock sobre la fila del premio) y bloquea desde B cuando A agotó el cupo; modo `product` consulta y descuenta stock exclusivamente de la sucursal ejecutora (bloquea sin stock en B aunque A tenga existencias), con `InventoryMovement.branch_id` = sucursal B;
+- cross-company bloqueado en ambos flujos: validación de contexto en servicios (premio/cliente/sucursal ajenos) más reglas validadas en controladores; cobertura previa en `LoyaltyRewardRedemptionTest` y nueva en `LoyaltyMultiBranchTest`;
+- permisos y sucursal activa respetados por los flujos existentes (POS: `pos.acceder`/`ventas.crear` y sesión activa; premios: `fidelidad.canjes`).
+
+Evidencia: `tests/Feature/LoyaltyMultiBranchTest.php` (5 tests, 40 aserciones). Regresión tras F26-F27: 198 tests Loyalty + POS-Loyalty, 1295 aserciones, 0 fallos.
+
 #### F28 — Reversión de puntos por anulación — COMPLETADO (ADELANTADO)
 
 Implementada durante la integración POS, antes de su posición en el cronograma (entre F19 y F27). Anular una venta revierte sus efectos de fidelización con trazabilidad e idempotencia.
@@ -527,7 +571,7 @@ Evidencia histórica:
 
 ### Brechas detectadas pendientes
 
-- **F29 — Ajuste por devolución (PENDIENTE, NO es la siguiente fase):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Debe ejecutarse respetando el orden F23–F27.
+- **F29 — Ajuste por devolución (SIGUIENTE FASE):** `SaleReturnService` actualmente no ajusta fidelización en devoluciones parciales. La anulación completa sí dispone de reversión de puntos (F28), pero una devolución puede dejar puntos ganados/canjeados sin el ajuste correspondiente. Es la única fase autorizada para iniciar tras F26-F27.
 - WhatsApp: actualmente registra contactos y plantillas, pero no realiza envío por API. Brecha futura fuera del cronograma; no es la siguiente tarea.
 - Discrepancias adicionales entre cronograma y código están registradas en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
