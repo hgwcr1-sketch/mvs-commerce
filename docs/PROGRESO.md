@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F34 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F35 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapa 10 (Portal cliente) completa. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -642,6 +642,18 @@ Evidencia: cambios en `LoyaltyPortalAccessService` (`qrSupported`, `qrSvg`), `Lo
 
 Regresión tras F33: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 259 tests, 1749 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
 
+#### F35 — Publicidad/promociones del portal — COMPLETADO
+
+- contenido promocional administrable por empresa, independiente de los multiplicadores F12 (que conservan su sección propia en el portal y toda su semántica);
+- tabla `loyalty_promotions`: empresa, título (120), descripción corta opcional (500), `starts_at`/`ends_at` (UTC), `is_active`, `sort_order`; índice `(company_id, is_active, starts_at, ends_at)`. Sin sucursal en V1: el portal resuelve la empresa globalmente y los puntos son globales entre sucursales (F26). Sin imagen: no existe infraestructura segura/reutilizable de uploads para este módulo y no se inventó una;
+- visibilidad centralizada en `LoyaltyPromotionService::vigentes()`: activa + vigente ahora, inicio y fin inclusivos, comparación en UTC con la zona horaria de la empresa (misma semántica temporal de F12); orden por `sort_order` ascendente y luego más recientes;
+- administración "Promociones del portal" (`loyalty.promotions.index/store/update/toggle`) bajo permiso nuevo sembrado `fidelidad.promociones` (asignado automáticamente al rol Administrador), entrada condicionada en sidebar; formulario con validación de fechas (fin ≥ inicio) y conversión zona horaria de la empresa → UTC (`SaveLoyaltyPromotionRequest`); badge de estado por fila (Vigente/Futura/Vencida/Inactiva) vía `LoyaltyPromotionService::estado()`; aislamiento estricto: listado solo de la empresa activa y 404 al editar/cambiar estado de promociones ajenas;
+- portal público F30–F34: sección nueva "Promociones vigentes" muestra solo promociones activas y vigentes de la empresa resuelta (título, descripción opcional y periodo d/m/Y en zona horaria empresarial), diseño responsive mobile-first y estado vacío elegante ("No hay promociones vigentes."); los multiplicadores pasaron a su propia sección "Multiplicadores de puntos" sin cambiar su comportamiento.
+
+Evidencia: migración `2026_08_24_000001_create_loyalty_promotions_table`, `LoyaltyPromotion`, `LoyaltyPromotionService`, `SaveLoyaltyPromotionRequest`, `LoyaltyPromotionController`, vista `loyalty/promotions/index`, cambios en `routes/web.php`, `PermissionSeeder`, sidebar, `LoyaltyCustomerPortalService` y `loyalty/portal/show`; `LoyaltyPromotionTest` nuevo (6 tests): CRUD con precisión de zona horaria (CR UTC-6 → UTC), validaciones (fechas invertidas, título ausente, descripción >500, sort_order inválido), aislamiento por empresa (listado + update/toggle 404 cross-company), permisos completos, matriz de visibilidad en portal (vigente/futura/vencida/inactiva/ajena + orden por prioridad) y estado vacío.
+
+Regresión tras F35: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 265 tests, 1804 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -661,11 +673,11 @@ Regresión tras F33: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 259
 
 ### Estado reciente
 
-F01–F34 COMPLETADOS según el Cronograma Maestro (F28 adelantada).
+F01–F35 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapa 10 (Portal cliente) completa.
 
-Último hito confirmado: F33 — QR local sobre el enlace seguro F34.
+Último hito confirmado: F35 — Publicidad/promociones administrables del portal.
 
-Siguiente fase según cronograma: **F35 — Publicidad/promociones** (portal). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F36 — Acumulación online** (etapa 11. Tienda online). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

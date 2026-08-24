@@ -10,26 +10,26 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F34: COMPLETADO** según el cronograma maestro (F28 de forma adelantada), sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F35: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapa 10 (Portal cliente) completa, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F33 — QR: COMPLETADO.**
+**F35 — Publicidad/promociones del portal: COMPLETADO.**
 
-- Generación local con `chillerlan/php-qrcode` 6.0.1 (estable, PHP puro, única dependencia autorizada; transitiva `chillerlan/php-settings-container` 3.3.0). Sin APIs externas de QR.
-- El QR codifica exactamente el enlace seguro F34 (`loyalty.portal.access`): un solo mecanismo de tokens, sin customer_id público ni datos personales. Salida SVG vectorial (ECC H, responsive) con botón de impresión en "Accesos al portal".
-- El QR se entrega junto al enlace en la única respuesta donde el token existe en claro y nunca se persiste (BD conserva solo el hash SHA-256). Regenerar o revocar invalida automáticamente cualquier QR impreso anterior porque su enlace deja de resolver.
-- Evidencia: `LoyaltyPortalAccessQrTest` (5 tests) + `LoyaltyPortalAccessTest` actualizado; regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 259 tests, 1749 aserciones, 0 fallos.
+- Tabla `loyalty_promotions` + `LoyaltyPromotion` + `LoyaltyPromotionService`: contenido promocional administrable por empresa (título, descripción corta opcional, inicio/fin, activo/inactivo, orden `sort_order`), independiente de los multiplicadores F12 (sección propia conservada).
+- Vigencia centralizada y inclusiva (`is_active && starts_at <= ahora <= ends_at`) con zona horaria de la empresa convertida a UTC (misma semántica temporal que F12); el portal solo muestra promociones activas y vigentes de su empresa.
+- Administración "Promociones del portal" bajo permiso nuevo sembrado `fidelidad.promociones`: CRUD mínimo con badge de estado (vigente/futura/vencida/inactiva) y 404 ante empresas ajenas; sidebar condicionada.
+- Decisiones V1: sin sucursal (portal resuelve empresa global, puntos globales F26) y sin imagen (sin infraestructura segura/reutilizable de uploads en el módulo).
+- Evidencia: `LoyaltyPromotionTest` (6 tests); regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 265 tests, 1804 aserciones, 0 fallos.
 
 Hito anterior:
 
-**F34 — Acceso por enlace seguro: COMPLETADO.**
+**F33 — QR + F34 — Acceso por enlace seguro: COMPLETADOS.**
 
-- Tabla nueva `loyalty_portal_accesses` + `LoyaltyPortalAccessService`: token aleatorio de 60 caracteres (CSPRNG) asociado a `(company_id, customer_id)`, guardado SOLO como hash SHA-256 — el enlace completo se muestra una única vez al generarlo/regenerarlo; regenerar revoca el anterior; revocación explícita.
-- Ruta pública `/fidelidad/portal/acceso/{token}` (`loyalty.portal.access`, `throttle:30,1`, sin auth staff): resuelve token→empresa+cliente activos y renderiza el mismo portal F30–F32 vía `LoyaltyCustomerPortalService`.
-- Administración "Accesos al portal" bajo permiso nuevo sembrado `fidelidad.portal` con entrada en sidebar; aislamiento total por empresa.
-- La URL no contiene IDs internos ni datos personales. No se usaron signed URLs (expondrían customer_id).
-- Evidencia original: `LoyaltyPortalAccessTest` (7 tests, 70 aserciones); regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 253 tests, 1696 aserciones, 0 fallos.
+- F34: tabla `loyalty_portal_accesses` con token aleatorio de 60 caracteres (CSPRNG) guardado SOLO como hash SHA-256; regenerar revoca el anterior; ruta pública `/fidelidad/portal/acceso/{token}` (`throttle:30,1`, sin auth staff) resuelve token→empresa+cliente y renderiza el portal F30–F32; URL sin IDs internos ni datos personales.
+- F33: QR local con `chillerlan/php-qrcode` 6.0.1 codificando exactamente el enlace F34 (SVG vectorial ECC H, botón de impresión); se entrega junto al enlace en la única respuesta donde el token existe en claro y nunca se persiste; regenerar o revocar invalida automáticamente cualquier QR impreso anterior. Sin APIs externas de QR.
+- Administración "Accesos al portal" bajo permiso `fidelidad.portal`; aislamiento total por empresa.
+- Evidencia: `LoyaltyPortalAccessTest` (7 tests) + `LoyaltyPortalAccessQrTest` (5 tests); regresión al cierre de F33: 259 tests, 1749 aserciones, 0 fallos.
 
 Hito anterior:
 
@@ -40,7 +40,7 @@ Hito anterior:
 
 Además:
 
-- **F35 — Publicidad/promociones: SIGUIENTE** (única fase autorizada para iniciar).
+- **F36 — Acumulación online: SIGUIENTE** (única fase autorizada para iniciar; abre la etapa 11. Tienda online).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -55,7 +55,7 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-Trabajo de F33 (QR) terminado y probado, pendiente de commit (sin push). Incluye: `composer.json`/`composer.lock` (`chillerlan/php-qrcode ^6.0`), `LoyaltyPortalAccessService`, `LoyaltyPortalAccessController`, vista `loyalty/accesses/index`, tests nuevo/actualizado y esta documentación. Existe además un directorio sin seguimiento `docs/beautyos/` ajeno a la tarea — no eliminar.
+Trabajo de F35 (promociones del portal) terminado y probado, pendiente de commit (sin push). Incluye: migración `loyalty_promotions`, modelo/servicio/request/controlador nuevos, vista `loyalty/promotions/index`, cambios en `routes/web.php`, `PermissionSeeder`, sidebar, portal (servicio + vista), `LoyaltyPromotionTest` nuevo y esta documentación. Existe además un directorio sin seguimiento `docs/beautyos/` ajeno a las tareas — no eliminar.
 
 Verificar siempre con `git status` antes de trabajar.
 
@@ -80,7 +80,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: fases confirmadas hasta F34 y F33 (QR local) completadas; etapa 10 (portal) en curso — solo falta F35. Siguiente fase según cronograma: **F35 — Publicidad/promociones**.
+- Fidelización: etapa 10 (Portal cliente) completa — F30–F35 confirmados (portal, identidad, marca, QR y promociones). Siguiente fase según cronograma: **F36 — Acumulación online** (etapa 11. Tienda online).
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
@@ -98,7 +98,7 @@ No asumir que el último estado conocido sigue vigente.
 ## Archivos o módulos relevantes
 
 - POS: `PosController`, `PosSaleProcessor`, `Sale`, `SaleItem`, `SalePayment`.
-- Fidelización: `app/Services/Loyalty/*`, `LoyaltyAccount`, `LoyaltyMovement`, `LoyaltyMovementLine`, `LoyaltyReward`, `LoyaltyRewardRedemption`.
+- Fidelización: `app/Services/Loyalty/*`, `LoyaltyAccount`, `LoyaltyMovement`, `LoyaltyMovementLine`, `LoyaltyReward`, `LoyaltyRewardRedemption`, `LoyaltyPromotion`.
 - Caja: `app/Services/Cash/*`, notificaciones por correo con reintentos.
 - Pedidos/órdenes: `OrderService`, `PurchaseOrderPreparationService`, `PurchaseOrderConversionService`.
 - Apartados: `LayawayService`. Devoluciones: `SaleReturnService`. Pagos a proveedores: `AccountsPayableService`.
@@ -108,7 +108,7 @@ No asumir que el último estado conocido sigue vigente.
 Suite principal: `tests/Feature`.
 
 - POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`.
-- Fidelización: `tests/Feature/Loyalty*Test.php` (incluye `LoyaltyExpirationTest`, `LoyaltyExpirationSettingTest`, `LoyaltyCustomerPortalTest`, `LoyaltyPortalAccessTest`), `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
+- Fidelización: `tests/Feature/Loyalty*Test.php` (incluye `LoyaltyExpirationTest`, `LoyaltyExpirationSettingTest`, `LoyaltyCustomerPortalTest`, `LoyaltyPortalAccessTest`, `LoyaltyPortalAccessQrTest`, `LoyaltyPromotionTest`), `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
 - Caja: `Cash*Test.php`.
 - Módulos recientes: `Order*Test.php`, `PurchaseOrderTest`, `PurchaseOrderConversionTest`, `LayawayV1Test`, `SaleReturnTest`, `SaleVoidTest`, `AccountsPayable*Test.php`.
 

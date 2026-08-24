@@ -24,9 +24,9 @@ use Illuminate\Validation\ValidationException;
  */
 class LoyaltyCustomerPortalService
 {
-    public function __construct(private readonly LoyaltyPointValueService $pointValues) {}
+    public function __construct(private readonly LoyaltyPointValueService $pointValues, private readonly LoyaltyPromotionService $promotions) {}
 
-    /** @return array{company:Company,customer:Customer,module_active:bool,balance_points:string,balance_money:?string,movements:LengthAwarePaginator,rewards:Collection,promotions:Collection} */
+    /** @return array{company:Company,customer:Customer,module_active:bool,balance_points:string,balance_money:?string,movements:LengthAwarePaginator,rewards:Collection,promotions:Collection,multipliers:Collection} */
     public function data(Company $company, Customer $customer): array
     {
         $moduleActive = LoyaltySetting::query()
@@ -49,7 +49,8 @@ class LoyaltyCustomerPortalService
             'balance_money' => $this->balanceMoney($company, $balancePoints),
             'movements' => $this->movements((int) $company->id, (int) $customer->id),
             'rewards' => $this->rewards((int) $company->id),
-            'promotions' => $this->promotions($company),
+            'promotions' => $this->publicity($company),
+            'multipliers' => $this->multipliers($company),
         ];
     }
 
@@ -84,8 +85,14 @@ class LoyaltyCustomerPortalService
             ->get(['id', 'name', 'type', 'description', 'points_cost']);
     }
 
-    /** Multiplicadores vigentes (promoción de fidelización existente en la arquitectura, F12). */
-    private function promotions(Company $company): Collection
+    /** Publicidad/promociones administrables vigentes de la empresa (F35). */
+    private function publicity(Company $company): Collection
+    {
+        return $this->promotions->vigentes($company);
+    }
+
+    /** Multiplicadores vigentes (mecanismo de puntos existente en la arquitectura, F12). */
+    private function multipliers(Company $company): Collection
     {
         $instant = CarbonImmutable::now($company->timezone ?: config('app.timezone'))->utc();
 

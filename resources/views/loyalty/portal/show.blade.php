@@ -50,24 +50,43 @@
             @endif
         </section>
 
-        {{-- Promociones vigentes --}}
+        {{-- Promociones vigentes: contenido administrable de la empresa (F35) --}}
         <section aria-label="Promociones" class="space-y-3">
             <h2 class="text-lg font-semibold text-slate-800">Promociones vigentes</h2>
             @forelse($promotions as $promotion)
                 <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="font-semibold text-slate-800">{{ $promotion->name }}</h3>
-                        <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">x{{ $decimal($promotion->multiplier) }} puntos</span>
-                    </div>
+                    <h3 class="font-semibold text-slate-800">{{ $promotion->title }}</h3>
+                    @if($promotion->description)
+                        <p class="mt-1 break-words text-sm text-slate-600">{{ $promotion->description }}</p>
+                    @endif
                     <p class="mt-1 text-xs text-slate-500">
-                        Vigente hasta el {{ $promotion->ends_at->timezone($company->timezone ?: config('app.timezone'))->format('d/m/Y') }}
-                        @if($promotion->branch)
-                            · {{ $promotion->branch->name }}
-                        @endif
+                        Del {{ $promotion->starts_at->timezone($company->timezone ?: config('app.timezone'))->format('d/m/Y') }}
+                        al {{ $promotion->ends_at->timezone($company->timezone ?: config('app.timezone'))->format('d/m/Y') }}
                     </p>
                 </article>
             @empty
                 <p class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">No hay promociones vigentes.</p>
+            @endforelse
+        </section>
+
+        {{-- Multiplicadores de puntos vigentes (mecanismo F12) --}}
+        <section aria-label="Multiplicadores de puntos" class="space-y-3">
+            <h2 class="text-lg font-semibold text-slate-800">Multiplicadores de puntos</h2>
+            @forelse($multipliers as $multiplier)
+                <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h3 class="font-semibold text-slate-800">{{ $multiplier->name }}</h3>
+                        <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">x{{ $decimal($multiplier->multiplier) }} puntos</span>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Vigente hasta el {{ $multiplier->ends_at->timezone($company->timezone ?: config('app.timezone'))->format('d/m/Y') }}
+                        @if($multiplier->branch)
+                            · {{ $multiplier->branch->name }}
+                        @endif
+                    </p>
+                </article>
+            @empty
+                <p class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">No hay multiplicadores vigentes por el momento.</p>
             @endforelse
         </section>
 

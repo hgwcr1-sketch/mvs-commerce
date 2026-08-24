@@ -175,6 +175,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'fidelidad.canjes', 'label' => 'Registrar y consultar canjes de premios de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.ajustes', 'label' => 'Ajustar manualmente puntos de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.portal', 'label' => 'Administrar accesos al portal de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.promociones', 'label' => 'Administrar promociones del portal de Fidelidad', 'module' => 'Fidelidad'],
         ];
 
         foreach ($permissions as $permission) {

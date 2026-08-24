@@ -43,6 +43,7 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
+use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
@@ -420,6 +421,12 @@ Route::middleware(['auth', 'active.company'])->group(function () {
             Route::post('/', [LoyaltyRewardController::class, 'store'])->name('store');
             Route::put('/{reward}', [LoyaltyRewardController::class, 'update'])->name('update');
             Route::patch('/{reward}/estado', [LoyaltyRewardController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.promociones')->prefix('promociones')->name('promotions.')->group(function () {
+            Route::get('/', [LoyaltyPromotionController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyPromotionController::class, 'store'])->name('store');
+            Route::put('/{promotion}', [LoyaltyPromotionController::class, 'update'])->name('update');
+            Route::patch('/{promotion}/estado', [LoyaltyPromotionController::class, 'toggle'])->name('toggle');
         });
         Route::middleware('permission:fidelidad.canjes')->prefix('canjes')->name('redemptions.')->group(function () {
             Route::get('/', [LoyaltyRewardRedemptionController::class, 'index'])->name('index');
