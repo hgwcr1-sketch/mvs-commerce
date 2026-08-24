@@ -8,6 +8,7 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnItem;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
+use App\Services\Loyalty\LoyaltySaleReturnAdjustmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -20,6 +21,7 @@ class SaleReturnService
 
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
+        private readonly LoyaltySaleReturnAdjustmentService $loyaltyAdjustments,
     ) {
     }
 
@@ -189,6 +191,8 @@ foreach ($sale->items as $item) {
                     break;
                 }
             }
+
+            $this->loyaltyAdjustments->adjust($sale, $saleReturn, $user);
 
             $sale->update([
                 'status' => $hasPending

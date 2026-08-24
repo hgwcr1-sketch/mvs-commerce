@@ -72,8 +72,12 @@ class LoyaltyAccountService
         return $this->record($account, $points, LoyaltyMovement::TYPE_ADJUSTMENT, $context);
     }
 
-    public function reverseMovement(LoyaltyMovement $original, string $type, array $context = []): LoyaltyMovement
-    {
+    public function reverseMovement(
+        LoyaltyMovement $original,
+        string $type,
+        array $context = [],
+        string|int|null $pointsOverride = null,
+    ): LoyaltyMovement {
         if (! in_array($type, [LoyaltyMovement::TYPE_RETURN, LoyaltyMovement::TYPE_VOID], true)) {
             throw ValidationException::withMessages(['type' => 'La reversión debe ser de tipo return o void.']);
         }
@@ -83,11 +87,28 @@ class LoyaltyAccountService
             throw ValidationException::withMessages(['related_movement_id' => 'El movimiento original no existe.']);
         }
 
+        $originalAmount = ltrim($this->decimal($original->points), '-');
+        if ($pointsOverride === null) {
+            $amount = $originalAmount;
+        } else {
+            $amount = $this->positiveDecimal($pointsOverride);
+            if (bccomp($amount, $originalAmount, self::SCALE) > 0) {
+                throw ValidationException::withMessages(['points' => 'La reversión no puede superar los puntos del movimiento original.']);
+            }
+        }
+
         $context['related_movement_id'] = $original->id;
+
+        // La reversión aplica siempre el signo opuesto al movimiento original.
+        if (bccomp($original->points, '0', self::SCALE) >= 0) {
+            $signedPoints = bcsub('0', $amount, self::SCALE);
+        } else {
+            $signedPoints = $amount;
+        }
 
         return $this->record(
             $original->loyaltyAccount,
-            bcsub('0', $original->points, self::SCALE),
+            $signedPoints,
             $type,
             $context,
             $original
@@ -185,8 +206,8 @@ class LoyaltyAccountService
         ];
 
         if ($original !== null) {
-            $amount = ltrim($this->decimal($original->points), '-');
-            if (in_array($original->type, self::EARNING_TYPES, true) && bccomp($original->points, '0', self::SCALE) > 0) {
+            $amount = ltrim($this->decimal($points), '-');
+            if (in_array($original->type, self::EARNING_TYPES, true)) {
                 $totals['total_earned'] = bcsub($totals['total_earned'], $amount, self::SCALE);
             } elseif (in_array($original->type, [LoyaltyMovement::TYPE_REDEMPTION, LoyaltyMovement::TYPE_REWARD], true)) {
                 $totals['total_redeemed'] = bcsub($totals['total_redeemed'], $amount, self::SCALE);
