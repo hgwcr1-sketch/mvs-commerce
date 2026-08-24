@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F29 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F32 y F34 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada; F33 bloqueada por dependencia QR sin autorizar). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -617,6 +617,28 @@ Evidencia: cambio en `resources/views/layouts/portal.blade.php`; `LoyaltyCustome
 
 Regresión conjunta tras F31-F32: `LoyaltyCustomerPortalTest` (9 tests, 66 aserciones); suite Loyalty/POS-Loyalty/Devoluciones completa: 246 tests, 1624 aserciones, 0 fallos; `git diff --check` limpio.
 
+#### F34 — Acceso por enlace seguro — COMPLETADO
+
+- tabla `loyalty_portal_accesses`: empresa, cliente, usuario generador (nullable, auditoría), hash del token (SHA-256, único), `revoked_at`, `last_used_at`, timestamps; índice `(company_id, customer_id)`;
+- **decisión de token**: entidad dedicada con token aleatorio de 60 caracteres vía CSPRNG (`Str::random`) almacenado únicamente como hash SHA-256 — el enlace en claro se muestra una sola vez al generar/regenerar (patrón password-reset/API tokens). Se descartaron signed URLs (`URL::temporarySignedRoute`) porque obligan a colocar el customer_id en la ruta, revelando un ID interno; también se descartó guardar el token plano para permitir revocación/regeneración/auditoría robustas sin exponer credenciales en la base;
+- regeneración atómica: dentro de transacción y con lock se revoca el acceso activo previo del cliente y se crea uno nuevo — siempre un único acceso activo por cliente; revocación explícita desde la administración; `last_used_at` audita cada uso;
+- ruta pública `/fidelidad/portal/acceso/{token}` (`loyalty.portal.access`) fuera del grupo de staff: valida formato del token, resuelve por hash, verifica acceso vigente + empresa activa + cliente no eliminado y renderiza el mismo portal F30–F32 reutilizando `LoyaltyCustomerPortalService`; protegida con `throttle:30,1`;
+- la URL no contiene IDs internos ni datos personales (verificado contra identificación/email/teléfono/nombre del cliente);
+- administración "Accesos al portal" (`loyalty.accesses.index/store/revoke`) bajo permiso nuevo sembrado `fidelidad.portal` (asignado automáticamente al rol Administrador por el `PermissionSeeder`), entrada condicionada en sidebar; genera/regenera mostrando el enlace una sola vez con botón copiar, lista accesos activos y permite revocar; aislamiento estricto por empresa activa (404 ante clientes ajenos);
+- cross-company imposible: el propio token define la pareja empresa+cliente; ningún query depende de sesión;
+- el acceso staff existente (`loyalty.portal.show`) no cambió.
+
+Evidencia: migración `2026_08_23_000004_create_loyalty_portal_accesses_table`, `LoyaltyPortalAccess`, `LoyaltyPortalAccessService`, `LoyaltyPortalAccessController`, vista `loyalty/accesses/index`, cambios en `routes/web.php`, `PermissionSeeder` y sidebar; `LoyaltyPortalAccessTest` (7 tests, 70 aserciones).
+
+#### F33 — QR — PENDIENTE (BLOQUEADA POR DEPENDENCIA)
+
+- el stack actual NO incluye librería de QR (verificado `composer.json`: laravel/framework, dompdf, phpspreadsheet, tinker) y no se instaló ninguna sin autorización del usuario;
+- arquitectura preparada: `LoyaltyPortalAccessService::qrSupported()` (false hoy), pantalla "Accesos al portal" ya informa que el QR se habilitará con generación local, y el destino del QR es exactamente el enlace seguro F34 (`loyalty.portal.access`);
+- propuesta mínima pendiente de aprobación: `chillerlan/php-qrcode` (PHP puro, renderiza PNG/SVG localmente, sin dependencias de red);
+- prohibido usar APIs externas de QR (Google Chart/quickchart/qrserver): enviarían el token de acceso del cliente a terceros.
+
+Regresión tras F34: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 253 tests, 1696 aserciones, 0 fallos; Pint limpio en archivos nuevos; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -636,11 +658,11 @@ Regresión conjunta tras F31-F32: `LoyaltyCustomerPortalTest` (9 tests, 66 aserc
 
 ### Estado reciente
 
-F01–F32 COMPLETADOS según el Cronograma Maestro (F28 completada de forma adelantada).
+F01–F32 y F34 COMPLETADOS según el Cronograma Maestro (F28 adelantada; F33 bloqueada por dependencia QR sin autorizar).
 
-Último hito confirmado: F31 — Identidad visual + F32 — Marca MVS Commerce.
+Último hito confirmado: F34 — Acceso por enlace seguro.
 
-Siguiente fase según cronograma: **F33 — QR seguro** (portal, sin exponer información indebida). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F35 — Publicidad/promociones** (portal). F33 requiere decisión previa del usuario sobre la dependencia QR propuesta (`chillerlan/php-qrcode`). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

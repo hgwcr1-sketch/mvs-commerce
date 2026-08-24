@@ -42,6 +42,7 @@ use App\Http\Controllers\LoyaltyCustomerPortalController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
+use App\Http\Controllers\LoyaltyPortalAccessController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
@@ -100,6 +101,20 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+
+/*
+|--------------------------------------------------------------------------
+| Portal del cliente de Fidelización (F33/F34)
+|--------------------------------------------------------------------------
+|
+| Acceso público mediante token seguro asociado a empresa y cliente.
+| El token se almacena solo como hash; la URL no contiene IDs internos
+| ni datos personales. Limitada por tasa para frenar fuerza bruta.
+*/
+
+Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::class, 'access'])
+    ->middleware('throttle:30,1')
+    ->name('loyalty.portal.access');
 
 Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
     ->middleware('auth')
@@ -388,6 +403,11 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::middleware('permission:fidelidad.ajustes')->prefix('ajustes')->name('adjustments.')->group(function () {
             Route::get('/', [LoyaltyAdjustmentController::class, 'index'])->name('index');
             Route::post('/', [LoyaltyAdjustmentController::class, 'store'])->name('store');
+        });
+        Route::middleware('permission:fidelidad.portal')->prefix('accesos')->name('accesses.')->group(function () {
+            Route::get('/', [LoyaltyPortalAccessController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyPortalAccessController::class, 'store'])->name('store');
+            Route::patch('/{cliente}/revocar', [LoyaltyPortalAccessController::class, 'revoke'])->name('revoke');
         });
         Route::middleware('permission:fidelidad.multiplicadores')->prefix('multiplicadores')->name('multipliers.')->group(function () {
             Route::get('/', [LoyaltyMultiplierController::class, 'index'])->name('index');
