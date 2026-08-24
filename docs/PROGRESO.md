@@ -378,7 +378,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F32 y F34 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada; F33 bloqueada por dependencia QR sin autorizar). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F34 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -630,14 +630,17 @@ Regresión conjunta tras F31-F32: `LoyaltyCustomerPortalTest` (9 tests, 66 aserc
 
 Evidencia: migración `2026_08_23_000004_create_loyalty_portal_accesses_table`, `LoyaltyPortalAccess`, `LoyaltyPortalAccessService`, `LoyaltyPortalAccessController`, vista `loyalty/accesses/index`, cambios en `routes/web.php`, `PermissionSeeder` y sidebar; `LoyaltyPortalAccessTest` (7 tests, 70 aserciones).
 
-#### F33 — QR — PENDIENTE (BLOQUEADA POR DEPENDENCIA)
+#### F33 — QR — COMPLETADO
 
-- el stack actual NO incluye librería de QR (verificado `composer.json`: laravel/framework, dompdf, phpspreadsheet, tinker) y no se instaló ninguna sin autorización del usuario;
-- arquitectura preparada: `LoyaltyPortalAccessService::qrSupported()` (false hoy), pantalla "Accesos al portal" ya informa que el QR se habilitará con generación local, y el destino del QR es exactamente el enlace seguro F34 (`loyalty.portal.access`);
-- propuesta mínima pendiente de aprobación: `chillerlan/php-qrcode` (PHP puro, renderiza PNG/SVG localmente, sin dependencias de red);
-- prohibido usar APIs externas de QR (Google Chart/quickchart/qrserver): enviarían el token de acceso del cliente a terceros.
+- generación local de QR integrada en "Accesos al portal" mediante `chillerlan/php-qrcode` 6.0.1 (estable, PHP puro, única dependencia autorizada; arrastra transitivamente `chillerlan/php-settings-container` 3.3.0). Sin APIs externas de QR: el token nunca sale del servidor;
+- el QR codifica **exactamente** el enlace seguro F34 (`route('loyalty.portal.access', token)`): un solo mecanismo de tokens, sin segundo sistema, sin customer_id público y sin datos personales. Salida SVG vectorial (`QRMarkupSVG`, ECC nivel H, viewBox responsive) apta para impresión y visualización;
+- `LoyaltyPortalAccessService::qrSupported()` ahora devuelve true cuando la librería está presente; `qrSvg(string $url)` genera el SVG bajo demanda. El token solo existe en claro en el momento de la generación, así que el QR se entrega junto al enlace en esa única respuesta y **nunca se persiste** (la tabla `loyalty_portal_accesses` sigue guardando solo el hash SHA-256 del token);
+- regenerar o revocar el acceso invalida automáticamente el enlace y con él cualquier QR impreso anterior: el SVG anterior es determinísticamente el QR del enlace viejo, que ya no resuelve;
+- flujo en `LoyaltyPortalAccessController::store`: genera/regenera acceso → flash `portal_url` + `portal_qr` (SVG); la vista "Accesos al portal" muestra enlace copiable + QR + botón "Imprimir QR" (ventana de impresión limpia con nombre del cliente); si la librería no estuviera disponible el panel lo indica y todo F34 sigue funcionando igual.
 
-Regresión tras F34: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 253 tests, 1696 aserciones, 0 fallos; Pint limpio en archivos nuevos; `git diff --check` limpio.
+Evidencia: cambios en `LoyaltyPortalAccessService` (`qrSupported`, `qrSvg`), `LoyaltyPortalAccessController::store`, vista `loyalty/accesses/index`, `composer.json`/`composer.lock`; `LoyaltyPortalAccessQrTest` nuevo (5 tests): contenido determinista = enlace seguro exacto, sin identificación/email/teléfono/nombre/token/hash ni persistencia del QR, regeneración invalida enlace+QR previos, revocación mata el destino de un QR impreso, permisos (`fidelidad.portal`) y aislamiento por empresa; `LoyaltyPortalAccessTest` actualizado (7 tests): QR local sin servicios externos.
+
+Regresión tras F33: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 259 tests, 1749 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
 
 ### Brechas detectadas pendientes
 
@@ -658,11 +661,11 @@ Regresión tras F34: suite Loyalty/POS-Loyalty/Devoluciones/Portal completa: 253
 
 ### Estado reciente
 
-F01–F32 y F34 COMPLETADOS según el Cronograma Maestro (F28 adelantada; F33 bloqueada por dependencia QR sin autorizar).
+F01–F34 COMPLETADOS según el Cronograma Maestro (F28 adelantada).
 
-Último hito confirmado: F34 — Acceso por enlace seguro.
+Último hito confirmado: F33 — QR local sobre el enlace seguro F34.
 
-Siguiente fase según cronograma: **F35 — Publicidad/promociones** (portal). F33 requiere decisión previa del usuario sobre la dependencia QR propuesta (`chillerlan/php-qrcode`). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F35 — Publicidad/promociones** (portal). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

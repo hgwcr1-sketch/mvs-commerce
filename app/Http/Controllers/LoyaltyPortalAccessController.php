@@ -60,11 +60,19 @@ class LoyaltyPortalAccessController extends Controller
         // Regenerar revoca el acceso anterior; el token en claro solo existe en esta respuesta.
         $result = $service->generate($customer, $company, $request->user());
 
-        return back()->with([
+        $flash = [
             'success' => 'Enlace de acceso generado para '.$customer->name.'. Se muestra una sola vez; si se pierde debe regenerarse.',
             'portal_url' => $result['url'],
             'portal_url_customer' => $customer->name,
-        ]);
+        ];
+
+        // F33: el QR codifica exactamente el enlace seguro y se genera localmente;
+        // como el token vive solo en esta respuesta, tampoco se persiste el QR.
+        if ($service->qrSupported()) {
+            $flash['portal_qr'] = $service->qrSvg($result['url']);
+        }
+
+        return back()->with($flash);
     }
 
     public function revoke(Request $request, Customer $cliente, LoyaltyPortalAccessService $service): RedirectResponse

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Accesos al portal de Fidelización')
-@section('description', 'Genere, comparta y revoque enlaces seguros (y QR, cuando esté disponible) para que sus clientes consulten su portal de Fidelización.')
+@section('description', 'Genere, comparta y revoque enlaces seguros con su código QR local para que sus clientes consulten su portal de Fidelización.')
 
 @section('content')
 <div class="space-y-6">
@@ -24,8 +24,20 @@
                     class="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Copiar</button>
             </div>
             <p class="mt-2 text-xs font-medium text-amber-800">Guárdelo ahora: por seguridad se muestra una sola vez. Si se pierde, regenere el acceso (el enlace anterior deja de funcionar).</p>
+            @if(session('portal_qr'))
+                <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <div id="portal-qr" class="w-36 shrink-0 rounded-lg border border-amber-300 bg-white p-2 [&_svg]:h-auto [&_svg]:w-full">{!! session('portal_qr') !!}</div>
+                    <div class="space-y-2 text-xs text-amber-900">
+                        <p id="portal-qr-name" class="text-sm font-semibold text-slate-800">{{ session('portal_url_customer') }}</p>
+                        <p>El código QR apunta exactamente al enlace seguro mostrado y contiene únicamente ese enlace: sin datos personales ni identificadores internos.</p>
+                        <p>Se muestra solo esta vez. Si se regenera o revoca el acceso, el QR impreso anterior deja de funcionar.</p>
+                        <button type="button" onclick="printPortalQr()"
+                            class="rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">Imprimir QR</button>
+                    </div>
+                </div>
+            @endif
             @unless($qrSupported)
-                <p class="mt-1 text-xs text-slate-600">El código QR para este enlace se habilitará al activar la generación local de QR (F33).</p>
+                <p class="mt-1 text-xs text-slate-600">La generación local de código QR no está disponible en este servidor.</p>
             @endunless
         </div>
     @endif
@@ -51,4 +63,17 @@
     </tbody></table></div>{{ $accesses->links() }}
     </x-card>
 </div>
+
+<script>
+function printPortalQr() {
+    const qr = document.getElementById('portal-qr');
+    const name = document.getElementById('portal-qr-name');
+    if (!qr) { return; }
+    const win = window.open('', '_blank', 'width=480,height=680');
+    if (!win) { alert('Permita las ventanas emergentes para imprimir el código QR.'); return; }
+    win.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Acceso al portal de Fidelización<\/title><style>body{font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:40px;color:#0f172a}svg{width:280px;height:auto}h1{font-size:18px;margin:16px 0 4px}p{font-size:13px;color:#334155;margin:8px 0}@media print{body{padding:16px}}<\/style><\/head><body>' + qr.innerHTML + '<h1>' + (name ? name.textContent : '') + '<\/h1><p>Escanea el código para abrir tu portal de Fidelización.<\/p><\/body><\/html>');
+    win.document.close();
+    win.focus();
+}
+</script>
 @endsection

@@ -165,26 +165,42 @@ class LoyaltyPortalAccessTest extends TestCase
         $this->actingAs($authorized)->withSession($session)->get(route('loyalty.accesses.index'))->assertOk();
     }
 
-    public function test_qr_reports_unavailable_without_external_services_or_new_dependencies(): void
+    public function test_qr_is_generated_locally_for_the_secure_link_without_external_services(): void
     {
         [$company, $branch] = $this->companyContext('QR');
         $staff = $this->user($company, $branch, true);
-        $customer = $this->customer($company, 'CLIENTE-QR');
+        $customer = $this->customer($company, 'CLIENTE-QR', [
+            'identification' => '9988776655',
+            'email' => 'cliente.qr@correo.com',
+            'phone' => '77776666',
+        ]);
+        $service = app(LoyaltyPortalAccessService::class);
 
-        $this->assertFalse(app(LoyaltyPortalAccessService::class)->qrSupported());
+        // La generación local de QR está disponible (chillerlan/php-qrcode).
+        $this->assertTrue($service->qrSupported());
 
         ['url' => $url] = $this->generateFor($staff, $company, $branch, $customer);
+
+        // El enlace y su QR se entregan juntos en la misma respuesta.
         $content = (string) $this->actingAs($staff)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
             ->get(route('loyalty.accesses.index'))
             ->assertOk()
-            ->assertSee('El código QR para este enlace se habilitará al activar la generación local de QR (F33).')
+            ->assertSee('<svg', false)
+            ->assertSee($url)
             ->getContent();
 
         // Ninguna API externa de QR recibe el token del cliente.
         foreach (['chart.googleapis', 'quickchart', 'api.qrserver', 'qrserver.com'] as $external) {
             $this->assertStringNotContainsString($external, $content);
         }
-        $this->assertStringContainsString($url, $content);
+
+        // El QR mostrado no contiene datos personales del cliente.
+        foreach ([$customer->identification, $customer->email, $customer->phone] as $sensitive) {
+            $this->assertStringNotContainsString((string) $sensitive, $content);
+        }
+
+        // El servicio genera un SVG local a partir del propio enlace.
+        $this->assertStringStartsWith('<svg', $service->qrSvg($url));
     }
 
     public function test_existing_staff_portal_route_keeps_working(): void

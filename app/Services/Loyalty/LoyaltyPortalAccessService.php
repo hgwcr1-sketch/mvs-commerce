@@ -6,14 +6,19 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalAccess;
 use App\Models\User;
+use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Output\QRMarkupSVG;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 /**
  * Acceso seguro al portal del cliente de Fidelización (F33/F34).
  *
- * Un mismo mecanismo sirve tanto para el enlace compartible como para el futuro QR:
+ * Un mismo mecanismo sirve tanto para el enlace compartible como para el QR:
  * token aleatorio de 60 caracteres (CSPRNG) asociado a (empresa, cliente). El token
  * nunca contiene datos personales ni IDs internos y se guarda únicamente como hash
  * SHA-256, por lo que solo puede mostrarse en el momento en que se genera o regenera.
@@ -108,12 +113,37 @@ class LoyaltyPortalAccessService
     }
 
     /**
-     * F33: la generación local de QR requiere una dependencia aún no autorizada.
-     * Mientras tanto no hay capacidad QR en el stack y no se usan APIs externas
-     * (enviarían el token del cliente a terceros).
+     * F33: el QR se genera localmente (chillerlan/php-qrcode) y codifica únicamente
+     * el enlace seguro F34. Nunca se usan APIs externas: enviarían el token a terceros.
      */
     public function qrSupported(): bool
     {
-        return false;
+        return class_exists(QRCode::class);
+    }
+
+    /**
+     * SVG del QR para un enlace seguro ya generado. El token solo existe en claro
+     * en el momento de la generación, por lo que el QR se entrega junto al enlace
+     * y nunca se persiste. Salida SVG vectorial: impresión nítida y escala responsive.
+     */
+    public function qrSvg(string $url): string
+    {
+        if (! $this->qrSupported()) {
+            throw new RuntimeException('La generación local de QR no está disponible.');
+        }
+
+        $svg = (new QRCode(new QROptions([
+            'outputInterface' => QRMarkupSVG::class,
+            'eccLevel' => EccLevel::H,
+            'scale' => 6,
+            'svgAddXmlHeader' => false,
+            'outputBase64' => false,
+        ])))->render($url);
+
+        if (! is_string($svg)) {
+            throw new RuntimeException('No fue posible generar el código QR.');
+        }
+
+        return $svg;
     }
 }
