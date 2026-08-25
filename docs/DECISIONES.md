@@ -314,6 +314,28 @@ El modelo `Academy Founder/Partner`, sus posibles subsidios, límites y crédito
 
 ---
 
+## D026 — Alcance MVP de BeautyOS Professional (B09)
+
+El MVP aprobado incluye `B00–B17`, `B20–B28`, `B40`, `B41`, `B46`, `B47`, `B70–B74` y `B77–B81`. Quedan Post-MVP `B30–B37`, `B42–B45`, `B50–B56`, `B60–B64`, `B75`, `B76` y `B82–B93`.
+
+Consecuencias aprobadas:
+
+- el portal inicial no exige contraseña: usa acceso seguro por token/QR;
+- el cliente permanece aislado por empresa, sin identidad global entre negocios en el MVP;
+- todos los rubros usan el núcleo común de servicios y citas;
+- las fichas técnicas profundas de Nails, Lash, Hair, Barber y Estética quedan Post-MVP;
+- Estética puede operar con servicios y citas base; sesiones/paquetes especializados quedan Post-MVP;
+- el consumo de productos por servicio (`B41`) es MVP; costos, comisiones, rentabilidad y dashboard (`B42–B45`) quedan Post-MVP, aunque `B43` puede adelantarse mediante una decisión posterior si el plan Team lo exige;
+- retención e IA (`B50–B56`) y Academy completa quedan Post-MVP Professional;
+- el piloto Professional no depende de Academy y valida inicialmente dos rubros distintos;
+- los planes del MVP son Professional; Academy permanece futura/hipótesis;
+- `B75` y `B76` no bloquean la landing/demo ni el gate Go/No-Go;
+- mobile-first (`B79`), identidad Core/perfiles (`B80`) e independencia comercial/Core (`B81`) son obligatorios para el MVP.
+
+La fuente detallada de IDs, dependencias, entregables y clasificación es `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx`. B09 está completado y B10 es la siguiente tarea; esta decisión no inicia B10.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

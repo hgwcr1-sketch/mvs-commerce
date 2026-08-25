@@ -55,9 +55,9 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-BeautyOS B05 está completado en `d74aad6` y B06 está implementado localmente, pendiente de commit. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
+BeautyOS B05–B08 están completados en `d74aad6`, `b284c1a`, `bfca7f6` y `8557fa8`. B09 — Aprobar alcance MVP y lista NO-MVP está completado por decisión del 25-08-2026. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
 
-Los cambios locales actuales corresponden a la base B06 Service Catalog y su documentación. Verificar `git status`; no avanzar a B07 sin una tarea explícita.
+Los cambios locales actuales corresponden únicamente a la actualización del cronograma y documentación oficial de B09. No se modificó código funcional ni se inició B10.
 
 Verificar siempre con `git status` antes de trabajar.
 
@@ -84,10 +84,12 @@ Según historial reciente de commits en esta rama:
 
 - Fidelización: fases confirmadas hasta F34 y F33 (QR local) completadas; etapa 10 (portal) en curso — solo falta F35. Siguiente fase según cronograma: **F35 — Publicidad/promociones**.
 - POS: expansión activa (uno de los módulos principales).
-- BeautyOS: B05 completado; B06 Service Catalog implementado localmente y validado; B07 no iniciado.
+- BeautyOS: B05–B08 completados; B09 aprobado y completado. El MVP Professional y el Post-MVP están congelados en el cronograma maestro. B10 no iniciado.
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
 ## Próximo paso
+
+BeautyOS: **B10 — Crear módulo de profesionales** es la siguiente tarea. No iniciarla sin una tarea explícita.
 
 Antes de programar cualquier tarea nueva:
 
