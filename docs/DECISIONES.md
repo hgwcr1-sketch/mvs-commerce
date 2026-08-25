@@ -282,6 +282,38 @@ Revisar siempre Git antes de modificar y antes de respaldar.
 
 ---
 
+## D021 — BeautyOS mobile-first
+
+BeautyOS es mobile-first: las operaciones diarias priorizan el celular y toda UI futura debe validarse en móvil, tablet y escritorio. El flujo móvil puede simplificarse de forma intencional; no tiene que ser una reducción literal del escritorio.
+
+---
+
+## D022 — Identidad Core y perfiles BeautyOS
+
+`User` es la identidad del Core. `Student`, `Professional` e `Instructor` son perfiles o relaciones y no identidades duplicadas. La transición `Student → Graduate → Professional` debe preservar identidad.
+
+---
+
+## D023 — BeautyOS como producto independiente
+
+BeautyOS debe poder comercializarse independientemente, reutilizar el Core compartido y mantener aislamiento multiempresa/multisucursal estricto, sin depender de módulos exclusivos de MVS Commerce. El Core se prepara para productos combinables o independientes, incluidos RRHH, Contabilidad y TallerOS.
+
+---
+
+## D024 — Privacidad de la relación Academy
+
+Academy solo puede conocer matrícula, cursos, graduación, certificados y una señal autorizada de perfil profesional activo. Esa relación no da acceso a ventas, clientes, agenda, inventario, ingresos, caja, facturación ni datos privados del negocio del egresado. Los datos privados nunca se comercializan ni intercambian.
+
+---
+
+## D025 — Conocimiento autorizado de Academy
+
+Knowledge AI debe usar contenido autorizado con fuente y versión. Brand Knowledge conserva procedencia y vigencia del contenido oficial o verificado. BeautyOS Templates debe ser contenido propio con procedencia/licencia y nunca derivarse de contenido privado de academias.
+
+El modelo `Academy Founder/Partner`, sus posibles subsidios, límites y créditos es una hipótesis comercial, no una decisión ni un precio aprobado. Ver `docs/beautyos/README.md` y el cronograma maestro.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

@@ -186,6 +186,18 @@ El POS es uno de los módulos principales actualmente en expansión.
 
 ---
 
+## BeautyOS
+
+Estado: PLANIFICACIÓN ACTIVA; B05 COMPLETADO; B06 NO INICIADO.
+
+La fuente oficial de fases, IDs, orden, dependencias y criterios de aceptación es `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx`. `docs/beautyos/README.md` resume las decisiones aprobadas, las fases Academy y las hipótesis comerciales sin duplicar el detalle del Excel.
+
+Evidencia de B05: commit `d74aad6`, modelos `Professional`/`Specialty`, migración, fábricas y `BeautyProfessionalSpecialtyTest`.
+
+La planificación contempla BeautyOS mobile-first, identidad Core sin duplicaciones, independencia comercial, privacidad estricta de Academy y una evolución Academy por fases. Documentar estas fases no autoriza iniciar B06 ni otra implementación.
+
+---
+
 ## Caja
 
 Estado: ACTIVO / EN EVOLUCIÓN

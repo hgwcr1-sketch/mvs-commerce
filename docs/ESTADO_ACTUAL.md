@@ -51,11 +51,13 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Rama actual
 
-`feature/pos`
+`feature/beautyos-b05`
 
 ## Estado del repositorio
 
-Trabajo de F33 (QR) terminado y probado, pendiente de commit (sin push). Incluye: `composer.json`/`composer.lock` (`chillerlan/php-qrcode ^6.0`), `LoyaltyPortalAccessService`, `LoyaltyPortalAccessController`, vista `loyalty/accesses/index`, tests nuevo/actualizado y esta documentación. Existe además un directorio sin seguimiento `docs/beautyos/` ajeno a la tarea — no eliminar.
+BeautyOS B05 está completado en `d74aad6`. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
+
+La sincronización actual modifica únicamente documentación. B06 no se ha iniciado. Verificar `git status` para identificar los cambios documentales todavía sin commit.
 
 Verificar siempre con `git status` antes de trabajar.
 
@@ -82,6 +84,7 @@ Según historial reciente de commits en esta rama:
 
 - Fidelización: fases confirmadas hasta F34 y F33 (QR local) completadas; etapa 10 (portal) en curso — solo falta F35. Siguiente fase según cronograma: **F35 — Publicidad/promociones**.
 - POS: expansión activa (uno de los módulos principales).
+- BeautyOS: B05 completado; planificación Academy/mobile-first/privacidad/arquitectura sincronizada. B06 permanece pendiente y no iniciado.
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
 ## Próximo paso
