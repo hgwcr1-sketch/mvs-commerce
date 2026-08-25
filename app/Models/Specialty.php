@@ -49,4 +49,12 @@ class Specialty extends Model
             ->wherePivot('company_id', $this->company_id)
             ->withTimestamps();
     }
+
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'service_specialty')
+            ->withPivot('company_id')
+            ->wherePivot('company_id', $this->company_id)
+            ->withTimestamps();
+    }
 }

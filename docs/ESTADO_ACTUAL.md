@@ -55,9 +55,9 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-BeautyOS B05 está completado en `d74aad6`. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
+BeautyOS B05 está completado en `d74aad6` y B06 está implementado localmente, pendiente de commit. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
 
-La sincronización actual modifica únicamente documentación. B06 no se ha iniciado. Verificar `git status` para identificar los cambios documentales todavía sin commit.
+Los cambios locales actuales corresponden a la base B06 Service Catalog y su documentación. Verificar `git status`; no avanzar a B07 sin una tarea explícita.
 
 Verificar siempre con `git status` antes de trabajar.
 
@@ -84,7 +84,7 @@ Según historial reciente de commits en esta rama:
 
 - Fidelización: fases confirmadas hasta F34 y F33 (QR local) completadas; etapa 10 (portal) en curso — solo falta F35. Siguiente fase según cronograma: **F35 — Publicidad/promociones**.
 - POS: expansión activa (uno de los módulos principales).
-- BeautyOS: B05 completado; planificación Academy/mobile-first/privacidad/arquitectura sincronizada. B06 permanece pendiente y no iniciado.
+- BeautyOS: B05 completado; B06 Service Catalog implementado localmente y validado; B07 no iniciado.
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
 ## Próximo paso

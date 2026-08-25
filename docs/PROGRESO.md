@@ -188,11 +188,13 @@ El POS es uno de los módulos principales actualmente en expansión.
 
 ## BeautyOS
 
-Estado: PLANIFICACIÓN ACTIVA; B05 COMPLETADO; B06 NO INICIADO.
+Estado: PLANIFICACIÓN ACTIVA; B05–B06 COMPLETADOS; B07 NO INICIADO.
 
 La fuente oficial de fases, IDs, orden, dependencias y criterios de aceptación es `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx`. `docs/beautyos/README.md` resume las decisiones aprobadas, las fases Academy y las hipótesis comerciales sin duplicar el detalle del Excel.
 
 Evidencia de B05: commit `d74aad6`, modelos `Professional`/`Specialty`, migración, fábricas y `BeautyProfessionalSpecialtyTest`.
+
+Evidencia de B06: modelo `Service`, migración de `services`/`service_specialty`, fábrica y `BeautyServiceCatalogTest`. Incluye duración, precio/costo con precisión `DECIMAL(19,4)`, preparación, buffers, estado, especialidades y aislamiento multiempresa; no incluye agenda, UI, asignación profesional-servicio, comisiones ni inventario automático.
 
 La planificación contempla BeautyOS mobile-first, identidad Core sin duplicaciones, independencia comercial, privacidad estricta de Academy y una evolución Academy por fases. Documentar estas fases no autoriza iniciar B06 ni otra implementación.
 

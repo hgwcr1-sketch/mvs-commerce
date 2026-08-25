@@ -17,7 +17,7 @@ Reglas de planificación:
 ## Estado confirmado
 
 - **B05 — Diseñar modelo Professional/Profile/Specialty: COMPLETADO.** Evidencia: commit `d74aad6`, modelos `Professional` y `Specialty`, migración, fábricas y `BeautyProfessionalSpecialtyTest`.
-- **B06 — Diseñar Service Catalog: NO INICIADO.** Continúa como la siguiente tarea funcional prevista; esta sincronización es exclusivamente documental y no la inicia.
+- **B06 — Diseñar Service Catalog: COMPLETADO.** Base empresarial de servicios con duración, precio/costo decimal, preparación, buffers, estado y relación muchos-a-muchos con especialidades; aislamiento multiempresa protegido por modelo y base de datos. Evidencia: `Service`, migración, fábrica y `BeautyServiceCatalogTest`.
 - Máximo original antes de esta ampliación: **B78**.
 - IDs incorporados: **B79–B93**. Los detalles y el orden oficial están en la hoja `Cronograma` del Excel.
 
@@ -78,4 +78,3 @@ El Excel conserva el Academy MVP existente (`B60–B64`) y amplía la planificac
 - costos, elegibilidad, medición y controles antiabuso.
 
 Ninguna variante puede basarse en comercializar o intercambiar datos privados. La activación profesional debe ser voluntaria. Los precios, beneficios, límites y créditos permanecen sin aprobar.
-
