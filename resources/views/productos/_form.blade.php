@@ -28,10 +28,33 @@
             :value="$product->internal_code ?? ''"
             required />
 
-        <x-input
-            name="barcode"
-            label="Código de Barras"
-            :value="$product->barcode ?? ''" />
+        <div x-data="{ cameraAvailable: !!window.mvsScannerAvailable }"
+             @mvs-scan.window="if($event.detail?.code) $refs.barcodeInput.value = $event.detail.code">
+            <label for="barcode" class="form-label">Código de Barras</label>
+            <div class="flex gap-2">
+                <input id="barcode"
+                       name="barcode"
+                       x-ref="barcodeInput"
+                       type="text"
+                       value="{{ old('barcode', $product->barcode ?? '') }}"
+                       class="form-input flex-1">
+                <button type="button"
+                        x-show="cameraAvailable"
+                        x-cloak
+                        @click="$dispatch('mvs-scanner-open')"
+                        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                        aria-label="Escanear código de barras"
+                        title="Escanear código de barras">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25A2.25 2.25 0 0 1 5.25 6h1.4l1.13-1.69a.75.75 0 0 1 .62-.31h3.2a.75.75 0 0 1 .62.31L13.35 6h5.4A2.25 2.25 0 0 1 21 8.25v9a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 17.25v-9Z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Zm3 0c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Zm3 0c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Z"/>
+                    </svg>
+                </button>
+            </div>
+            @error('barcode')
+                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
 
         <x-input
             name="cabys_code"
@@ -404,3 +427,5 @@ document.addEventListener('DOMContentLoaded', () => {
         class="form-input">
 
 </x-card>
+
+<x-scanner.mvs-scanner />

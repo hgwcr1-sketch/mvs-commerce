@@ -148,16 +148,18 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="order-2 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 lg:table-cell lg:w-28 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
-                                        <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Cantidad</span>
-                                        <div class="flex items-center justify-center gap-1">
-                                            <button type="button" @click="decrease(item)" class="h-11 w-11 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300 disabled:opacity-40 lg:h-7 lg:w-7">−</button>
+                                    <td class="order-2 flex flex-col gap-1 rounded-xl bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between lg:table-cell lg:w-28 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-xs font-semibold uppercase text-slate-500 sm:hidden">Cantidad</span>
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button type="button" @click="decrease(item)" class="h-11 w-11 shrink-0 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300 disabled:opacity-40 lg:h-7 lg:w-7">−</button>
                                             <input type="number"
                                                    x-model.number="item.quantity"
                                                    :min="item.allows_decimals ? 0.0001 : 1"
                                                    :step="item.allows_decimals ? 0.0001 : 1"
-                                                   class="h-11 w-16 rounded border border-slate-300 px-1 text-center text-sm font-bold lg:h-auto lg:py-1">
-                                            <button type="button" @click="increase(item)" class="h-11 w-11 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600 disabled:opacity-40 lg:h-7 lg:w-7">+</button>
+                                                   inputmode="decimal"
+                                                   enterkeyhint="done"
+                                                   class="h-11 w-20 shrink-0 rounded border border-slate-300 px-2 text-center text-sm font-bold lg:h-auto lg:w-16 lg:py-1">
+                                            <button type="button" @click="increase(item)" class="h-11 w-11 shrink-0 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600 disabled:opacity-40 lg:h-7 lg:w-7">+</button>
                                         </div>
                                     </td>
                                     <td class="order-4 flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-right lg:table-cell lg:w-28 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">

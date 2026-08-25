@@ -55,7 +55,7 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-R02 (POS móvil + escaneo) COMPLETADO: R02-A commiteado y R02-B (escáner por cámara) terminado y probado, **pendiente de commit**. R02-B añadió: `resources/js/scanner/` (`engine.js` con BarcodeDetector + fallback `@zxing/library` por dynamic import; `index.js` con componente Alpine `mvsScanner` y contrato de eventos `mvs-scan`), `components/scanner/mvs-scanner.blade.php` (hoja mobile-safe reutilizable), integración en `pos/index.blade.php` (botón de cámara junto al buscador; el código escaneado entra a la búsqueda existente `searchProducts` → `addProduct`; guards de sticky bar y Enter global), import en `app.js` y dependencia `@zxing/library` en `package.json`. Sin backend. Evidencia: `PosCameraScannerTest` (9 tests / 58 aserciones); regresión POS 80 tests (75 verdes, mismos 5 fallos preexistentes de HEAD por deriva backend–tests), POS-Loyalty 32/32, Loyalty 218/218; `npm run build` correcto. Siguiente fase responsive: **R03 — Producto/Inventario móvil + escaneo reutilizable**; siguiente fase funcional de Fidelización: **F38** (orden intacto). Verificar siempre con `git status` antes de trabajar.
+R02 (POS móvil + escaneo) COMPLETADO y R03 (Productos/Inventario móvil + cámara) COMPLETADO. R03 añadió: `ProductController::search()` enriquecido (busca en `product_barcodes` secundarios, retorna `sale_price`, `cost`, `branch_stock`), `productos/index.blade.php` responsive mobile-first (tarjetas con código/precio/stock, cámara junto al buscador, listener `mvs-scan`), `inventario/index.blade.php` responsive mobile-first (tarjetas con stock/mín/máx y estado, cámara, listener `mvs-scan`), ambos incluyen `<x-scanner.mvs-scanner />`. Sin backend adicional (se reutilizó `productos.search`). Sin header/sidebar. Evidencia: `PosCameraScannerTest` 9/9, regresión POS/Loyalty: 180 tests / 1126 aserciones, mismos fallos preexistentes; `npm run build` correcto. Siguiente fase responsive: **R04**; siguiente fase funcional de Fidelización: **F38** (orden intacto). Verificar siempre con `git status` antes de trabajar.
 
 ## Objetivo actual
 
@@ -80,7 +80,8 @@ Según historial reciente de commits en esta rama:
 
 - Fidelización: etapas 10 y 11 completas — F30–F37 confirmados (portal, QR, promociones, acumulación y canje online). Siguiente fase según cronograma: **F38 — Administrador** (etapa 12).
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
-- R02 — POS móvil + escaneo: **COMPLETADO** (R02-A presentación móvil/tablet, ya commiteado; R02-B escáner por cámara con BarcodeDetector + fallback ZXing, pendiente de commit). Siguiente fase responsive: **R03** (reutilizar `resources/js/scanner`).
+- R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
+- R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 

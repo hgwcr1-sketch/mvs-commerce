@@ -384,14 +384,24 @@ if ($branchId) {
         }
 
         $companyId = session('active_company_id');
+        $branchId = request('branch_id') ?: session('active_branch_id');
 
         $products = Product::where('company_id', $companyId)
-            ->with('unit:id,allows_decimals')
+            ->with(['unit:id,allows_decimals'])
+            ->with([
+                'branches' => function ($query) use ($branchId) {
+                    $query->where('branches.id', $branchId);
+                },
+            ])
             ->where('is_active', true)
             ->where(function ($query) use ($search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%");
+                    ->orWhere('barcode', 'like', "%{$search}%")
+                    ->orWhereHas('barcodes', function ($q) use ($search) {
+                        $q->where('is_active', true)
+                            ->where('barcode', 'like', "%{$search}%");
+                    });
             })
             ->orderBy('name')
             ->limit(10)
@@ -401,15 +411,28 @@ if ($branchId) {
                 'internal_code',
                 'barcode',
                 'unit_id',
+                'sale_price',
+                'cost',
+                'tax_rate',
+                'track_inventory',
             ]);
 
-        return response()->json($products->map(fn (Product $product) => [
-            'id' => $product->id,
-            'name' => $product->name,
-            'internal_code' => $product->internal_code,
-            'barcode' => $product->barcode,
-            'allows_decimals' => (bool) $product->unit?->allows_decimals,
-        ]));
+        return response()->json($products->map(function (Product $product) {
+            $branch = $product->branches->first();
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'barcode' => $product->barcode,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'sale_price' => (float) $product->sale_price,
+                'cost' => (float) $product->cost,
+                'tax_rate' => (float) $product->tax_rate,
+                'track_inventory' => (bool) $product->track_inventory,
+                'branch_stock' => $branch ? (float) $branch->pivot->stock : null,
+            ];
+        }));
     }
 
     public function createProduct(Request $request)

@@ -212,7 +212,23 @@ Implementación:
 
 Evidencia: `PosCameraScannerTest` (9 tests / 58 aserciones). Regresión: POS (80 tests, 75 verdes — los mismos 5 fallos preexistentes de HEAD por deriva backend–tests, verificados idénticos en árbol limpio mediante stash), POS-Loyalty (32/32), Loyalty (218/218). `npm run build` correcto (chunk ZXing diferido) y `git diff --check` limpio.
 
-Pendiente **R03 — Producto/Inventario móvil + escaneo reutilizable** (siguiente fase responsive; reutilizar `resources/js/scanner` y `components/scanner/mvs-scanner.blade.php`).
+### R03 — Productos/Inventario móvil + cámara: COMPLETADO
+
+Extiende R02 a los módulos de Productos e Inventario, reutilizando el mismo scanner sin duplicar código.
+
+Implementación:
+
+- `ProductController::search()` enriquecido: ahora busca también en la tabla `product_barcodes` (códigos secundarios), retorna `sale_price`, `cost`, `tax_rate`, `track_inventory` y `branch_stock` cuando se provee `branch_id` (o se usa la sucursal activa). Compatibilidad retro: consumidores existentes que solo usan `id/name/internal_code/barcode` no se afectan.
+- `resources/views/productos/index.blade.php` — responsive mobile-first: estadísticas en grid 2→4 columnas, buscador con botón de cámara (`x-show="cameraAvailable"`), tabla completa en `hidden md:block`, tarjetas móviles (`md:hidden`) con imagen, nombre, código, categoría, marca, costo, precio, stock, estado y acciones táctiles ≥44px. Listener `mvs-scan` alimenta `doSearch()` que reutiliza el mismo `productos.search`.
+- `resources/views/inventario/index.blade.php` — responsive mobile-first: buscador con cámara, tabla desktop completa, tarjetas móviles con nombre, código, categoría, stock/grande, mínimo, máximo y badge de estado (Disponible/Stock bajo/Sin stock). Listener `mvs-scan` idéntico al de productos.
+- Ambas vistas incluyen `<x-scanner.mvs-scanner />` y Alpine `x-data` con `cameraAvailable` detectado desde `window.mvsScannerAvailable`.
+- Sin rutas nuevas, sin backend adicional, sin header/sidebar, sin BeautyOS, sin nuevas dependencias.
+
+Preparación arquitectónica: el patrón de integración (botón de cámara + listener `mvs-scan` + reutilización de search existente) está listo para reaplicar en Kardex, Ajustes, Transferencias y cualquier vista futura que necesite escaneo.
+
+Evidencia: `PosCameraScannerTest` (9/9). Regresión POS + Loyalty: 180 tests / 1126 aserciones, mismos fallos preexistentes de HEAD. `npm run build` correcto, `git diff --check` limpio. 3 archivos modificados: `ProductController.php`, `productos/index.blade.php`, `inventario/index.blade.php`.
+
+Pendiente **R04** (siguiente fase responsive).
 
 ---
 
