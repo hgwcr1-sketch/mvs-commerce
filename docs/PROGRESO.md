@@ -424,7 +424,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F38 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 (parcial) completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F39 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -734,6 +734,16 @@ Evidencia: cambios en `LoyaltyOnlineSaleService` (+`redeemForSale`, +`paymentFor
 
 Evidencia: `tests/Feature/LoyaltyAdminAuthorizationTest.php`; `git diff --check` limpio.
 
+#### F39 — Cajero (permisos) — COMPLETADO
+
+- auditoría confirmó que no era necesario modificar reglas ni rutas: la consulta de puntos vive en el POS bajo `pos.acceder` y el canje real durante checkout bajo `ventas.crear`;
+- los roles son configurables por empresa, por lo que no se concedieron permisos por nombre ni se acopló el rol `Cajero` a permisos administrativos `fidelidad.*`;
+- prueba end-to-end con permisos mínimos: consulta saldo y máximo canjeable, completa una venta con pago mixto de puntos + efectivo y registra el movimiento con empresa, sucursal y usuario correctos;
+- configuración general, centro de reglas, ajustes, multiplicadores, premios, canjes administrativos, accesos al portal y promociones permanecen protegidos y devuelven 403;
+- el sidebar del Cajero no expone entradas de administración de Fidelización.
+
+Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresión `php artisan test --filter Loyalty`: 298 tests, 1910 aserciones, 0 fallos.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -753,11 +763,11 @@ Evidencia: `tests/Feature/LoyaltyAdminAuthorizationTest.php`; `git diff --check`
 
 ### Estado reciente
 
-F01–F38 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 (parcial) completas.
+F01–F39 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 completas.
 
-Último hito confirmado: F38 — Administrador (permisos).
+Último hito confirmado: F39 — Cajero (permisos).
 
-Siguiente fase según cronograma: **F39 — Cajero** (etapa 12. Permisos). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F40 — Indicadores** (etapa 13. Dashboard).
 
 Antes de continuar una fase nueva, revisar:
 

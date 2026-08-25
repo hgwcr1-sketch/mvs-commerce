@@ -10,17 +10,16 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F38: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11 y 12 (parcial) completas, sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F39: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F38 — Administrador: COMPLETADO.**
+**F39 — Cajero: COMPLETADO.**
 
-- Ampliación de la capa online F36: `LoyaltyOnlineSaleService::redeemForSale(Sale, ?Customer, puntosSolicitados, referenciaExterna, canal)` canjea sobre una venta real confirmada resolviendo empresa/sucursal desde la propia venta.
-- Cero duplicación de F14–F17: valor del punto (F14), mínimo de saldo (F15), máximo pagable sobre el total de la venta (F16) y `redeem_on_offers` (F17) viven en `LoyaltyRedemptionService`; saldo central compartido con POS.
-- Pago con puntos idéntico al POS (`SalePayment` + `PaymentMethod` tipo `loyalty_points`, sin efecto de caja), coordinado con el movimiento en UNA transacción: fallo posterior al descuento revierte todo (probado inyectando fallo).
-- Idempotencia determinista `online_sale:{canal}:{ref}:loyalty:redemption` independiente del earn; reintentos no duplican movimiento ni pago. Cliente obligatorio; venta no confirmada/empresa inactiva/cliente ajeno bloqueados.
-- Evidencia: `LoyaltyOnlineRedemptionTest` (12 tests); regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 288 tests, 1907 aserciones, 0 fallos.
+- Auditoría sin cambios de negocio: consulta y canje ya están correctamente integrados al POS mediante `pos.acceder` y `ventas.crear`; los roles siguen siendo configurables por empresa.
+- Cajero con permisos mínimos consulta saldo y máximo canjeable y completa un canje real con trazabilidad de empresa, sucursal y usuario.
+- Ocho áreas administrativas de Fidelización permanecen en 403 y el sidebar no expone sus accesos al Cajero.
+- Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresión `--filter Loyalty`: 298 tests, 1910 aserciones, 0 fallos.
 
 Hito anterior:
 
@@ -41,7 +40,8 @@ Hitos anteriores:
 Además:
 
 - **F38 — Administrador: COMPLETADO** (etapa 12. Permisos).
-- **F39 — Cajero: SIGUIENTE** (única fase autorizada para iniciar).
+- **F39 — Cajero: COMPLETADO** (etapa 12. Permisos).
+- **F40 — Indicadores: SIGUIENTE** (etapa 13. Dashboard).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -79,7 +79,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: etapas 10, 11 y 12 (parcial) completas — F30–F38 confirmados (portal, QR, promociones, acumulación y canje online, permisos del Administrador). Siguiente fase según cronograma: **F39 — Cajero** (etapa 12).
+- Fidelización: etapas 10, 11 y 12 completas — F30–F39 confirmados (portal, QR, promociones, acumulación y canje online, permisos de Administrador y Cajero). Siguiente fase según cronograma: **F40 — Indicadores** (etapa 13).
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.
