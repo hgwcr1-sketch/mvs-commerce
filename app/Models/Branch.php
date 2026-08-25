@@ -63,4 +63,12 @@ class Branch extends Model
     {
         return $this->hasMany(PurchaseOrder::class);
     }
+
+    public function professionals(): BelongsToMany
+    {
+        return $this->belongsToMany(Professional::class, 'professional_branch')
+            ->withPivot('company_id')
+            ->wherePivot('company_id', $this->company_id)
+            ->withTimestamps();
+    }
 }

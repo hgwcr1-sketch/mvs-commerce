@@ -92,6 +92,11 @@ class User extends Authenticatable
         return $this->hasMany(Company::class, 'owner_user_id');
     }
 
+    public function professionalProfiles()
+    {
+        return $this->hasMany(Professional::class);
+    }
+
     public function companyAllowance()
     {
         return $this->hasOne(CompanyAllowance::class);
@@ -117,7 +122,7 @@ class User extends Authenticatable
             ->where('companies.id', $company->id)
             ->first();
 
-        if (!$companyAccess || !$companyAccess->pivot->role_id) {
+        if (! $companyAccess || ! $companyAccess->pivot->role_id) {
             return null;
         }
 
@@ -129,7 +134,7 @@ class User extends Authenticatable
     {
         $role = $this->roleInCompany($company);
 
-        if (!$role || !$role->is_active) {
+        if (! $role || ! $role->is_active) {
             return false;
         }
 

@@ -88,6 +88,16 @@ class Company extends Model
         return $this->hasMany(Branch::class);
     }
 
+    public function professionals()
+    {
+        return $this->hasMany(Professional::class);
+    }
+
+    public function specialties()
+    {
+        return $this->hasMany(Specialty::class);
+    }
+
     public function customers()
     {
         return $this->hasMany(Customer::class);
