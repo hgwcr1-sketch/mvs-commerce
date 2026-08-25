@@ -3,7 +3,12 @@
 @section('title', 'Punto de venta')
 
 @section('content')
-<div x-data="posTerminal" x-cloak @keydown.enter.window="handleGlobalEnter($event)" class="space-y-3 text-sm">
+<div x-data="posTerminal"
+     x-cloak
+     @keydown.enter.window="handleGlobalEnter($event)"
+     @mvs-scan.window="onMvsScan($event)"
+     @mvs-scanner-change.window="cameraScannerOpen = $event.detail.open"
+     class="space-y-3 text-sm">
     <section class="rounded-xl bg-slate-900 px-4 py-3 text-white shadow-lg">
         <div class="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div class="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4">
@@ -25,23 +30,41 @@
 
     <section class="relative rounded-xl bg-white p-3 shadow-sm">
         <label for="pos-product-search" class="mb-1 block text-xs font-semibold uppercase text-slate-600">Agregar producto</label>
-        <div class="relative">
-            <input id="pos-product-search"
-                   x-ref="searchInput"
-                   x-model="query"
-                   @input.debounce.180ms="searchProducts"
-                   @keydown.down.prevent="moveSelection(1)"
-                   @keydown.up.prevent="moveSelection(-1)"
-                   @keydown.enter.prevent="addSelected"
-                   @keydown.escape="closeResults"
-                   type="search"
-                   autocomplete="off"
-                   placeholder="Buscar por nombre, código o escanear código de barras…"
-                   class="w-full rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-2.5 text-base outline-none transition focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-100">
-            <span x-show="loading" class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">Buscando…</span>
+        <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+                <input id="pos-product-search"
+                       x-ref="searchInput"
+                       x-model="query"
+                       @input.debounce.180ms="searchProducts"
+                       @keydown.down.prevent="moveSelection(1)"
+                       @keydown.up.prevent="moveSelection(-1)"
+                       @keydown.enter.prevent="addSelected"
+                       @keydown.escape="closeResults"
+                       type="search"
+                       autocomplete="off"
+                       placeholder="Buscar por nombre, código o escanear código de barras…"
+                       class="w-full rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-2.5 text-base outline-none transition focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-100">
+                <span x-show="loading" class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">Buscando…</span>
+            </div>
+            {{-- R02-B: escáner por cámara como capa de entrada adicional.
+                 No sustituye búsqueda manual, teclado ni lectores HID. --}}
+            <button type="button"
+                    x-show="cameraScannerAvailable"
+                    x-cloak
+                    @click="$dispatch('mvs-scanner-open', { videoId: 'pos-scanner-video' })"
+                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    aria-label="Escanear código con cámara"
+                    title="Escanear código con cámara">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25A2.25 2.25 0 0 1 5.25 6h1.4l1.13-1.69a.75.75 0 0 1 .62-.31h3.2a.75.75 0 0 1 .62.31L13.35 6h5.4A2.25 2.25 0 0 1 21 8.25v9a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 17.25v-9Z"/>
+                    <circle cx="12" cy="12.75" r="3.25"/>
+                </svg>
+            </button>
         </div>
 
-        <div x-show="resultsOpen" class="absolute left-4 right-4 z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+
+
+        <div x-show="resultsOpen" class="absolute z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl" :style="dropdownPos($refs.searchInput, results.length)">
             <template x-for="(product, index) in results" :key="product.id">
                 <button type="button"
                         @click="addProduct(product)"
@@ -242,8 +265,10 @@
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-0">
                 </div>
 
+
+
                 <div x-show="customerResultsOpen"
-                     class="absolute left-5 right-5 z-40 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+                     class="absolute z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl" :style="dropdownPos($refs.customerSearchInput, customerResults.length)">
                     <template x-for="(customer, index) in customerResults" :key="customer.id">
                         <button type="button"
                                 @click="selectCustomer(customer)"
@@ -315,7 +340,7 @@
          y se desplaza fuera de vista cuando el teclado móvil recibe el foco. --}}
     <div id="pos-sticky-bar"
          x-cloak
-         x-show="cart.length > 0 && !checkout.open && !orderRequest.open && !suspended.open && !imageModal.open && !quickCustomer.open"
+         x-show="cart.length > 0 && !checkout.open && !orderRequest.open && !suspended.open && !imageModal.open && !quickCustomer.open && !cameraScannerOpen"
          class="fixed inset-x-0 bottom-0 z-[90] border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.18)] transition-transform duration-200 lg:hidden"
          style="padding-bottom: env(safe-area-inset-bottom);">
 
@@ -643,11 +668,23 @@
             </form>
         </div>
     @endcan
+
+    {{-- R02-B: hoja del escáner por cámara (capa reutilizable; emite mvs-scan). --}}
+    <x-scanner.mvs-scanner />
 </div>
 @endsection
 
 @push('scripts')
 <script>
+function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
 document.addEventListener('alpine:init', () => {
     Alpine.data('posTerminal', () => ({
         query: '',
@@ -671,7 +708,7 @@ document.addEventListener('alpine:init', () => {
         _generalDiscountType: 'fixed',
         canDiscount: @json($canDiscount),
         canOverridePrice: @json($canOverridePrice),
-        checkoutToken: crypto.randomUUID(),
+        checkoutToken: generateUUID(),
         quoteId: null,
         creatingQuote: false,
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
@@ -689,13 +726,23 @@ document.addEventListener('alpine:init', () => {
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
         loyaltyRequestNumber: 0,
         loyalty: { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' },
+        // R02-B: escáner por cámara (capa de entrada; sin estado propio de carrito).
+        cameraScannerAvailable: false,
+        cameraScannerOpen: false,
+
 
         init() {
             this.focusSearch();
+            this.cameraScannerAvailable = window.mvsScannerAvailable === true;
             const quoteId = new URLSearchParams(window.location.search).get('quote_id');
             if (quoteId) this.loadQuote(quoteId);
             this.$watch('customerId', () => this.refreshLoyalty());
             this.$watch('grandTotal', () => { if (this.customerId) this.refreshLoyalty(); });
+            const closeDropdownsOnScroll = () => {
+                if (this.resultsOpen && document.activeElement !== this.$refs.searchInput) this.closeResults();
+                if (this.customerResultsOpen && document.activeElement !== this.$refs.customerSearchInput) this.closeCustomerResults();
+            };
+            window.addEventListener('scroll', closeDropdownsOnScroll, { passive: true, capture: true });
         },
 
         // R02-A: solo se enfoca el buscador con puntero fino (desktop/lector HID).
@@ -871,7 +918,7 @@ document.addEventListener('alpine:init', () => {
             }
             this.loading = true;
             try {
-                const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search')) }}, window.location.origin);
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
                 const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 if (!response.ok) throw new Error('No fue posible buscar productos.');
@@ -886,6 +933,14 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 if (currentRequest === this.requestNumber) this.loading = false;
             }
+        },
+        // R02-B: la cámara entrega el código y se reutiliza exactamente el mismo
+        // flujo de búsqueda del POS (searchProducts → matched_barcode → addProduct).
+        onMvsScan(event) {
+            const code = String(event?.detail?.code ?? '').trim();
+            if (!code) return;
+            this.query = code;
+            this.searchProducts();
         },
         openOrderRequest() {
             this.orderRequest = { open: true, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null };
@@ -903,7 +958,7 @@ document.addEventListener('alpine:init', () => {
             this.orderRequest.loading = true;
             this.orderRequest.error = '';
             try {
-                const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search')) }}, window.location.origin);
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
                 const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 const products = await this.readFetchResponse(response);
@@ -937,7 +992,7 @@ document.addEventListener('alpine:init', () => {
             this.orderRequest.saving = true;
             this.orderRequest.error = '';
             try {
-                const response = await fetch({{ Illuminate\Support\Js::from(route('pedidos.store')) }}, {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pedidos.store', [], false)) }}, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({ notes: this.orderRequest.notes || null, items: this.orderRequest.items.map(item => ({ product_id: item.id, requested_quantity: item.requested_quantity, request_note: item.request_note || null })) }),
@@ -1070,7 +1125,7 @@ document.addEventListener('alpine:init', () => {
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
         handleGlobalEnter(event) {
-            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.resultsOpen || this.customerResultsOpen) return;
+            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.cameraScannerOpen || this.resultsOpen || this.customerResultsOpen) return;
             if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
             if (this.canCheckout) { event.preventDefault(); this.openCheckout(); }
         },
@@ -1130,7 +1185,7 @@ document.addEventListener('alpine:init', () => {
             this.checkout.processing = true;
             this.checkout.error = '';
             try {
-                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout')) }}, {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout', [], false)) }}, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({
@@ -1177,7 +1232,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
         newSale() {
-            this.checkoutToken = crypto.randomUUID();
+            this.checkoutToken = generateUUID();
             this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null };
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
@@ -1196,7 +1251,7 @@ document.addEventListener('alpine:init', () => {
             }
             this.loyalty.loading = true;
             try {
-                const url = new URL({{ Illuminate\Support\Js::from(route('pos.loyalty.summary')) }}, window.location.origin);
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.loyalty.summary', [], false)) }}, window.location.origin);
                 url.searchParams.set('customer_id', String(this.customerId));
                 url.searchParams.set('total', String(this.grandTotal));
                 url.searchParams.set('has_offers', this.cart.some(item => item.is_offer) ? '1' : '0');
@@ -1220,7 +1275,7 @@ document.addEventListener('alpine:init', () => {
             this.creatingQuote = true;
             this.notice = '';
             try {
-                const response = await fetch({{ Illuminate\Support\Js::from(route('cotizaciones.store')) }}, {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('cotizaciones.store', [], false)) }}, {
                     method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({ customer_id: this.customerId, ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? { discount_total: this.numberValue(this._generalDiscountInput), discount_total_type: this._generalDiscountType } : {}), items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}), ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}) })) }),
                 });
@@ -1234,7 +1289,7 @@ document.addEventListener('alpine:init', () => {
                 const payload = await this.readFetchResponse(response);
                 this.quoteId = payload.quote_id;
                 this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = crypto.randomUUID(); this.notice = `Cotización ${payload.quote_number} cargada como base editable. La cotización original no se modificará.`;
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada como base editable. La cotización original no se modificará.`;
             } catch (error) { this.notice = error.message; }
         },
         async releaseCurrentRecovery() {
@@ -1255,7 +1310,7 @@ document.addEventListener('alpine:init', () => {
             if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
-            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null;
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = generateUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null;
             this.$nextTick(() => this.focusSearch());
         },
         async suspendCurrent() {
@@ -1263,15 +1318,15 @@ document.addEventListener('alpine:init', () => {
             this.suspended.saving = true; this.notice = '';
             try {
                 const recoveredCart = this.suspended.activeId && this.suspended.recoveryToken;
-                const url = recoveredCart ? `/pos/suspendidas/${this.suspended.activeId}/volver-a-suspender` : {{ Illuminate\Support\Js::from(route('pos.suspended.store')) }};
+                const url = recoveredCart ? `/pos/suspendidas/${this.suspended.activeId}/volver-a-suspender` : {{ Illuminate\Support\Js::from(route('pos.suspended.store', [], false)) }};
                 const response = await fetch(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ ...(recoveredCart ? { recovery_token: this.suspended.recoveryToken } : {}), customer_id: this.customerId, items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })) }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkoutToken = crypto.randomUUID(); this.clearSuspendedRecovery(); this.successMessage = payload.message;
+                this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkoutToken = generateUUID(); this.clearSuspendedRecovery(); this.successMessage = payload.message;
             } catch (error) { this.notice = error.message; } finally { this.suspended.saving = false; }
         },
         async openSuspended() {
             this.suspended.open = true; this.suspended.loading = true; this.suspended.error = '';
-            try { const response = await fetch({{ Illuminate\Support\Js::from(route('pos.suspended.index')) }}, { headers: { Accept: 'application/json' } }); const payload = await this.readFetchResponse(response); this.suspended.list = payload; }
+            try { const response = await fetch({{ Illuminate\Support\Js::from(route('pos.suspended.index', [], false)) }}, { headers: { Accept: 'application/json' } }); const payload = await this.readFetchResponse(response); this.suspended.list = payload; }
             catch (error) { this.suspended.error = error.message; } finally { this.suspended.loading = false; }
         },
         async recoverSuspended(sale) {
@@ -1282,7 +1337,7 @@ document.addEventListener('alpine:init', () => {
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
                 this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.focusSearch());
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = generateUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.focusSearch());
             } catch (error) { this.suspended.error = error.message; }
         },
         async cancelSuspended(sale) {
@@ -1300,7 +1355,7 @@ document.addEventListener('alpine:init', () => {
             }
             this.customerLoading = true;
             try {
-                const url = new URL({{ Illuminate\Support\Js::from(route('pos.customers.search')) }}, window.location.origin);
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.customers.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
                 const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 if (!response.ok) throw new Error('No fue posible buscar clientes.');
@@ -1344,6 +1399,14 @@ document.addEventListener('alpine:init', () => {
             this.customerSelectedIndex = 0;
             this.customerRequestNumber += 1;
         },
+        dropdownPos(refEl) {
+            if (!refEl) return { top: '-9999px', left: '0px', width: '0px' };
+            const section = refEl.closest('section');
+            if (!section) return { top: '-9999px', left: '0px', width: '0px' };
+            const sectionRect = section.getBoundingClientRect();
+            const r = refEl.getBoundingClientRect();
+            return { top: (r.bottom - sectionRect.top + 8) + 'px', left: (r.left - sectionRect.left) + 'px', width: r.width + 'px' };
+        },
         openQuickCustomer() {
             this.quickCustomer.open = true;
             this.quickCustomer.errors = {};
@@ -1367,7 +1430,7 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
             try {
-                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.customers.quick-store')) }}, {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.customers.quick-store', [], false)) }}, {
                     method: 'POST',
                     headers: {
                         Accept: 'application/json',

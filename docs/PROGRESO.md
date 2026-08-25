@@ -196,6 +196,24 @@ Adaptación exclusivamente de presentación del POS (`pos/index.blade.php`) sin 
 
 Evidencia: regresión POS + Loyalty + Devoluciones 386 tests / 2391 aserciones idéntica al árbol limpio (los 5 fallos detectados son preexistentes de HEAD, por deriva backend–tests: claves del payload de búsqueda, formato de precio en recuperación y validación de caja en un test de suspendidas; no corresponden a esta tarea). `npm run build` correcto. Pendiente **R02-B**: escáner por cámara (BarcodeDetector + fallback), sin dependencias instaladas todavía.
 
+### R02-B — Escáner por cámara para POS: COMPLETADO
+
+Capa de entrada adicional para leer códigos de producto con la cámara en celular/tablet, reutilizable para R03 sin copiar código. El escáner no tiene lógica propia de productos: entrega el código a la búsqueda existente del POS (`onMvsScan` → `query` → `searchProducts()` → coincidencia exacta `matched_barcode` → `addProduct` existente).
+
+Implementación:
+
+- `resources/js/scanner/engine.js`: motor headless con detección progresiva — `BarcodeDetector` nativo si está disponible y soporta los formatos; fallback local `@zxing/library` (única dependencia nueva, autorizada; procesamiento 100% local, sin APIs externas) cargado por dynamic import como chunk separado (`esm-*.js`, fuera del bundle inicial). Formatos: EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39 y QR con gate `isProductCodeText()`.
+- QR seguros: URLs/tokens (portal F33/F34), QR de cliente o fidelización nunca se buscan como producto; muestran mensaje comprensible dentro del escáner, sin navegar ni emitir evento.
+- `resources/js/scanner/index.js`: componente Alpine reutilizable `mvsScanner`; contrato por eventos de ventana: `mvs-scanner-open` (entrada), `mvs-scan` `{ code, source }` (salida única por lectura válida) y `mvs-scanner-change` `{ open }`. Cámara trasera por defecto (`facingMode: environment`) con cambio de cámara cuando existe más de una.
+- `resources/views/components/scanner/mvs-scanner.blade.php`: hoja mobile-safe (`z-[130]`, cierre ≥44px, video `playsinline muted autoplay`, mensajes en español). Prop `video-id` lista para R03.
+- Integración POS (`pos/index.blade.php`): botón táctil junto al buscador visible según disponibilidad en runtime (`window.mvsScannerAvailable`); mientras el escáner está abierto, la barra sticky Total/Cobrar se oculta (`!cameraScannerOpen`), el Enter global no abre checkout y Escape cierra solo el escáner. Búsqueda manual, teclado y lectores USB/Bluetooth HID intactos.
+- Ciclo de vida: cámara solo tras acción explícita; `track.stop()` de todas las pistas + `srcObject = null` al cerrar, tras lectura válida, al ocultar la pestaña (`visibilitychange`) y al desmontar. Anti-doble lectura con cooldown de ~1,2 s y pausa total tras lectura válida.
+- Seguridad/permisos: HTTP inseguro explica el requisito HTTPS sin romper el POS; mensajes específicos para permiso denegado, cámara inexistente, cámara ocupada y navegador incompatible.
+
+Evidencia: `PosCameraScannerTest` (9 tests / 58 aserciones). Regresión: POS (80 tests, 75 verdes — los mismos 5 fallos preexistentes de HEAD por deriva backend–tests, verificados idénticos en árbol limpio mediante stash), POS-Loyalty (32/32), Loyalty (218/218). `npm run build` correcto (chunk ZXing diferido) y `git diff --check` limpio.
+
+Pendiente **R03 — Producto/Inventario móvil + escaneo reutilizable** (siguiente fase responsive; reutilizar `resources/js/scanner` y `components/scanner/mvs-scanner.blade.php`).
+
 ---
 
 ## Caja

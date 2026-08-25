@@ -309,6 +309,31 @@ El POS contempla o debe contemplar:
 * cuentas por cobrar;
 * fidelización.
 
+### 12.1 Escáner por cámara (R02-B)
+
+Capa frontend reutilizable (no acoplada al POS) que permite leer códigos de producto con la cámara de celulares/tablets. Principio: el escáner es solo una capa de entrada; el código alimenta la búsqueda existente (`searchProducts` → `matched_barcode` → `addProduct`). No crea estado ni lógica paralela.
+
+Componentes:
+
+* `resources/js/scanner/engine.js`: motor sin lógica de negocio. Detección progresiva: `BarcodeDetector` nativo cuando está disponible y soporta los formatos; si no, fallback local `@zxing/library` cargado por dynamic import (chunk separado, no afecta la carga inicial). Procesamiento 100% local: nunca se envían imágenes ni códigos a servicios externos.
+* `resources/js/scanner/index.js`: componente Alpine reutilizable `mvsScanner` (hoja del escáner) y contrato de eventos de ventana:
+  * entrada `mvs-scanner-open` (con `detail.videoId`) abre la hoja tras una acción explícita del usuario;
+  * salida `mvs-scan` con `{ code, source }` por cada lectura válida única;
+  * salida `mvs-scanner-change` con `{ open }` al abrir/cerrar.
+* `resources/views/components/scanner/mvs-scanner.blade.php`: hoja mobile-safe (`fixed inset-0`, `z-[130]`, cierre ≥44px, video `playsinline muted autoplay`, mensajes en español, cambio de cámara cuando hay varias). Acepta prop `video-id` para reutilización futura (R03).
+
+Reglas:
+
+* Formatos R02: EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39 y QR solo cuando su contenido pueda tratarse como código de producto.
+* Los QR con URL/token (portal F33/F34), QR de cliente o fidelización NO se buscan como producto: se muestra mensaje comprensible y no se navega. El gate vive en `isProductCodeText()` del engine.
+* Contexto inseguro (HTTP): el POS sigue funcionando; al intentar usar la cámara se explica el requisito HTTPS. Permiso denegado, cámara inexistente/ocupada o navegador incompatible producen mensajes claros sin romper el POS.
+* Ciclo de vida de la cámara: `track.stop()` para todas las pistas y `srcObject = null` al cerrar, tras lectura válida, al ocultar la pestaña y al desmontar. La cámara nunca se abre automáticamente.
+* Anti-doble lectura: cooldown de ~1,2 s por código y pausa total tras lectura válida (un solo evento).
+* Integración POS: botón táctil junto al buscador (visible según disponibilidad detectada en runtime); mientras el escáner está abierto, la barra sticky Total/Cobrar se oculta y el Enter global no abre checkout; Escape cierra el escáner sin afectar otros modales.
+* Lectores USB/Bluetooth HID y teclado conservan su flujo intacto sobre el buscador.
+
+Evidencia: `PosCameraScannerTest`.
+
 ---
 
 ## 13. Flujo general de venta
