@@ -30,7 +30,7 @@
         <main
             class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
 
-            <div class="{{ request()->routeIs('pos.*') ? 'p-4 sm:p-6' : 'p-4 pb-28 md:p-6 md:pb-6' }}">
+            <div class="{{ request()->routeIs('pos.*') ? 'p-4 pb-24 lg:p-6' : 'p-4 pb-28 md:p-6 md:pb-6' }}">
 
                 @yield('content')
 

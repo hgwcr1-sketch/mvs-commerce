@@ -55,7 +55,7 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-R01 — Navegación responsive: implementación terminada y probada, pendiente de commit (sin push). Barra inferior <768px (`components/navigation/bottom-bar.blade.php`), sheet "Más" que reutiliza el sidebar con `context = 'sheet'`, sidebar compacto/expandible ≥1024px (`resources/js/navigation.js`, Alpine `sidebarShell`), CSS en `resources/css/app.css`, reglas permanentes en `AGENTS.md` §13 y arquitectura en `docs/ARQUITECTURA.md` §7.1. Header responsive reescrito. Ajuste menor en `LoyaltyOnlineSaleTest` (fecha local de empresa para bono de cumpleaños). Sin cambios de esquema ni dependencias. Verificar siempre con `git status` antes de trabajar.
+R02-A (POS móvil/tablet operativo) terminado y probado, **pendiente de commit**. Cambios: `pos/index.blade.php` (carrito tarjeta <1024px / tabla ≥1024px en una sola plantilla, composición tablet dos paneles, barra sticky Total/Cobrar con safe-area y anti-teclado, foco solo con puntero fino), `layouts/app.blade.php` (`pb-24 lg:p-6` en rutas POS) y `navigation.js` (ocultamiento por teclado compartido entre barra inferior y barra del POS). Sin backend, sin dependencias, sin escáner. Fallos preexistentes documentados en PROGRESO.md (5 tests de deriva backend–tests, idénticos en HEAD limpio). Siguiente: **R02-B — escáner por cámara (BarcodeDetector + fallback)**; luego F38. Verificar siempre con `git status` antes de trabajar.
 
 ## Objetivo actual
 
@@ -79,7 +79,8 @@ Según historial reciente de commits en esta rama:
 ## Trabajo en curso
 
 - Fidelización: etapas 10 y 11 completas — F30–F37 confirmados (portal, QR, promociones, acumulación y canje online). Siguiente fase según cronograma: **F38 — Administrador** (etapa 12).
-- R01 — Navegación responsive: implementación completa en el working tree (pendiente de commit). Fuente única de menú en `sidebar.blade.php`; no duplicar menús al agregar módulos.
+- R01 — Navegación responsive: COMPLETADO (`9c03912`).
+- R02 — POS móvil + escaneo: **R02-A COMPLETADO** (presentación móvil/tablet, pendiente de commit); **R02-B PENDIENTE** (cámara/escáner como capa de entrada; BarcodeDetector con fallback, sin dependencias instaladas aún).
 - POS: expansión activa (uno de los módulos principales).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
@@ -106,7 +107,7 @@ No asumir que el último estado conocido sigue vigente.
 
 Suite principal: `tests/Feature`.
 
-- POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`.
+- POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`, `PosAccessAndSearchTest`.
 - Navegación: `ResponsiveNavigationTest`, `LoyaltySettingsSidebarNavigationTest`.
 - Fidelización: `tests/Feature/Loyalty*Test.php` (incluye `LoyaltyExpirationTest`, `LoyaltyExpirationSettingTest`, `LoyaltyCustomerPortalTest`, `LoyaltyPortalAccessTest`, `LoyaltyPortalAccessQrTest`, `LoyaltyPromotionTest`, `LoyaltyOnlineSaleTest`, `LoyaltyOnlineRedemptionTest`), `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
 - Caja: `Cash*Test.php`.

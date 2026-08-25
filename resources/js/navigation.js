@@ -50,14 +50,23 @@ document.addEventListener('alpine:init', () => {
 
 });
 
-// Barra inferior: se oculta mientras un campo de texto tiene el foco
-// para no competir con el teclado móvil.
+// Barras fijas (navegación inferior y barra Total/Cobrar del POS):
+// se ocultan mientras un campo de texto tiene el foco para no competir
+// con el teclado móvil.
 
 const bottomNavInputSelector = 'input, textarea, select';
 
+const fixedBarsSelector = '#bottom-nav, #pos-sticky-bar';
+
+function getFixedBar() {
+
+    return document.querySelector(fixedBarsSelector);
+
+}
+
 function hideBottomNavForFocus(event) {
 
-    const bar = document.getElementById('bottom-nav');
+    const bar = getFixedBar();
 
     if (! bar || ! (event.target instanceof Element)) {
 
@@ -75,7 +84,7 @@ function hideBottomNavForFocus(event) {
 
 function showBottomNavAfterBlur() {
 
-    const bar = document.getElementById('bottom-nav');
+    const bar = getFixedBar();
 
     if (! bar) {
 

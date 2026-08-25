@@ -184,6 +184,18 @@ Arquitectura relevante:
 
 El POS es uno de los módulos principales actualmente en expansión.
 
+### R02-A — POS móvil/tablet operativo: COMPLETADO
+
+Adaptación exclusivamente de presentación del POS (`pos/index.blade.php`) sin cambiar el estado Alpine (`posTerminal`), la lógica de checkout ni el backend:
+
+- Carrito: una sola plantilla; <1024px cada línea se presenta como tarjeta (grid) con etiquetas, targets táctiles ≥44px (±, cantidad, descuento, eliminar) y badge "Oferta" cuando `is_offer`; ≥1024px se restaura exactamente la tabla original (encabezado, anchos, paddings).
+- Tablet 768–1023px: composición de dos paneles (`md:grid-cols-[1.6fr_1fr]`) con carrito a la izquierda y cliente/totales sticky a la derecha; desktop `lg:grid-cols-4` intacto.
+- Barra sticky Total/Cobrar (<1024px): reutiliza `grandTotal`, `canCheckout` y `openCheckout`; oculta con carrito vacío, durante checkout o con cualquier modal POS abierto; `z-[90]` debajo de los modales; respeta safe-area y se desplaza fuera de vista al abrirse el teclado móvil (mecanismo compartido con la barra inferior R01); layout reserva espacio (`pb-24 lg:p-6` en rutas POS).
+- Foco: `autofocus` eliminado; nuevo helper `focusSearch()` solo enfoca con puntero fino (desktop/lector HID), aplicado también a los refocos tras acciones.
+- Lectores USB/Bluetooth/teclado: flujo HID sobre el buscador sin cambios.
+
+Evidencia: regresión POS + Loyalty + Devoluciones 386 tests / 2391 aserciones idéntica al árbol limpio (los 5 fallos detectados son preexistentes de HEAD, por deriva backend–tests: claves del payload de búsqueda, formato de precio en recuperación y validación de caja en un test de suspendidas; no corresponden a esta tarea). `npm run build` correcto. Pendiente **R02-B**: escáner por cámara (BarcodeDetector + fallback), sin dependencias instaladas todavía.
+
 ---
 
 ## Caja

@@ -35,7 +35,6 @@
                    @keydown.enter.prevent="addSelected"
                    @keydown.escape="closeResults"
                    type="search"
-                   autofocus
                    autocomplete="off"
                    placeholder="Buscar por nombre, código o escanear código de barras…"
                    class="w-full rounded-xl border-2 border-slate-300 bg-slate-50 px-4 py-2.5 text-base outline-none transition focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-100">
@@ -84,7 +83,7 @@
         </div>
     </section>
 
-    <div class="grid items-start gap-3 lg:grid-cols-4">
+    <div class="grid items-start gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:grid-cols-4">
         <section class="overflow-hidden rounded-xl bg-white shadow-sm lg:col-span-3">
                 <div class="border-b border-slate-200 px-4 py-2.5">
                     <div class="flex items-center justify-between gap-3">
@@ -95,7 +94,7 @@
                 </div>
                 <div class="overflow-auto lg:max-h-[calc(100vh-18rem)]">
                     <table class="min-w-full">
-                        <thead class="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
+                        <thead class="hidden bg-slate-100 text-xs uppercase text-slate-600 lg:sticky lg:top-0 lg:z-10 lg:table-header-group">
                             <tr>
                                 <th class="min-w-56 px-3 py-2 text-left">Producto</th>
                                 <th class="w-28 px-3 py-2 text-center">Cantidad</th>
@@ -108,36 +107,41 @@
                         </thead>
                         <tbody>
                             <template x-for="(item, index) in cart" :key="item.id">
-                                <tr class="border-b border-slate-100" :class="exceedsStock(item) ? 'bg-red-50' : ''">
-                                    <td class="min-w-56 px-3 py-2">
+                                <tr class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-slate-100 p-3 align-top last:border-0 lg:table-row lg:p-0" :class="exceedsStock(item) ? 'bg-red-50' : ''">
+                                    <td class="order-1 col-span-2 flex items-start justify-between gap-2 lg:table-cell lg:min-w-56 lg:px-3 lg:py-2">
                                         <div class="flex items-center gap-2">
-                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                            <button type="button" @click="openImage(item)" :disabled="!item.has_image" class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 lg:h-9 lg:w-9">
                                                 <img x-show="item.has_image" :src="item.image_url" :alt="item.name"
-                                                     @click="openImage(item)"
                                                      class="h-full w-full cursor-zoom-in object-contain p-1">
                                                 <svg x-show="!item.has_image" class="h-6 w-6 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7.5 12 3 4 7.5m16 0v9L12 21m8-13.5-8 4.5m0 9-8-4.5v-9m8 13.5v-9M4 7.5l8 4.5"/>
                                                 </svg>
-                                            </div>
+                                            </button>
                                             <div>
                                                 <p class="font-semibold text-slate-800" x-text="item.name"></p>
                                                 <p class="text-xs text-slate-500" x-text="item.internal_code"></p>
+                                                <span x-show="item.is_offer" class="mt-0.5 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 lg:hidden">Oferta</span>
                                                 <p x-show="exceedsStock(item)" class="mt-1 text-xs font-semibold text-red-600">Cantidad superior al stock de esta sucursal.</p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="w-28 whitespace-nowrap px-3 py-2">
+                                    <td class="order-2 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 lg:table-cell lg:w-28 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Cantidad</span>
                                         <div class="flex items-center justify-center gap-1">
-                                            <button type="button" @click="decrease(item)" class="h-7 w-7 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300 disabled:opacity-40">−</button>
+                                            <button type="button" @click="decrease(item)" class="h-11 w-11 rounded-md bg-slate-200 text-base font-bold hover:bg-slate-300 disabled:opacity-40 lg:h-7 lg:w-7">−</button>
                                             <input type="number"
                                                    x-model.number="item.quantity"
                                                    :min="item.allows_decimals ? 0.0001 : 1"
                                                    :step="item.allows_decimals ? 0.0001 : 1"
-                                                   class="w-16 rounded border border-slate-300 px-1 py-1 text-center text-sm font-bold">
-                                            <button type="button" @click="increase(item)" class="h-7 w-7 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600 disabled:opacity-40">+</button>
+                                                   class="h-11 w-16 rounded border border-slate-300 px-1 text-center text-sm font-bold lg:h-auto lg:py-1">
+                                            <button type="button" @click="increase(item)" class="h-11 w-11 rounded-md bg-amber-500 text-base font-normal text-black hover:bg-amber-600 disabled:opacity-40 lg:h-7 lg:w-7">+</button>
                                         </div>
                                     </td>
-                                    <td class="w-28 whitespace-nowrap px-3 py-2 text-right">
+                                    <td class="order-4 flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-right lg:table-cell lg:w-28 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-left text-xs font-semibold uppercase text-slate-500 lg:hidden">
+                                            Precio
+                                            <span x-show="item.is_offer" class="block font-bold normal-case text-emerald-600">Oferta</span>
+                                        </span>
                                         <template x-if="canOverridePrice">
                                             <div class="flex flex-col items-end gap-1">
                                                 <input x-model="item._unitPrice"
@@ -145,8 +149,8 @@
                                                        min="1"
                                                        step="1"
                                                        inputmode="numeric"
-                                                       class="w-24 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm font-bold text-amber-900"
-                                                       :placeholder="String(item.sale_price)"
+                                                        class="h-11 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm font-bold text-amber-900 lg:h-auto lg:py-1"
+                                                        :placeholder="String(item.sale_price)"
                                                        :title="'Precio original: ' + money(item.sale_price)">
                                                 <span x-show="Number(item._unitPrice) > 0 && Number(item._unitPrice) !== Number(item.sale_price)"
                                                       class="text-[11px] font-semibold text-amber-700">
@@ -156,11 +160,12 @@
                                         </template>
                                         <span x-show="!canOverridePrice" x-text="money(item.sale_price)"></span>
                                     </td>
-                                    <td class="w-36 whitespace-nowrap px-3 py-2 text-right">
+                                    <td class="order-6 col-span-2 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 lg:table-cell lg:w-36 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Descuento</span>
                                         <template x-if="canDiscount">
                                             <div class="flex items-center justify-end gap-1">
                                                 <select x-model="item._discountType"
-                                                        class="w-14 rounded border border-amber-300 bg-amber-50 px-1 py-1 text-xs font-bold text-amber-900">
+                                                        class="h-11 w-14 rounded border border-amber-300 bg-amber-50 px-1 text-xs font-bold text-amber-900 lg:h-auto lg:py-1">
                                                     <option value="fixed">₡</option>
                                                     <option value="percentage">%</option>
                                                 </select>
@@ -169,15 +174,21 @@
                                                        min="0"
                                                        :step="item._discountType === 'fixed' ? 1 : 0.0001"
                                                        inputmode="decimal"
-                                                       class="w-20 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right text-sm"
+                                                       class="h-11 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm lg:h-auto lg:py-1"
                                                        placeholder="0">
                                             </div>
                                         </template>
 
                                     </td>
-                                    <td class="w-24 whitespace-nowrap px-3 py-2 text-right" x-text="money(lineTax(item, index))"></td>
-                                    <td class="w-28 whitespace-nowrap px-3 py-2 text-right font-bold" x-text="money(lineTotal(item, index))"></td>
-                                    <td class="w-20 whitespace-nowrap px-3 py-2 text-right"><button type="button" @click="remove(item)" class="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40">Eliminar</button></td>
+                                    <td class="order-5 flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-right lg:table-cell lg:w-24 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Impuesto</span>
+                                        <span x-text="money(lineTax(item, index))"></span>
+                                    </td>
+                                    <td class="order-3 flex items-start justify-between gap-2 text-right lg:table-cell lg:w-28 lg:px-0 lg:py-0 lg:whitespace-nowrap">
+                                        <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Total</span>
+                                        <strong class="text-base font-bold lg:text-sm" x-text="money(lineTotal(item, index))"></strong>
+                                    </td>
+                                    <td class="order-7 flex items-center justify-end lg:table-cell lg:w-20 lg:px-0 lg:py-0 lg:whitespace-nowrap lg:text-right"><button type="button" @click="remove(item)" class="min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 lg:min-h-0 lg:px-2 lg:py-1 lg:text-xs lg:font-normal">Eliminar</button></td>
                                 </tr>
                             </template>
                             <tr x-show="cart.length === 0">
@@ -188,7 +199,7 @@
                 </div>
         </section>
 
-        <aside class="space-y-3 lg:sticky lg:top-3">
+        <aside class="space-y-3 md:sticky md:top-3">
             <section class="relative rounded-xl bg-white p-3 shadow-sm">
                 <p x-show="successMessage" x-text="successMessage" class="mb-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"></p>
                 <div class="flex items-start justify-between gap-3">
@@ -297,6 +308,29 @@
                 @endcan
             </section>
         </aside>
+    </div>
+
+    {{-- R02-A: barra sticky Total/Cobrar (móvil/tablet). Debajo de los modales (z<100),
+         oculta con carrito vacío, durante el cobro o con cualquier modal POS abierto,
+         y se desplaza fuera de vista cuando el teclado móvil recibe el foco. --}}
+    <div id="pos-sticky-bar"
+         x-cloak
+         x-show="cart.length > 0 && !checkout.open && !orderRequest.open && !suspended.open && !imageModal.open && !quickCustomer.open"
+         class="fixed inset-x-0 bottom-0 z-[90] border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.18)] transition-transform duration-200 lg:hidden"
+         style="padding-bottom: env(safe-area-inset-bottom);">
+
+        <div class="flex items-center justify-between gap-3 px-4 py-3">
+            <div class="leading-tight">
+                <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
+                <p class="text-xl font-black text-slate-900" x-text="money(grandTotal)"></p>
+            </div>
+            @can('ventas.crear')
+                <button type="button" @click="openCheckout" :disabled="!canCheckout"
+                        class="max-w-[16rem] min-h-[48px] flex-1 rounded-xl bg-amber-500 px-6 text-base font-bold text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
+                    Cobrar
+                </button>
+            @endcan
+        </div>
     </div>
 
     <section class="rounded-xl bg-white p-2 shadow-sm">
@@ -657,10 +691,18 @@ document.addEventListener('alpine:init', () => {
         loyalty: { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' },
 
         init() {
+            this.focusSearch();
             const quoteId = new URLSearchParams(window.location.search).get('quote_id');
             if (quoteId) this.loadQuote(quoteId);
             this.$watch('customerId', () => this.refreshLoyalty());
             this.$watch('grandTotal', () => { if (this.customerId) this.refreshLoyalty(); });
+        },
+
+        // R02-A: solo se enfoca el buscador con puntero fino (desktop/lector HID).
+        // En táctil evita abrir el teclado automáticamente al cargar o tras acciones.
+        focusSearch() {
+            if (! window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+            this.$refs.searchInput?.focus();
         },
 
         get resultsOpen() {
@@ -852,7 +894,7 @@ document.addEventListener('alpine:init', () => {
         closeOrderRequest() {
             if (this.orderRequest.saving) return;
             this.orderRequest.open = false;
-            this.$nextTick(() => this.$refs.searchInput?.focus());
+            this.$nextTick(() => this.focusSearch());
         },
         async searchOrderProducts() {
             const term = this.orderRequest.query.trim();
@@ -927,7 +969,7 @@ document.addEventListener('alpine:init', () => {
             else this.cart.push({ ...product, quantity: 1, _discount: 0, _discountType: 'fixed', _unitPrice: '' });
             this.notice = '';
             this.closeResults();
-            this.$nextTick(() => this.$refs.searchInput.focus());
+            this.$nextTick(() => this.focusSearch());
         },
         closeResults() {
             this.query = '';
@@ -1045,7 +1087,7 @@ document.addEventListener('alpine:init', () => {
             if (this.checkout.payments.length && !window.confirm('¿Desea cerrar el cobro? Los pagos preparados se limpiarán.')) return;
             this.clearPayments();
             this.checkout.open = false;
-            this.$nextTick(() => this.$refs.searchInput?.focus());
+            this.$nextTick(() => this.focusSearch());
         },
         unsupportedPaymentMethod(method) { return method.type === 'loyalty_points'; },
         methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0 || (method.type === 'credit' && this.checkout.payments.length > 0); },
@@ -1143,7 +1185,7 @@ document.addEventListener('alpine:init', () => {
             this.clearSuspendedRecovery();
             this.quoteId = null;
             this.refreshLoyalty();
-            this.$nextTick(() => this.$refs.searchInput.focus());
+            this.$nextTick(() => this.focusSearch());
         },
         clearSuspendedRecovery() { this.suspended.activeId = null; this.suspended.recoveryToken = null; this.suspended.warnings = []; this.suspended.customerInvalid = false; },
         async refreshLoyalty() {
@@ -1214,7 +1256,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
             this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = crypto.randomUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null;
-            this.$nextTick(() => this.$refs.searchInput.focus());
+            this.$nextTick(() => this.focusSearch());
         },
         async suspendCurrent() {
             if (!this.cart.length || this.suspended.saving) return;
@@ -1240,7 +1282,7 @@ document.addEventListener('alpine:init', () => {
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
                 this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.$refs.searchInput.focus());
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = crypto.randomUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.focusSearch());
             } catch (error) { this.suspended.error = error.message; }
         },
         async cancelSuspended(sale) {
