@@ -11,6 +11,23 @@ use Illuminate\View\View;
 
 class CashSessionController extends Controller
 {
+    public function required(Request $request): View|RedirectResponse
+    {
+        [$company, $companyId, $branchId] = $this->context();
+        if (! $request->user()->hasPermission('pos.acceder', $company)) {
+            abort(403);
+        }
+
+        if (app(\App\Services\Cash\CashSessionResolver::class)->applicable($request->user(), $companyId, $branchId)->isNotEmpty()) {
+            return redirect()->route('pos.index');
+        }
+
+        return view('cash.required', [
+            'company' => $company,
+            'branch' => \App\Models\Branch::findOrFail($branchId),
+            'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
+        ]);
+    }
     public function index(Request $request): View
     {
         [$company,$companyId,$branchId,$settings]=$this->context();
@@ -41,7 +58,9 @@ class CashSessionController extends Controller
     public function store(OpenCashSessionRequest $request,CashSessionService $service): RedirectResponse
     {
         $session=$service->open($request->validated(),$request->user(),(int)session('active_company_id'),(int)session('active_branch_id'));
-        return redirect()->route('cash.index')->with('success',"Caja {$session->session_number} abierta correctamente.");
+        if ($request->session()->pull('cash_open_return_to_pos', false)) {
+            return redirect()->route('pos.index')->with('success', "Caja {$session->session_number} abierta. Ya puede operar el POS.");
+        }        return redirect()->route('cash.index')->with('success',"Caja {$session->session_number} abierta correctamente.");
     }
 
     private function context(): array

@@ -176,10 +176,11 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::redirect('/', '/dashboard');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->middleware(['active.branch', 'pos.cash-session:after-login'])
         ->name('dashboard');
 
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
-        Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
+        Route::get('/pos', [PosController::class, 'index'])->middleware('pos.cash-session')->name('pos.index');
         Route::get('/pos/productos/buscar', [PosController::class, 'searchProducts'])
             ->name('pos.products.search');
         Route::get('/pos/clientes/buscar', [PosController::class, 'searchCustomers'])
@@ -190,7 +191,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('/pos/fidelidad/consulta', [PosController::class, 'loyaltySummary'])
             ->name('pos.loyalty.summary');
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
-            ->middleware('permission:ventas.crear')
+            ->middleware(['permission:ventas.crear', 'pos.cash-session'])
             ->name('pos.checkout');
         Route::middleware('permission:ventas.crear')->group(function () {
             Route::post('/pos/suspender', [PosController::class, 'storeSuspended'])->name('pos.suspended.store');
@@ -209,6 +210,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     });
 
     Route::middleware('active.branch')->group(function () {
+        Route::get('/caja/requerida', [CashSessionController::class, 'required'])->name('cash.required');
         Route::get('/caja', [CashSessionController::class, 'index'])
             ->name('cash.index');
         Route::get('/caja/abrir', [CashSessionController::class, 'create'])

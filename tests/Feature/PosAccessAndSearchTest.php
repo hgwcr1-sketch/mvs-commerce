@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
@@ -13,6 +15,7 @@ use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CompanyCashSettingsProvisioner;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -174,21 +177,21 @@ class PosAccessAndSearchTest extends TestCase
             ->assertSee('selectPaymentMethod(method)', false)->assertSee('method.requires_reference', false)
             ->assertSee('method.allows_change', false)->assertSee('handleCheckoutEnter($event)', false)
             ->assertSee('this.checkout.payments = []', false)
-            ->assertSee("this.checkout.draft.amount = String(this.pendingBalance)", false)
+            ->assertSee('this.checkout.draft.amount = String(this.pendingBalance)', false)
             ->assertSee("['credit', 'loyalty_points'].includes(method.type)", false)
-            ->assertSee("Number(this.checkout.draft.receivedAmount) < amount", false)
-            ->assertSee("amount > this.pendingBalance", false)
-            ->assertSee("change_amount: method.allows_change ? received - amount : 0", false)
-            ->assertSee("received_amount: received", false)
-            ->assertDontSee("Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance", false)
-            ->assertSee("border-amber-500 bg-amber-500 text-black hover:bg-amber-600", false)
+            ->assertSee('Number(this.checkout.draft.receivedAmount) < amount', false)
+            ->assertSee('amount > this.pendingBalance', false)
+            ->assertSee('change_amount: method.allows_change ? received - amount : 0', false)
+            ->assertSee('received_amount: received', false)
+            ->assertDontSee('Number(this.checkout.draft.receivedAmount) === amount || amount === this.pendingBalance', false)
+            ->assertSee('border-amber-500 bg-amber-500 text-black hover:bg-amber-600', false)
             ->assertSee('bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600', false)
             ->assertSee('bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta', false)
             ->assertSee('bg-[#111111] px-5 py-3 font-normal text-white">Imprimir comprobante', false)
             ->assertSee('rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓', false)
-            ->assertSee("disabled:bg-slate-100 disabled:text-slate-500", false)
-            ->assertSee("text-xl font-extrabold sm:text-2xl", false)
-            ->assertSee("text-2xl font-extrabold text-emerald-400 sm:text-3xl", false);
+            ->assertSee('disabled:bg-slate-100 disabled:text-slate-500', false)
+            ->assertSee('text-xl font-extrabold sm:text-2xl', false)
+            ->assertSee('text-2xl font-extrabold text-emerald-400 sm:text-3xl', false);
     }
 
     public function test_exact_barcode_match_has_priority(): void
@@ -611,6 +614,27 @@ class PosAccessAndSearchTest extends TestCase
         }
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
+        app(CompanyCashSettingsProvisioner::class)->provision($company);
+        if ($withPermission) {
+            $register = CashRegister::create([
+                'company_id' => $company->id,
+                'branch_id' => $branch->id,
+                'code' => 'CAJA-'.$company->id,
+                'name' => 'Caja principal',
+                'is_active' => true,
+            ]);
+            CashSession::create([
+                'company_id' => $company->id,
+                'branch_id' => $branch->id,
+                'cash_register_id' => $register->id,
+                'session_number' => 'CAJA-'.$company->id,
+                'opened_by' => $user->id,
+                'status' => CashSession::STATUS_OPEN,
+                'open_guard' => CashSession::OPEN_GUARD,
+                'opening_amount' => 0,
+                'opened_at' => now(),
+            ]);
+        }
 
         return [$company, $branch, $user];
     }

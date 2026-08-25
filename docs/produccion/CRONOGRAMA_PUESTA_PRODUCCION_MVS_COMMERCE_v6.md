@@ -18,7 +18,8 @@ controladas.
 -   Decisión actual: Producción principal en **cloud**, no en la PC de
     San Ramón.
 -   P08S: **VALIDADO ESTÁTICAMENTE / PRUEBA REAL POSTGRESQL PENDIENTE**.
--   P08L: **PENDIENTE DESPUÉS DE P08S**.
+-   P08L: **COMPLETADO**.
+-   P08C: **COMPLETADO** — apertura de caja obligatoria antes de operar POS.
 -   P09 MYM Beauty Center: **PENDIENTE**.
 -   P10 piloto/salida: **PENDIENTE**.
 
@@ -80,6 +81,11 @@ individuales para cajeros.
 
 Cobro automático recurrente queda fuera del MVP.
 
+## P08C --- Apertura de caja obligatoria antes de POS
+
+**Estado: COMPLETADO.** Los usuarios con acceso operativo al POS son dirigidos a Apertura de Caja cuando no existe una sesión aplicable. `/pos` queda protegido y el checkout conserva la validación transaccional de `CashSessionResolver`. La sesión aplicable respeta empresa, sucursal, usuario según modo individual/compartido y caja registradora activa; cierre y cambio de sucursal vuelven a bloquear. No existe bypass para administrador ni integración con RRHH. UI mobile-first verificada conceptualmente a 360/768/1280.
+
+Evidencia: `P08CashOpeningGateTest`, regresión Caja/POS, build Vite, Pint y `git diff --check`.
 ## Producción cloud
 
 Arquitectura objetivo:

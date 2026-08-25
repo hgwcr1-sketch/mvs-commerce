@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07B, P08L, P11 y P12 COMPLETADOS; P08S VALIDADO ESTÁTICAMENTE / POSTGRESQL REAL PENDIENTE**. Licencias SaaS, auditoría, bloqueo/reactivación, límites y separación de módulos implementados. Evidencia P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global: 824 pruebas, 814 pasan, 4.764 aserciones y los mismos 10 fallos históricos ajenos. No hay PostgreSQL local y no se instaló nada. **PAUSA: P09 NO INICIADA; requiere autorización explícita.**
+- Puesta en Producción: **P00–P07B, P08L, P08C, P11 y P12 COMPLETADOS; P08S VALIDADO ESTÁTICAMENTE / POSTGRESQL REAL PENDIENTE**. P08C exige sesión de caja aplicable tras login, en `/pos` y al cobrar; revalida cierre y cambio de sucursal sin bypass administrativo ni integración RRHH. Licencias SaaS, auditoría, bloqueo/reactivación, límites y separación de módulos implementados. Evidencia P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global tras P08C: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos históricos ajenos. No hay PostgreSQL local y no se instaló nada. **PAUSA: P09 NO INICIADA; requiere autorización explícita. Siguiente paso exacto: activación externa P08 en cloud.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

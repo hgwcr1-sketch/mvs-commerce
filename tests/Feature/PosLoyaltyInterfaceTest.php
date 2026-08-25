@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
@@ -10,6 +12,7 @@ use App\Models\LoyaltySetting;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\CompanyCashSettingsProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -168,7 +171,25 @@ class PosLoyaltyInterfaceTest extends TestCase
         }
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
-
+        app(CompanyCashSettingsProvisioner::class)->provision($company);
+        $register = CashRegister::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'code' => 'CAJA-'.uniqid(),
+            'name' => 'Caja principal',
+            'is_active' => true,
+        ]);
+        CashSession::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'cash_register_id' => $register->id,
+            'session_number' => 'CAJA-'.uniqid(),
+            'opened_by' => $user->id,
+            'status' => CashSession::STATUS_OPEN,
+            'open_guard' => CashSession::OPEN_GUARD,
+            'opening_amount' => 0,
+            'opened_at' => now(),
+        ]);
         LoyaltySetting::create(['company_id' => $company->id, 'is_active' => true, 'earning_percentage' => 5, 'point_value' => '1.0000', 'maximum_redemption_percent' => $percentage, 'redeem_on_offers' => false]);
 
         return [$company, $branch, $user];

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Permission;
 use App\Models\Product;
@@ -10,6 +12,7 @@ use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CompanyCashSettingsProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -72,7 +75,7 @@ class PosCameraScannerTest extends TestCase
         $html = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->get(route('pos.index'))
             ->getContent();
-        $this->assertSame(1, substr_count($html, "product.matched_barcode === term"));
+        $this->assertSame(1, substr_count($html, 'product.matched_barcode === term'));
     }
 
     public function test_qr_url_is_not_treated_as_product_code(): void
@@ -80,10 +83,10 @@ class PosCameraScannerTest extends TestCase
         $engine = file_get_contents(base_path('resources/js/scanner/engine.js'));
 
         // El gate de QR rechaza URLs y esquemas antes de emitir cualquier evento.
-        $this->assertStringContainsString("export function isProductCodeText", $engine);
-        $this->assertStringContainsString("/^[a-z][a-z0-9+.-]*:/i", $engine);
+        $this->assertStringContainsString('export function isProductCodeText', $engine);
+        $this->assertStringContainsString('/^[a-z][a-z0-9+.-]*:/i', $engine);
         $this->assertStringContainsString("value.includes('://')", $engine);
-        $this->assertStringContainsString("/^www\\./i", $engine);
+        $this->assertStringContainsString('/^www\\./i', $engine);
 
         // El gate se aplica únicamente sobre resultados qr_code.
         $this->assertStringContainsString("format === 'qr_code' && !isProductCodeText(rawValue)", $engine);
@@ -224,6 +227,25 @@ class PosCameraScannerTest extends TestCase
         $role->permissions()->attach($permission);
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
+        app(CompanyCashSettingsProvisioner::class)->provision($company);
+        $register = CashRegister::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'code' => 'CAJA-'.uniqid(),
+            'name' => 'Caja principal',
+            'is_active' => true,
+        ]);
+        CashSession::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'cash_register_id' => $register->id,
+            'session_number' => 'CAJA-'.uniqid(),
+            'opened_by' => $user->id,
+            'status' => CashSession::STATUS_OPEN,
+            'open_guard' => CashSession::OPEN_GUARD,
+            'opening_amount' => 0,
+            'opened_at' => now(),
+        ]);
 
         return [$company, $branch, $user];
     }

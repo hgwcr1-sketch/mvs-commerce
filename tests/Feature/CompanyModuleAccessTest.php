@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\Modules\ModuleRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -80,6 +83,25 @@ class CompanyModuleAccessTest extends TestCase
         $user = User::factory()->create(['is_active' => true]);
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
+        app(CompanyCashSettingsProvisioner::class)->provision($company);
+        $register = CashRegister::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'code' => 'CAJA-'.uniqid(),
+            'name' => 'Caja principal',
+            'is_active' => true,
+        ]);
+        CashSession::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'cash_register_id' => $register->id,
+            'session_number' => 'CAJA-'.uniqid(),
+            'opened_by' => $user->id,
+            'status' => CashSession::STATUS_OPEN,
+            'open_guard' => CashSession::OPEN_GUARD,
+            'opening_amount' => 0,
+            'opened_at' => now(),
+        ]);
 
         return [$company, $branch, $user];
     }

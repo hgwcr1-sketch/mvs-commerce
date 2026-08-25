@@ -984,6 +984,15 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 - Regresión cercana: 23/23 pruebas, 102 aserciones. Suite global: 824 pruebas, 814 pasan, 4.764 aserciones y los mismos 10 fallos históricos documentados en P08S; no aparecieron fallos nuevos.
 - **P09 NO INICIADA.** Pausa hasta autorización explícita; PostgreSQL/staging P08S sigue pendiente.
 
+### P08C — Apertura de caja obligatoria antes de POS: COMPLETADO
+
+- El dashboard posterior al login revalida a usuarios con `pos.acceder`; sin sesión aplicable los dirige a Apertura de Caja o a una pantalla clara si carecen de `caja.abrir`.
+- `/pos` exige caja abierta y `pos.checkout` conserva la validación transaccional bajo lock de `CashSessionResolver`; no se puede crear una venta sin sesión válida.
+- El contrato existente valida empresa, sucursal, usuario según modo individual/compartido y caja registradora activa. Cerrar caja o cambiar sucursal obliga a resolver de nuevo.
+- No existe bypass por administrador. La UX aclara que caja no equivale a jornada laboral, dejando el límite futuro con RRHH sin integrarlo.
+- Evidencia focal Caja/POS: 155 pruebas, 871 aserciones; fixtures afectados: 26 pruebas, 140 aserciones. Suite global: 829 pruebas, 819 pasan, 4.779 aserciones y exactamente los mismos 10 fallos históricos documentados en P08S; P08C no agrega fallos.
+
+**P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 ---
 
 ## Centro de Datos

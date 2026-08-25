@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\CompanyCashSetting;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
@@ -14,6 +17,7 @@ use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\CompanyCashSettingsProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -361,7 +365,7 @@ class PosSuspendedSalesTest extends TestCase
         $this->assertSame($before, $after);
     }
 
-    private function context(string $name = 'Empresa'): array { $company = Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]); $branch = $this->branch($company, 'Principal'); $user = $this->user($company, $branch, ['pos.acceder', 'ventas.crear']); $cash = PaymentMethod::create(['company_id' => $company->id, 'code' => 'cash-'.uniqid(), 'name' => 'Efectivo', 'type' => 'cash', 'is_active' => true, 'allows_change' => true]); return [$company, $branch, $user, $cash]; }
+    private function context(string $name = 'Empresa'): array { $company = Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]); $branch = $this->branch($company, 'Principal'); $user = $this->user($company, $branch, ['pos.acceder', 'ventas.crear']); $settings = app(CompanyCashSettingsProvisioner::class)->provision($company); $settings->update(['session_mode' => CompanyCashSetting::SESSION_MODE_SHARED]); $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'REG-'.uniqid(), 'name' => 'Caja', 'is_active' => true]); CashSession::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'cash_register_id' => $register->id, 'session_number' => 'CAJA-'.uniqid(), 'opened_by' => $user->id, 'status' => CashSession::STATUS_OPEN, 'open_guard' => CashSession::OPEN_GUARD, 'opening_amount' => 0, 'opened_at' => now()]); $cash = PaymentMethod::create(['company_id' => $company->id, 'code' => 'cash-'.uniqid(), 'name' => 'Efectivo', 'type' => 'cash', 'is_active' => true, 'allows_change' => true]); return [$company, $branch, $user, $cash]; }
     private function branch(Company $company, string $name): Branch { return Branch::create(['company_id' => $company->id, 'name' => $name, 'code' => $name.'-'.$company->id, 'is_active' => true]); }
     private function user(Company $company, Branch $branch, array $permissions): User { $user = User::factory()->create(); $role = Role::create(['company_id' => $company->id, 'name' => 'Rol '.uniqid(), 'is_active' => true]); foreach ($permissions as $name) { $permission = Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'POS', 'is_active' => true]); $role->permissions()->syncWithoutDetaching($permission); } $user->companies()->attach($company->id, ['role_id' => $role->id]); $user->branches()->attach($branch->id); return $user; }
     private function product(Company $company, bool $tracked, array $attributes = []): Product { $id = uniqid(); $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$id, 'slug' => 'cat-'.$id, 'is_active' => true]); $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$id, 'allows_decimals' => false, 'is_active' => true]); return Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$id, 'internal_code' => 'P-'.$id, 'cost' => 500, 'sale_price' => 1000, 'stock' => 0, 'tax_rate' => 13, 'track_inventory' => $tracked, 'is_active' => true], $attributes)); }

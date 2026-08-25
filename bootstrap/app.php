@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureActiveBranch;
 use App\Http\Middleware\EnsureActiveCompany;
 use App\Http\Middleware\EnsureCompanyLicense;
 use App\Http\Middleware\EnsurePlatformAdmin;
+use App\Http\Middleware\EnsurePosCashSession;
 use App\Http\Middleware\PermissionMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
 
             'platform.admin' => EnsurePlatformAdmin::class,
+            'pos.cash-session' => EnsurePosCashSession::class,
         ]);
 
     })

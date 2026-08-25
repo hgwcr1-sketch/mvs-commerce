@@ -75,10 +75,10 @@ class CashSessionOpeningTest extends TestCase
         $viewer=$this->user($c,$b,['caja.ver','caja.ver_todas']); $this->actingAs($viewer)->withSession($this->ctx($c,$b))->get(route('cash.index'))->assertSee('MIA')->assertSee('AJENA')->assertDontSee('OTRA');
     }
 
-    public function test_pos_indicator_and_views_work_without_requiring_opening(): void
+    public function test_pos_requires_opening_and_cash_open_view_remains_available(): void
     {
         [$c,$b]=$this->context(); $u=$this->user($c,$b,['pos.acceder','ventas.crear','caja.abrir']); $r=$this->register($c,$b);
-        $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('pos.index'))->assertSee('Sin apertura de caja')->assertSee('Abrir caja'); $this->assertFalse($this->settings($c)->require_open_session);
+        $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('pos.index'))->assertRedirect(route('cash.open.create'));
         $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('cash.open.create'))->assertSee('Volver')->assertSee('@submit="processing=true"',false)->assertSee(':disabled="processing"',false);
         $this->open($u,$c,$b,$r); $this->actingAs($u)->withSession($this->ctx($c,$b))->get(route('pos.index'))->assertSee('Caja abierta: CAJA-00000001');
     }
