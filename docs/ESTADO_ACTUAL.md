@@ -10,16 +10,16 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F39: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas, sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F40: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas; etapa 13 parcial, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F39 — Cajero: COMPLETADO.**
+**F40 — Indicadores: COMPLETADO.**
 
-- Auditoría sin cambios de negocio: consulta y canje ya están correctamente integrados al POS mediante `pos.acceder` y `ventas.crear`; los roles siguen siendo configurables por empresa.
-- Cajero con permisos mínimos consulta saldo y máximo canjeable y completa un canje real con trazabilidad de empresa, sucursal y usuario.
-- Ocho áreas administrativas de Fidelización permanecen en 403 y el sidebar no expone sus accesos al Cajero.
-- Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresión `--filter Loyalty`: 298 tests, 1910 aserciones, 0 fallos.
+- Servicio dedicado agrega por empresa clientes con cuenta, puntos generados, canjeados, vencidos y saldo vigente desde `loyalty_accounts`.
+- Precisión decimal escala 4, ceros explícitos sin cuentas y aislamiento cross-company probado.
+- Dashboard conserva oportunidades previas y añade cinco tarjetas responsive; F41 queda responsable del desglose por sucursal.
+- Evidencia: `LoyaltyDashboardIndicatorTest` (3 tests, 5 aserciones); regresión `--filter Loyalty`: 301 tests, 1915 aserciones, 0 fallos.
 
 Hito anterior:
 
@@ -41,7 +41,8 @@ Además:
 
 - **F38 — Administrador: COMPLETADO** (etapa 12. Permisos).
 - **F39 — Cajero: COMPLETADO** (etapa 12. Permisos).
-- **F40 — Indicadores: SIGUIENTE** (etapa 13. Dashboard).
+- **F40 — Indicadores: COMPLETADO** (etapa 13. Dashboard).
+- **F41 — Empresa / sucursal: SIGUIENTE** (etapa 13. Dashboard).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -79,7 +80,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: etapas 10, 11 y 12 completas — F30–F39 confirmados (portal, QR, promociones, acumulación y canje online, permisos de Administrador y Cajero). Siguiente fase según cronograma: **F40 — Indicadores** (etapa 13).
+- Fidelización: etapas 10, 11 y 12 completas; etapa 13 parcial — F30–F40 confirmados. Siguiente fase según cronograma: **F41 — Empresa / sucursal** (etapa 13).
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.

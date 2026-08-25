@@ -424,7 +424,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F39 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F40 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas; etapa 13 parcial. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -744,6 +744,16 @@ Evidencia: `tests/Feature/LoyaltyAdminAuthorizationTest.php`; `git diff --check`
 
 Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresión `php artisan test --filter Loyalty`: 298 tests, 1910 aserciones, 0 fallos.
 
+#### F40 — Indicadores — COMPLETADO
+
+- `LoyaltyDashboardIndicatorService` agrega las cuentas de Fidelización acotadas por `company_id`, sin duplicar datos ni calcular desde vistas;
+- indicadores acumulados: clientes con cuenta, puntos generados (`total_earned`), canjeados (`total_redeemed`), vencidos (`total_expired`) y saldo vigente (`balance`);
+- precisión decimal conservada a escala 4 con BCMath al normalizar resultados; una empresa sin cuentas obtiene ceros explícitos;
+- dashboard existente conserva oportunidades y movimientos del día y añade cinco tarjetas responsive mobile-first (`sm:grid-cols-2`, `xl:grid-cols-5`);
+- aislamiento empresarial probado con datos ajenos de magnitud identificable; F40 no introduce desglose por sucursal, reservado expresamente para F41.
+
+Evidencia: `LoyaltyDashboardIndicatorTest` (3 tests, 5 aserciones); validación focalizada dashboard/autorización: 40 tests, 131 aserciones; regresión `php artisan test --filter Loyalty`: 301 tests, 1915 aserciones, 0 fallos.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -763,11 +773,11 @@ Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresió
 
 ### Estado reciente
 
-F01–F39 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 completas.
+F01–F40 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 completas; etapa 13 parcial.
 
-Último hito confirmado: F39 — Cajero (permisos).
+Último hito confirmado: F40 — Indicadores.
 
-Siguiente fase según cronograma: **F40 — Indicadores** (etapa 13. Dashboard).
+Siguiente fase según cronograma: **F41 — Empresa / sucursal** (etapa 13. Dashboard).
 
 Antes de continuar una fase nueva, revisar:
 
