@@ -192,7 +192,7 @@ class PosController extends Controller
                 'allows_decimals' => (bool) $product->unit?->allows_decimals,
                 'can_add_to_cart' => !$product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
-                'image_url' => $hasImage ? Storage::disk('public')->url($imagePath) : null,
+                'image_url' => $hasImage ? asset('storage/'.$imagePath) : null,
             ];
 
             if ($canViewOtherBranches) {

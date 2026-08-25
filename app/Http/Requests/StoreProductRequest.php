@@ -170,7 +170,7 @@ class StoreProductRequest extends FormRequest
                 'nullable',
                 'image',
                 'mimes:jpg,jpeg,png,webp',
-                'max:2048',
+                'max:5120',
             ],
 
             'is_active' => [
@@ -231,7 +231,7 @@ class StoreProductRequest extends FormRequest
                 'La imagen debe ser JPG, JPEG, PNG o WEBP.',
 
             'image.max' =>
-                'La imagen no puede superar los 2 MB.',
+                'La imagen no puede superar los 5 MB.',
 
         ];
     }

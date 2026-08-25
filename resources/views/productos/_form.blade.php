@@ -426,6 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
         name="image"
         class="form-input">
 
+    <p class="mt-1 text-xs text-slate-500">
+        Formatos aceptados: JPG, JPEG, PNG o WEBP. Tamaño máximo: 5 MB.
+    </p>
+
+    @error('image')
+        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+    @enderror
+
 </x-card>
 
 <x-scanner.mvs-scanner />

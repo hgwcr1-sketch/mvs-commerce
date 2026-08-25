@@ -315,7 +315,7 @@ class PosAccessAndSearchTest extends TestCase
 
         $response->assertJsonPath('0.id', $product->id)
             ->assertJsonPath('0.has_image', true)
-            ->assertJsonPath('0.image_url', '/storage/products/pos-test.jpg');
+            ->assertJsonPath('0.image_url', asset('storage/products/pos-test.jpg'));
         $this->assertStringNotContainsString(storage_path(), $response->json('0.image_url'));
         $this->assertStringNotContainsString('C:\\', $response->json('0.image_url'));
     }

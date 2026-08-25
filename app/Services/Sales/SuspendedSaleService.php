@@ -11,7 +11,6 @@ use App\Models\SuspendedSale;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -243,7 +242,7 @@ if ($priceChanged) {
             if ($taxChanged) $warnings[] = "{$product->name}: impuesto cambió de {$snapshot->estimated_tax_rate}% a {$product->tax_rate}%.";
             if ($stockInsufficient) { $warnings[] = "{$product->name}: stock insuficiente."; $canCheckout = false; }
             $path = $this->safeImage($product->image);
-            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $currentPrice, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? Storage::disk('public')->url($path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient];
+            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $currentPrice, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? asset('storage/'.$path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient];
         })->values();
         return ['suspended_sale_id' => $sale->id, 'suspension_number' => $sale->suspension_number, 'recovery_token' => $sale->recovery_token, 'customer' => $customerInvalid || !$customer ? null : [
     'id' => $customer->id,
