@@ -424,7 +424,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F37 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10 y 11 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F38 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 (parcial) completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -722,6 +722,18 @@ Evidencia: `app/Services/Loyalty/LoyaltyOnlineSaleService.php`; `LoyaltyOnlineSa
 
 Evidencia: cambios en `LoyaltyOnlineSaleService` (+`redeemForSale`, +`paymentFor`, helper `reference()` compartido con F36); `LoyaltyOnlineRedemptionTest` nuevo (12 tests): canje exitoso con pago coherente, cuenta compartida POS/online, F15, F16 (rechazo y caso límite exacto), F17 on/off, saldo insuficiente, cliente null/ajeno, venta draft, duplicado sin doble efecto, rollback completo ante fallo, método de puntos ausente sin efectos, earn+redemption conviviendo con event_keys independientes. Regresión Loyalty/POS-Loyalty/Devoluciones/Portal: 288 tests, 1907 aserciones, 0 fallos; Pint limpio; `git diff --check` limpio.
 
+#### F38 — Administrador (permisos) — COMPLETADO
+
+- Auditoría completa del sistema de permisos de Fidelización;
+- los 13 permisos `fidelidad.*` están sembrados en `PermissionSeeder` y asignados al rol Administrador via wildcard sync (`syncWithoutDetaching` de todos los permisos activos);
+- todas las 28 rutas de Fidelización tienen middleware `permission:fidelidad.*` correcto (excepto la ruta pública `loyalty.portal.access` por diseño y `pos.loyalty.summary` que es intencional para POS);
+- el sidebar muestra las 10 entradas condicionadas por permiso;
+- los 10 controladores de Fidelización scopean correctamente por `session('active_company_id')` con protección cross-company;
+- pruebas: `LoyaltyAdminAuthorizationTest` (28 tests, 88 aserciones): permisos sembrados, Admin recibe todos, acceso Admin a 12 rutas, 403 en 10 rutas sin permiso, sidebar completo, 2 tests de aislamiento cross-company;
+- regresión: Loyalty 295/295, POS-Loyalty 18/18, Portal 26/26, Sidebar 2/2, 0 fallos.
+
+Evidencia: `tests/Feature/LoyaltyAdminAuthorizationTest.php`; `git diff --check` limpio.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -741,11 +753,11 @@ Evidencia: cambios en `LoyaltyOnlineSaleService` (+`redeemForSale`, +`paymentFor
 
 ### Estado reciente
 
-F01–F37 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10 y 11 completas.
+F01–F38 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 (parcial) completas.
 
-Último hito confirmado: F37 — Canje online sobre venta confirmada.
+Último hito confirmado: F38 — Administrador (permisos).
 
-Siguiente fase según cronograma: **F38 — Administrador** (etapa 12. Permisos). No iniciar ninguna otra fase sin autorización.
+Siguiente fase según cronograma: **F39 — Cajero** (etapa 12. Permisos). No iniciar ninguna otra fase sin autorización.
 
 Antes de continuar una fase nueva, revisar:
 

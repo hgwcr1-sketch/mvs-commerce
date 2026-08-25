@@ -10,11 +10,11 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F37: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10 y 11 completas, sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F38: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11 y 12 (parcial) completas, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F37 — Canje online: COMPLETADO.**
+**F38 — Administrador: COMPLETADO.**
 
 - Ampliación de la capa online F36: `LoyaltyOnlineSaleService::redeemForSale(Sale, ?Customer, puntosSolicitados, referenciaExterna, canal)` canjea sobre una venta real confirmada resolviendo empresa/sucursal desde la propia venta.
 - Cero duplicación de F14–F17: valor del punto (F14), mínimo de saldo (F15), máximo pagable sobre el total de la venta (F16) y `redeem_on_offers` (F17) viven en `LoyaltyRedemptionService`; saldo central compartido con POS.
@@ -40,7 +40,8 @@ Hitos anteriores:
 
 Además:
 
-- **F38 — Administrador: SIGUIENTE** (única fase autorizada para iniciar; abre la etapa 12. Permisos).
+- **F38 — Administrador: COMPLETADO** (etapa 12. Permisos).
+- **F39 — Cajero: SIGUIENTE** (única fase autorizada para iniciar).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -55,7 +56,7 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Estado del repositorio
 
-R02 (POS móvil + escaneo) COMPLETADO y R03 (Productos/Inventario móvil + cámara) COMPLETADO. R03 añadió: `ProductController::search()` enriquecido (busca en `product_barcodes` secundarios, retorna `sale_price`, `cost`, `branch_stock`), `productos/index.blade.php` responsive mobile-first (tarjetas con código/precio/stock, cámara junto al buscador, listener `mvs-scan`), `inventario/index.blade.php` responsive mobile-first (tarjetas con stock/mín/máx y estado, cámara, listener `mvs-scan`), ambos incluyen `<x-scanner.mvs-scanner />`. Sin backend adicional (se reutilizó `productos.search`). Sin header/sidebar. Evidencia: `PosCameraScannerTest` 9/9, regresión POS/Loyalty: 180 tests / 1126 aserciones, mismos fallos preexistentes; `npm run build` correcto. Siguiente fase responsive: **R04**; siguiente fase funcional de Fidelización: **F38** (orden intacto). Verificar siempre con `git status` antes de trabajar.
+R02 (POS móvil + escaneo) COMPLETADO y R03 (Productos/Inventario móvil + cámara) COMPLETADO. R03 añadió: `ProductController::search()` enriquecido (busca en `product_barcodes` secundarios, retorna `sale_price`, `cost`, `branch_stock`), `productos/index.blade.php` responsive mobile-first (tarjetas con código/precio/stock, cámara junto al buscador, listener `mvs-scan`), `inventario/index.blade.php` responsive mobile-first (tarjetas con stock/mín/máx y estado, cámara, listener `mvs-scan`), ambos incluyen `<x-scanner.mvs-scanner />`. Sin backend adicional (se reutilizó `productos.search`). Sin header/sidebar. Evidencia: `PosCameraScannerTest` 9/9, regresión POS/Loyalty: 180 tests / 1126 aserciones, mismos fallos preexistentes; `npm run build` correcto. Siguiente fase responsive: **R04**; siguiente fase funcional de Fidelización: **F39** (orden intacto). Verificar siempre con `git status` antes de trabajar.
 
 ## Objetivo actual
 
@@ -78,7 +79,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: etapas 10 y 11 completas — F30–F37 confirmados (portal, QR, promociones, acumulación y canje online). Siguiente fase según cronograma: **F38 — Administrador** (etapa 12).
+- Fidelización: etapas 10, 11 y 12 (parcial) completas — F30–F38 confirmados (portal, QR, promociones, acumulación y canje online, permisos del Administrador). Siguiente fase según cronograma: **F39 — Cajero** (etapa 12).
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.
