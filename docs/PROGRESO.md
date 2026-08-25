@@ -424,7 +424,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F40 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11 y 12 completas; etapa 13 parcial. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F41 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11, 12 y 13 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -754,6 +754,17 @@ Evidencia: `LoyaltyCashierAuthorizationTest` (3 tests, 22 aserciones); regresió
 
 Evidencia: `LoyaltyDashboardIndicatorTest` (3 tests, 5 aserciones); validación focalizada dashboard/autorización: 40 tests, 131 aserciones; regresión `php artisan test --filter Loyalty`: 301 tests, 1915 aserciones, 0 fallos.
 
+#### F41 — Empresa / sucursal — COMPLETADO
+
+- el resumen F40 continúa siendo la cifra global y única de las cuentas por empresa;
+- `LoyaltyDashboardIndicatorService::byBranch()` agrega por origen (`branch_id`) clientes con movimiento, puntos generados, canjeados y vencidos;
+- los movimientos `return`/`void` se clasifican mediante su `related_movement_id`: restan del generado si revierten acumulación y del canjeado si restauran un canje, evitando totales brutos engañosos;
+- se incluyen sucursales sin actividad con ceros y una fila "Sin sucursal" para vencimientos automáticos u otros movimientos globales;
+- el saldo no se atribuye a una sucursal: conforme F26 es global por `(company_id, customer_id)` y la vista lo indica expresamente;
+- UI responsive: tarjetas con métricas en móvil (`md:hidden`) y tabla contenida en `overflow-x-auto` para tablet/escritorio.
+
+Evidencia: `LoyaltyDashboardIndicatorTest` ampliado (5 tests, 17 aserciones); validación focalizada dashboard: 14 tests, 55 aserciones; regresión `php artisan test --filter Loyalty`: 303 tests, 1927 aserciones, 0 fallos.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -773,11 +784,11 @@ Evidencia: `LoyaltyDashboardIndicatorTest` (3 tests, 5 aserciones); validación 
 
 ### Estado reciente
 
-F01–F40 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11 y 12 completas; etapa 13 parcial.
+F01–F41 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas.
 
-Último hito confirmado: F40 — Indicadores.
+Último hito confirmado: F41 — Empresa / sucursal.
 
-Siguiente fase según cronograma: **F41 — Empresa / sucursal** (etapa 13. Dashboard).
+Siguiente fase según cronograma: **F42 — Suite de pruebas** (etapa 14. Calidad).
 
 Antes de continuar una fase nueva, revisar:
 

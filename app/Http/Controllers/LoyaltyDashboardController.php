@@ -18,6 +18,7 @@ class LoyaltyDashboardController extends Controller
         return view('loyalty.dashboard', [
             'summary' => $opportunities->dashboard($company),
             'indicators' => $indicators->forCompany($company),
+            'branchIndicators' => $indicators->byBranch($company),
         ]);
     }
 }

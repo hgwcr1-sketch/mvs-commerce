@@ -30,6 +30,49 @@
             @endforeach
         </div>
     </section>
+    <section aria-labelledby="loyalty-branches-title">
+        <div class="mb-3">
+            <h2 id="loyalty-branches-title" class="text-lg font-semibold text-slate-800">Actividad por sucursal</h2>
+            <p class="mt-1 text-sm text-slate-500">Origen acumulado de los movimientos. El saldo de puntos es global para toda la empresa.</p>
+        </div>
+        <div class="space-y-3 md:hidden">
+            @foreach($branchIndicators as $branch)
+                <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <h3 class="font-semibold text-slate-800">{{ $branch['branch_name'] }}</h3>
+                    <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div><dt class="text-slate-500">Clientes</dt><dd class="mt-1 font-semibold tabular-nums">{{ $branch['customers'] }}</dd></div>
+                        <div><dt class="text-slate-500">Generados</dt><dd class="mt-1 font-semibold tabular-nums">{{ $branch['total_earned'] }}</dd></div>
+                        <div><dt class="text-slate-500">Canjeados</dt><dd class="mt-1 font-semibold tabular-nums">{{ $branch['total_redeemed'] }}</dd></div>
+                        <div><dt class="text-slate-500">Vencidos</dt><dd class="mt-1 font-semibold tabular-nums">{{ $branch['total_expired'] }}</dd></div>
+                    </dl>
+                </article>
+            @endforeach
+        </div>
+        <div class="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm md:block">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                        <th scope="col" class="px-4 py-3">Sucursal</th>
+                        <th scope="col" class="px-4 py-3 text-right">Clientes</th>
+                        <th scope="col" class="px-4 py-3 text-right">Generados</th>
+                        <th scope="col" class="px-4 py-3 text-right">Canjeados</th>
+                        <th scope="col" class="px-4 py-3 text-right">Vencidos</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach($branchIndicators as $branch)
+                        <tr>
+                            <th scope="row" class="whitespace-nowrap px-4 py-3 text-left font-medium text-slate-800">{{ $branch['branch_name'] }}</th>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ $branch['customers'] }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ $branch['total_earned'] }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ $branch['total_redeemed'] }}</td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ $branch['total_expired'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </section>
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach(['birthdays' => 'Cumpleaños hoy', 'inactive_30' => '30–59 días', 'inactive_60' => '60–89 días', 'inactive_90' => '90 días o más'] as $key => $label)
             <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">{{ $label }}</p><p class="mt-2 text-3xl font-bold text-slate-800">{{ $summary[$key] }}</p></div>
