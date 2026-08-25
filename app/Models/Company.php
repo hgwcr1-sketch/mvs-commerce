@@ -108,6 +108,11 @@ class Company extends Model
         return $this->hasMany(Customer::class);
     }
 
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
     /**
      * Productos pertenecientes a la empresa.
      */
