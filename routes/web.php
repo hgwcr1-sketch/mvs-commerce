@@ -13,6 +13,7 @@ use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\BeautyOSPortalAccessController;
 use App\Http\Controllers\BranchController;
 // Catálogos
 use App\Http\Controllers\BrandController;
@@ -23,22 +24,23 @@ use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashSessionHistoryController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
-use App\Http\Controllers\CustomerAddressController;
+use App\Http\Controllers\Core\PortalAccessController;
 // Inventario
+use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DataImportController;
 // Compras
+use App\Http\Controllers\DataImportController;
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\KardexController;
 // Ventas
+use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LayawayController;
-use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
+use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
@@ -115,6 +117,14 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::class, 'access'])
     ->middleware('throttle:30,1')
     ->name('loyalty.portal.access');
+
+Route::get('/beautyos/portal/acceso/{token}', [BeautyOSPortalAccessController::class, 'access'])
+    ->middleware('throttle:30,1')
+    ->name('beauty.portal.access');
+
+Route::get('/portal/acceso/{token}', [PortalAccessController::class, 'access'])
+    ->middleware('throttle:30,1')
+    ->name('portal.access');
 
 Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
     ->middleware('auth')
@@ -409,6 +419,7 @@ Route::middleware(['auth', 'active.company'])->group(function () {
             Route::post('/', [LoyaltyPortalAccessController::class, 'store'])->name('store');
             Route::patch('/{cliente}/revocar', [LoyaltyPortalAccessController::class, 'revoke'])->name('revoke');
         });
+
         Route::middleware('permission:fidelidad.multiplicadores')->prefix('multiplicadores')->name('multipliers.')->group(function () {
             Route::get('/', [LoyaltyMultiplierController::class, 'index'])->name('index');
             Route::post('/', [LoyaltyMultiplierController::class, 'store'])->name('store');
@@ -424,6 +435,12 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::middleware('permission:fidelidad.canjes')->prefix('canjes')->name('redemptions.')->group(function () {
             Route::get('/', [LoyaltyRewardRedemptionController::class, 'index'])->name('index');
             Route::post('/', [LoyaltyRewardRedemptionController::class, 'store'])->name('store');
+        });
+
+        Route::middleware('permission:portal.accesos')->prefix('portal/accesos')->name('portal.accesses.')->group(function () {
+            Route::get('/', [PortalAccessController::class, 'index'])->name('index');
+            Route::post('/', [PortalAccessController::class, 'store'])->name('store');
+            Route::patch('/{cliente}/revocar', [PortalAccessController::class, 'revoke'])->name('revoke');
         });
     });
 
