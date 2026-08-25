@@ -41,14 +41,14 @@
 
             </div>
 
-            <span class="text-sm font-medium">
+            <span class="nav-fade text-sm font-medium">
                 {{ $label }}
             </span>
 
         </div>
 
 
-        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="text-xs transition-transform">▼</span>
+        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="nav-fade text-xs transition-transform">▼</span>
 
     </button>
 
@@ -57,7 +57,7 @@
     x-cloak
     x-show="open"
     x-transition
-    class="mt-2 space-y-1 pl-10">
+    class="nav-sub mt-2 space-y-1 pl-10">
 
     {{ $slot }}
 

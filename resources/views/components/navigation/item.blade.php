@@ -7,6 +7,7 @@
 
 <a
     href="{{ route($route) }}"
+    title="{{ $label }}"
     class="flex items-center gap-4 rounded-xl px-4 py-3 transition-all duration-200
     {{ $active
         ? 'bg-amber-500 text-slate-900 shadow-md'

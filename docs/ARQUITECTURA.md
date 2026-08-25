@@ -152,9 +152,9 @@ Existe protección especial para evitar eliminar o dejar sin control al último 
 
 ## 7. Navegación
 
-El acceso principal a módulos se realiza desde el sidebar.
+El acceso principal a módulos se realiza desde la navegación de la aplicación.
 
-Archivo relevante conocido:
+Fuente única del menú:
 
 `resources/views/components/navigation/sidebar.blade.php`
 
@@ -165,6 +165,23 @@ Agregar enlaces al sidebar debe realizarse normalmente al final de una implement
 * la ruta ya existe;
 * el permiso existe;
 * el módulo está funcional.
+
+### 7.1 Navegación responsive (R01)
+
+La navegación se adapta al dispositivo sin duplicar menús ni permisos:
+
+* **Celular (<768px):** barra inferior fija (`components/navigation/bottom-bar.blade.php`) con accesos P0 condicionados por permiso y botón "Más". El sidebar está oculto.
+* **Tablet (768–1023px):** sidebar en modo rail compacto; los grupos desplegables se ocultan por CSS (`.nav-desktop-group`) y se muestra el disparador "Más" (`.nav-more-trigger`).
+* **Escritorio (≥1024px):** sidebar compacto expandible por hover/foco o fijado (preferencia `localStorage` `mvs.sidebar.pinned`, componente Alpine `sidebarShell` en `resources/js/navigation.js`).
+
+Reglas permanentes:
+
+* El botón "Más" abre un sheet lateral (`layouts/app.blade.php`) que reutiliza el sidebar real con `context = 'sheet'`: un solo origen de rutas y permisos.
+* En rutas POS (`pos.*`) no se renderizan la barra inferior ni el sheet: el POS gestiona su propio espacio de trabajo.
+* La barra inferior se oculta temporalmente mientras un campo de texto recibe foco (teclado móvil).
+* Al agregar módulos o permisos, actualizar únicamente `sidebar.blade.php`; la barra inferior solo lleva los accesos P0 definidos en `AGENTS.md`.
+
+Evidencia: `ResponsiveNavigationTest`.
 
 ---
 
@@ -802,3 +819,4 @@ Si un agente detecta una diferencia importante entre esta documentación y el re
 2. verificar pruebas;
 3. determinar cuál es el estado correcto;
 4. actualizar la documentación correspondiente.
+

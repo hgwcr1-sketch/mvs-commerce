@@ -271,7 +271,26 @@ Al finalizar una tarea importante, dejar el repositorio y la documentación en u
 
 ---
 
-## 13. Regla final
+## 13. Interfaz responsive (reglas permanentes)
+
+Todo desarrollo nuevo debe ser responsive desde el inicio, priorizando el celular en las operaciones de uso diario.
+
+Reglas mínimas obligatorias:
+
+- **Mobile-first para pantallas P0** (POS, caja, clientes, consulta de producto, portal): se diseña primero a 360px y luego se expande con breakpoints (`sm/md/lg/xl`), nunca al revés.
+- **Targets táctiles**: todo control interactivo idealmente ≥44px (mínimo absoluto 40px), con separación suficiente entre acciones adyacentes.
+- **Tablas**: siempre dentro de `overflow-x-auto`; columnas secundarias con `hidden md:table-cell`; cuando la fila exige acciones repetitivas (POS, oportunidades), versión tarjeta en móvil.
+- **Formularios**: una columna en móvil → grids superiores (`md:grid-cols-*`); inputs `w-full`; montos con `inputmode` apropiado y alineación a la derecha.
+- **Modales**: patrón mobile-safe ya establecido en POS — `fixed inset-0`, `max-h-[90vh]` con scroll interno, cierre ≥44px, padding `p-3 sm:p-5`.
+- **Navegación responsive según dispositivo**: barra inferior <768px, rail de iconos 768–1023px, sidebar compacto expandible ≥1024px (ver `docs/ARQUITECTURA.md`, sección Navegación responsive). Ninguna vista nueva puede asumir sidebar ancho permanente.
+- **Sin overflow horizontal a nivel página**: el scroll horizontal solo vive dentro de contenedores de tabla declarados.
+- **CTA persistente**: en flujos largos (carrito, multi-paso), la acción primaria debe permanecer visible sin depender del scroll.
+- **Verificación conceptual 360 / 768 / 1280** antes de cerrar cualquier tarea que toque UI; desktop y responsive se desarrollan juntos, no como corrección posterior.
+- **Fuente única de navegación**: el menú vive en `components/navigation/sidebar.blade.php` (reutilizado por la barra "Más" móvil/tablet). Al agregar módulos o permisos, actualizar solo esa fuente.
+
+---
+
+## 14. Regla final
 
 Antes de escribir código:
 

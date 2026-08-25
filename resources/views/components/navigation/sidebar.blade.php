@@ -1,21 +1,57 @@
-<aside id="sidebar"
-class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300">
+@php
+    $navContext = $context ?? 'shell';
+@endphp
+
+@if($navContext === 'shell')
+<aside id="app-sidebar"
+    x-data="sidebarShell"
+    x-on:focusin="hovered = true"
+    x-on:focusout="if (! $event.relatedTarget || ! $el.contains($event.relatedTarget)) hovered = false"
+    class="hidden w-[68px] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900 transition-[width] duration-200 ease-out md:flex"
+    x-bind:class="[isExpanded ? 'lg:w-64' : 'lg:w-[68px]', isExpanded ? '' : 'collapsed']">
+@else
+<aside class="flex w-full flex-col bg-slate-900" aria-label="Navegación">
+@endif
 
     {{-- LOGO --}}
-<div class="flex flex-col items-center py-4 border-b border-slate-800 shrink-0">
+<div class="relative flex flex-col items-center py-4 border-b border-slate-800 shrink-0">
 
     <img
     src="{{ asset('images/logo-mvs-corto.png') }}"
     alt="MVS Commerce"
-    class="w-16 h-16 object-contain">
+    class="h-16 w-16 object-contain">
 
-    <h2 class="mt-3 text-lg font-bold text-white">
+    <h2 class="nav-fade mt-3 text-lg font-bold text-white">
         MVS Commerce
     </h2>
 
-    <p class="text-xs text-slate-400">
+    <p class="nav-fade text-xs text-slate-400">
         ERP Profesional
     </p>
+
+    @if($navContext === 'shell')
+    <button
+        type="button"
+        x-on:click="togglePinned()"
+        x-bind:title="isExpanded ? 'Desanclar menú' : 'Fijar menú expandido'"
+        x-bind:aria-pressed="pinned ? 'true' : 'false'"
+        aria-label="Fijar o desanclar el menú expandido"
+        class="absolute right-1 top-1 hidden h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white lg:flex">
+
+        <svg xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+            x-bind:class="pinned ? '' : 'rotate-180'">
+
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+
+        </svg>
+
+    </button>
+    @endif
 
 </div>
 
@@ -49,6 +85,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 @endif
 
     {{-- VENTAS --}}
+    <div class="nav-desktop-group">
     @canany(['pos.acceder', 'ventas.ver', 'cotizaciones.ver', 'pedidos.ver', 'cuentas_cobrar.ver', 'cuentas_pagar.ver', 'apartados.ver', 'devoluciones.ver'])
         <x-navigation.dropdown
             icon="tag"
@@ -89,12 +126,14 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
         </x-navigation.dropdown>
     @endcanany
+    </div>
 
     @canany(['caja.abrir', 'caja.ver'])
         <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
     @endcanany
 
         {{-- PRODUCTOS --}}
+    <div class="nav-desktop-group">
     @canany([
         'productos.ver',
         'categorias.ver',
@@ -133,8 +172,10 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
         </x-navigation.dropdown>
 
     @endcanany
+    </div>
 
 {{-- INVENTARIO --}}
+<div class="nav-desktop-group">
 @canany([
     'inventario.ver',
     'inventario.ajustar',
@@ -179,6 +220,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     </x-navigation.dropdown>
 
 @endcanany
+</div>
     {{-- CLIENTES --}}
     @can('clientes.ver')
 
@@ -190,6 +232,8 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     @endcan
 
+    {{-- FIDELIZACIÓN --}}
+    <div class="nav-desktop-group">
     @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.ajustes', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes', 'fidelidad.portal', 'fidelidad.promociones'])
         <x-navigation.dropdown icon="users" label="Fidelización" :active="request()->routeIs('loyalty.*')">
             @can('fidelidad.dashboard')
@@ -227,6 +271,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             @endcan
         </x-navigation.dropdown>
     @endcanany
+    </div>
 
         {{-- PROVEEDORES --}}
     @can('proveedores.ver')
@@ -258,6 +303,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     {{-- ADMINISTRACIÓN --}}
     @canany(['usuarios.ver', 'roles.ver'])
 
+        <div class="nav-desktop-group">
         <x-navigation.dropdown
             icon="settings"
             label="Administración">
@@ -284,8 +330,29 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
         </x-navigation.dropdown>
 
+        </div>
     @endcanany
 
+    {{-- MÁS (móvil/tablet): abre el sheet con el menú completo --}}
+    <button
+        type="button"
+        class="nav-more-trigger hidden items-center gap-4 rounded-xl px-4 py-3 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+        x-on:click="$dispatch('mvs-open-nav')"
+        aria-label="Abrir menú completo">
+
+        <div class="flex h-6 w-6 items-center justify-center shrink-0">
+
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h.01M12 12h.01M19 12h.01"/>
+            </svg>
+
+        </div>
+
+        <span class="nav-fade text-sm font-medium whitespace-nowrap">
+            Más
+        </span>
+
+    </button>
 
 </nav>
 
@@ -309,11 +376,11 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     </svg>
 
-            <span>Configuración</span>
+            <span class="nav-fade">Configuración</span>
         </span>
-        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="transition">▼</span>
+        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="nav-fade transition">▼</span>
     </button>
-    <div x-cloak x-show="open" x-transition class="mt-2 space-y-1 pl-5">
+    <div x-cloak x-show="open" x-transition class="nav-sub mt-2 space-y-1 pl-5">
         @can('configuracion.ver')
             <a href="{{ route('configuracion.index') }}" class="block py-1 text-xs {{ request()->routeIs('configuracion.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración general</a>
         @endcan
@@ -346,7 +413,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     </svg>
 
-    <span>Ayuda</span>
+            <span class="nav-fade">Ayuda</span>
 
 </a>
 
@@ -370,12 +437,12 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
         </svg>
 
-        <span>Cerrar sesión</span>
+        <span class="nav-fade">Cerrar sesión</span>
 
     </button>
 </form>
 
-    <div class="border-t border-slate-800 py-4 text-center">
+    <div class="nav-fade border-t border-slate-800 py-4 text-center">
 
         <div class="text-[10px] text-slate-400">
             Versión 1.0

@@ -226,7 +226,11 @@ class LoyaltyOnlineSaleTest extends TestCase
         [$company, $branch] = $this->companyContext();
         $setting = $this->setting($company, '5.0000');
         $setting->update(['birthday_enabled' => true, 'birthday_points' => '100.0000']);
-        $customer = $this->customer($company, ['birth_date' => today()->toDateString()]);
+
+        // Nacimiento = fecha LOCAL de la empresa (no UTC) para que el cruce de
+        // medianoche entre husos no haga fallar la equivalencia.
+        $localToday = now()->timezone('America/Costa_Rica')->toDateString();
+        $customer = $this->customer($company, ['birth_date' => $localToday]);
         $sale = $this->onlineSale($company, $branch, $customer, '1000.0000');
 
         $this->service()->accrueForSale($sale, $customer, 'ORDER-9013');

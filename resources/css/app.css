@@ -139,26 +139,53 @@
 
 }
 /* ===========================
-   SIDEBAR
+   NAVEGACIÓN RESPONSIVE (R01)
 =========================== */
 
-#sidebar{
+/* Barra inferior: oculta mientras el teclado móvil está abierto */
+.nav-bar-hidden{
 
-    width:260px;
-    transition:.25s;
-
-}
-
-.sidebar-logo{
-
-    width:70px;
-    transition:.25s;
+    transform:translateY(110%);
 
 }
 
-.sidebar-text{
+/* Sidebar desktop: compacto por defecto; expande con hover, foco o al fijarlo.
+   En tablet (<1024px) queda siempre en modo rail compacto. */
 
-    opacity:1;
+#app-sidebar .nav-fade{
+
+    transition:opacity .15s ease;
+
+}
+
+#app-sidebar.collapsed .nav-fade{
+
+    opacity:0;
+
+    pointer-events:none;
+
+}
+
+#app-sidebar.collapsed .nav-sub{
+
+    display:none;
+
+}
+
+@media (max-width:1023.98px){
+
+    /* Rail de tablet: los grupos desplegables se sustituyen por "Más" */
+    #app-sidebar .nav-desktop-group{
+
+        display:none;
+
+    }
+
+    #app-sidebar .nav-more-trigger{
+
+        display:flex;
+
+    }
 
 }
 
