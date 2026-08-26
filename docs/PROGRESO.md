@@ -775,6 +775,16 @@ Evidencia: `LoyaltyDashboardIndicatorTest` ampliado (5 tests, 17 aserciones); va
 
 Evidencia: ejecución completa y reproducción aislada sobre `ba8a2c8`; sin cambios de código de negocio en F42.
 
+#### F43 — UI / usabilidad — COMPLETADO
+
+- auditoría de las 13 vistas de Fidelización y verificación conceptual mobile-first en 360, 768 y 1280 px;
+- el encabezado del dashboard ahora apila título y CTA en móvil; la acción ocupa el ancho disponible y mantiene su presentación compacta en desktop;
+- oportunidades conserva sus reglas, permisos y datos, pero presenta filtros de una columna en móvil, tarjetas para filas con acciones repetitivas y tabla contenida desde `md`;
+- acciones primarias con altura táctil de 44 px en móvil y mínimo de 40 px en tabla desktop; no se introdujo overflow horizontal a nivel de página;
+- sin cambios de backend, reglas de negocio, permisos, empresa/sucursal ni dependencias.
+
+Evidencia: `LoyaltyUiUsabilityTest` (2 tests, 15 aserciones); validación focalizada dashboard/UI (16 tests, 70 aserciones); regresión `php artisan test --filter Loyalty` (305 tests, 1942 aserciones); `npm run build`, Pint focalizado y `git diff --check` correctos.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -794,11 +804,11 @@ Evidencia: ejecución completa y reproducción aislada sobre `ba8a2c8`; sin camb
 
 ### Estado reciente
 
-F01–F42 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial.
+F01–F43 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial.
 
-Último hito confirmado: F42 — Suite de pruebas.
+Último hito confirmado: F43 — UI / usabilidad.
 
-Siguiente fase según cronograma: **F43 — UI / usabilidad** (etapa 14. Calidad).
+Siguiente fase según cronograma: **F44 — Regresión** (etapa 14. Calidad).
 
 Antes de continuar una fase nueva, revisar:
 

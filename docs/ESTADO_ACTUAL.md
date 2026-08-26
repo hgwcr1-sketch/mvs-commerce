@@ -10,16 +10,17 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F42: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial, sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F43: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F42 — Suite de pruebas: COMPLETADO.**
+**F43 — UI / usabilidad: COMPLETADO.**
 
-- Suite completa de Fidelización F01-F41 aprobada: 303 tests, 1927 aserciones, 0 fallos.
-- Suite global auditada sobre `ba8a2c8`: 728 tests, 721 pasan y 7 fallos preexistentes ajenos a F42.
-- Fallos aislados en `ExampleTest` (1), `PosAccessAndSearchTest` (3), `PosSuspendedSalesTest` (2) y `QuoteTest` (1); no se corrigió deuda fuera de alcance.
-- F44 debe usar esa línea base al comprobar Clientes, POS, Compras y Caja.
+- Auditoría de las 13 vistas de Fidelización con verificación conceptual 360/768/1280.
+- Dashboard: encabezado y CTA apilables en móvil, conservando desktop.
+- Oportunidades: filtros fluidos, tarjetas móviles, tabla desktop contenida y acciones táctiles.
+- Evidencia: 16 tests focalizados/70 aserciones; Loyalty 305 tests/1942 aserciones; build Vite correcto.
+- F44 debe ejecutar la regresión de Clientes, POS, Compras y Caja contra la línea base de 7 fallos preexistentes documentada en F42.
 
 Hito anterior:
 
@@ -44,7 +45,8 @@ Además:
 - **F40 — Indicadores: COMPLETADO** (etapa 13. Dashboard).
 - **F41 — Empresa / sucursal: COMPLETADO** (etapa 13. Dashboard).
 - **F42 — Suite de pruebas: COMPLETADO** (etapa 14. Calidad).
-- **F43 — UI / usabilidad: SIGUIENTE** (etapa 14. Calidad).
+- **F43 — UI / usabilidad: COMPLETADO** (etapa 14. Calidad).
+- **F44 — Regresión: SIGUIENTE** (etapa 14. Calidad).
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -82,7 +84,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: etapas 10, 11, 12 y 13 completas; etapa 14 parcial — F30–F42 confirmados. Siguiente fase según cronograma: **F43 — UI / usabilidad** (etapa 14).
+- Fidelización: etapas 10, 11, 12 y 13 completas; etapa 14 parcial — F30–F43 confirmados. Siguiente fase según cronograma: **F44 — Regresión** (etapa 14).
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.

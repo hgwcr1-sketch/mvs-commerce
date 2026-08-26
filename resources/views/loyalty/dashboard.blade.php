@@ -5,9 +5,9 @@
 
 @section('content')
 <div class="space-y-6">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div><h1 class="text-2xl font-semibold text-slate-800">Fidelización</h1><p class="mt-1 text-sm text-slate-500">Resumen de hoy para la empresa activa.</p></div>
-        @can('fidelidad.oportunidades')<a href="{{ route('loyalty.opportunities.index') }}" class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600">Ver oportunidades</a>@endcan
+        @can('fidelidad.oportunidades')<a href="{{ route('loyalty.opportunities.index') }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600 sm:w-auto">Ver oportunidades</a>@endcan
     </div>
     <section aria-labelledby="loyalty-indicators-title">
         <div class="mb-3">
