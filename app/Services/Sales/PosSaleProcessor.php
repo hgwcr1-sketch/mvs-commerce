@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanySequence;
 use App\Models\Customer;
+use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Quote;
@@ -20,6 +21,7 @@ use App\Services\Loyalty\LoyaltyBirthdayService;
 use App\Services\Loyalty\LoyaltyEarningService;
 use App\Services\Loyalty\LoyaltyOfferEligibilityService;
 use App\Services\Loyalty\LoyaltyRedemptionService;
+use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,7 @@ class PosSaleProcessor
         private readonly LoyaltyBirthdayService $loyaltyBirthdayService,
         private readonly LoyaltyReturningCustomerService $loyaltyReturningCustomerService,
         private readonly LoyaltyRedemptionService $loyaltyRedemptionService,
+        private readonly LoyaltyRegistrationIncentiveService $loyaltyRegistrationIncentiveService,
     ) {}
 
     /** @return array{sale: Sale, duplicate: bool} */
@@ -536,7 +539,9 @@ class PosSaleProcessor
                 }
 
                 foreach ($resolvedPayments as $payment) {
-                    if ($payment['method']->type === PaymentMethod::TYPE_CREDIT) continue;
+                    if ($payment['method']->type === PaymentMethod::TYPE_CREDIT) {
+                        continue;
+                    }
                     SalePayment::create([
                         'sale_id' => $sale->id,
                         'cash_session_id' => $cashSession?->id,
@@ -573,6 +578,7 @@ class PosSaleProcessor
                 $this->awardReturningCustomerLoyalty($sale, $customer, $company, $branch, $user);
                 $this->accrueLoyalty($sale, $customer, $company, $branch, $user);
                 $this->awardBirthdayLoyalty($sale, $customer, $company, $branch, $user);
+                $this->loyaltyRegistrationIncentiveService->tryAwardAfterPurchase($sale);
 
                 return $sale;
             }, 3);
@@ -614,7 +620,7 @@ class PosSaleProcessor
         }
 
         try {
-            $setting = \App\Models\LoyaltySetting::query()->where('company_id', $company->id)->first();
+            $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
             $offerEligibility = $this->loyaltyOfferEligibilityService->forSale($sale, (bool) $setting?->earn_on_offers);
             $this->loyaltyEarningService->earnFromEligibleAmount(
                 $customer,
@@ -1017,6 +1023,7 @@ class PosSaleProcessor
                 throw ValidationException::withMessages(['payments' => 'En Crédito V1 la venta debe pagarse completamente a crédito; el crédito mixto no está disponible.']);
             }
             $payment = array_values($creditPayments)[0];
+
             return [['method' => $paymentMethods->get($payment['payment_method_id']), 'amount' => $total, 'received_amount' => null, 'change_amount' => 0, 'reference' => $payment['reference']]];
         }
 

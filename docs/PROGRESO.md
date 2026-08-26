@@ -994,7 +994,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P15: COMPLETADO (P16 siguiente)
+### Portal de Clientes — P01–P16: COMPLETADO (P17 siguiente)
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`). **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -1005,7 +1005,8 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P13 — COMPLETADO** — Auditoría transversal: patrón aplicado al detalle complejo de Roles (Resumen, Usuarios, Permisos; acciones ≥44px). Se excluyeron POS, flujos transaccionales de Compras/Ventas/Caja, formularios únicos y detalles simples de Empresa/Proveedor para no ocultar contexto ni forzar tabs. Evidencia: `UserRoleSecurityTest` + `ResponsiveNavigationTest`, 15 tests, 59 aserciones; build Vite.
 - **P14 — COMPLETADO** — trabajo parcial retomado y cerrado: configuración habilitar/deshabilitar única por empresa, control protegido por `fidelidad.configuracion`, concesión base de 10 puntos una sola vez por cliente, reutilización de `LoyaltyAccountService` con movimiento `new_customer`, aislamiento explícito y claim enlazado al movimiento de Kardex. `LoyaltyRegistrationIncentiveP14Test` 8/8; regresión Portal/P14 78 pruebas, 500 aserciones; Pint focalizado y `git diff --check` correctos.
 - **P15 — COMPLETADO** — configuración única por empresa ampliada con tipo `points`, `percentage` o `fixed` y valor `DECIMAL(19,4)`; validación estricta en request y servicio (valor >0, máximo cuatro decimales, porcentaje ≤100 y capacidad decimal). Puntos reutilizan `LoyaltyAccountService`/`new_customer`; porcentaje y fijo quedan concedidos en el claim, sin aplicar una venta antes de definir P16. Se conserva una sola concesión y el snapshot no cambia si luego se reconfigura. Evidencia: `LoyaltyRegistrationIncentiveP15Test` 13/13, 52 aserciones; regresión P14/Portal/P15 91 tests, 552 aserciones; Pint y `git diff --check` correctos.
-- **P16 — SIGUIENTE** — compra mínima, momento primera compra/después, excepción al mínimo de canje y vencimiento. P31 queda después de P16–P20.
+- **P16 — COMPLETADO** — compra mínima con precisión decimal; concesión al registro o después de la primera compra válida; uso en primera compra o posteriores; excepción consumible al mínimo general de canje para incentivos de puntos; vencimiento calculado en la zona horaria de la empresa y snapshot inmutable por claim. Integrado con cierre POS y canje existente. Evidencia: `LoyaltyRegistrationIncentiveP16Test` 7/7, 28 aserciones; regresión P14–P16/Portal/POS/canjes 129 tests, 790 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
+- **P17 — SIGUIENTE** — sucursales, ofertas, descuento máximo y stacking/combinabilidad. P31 queda después de P17–P20.
 
 **Regla producción:** desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado. Los agentes no despliegan producción automáticamente.
 
@@ -1023,7 +1024,7 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P09C — Escaneo QR/Code128 en POS: COMPLETADO.** `PosController::searchCustomers` expone `public_code` + like, `pos/index` botón escáner cliente + `onMvsScan` (public_code exact → `selectCustomer`).
 - **P09D — PIN/QR temporal de un solo uso: COMPLETADO.** `customer_one_time_tokens` (`token_hash` SHA256, 5min, `used_at`), `CustomerOneTimeTokenService` genera PIN 6 dígitos + QR local y verifica single-use/expiración/aislamiento, `clientes/show` genera/muestra/verifica.
 - **Evidencia P01–P09D:** `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos**. `LoyaltyCustomerPortal` 13/13, 89 aserciones.
-- **P14–P15 — COMPLETADOS.** Siguiente **P16** – reglas de compra mínima, aplicación y vencimiento del incentivo.
+- **P14–P16 — COMPLETADOS.** Siguiente **P17** – sucursales, ofertas, descuento máximo y stacking/combinabilidad.
 
 ---
 

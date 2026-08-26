@@ -7,9 +7,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LoyaltyRegistrationIncentiveClaim extends Model
 {
-    protected $fillable = ['company_id', 'customer_id', 'loyalty_movement_id', 'benefit_type', 'benefit_value', 'awarded_points', 'discount_amount', 'branch_id', 'sale_id', 'configured_by'];
+    protected $fillable = [
+        'company_id', 'customer_id', 'loyalty_movement_id', 'benefit_type', 'benefit_value',
+        'award_timing', 'minimum_purchase_amount', 'allow_on_first_purchase',
+        'bypass_redemption_minimum', 'awarded_points', 'discount_amount', 'branch_id',
+        'sale_id', 'qualification_sale_id', 'configured_by', 'available_at', 'expires_at',
+        'expired_at', 'used_at',
+    ];
 
-    protected $casts = ['benefit_value' => 'decimal:4', 'awarded_points' => 'decimal:4', 'discount_amount' => 'decimal:4'];
+    protected $casts = [
+        'benefit_value' => 'decimal:4',
+        'minimum_purchase_amount' => 'decimal:4',
+        'allow_on_first_purchase' => 'boolean',
+        'bypass_redemption_minimum' => 'boolean',
+        'awarded_points' => 'decimal:4',
+        'discount_amount' => 'decimal:4',
+        'available_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'expired_at' => 'datetime',
+        'used_at' => 'datetime',
+    ];
 
     public function company(): BelongsTo
     {
@@ -34,6 +51,11 @@ class LoyaltyRegistrationIncentiveClaim extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function qualificationSale(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class, 'qualification_sale_id');
     }
 
     public function configurator(): BelongsTo

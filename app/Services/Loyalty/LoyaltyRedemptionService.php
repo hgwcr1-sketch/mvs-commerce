@@ -6,7 +6,9 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
 use App\Models\LoyaltyMovement;
+use App\Models\LoyaltyRegistrationIncentive;
 use App\Models\LoyaltySetting;
+use App\Models\Sale;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +21,7 @@ class LoyaltyRedemptionService
         private readonly LoyaltyPointValueService $pointValues,
         private readonly LoyaltyRedemptionEligibilityService $eligibility,
         private readonly LoyaltyRedemptionLimitService $limits,
+        private readonly LoyaltyRegistrationIncentiveService $registrationIncentives,
     ) {}
 
     /** @return array{movement:LoyaltyMovement,account:LoyaltyAccount,requested_points:string,redeemed_points:string,redeemed_amount:string,balance_after:string,point_value:string} */
@@ -49,8 +52,19 @@ class LoyaltyRedemptionService
                 throw ValidationException::withMessages(['is_offer' => 'El canje de puntos no está permitido en ofertas.']);
             }
 
+            $incentive = $this->registrationIncentives->evaluateForPurchase(
+                $customer,
+                $company,
+                $eligibleAmount,
+                $context['effective_at'] ?? null,
+                ($context['source_type'] ?? null) === Sale::class ? ($context['source_id'] ?? null) : null,
+            );
+            $bypassMinimum = $incentive['eligible']
+                && $incentive['benefit_type'] === LoyaltyRegistrationIncentive::TYPE_POINTS
+                && $incentive['bypass_redemption_minimum'];
+
             $eligibility = $this->eligibility->evaluate($account, $company);
-            if (! $eligibility['eligible']) {
+            if (! $bypassMinimum && ! $eligibility['eligible']) {
                 throw ValidationException::withMessages([
                     'redemption' => $this->eligibilityMessage($eligibility['reason']),
                 ]);
@@ -60,7 +74,7 @@ class LoyaltyRedemptionService
                 throw ValidationException::withMessages(['requested_points' => 'Saldo de puntos insuficiente.']);
             }
 
-            $limit = $this->limits->calculate($account, $company, $eligibleAmount);
+            $limit = $this->limits->calculate($account, $company, $eligibleAmount, $bypassMinimum);
             if (! $limit['eligible']) {
                 throw ValidationException::withMessages(['redemption' => 'El monto de la operación no permite realizar un canje.']);
             }
@@ -91,6 +105,16 @@ class LoyaltyRedemptionService
                 'effective_at' => $context['effective_at'] ?? now(),
                 'metadata' => $metadata,
             ]);
+
+            if ($bypassMinimum && $incentive['claim_id'] !== null) {
+                $this->registrationIncentives->consume(
+                    $incentive['claim_id'],
+                    $customer,
+                    $company,
+                    ($context['source_type'] ?? null) === Sale::class ? ($context['source_id'] ?? null) : null,
+                    $context['effective_at'] ?? null,
+                );
+            }
 
             return $this->result($movement, $account->fresh(), $requestedPoints);
         });

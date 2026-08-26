@@ -45,7 +45,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **COMPLETADO** | Auditoría selectiva: tabs en detalle complejo de Roles (Resumen/Usuarios/Permisos); POS, transacciones, formularios únicos y detalles simples excluidos. 15 tests, 59 aserciones + build Vite |
 | **P14** | Incentivo de registro configurable (habilitar/deshabilitar) | **COMPLETADO** | Configuración única por `company_id`, control en Centro de reglas, concesión base idempotente de 10 puntos vía `LoyaltyAccountService`/`new_customer`, claim enlazado al movimiento de Kardex; `LoyaltyRegistrationIncentiveP14Test` 8/8 |
 | **P15** | Beneficio: puntos, % descuento o descuento fijo | **COMPLETADO** | Tipo y valor `DECIMAL(19,4)` por empresa; puntos al Kardex, descuentos como claim pendiente sin adelantar P16; `LoyaltyRegistrationIncentiveP15Test` 13/13 |
-| P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
+| **P16** | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **COMPLETADO** | Reglas configurables por empresa y snapshot por concesión; concesión al registro o tras primera compra válida, mínimo decimal, uso en primera compra o posteriores, bypass de mínimo para puntos y vencimiento por zona horaria; `LoyaltyRegistrationIncentiveP16Test` 7/7 |
 | P17 | Sucursales, ofertas, descuento máximo y stacking/combinabilidad | **PENDIENTE** | Condiciones por empresa |
 | P18 | Una vez por cliente + teléfono/correo verificado | **PENDIENTE** | Prevención abuso |
 | P19 | Auditar incentivo: cliente, regla, beneficio, compra, sucursal, configurador y fecha | **PENDIENTE** | Trazabilidad |
@@ -116,7 +116,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P13: COMPLETADO** – Extensión selectiva al detalle de Roles; POS y pantallas no aptas preservadas.
 - **P14: COMPLETADO** – Habilitar/deshabilitar por empresa, concesión única por cliente y auditoría básica enlazada al Kardex existente. Regresión Portal/P14: 78 pruebas, 500 aserciones.
 - **P15: COMPLETADO** – Tipo y valor estrictamente validados por empresa; puntos inmediatos vía Kardex y descuentos concedidos como claim pendiente. Regresión P14/Portal/P15: 91 pruebas, 552 aserciones.
-- **P16: SIGUIENTE BLOQUE** – Compra mínima, momento de aplicación, excepción del mínimo de canje y vencimiento.
+- **P16: COMPLETADO** – Compra mínima con precisión decimal, concesión al registro o después de la primera compra válida, aplicación en primera compra o posteriores, excepción consumible al mínimo general de canje para puntos y vencimiento calculado en la zona horaria de la empresa. Evidencia: `LoyaltyRegistrationIncentiveP16Test` 7/7, 28 aserciones; regresión Portal/POS/canjes P14–P16 129 tests, 790 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
+- **P17: SIGUIENTE BLOQUE** – Sucursales, ofertas, descuento máximo y stacking/combinabilidad.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

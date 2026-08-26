@@ -12,7 +12,7 @@ class LoyaltyRedemptionEligibilityService
     public function __construct(private readonly LoyaltyPointValueService $pointValues) {}
 
     /** @return array{eligible:bool,available_points:string,available_money:string,minimum_enabled:bool,minimum_money:string,required_points:string,missing_money:string,reason:?string} */
-    public function evaluate(LoyaltyAccount $account, Company $company): array
+    public function evaluate(LoyaltyAccount $account, Company $company, bool $ignoreMinimum = false): array
     {
         if ((int) $account->company_id !== (int) $company->id) {
             throw ValidationException::withMessages(['account' => 'La cuenta no pertenece a la empresa.']);
@@ -28,7 +28,7 @@ class LoyaltyRedemptionEligibilityService
         }
 
         $availableMoney = $this->pointValues->moneyFromPoints($points, $company);
-        if (! $enabled) {
+        if (! $enabled || $ignoreMinimum) {
             return $this->result(true, $points, $availableMoney, false, '0.0000', '0.0000', '0.0000', null);
         }
 

@@ -161,9 +161,48 @@
                     @error('benefit_value')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="minimum_purchase_enabled" value="0">
+                <label class="flex min-h-11 items-start gap-3">
+                    <input type="checkbox" name="minimum_purchase_enabled" value="1" @checked(old('minimum_purchase_enabled', $registrationIncentive->minimum_purchase_enabled)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+                    <span><span class="block font-semibold text-slate-800">Exigir compra mínima</span><span class="block text-sm text-slate-500">Se compara con precisión de cuatro decimales.</span></span>
+                </label>
+                <div class="mt-3">
+                    <label for="registration_minimum_purchase_amount" class="mb-1 block text-sm font-semibold text-slate-700">Monto mínimo</label>
+                    <input id="registration_minimum_purchase_amount" name="minimum_purchase_amount" type="number" inputmode="decimal" min="0.0001" step="0.0001" value="{{ $dec(old('minimum_purchase_amount', $registrationIncentive->minimum_purchase_amount)) }}" class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-right text-sm tabular-nums outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
+                    @error('minimum_purchase_amount')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <div>
+                <label for="registration_award_timing" class="mb-1 block text-sm font-semibold text-slate-700">Cuándo se concede</label>
+                <select id="registration_award_timing" name="award_timing" required class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
+                    <option value="registration" @selected(old('award_timing', $registrationIncentive->award_timing) === 'registration')>Al registrarse</option>
+                    <option value="after_first_valid_purchase" @selected(old('award_timing', $registrationIncentive->award_timing) === 'after_first_valid_purchase')>Después de la primera compra válida</option>
+                </select>
+                @error('award_timing')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <input type="hidden" name="allow_on_first_purchase" value="0">
+                    <label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="allow_on_first_purchase" value="1" @checked(old('allow_on_first_purchase', $registrationIncentive->allow_on_first_purchase)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">Permitir en primera compra</span><span class="block text-sm text-slate-500">Si se desactiva, el cliente debe tener una compra completada anterior.</span></span></label>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <input type="hidden" name="bypass_redemption_minimum" value="0">
+                    <label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="bypass_redemption_minimum" value="1" @checked(old('bypass_redemption_minimum', $registrationIncentive->bypass_redemption_minimum)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">Ignorar mínimo general de canje</span><span class="block text-sm text-slate-500">Solo aplica al incentivo de puntos y se consume una vez.</span></span></label>
+                </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="expiration_enabled" value="0">
+                <label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="expiration_enabled" value="1" @checked(old('expiration_enabled', $registrationIncentive->expiration_enabled)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">El incentivo vence</span><span class="block text-sm text-slate-500">La fecha límite se calcula en la zona horaria de la empresa y queda guardada en la concesión.</span></span></label>
+                <div class="mt-3">
+                    <label for="registration_expiration_days" class="mb-1 block text-sm font-semibold text-slate-700">Días de vigencia</label>
+                    <input id="registration_expiration_days" name="expiration_days" type="number" inputmode="numeric" min="1" max="3650" step="1" value="{{ old('expiration_days', $registrationIncentive->expiration_days) }}" class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-right text-sm tabular-nums outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
+                    @error('expiration_days')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
             <button type="submit" class="min-h-11 rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar incentivo</button>
         </form>
-        <p class="mt-3 text-xs text-slate-500">Los puntos se acreditan al registrarse. Los descuentos quedan concedidos y pendientes de aplicación; P16 definirá la compra elegible sin adelantar reglas comerciales.</p>
+        <p class="mt-3 text-xs text-slate-500">Los puntos se acreditan según el momento configurado. Los descuentos quedan concedidos en una sola oportunidad y se validan contra estas reglas al aplicarlos.</p>
     </x-card>
 
     <x-card>

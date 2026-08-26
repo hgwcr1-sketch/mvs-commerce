@@ -15,11 +15,11 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - Empresas existentes conservan su contexto y no repiten onboarding.
 
 
-## Estado actual de Portal de Clientes (P01–P15) — reconciliado con Excel único
+## Estado actual de Portal de Clientes (P01–P16) — reconciliado con Excel único
 
-**P10–P15 COMPLETADOS.** P11: Portal con siete pestañas según permisos (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente y Configuración tabulados selectivamente (23 tests, 167 aserciones). P13: auditoría transversal y tabs solo en detalle complejo de Roles; POS, transacciones, formularios únicos y detalles simples excluidos (15 tests, 59 aserciones). P14: incentivo habilitable por empresa y concesión única. P15: tipo puntos/porcentaje/fijo y valor `DECIMAL(19,4)`; puntos al Kardex y descuentos pendientes en claim. Regresión Portal/P14/P15 91 tests, 552 aserciones. **P16 es el siguiente bloque.**
+**P10–P16 COMPLETADOS.** P11: Portal con siete pestañas según permisos (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente y Configuración tabulados selectivamente (23 tests, 167 aserciones). P13: auditoría transversal y tabs solo en detalle complejo de Roles; POS, transacciones, formularios únicos y detalles simples excluidos (15 tests, 59 aserciones). P14: incentivo habilitable por empresa y concesión única. P15: tipo puntos/porcentaje/fijo y valor `DECIMAL(19,4)`. P16: compra mínima, concesión al registro o tras compra válida, primera compra/posteriores, excepción consumible al mínimo de canje y vencimiento por zona horaria. Regresión P14–P16/Portal/POS/canjes: 129 tests, 790 aserciones. **P17 es el siguiente bloque.**
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P10 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P16 COMPLETADOS** (incluidos P09A–P09D con sus IDs exactos), P17 es el siguiente bloque y la migración P31–P40 permanece después de P17–P20 sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 - **P01 — Registrarme: COMPLETADO.** Enlace “Registrarme / Crear mi cuenta” en `loyalty.portal.login` (`resources/views/loyalty/portal/login.blade.php:14`) hacia `portal-clientes/{company}/registro`.
 - **P02 — Autorregistro: COMPLETADO.** `LoyaltyPortalSessionController::register` crea cliente activo (`is_active=true`) disponible en `clientes`, `pos.customers.search` y Fidelización, dentro de la empresa de la URL (`portal-clientes/{company}`), vía `Customer` + `LoyaltyPortalCredential`; sin factura/incentivo/QR individual. Rutas `loyalty.customer.register` / `register.store` (`routes/web.php:139`, `throttle:10,1`).
@@ -133,7 +133,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P15 COMPLETADOS** (incluidos P09A–P09D); **P09 ajuste QR compacto commit `58aba11`**; P14/P15 dejan incentivo por empresa habilitable, de concesión única y configurable como puntos, porcentaje o fijo. **P16 SIGUIENTE BLOQUE** – reglas de compra y vencimiento, sin iniciar todavía. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.** P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global histórica: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos ajenos. No hay PostgreSQL local.
+- Puesta en Producción: **P01–P16 COMPLETADOS** (incluidos P09A–P09D); **P09 ajuste QR compacto commit `58aba11`**. P14–P16 dejan el incentivo por empresa habilitable, de concesión única, configurable como puntos/porcentaje/fijo y sujeto a compra mínima, momento de concesión, primera compra/posteriores, excepción al mínimo de canje y vencimiento. **P17 SIGUIENTE BLOQUE** – sucursales, ofertas, descuento máximo y stacking/combinabilidad. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.** P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global histórica: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos ajenos. No hay PostgreSQL local.
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -151,7 +151,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P16 — compra mínima, momento de aplicación, excepción del mínimo de canje y vencimiento; P31 no inicia hasta cerrar P16–P20 en orden.**
+**Prioridad inmediata: P17 — sucursales, ofertas, descuento máximo y stacking/combinabilidad; P31 no inicia hasta cerrar P17–P20 en orden.**
 
 No asumir que el último estado conocido sigue vigente.
 

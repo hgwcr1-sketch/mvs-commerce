@@ -19,10 +19,10 @@ class LoyaltyRedemptionLimitService
     ) {}
 
     /** @return array{eligible:bool,reason:?string,percentage:string,eligible_purchase_amount:string,max_money_by_percentage:string,available_money:string,max_redeemable_money:string,max_redeemable_points:string} */
-    public function calculate(LoyaltyAccount $account, Company $company, string|int $eligiblePurchaseAmount): array
+    public function calculate(LoyaltyAccount $account, Company $company, string|int $eligiblePurchaseAmount, bool $ignoreMinimum = false): array
     {
         $amount = $this->nonNegativeDecimal($eligiblePurchaseAmount);
-        $eligibility = $this->eligibility->evaluate($account, $company);
+        $eligibility = $this->eligibility->evaluate($account, $company, $ignoreMinimum);
         $percentage = $this->percentage($company);
         $percentageLimit = bcdiv(bcmul($amount, $percentage, 8), '100', self::SCALE);
 
