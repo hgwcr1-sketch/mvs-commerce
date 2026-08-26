@@ -842,7 +842,7 @@ Antes de continuar una fase nueva, revisar:
 
 ## Centro de Datos
 
-Estado: D00, D02, D03 y D09 COMPLETADOS; D01 EN CURSO EN PARALELO.
+Estado: D00, D02, D03, D09 y D10 COMPLETADOS; D01 EN CURSO EN PARALELO.
 
 ### D02 — Centro de Datos base: COMPLETADO
 
@@ -881,7 +881,18 @@ Evidencia: `DataExportTest` (7 tests, 40 aserciones), `DataCenterShellTest` (6 t
 
 Fallo preexistente ajeno: `PosAccessAndSearchTest` mantiene 3 fallos por expectativas antiguas de payload/markup POS; D09 no modifica archivos POS y las otras 29 pruebas del archivo pasan. No se corrigió esa deuda.
 
-Siguiente fase ejecutable: **D10 — Centro de Reportes esenciales**. D04–D08 siguen pendientes de D01.
+### D10 — Centro de Reportes esenciales: COMPLETADO
+
+- Reportes permanece dentro de la entrada única Centro de Datos; no se agregó otra opción al sidebar.
+- Seis categorías funcionales consultan datos reales: Ventas, Inventario, Caja/Finanzas, Compras/Proveedores, Clientes y Fidelización.
+- Los filtros de sucursal, fechas, producto, cliente, proveedor y vendedor validan pertenencia a la empresa activa y acceso del usuario. Las consultas mantienen aislamiento por empresa/sucursal.
+- `reportes.ver` se combina con el permiso del dominio; CxC/CxP requieren además su lectura específica. Los botones autorizados reutilizan directamente las rutas y conjuntos D09.
+- UI mobile-first 360/768/1280 con tarjetas de categoría/indicadores, filtros de 44 px y tablas con scroll interno.
+- No se modificaron importadores, plantillas MYM, Excel maestro ni BeautyOS.
+
+Evidencia: `EssentialReportTest` (7 tests, 46 aserciones); integración `DataExportTest` + `DataCenterShellTest` (20 tests, 133 aserciones); regresión de Ventas/Inventario/Caja/Compras/CxP/Fidelización (76 tests, 383 aserciones). Build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **D11–D12 — Históricos opcionales**. No iniciada por instrucción expresa y porque requiere confirmar necesidad/contratos de migración.
 
 ---
 

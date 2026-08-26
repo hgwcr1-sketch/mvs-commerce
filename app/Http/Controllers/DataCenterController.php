@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Services\Exports\DataExportService;
+use App\Services\Reports\EssentialReportQuery;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -54,7 +55,11 @@ class DataCenterController extends Controller
         $company = $this->company();
         $this->authorizeAny($request, $company, ['reportes.ver']);
 
-        return view('data-center.reports');
+        $categories = collect(EssentialReportQuery::CATEGORIES)->filter(
+            fn (array $definition) => $request->user()->hasPermission($definition['permission'], $company),
+        );
+
+        return view('data-center.reports', compact('categories'));
     }
 
     private function company(): Company

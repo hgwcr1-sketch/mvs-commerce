@@ -62,6 +62,7 @@ use App\Http\Controllers\PurchaseImportController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
@@ -672,6 +673,9 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::get('/importar', [DataCenterController::class, 'imports'])->name('imports');
         Route::get('/exportar', [DataCenterController::class, 'exports'])->name('exports');
         Route::get('/reportes', [DataCenterController::class, 'reports'])->name('reports');
+        Route::get('/reportes/{category}', [ReportCenterController::class, 'show'])
+            ->middleware('permission:reportes.ver')
+            ->name('reports.show');
         Route::get('/exportar/{dataset}/{format}', [DataExportController::class, 'download'])
             ->middleware('permission:reportes.exportar')
             ->whereIn('format', ['xlsx', 'csv'])

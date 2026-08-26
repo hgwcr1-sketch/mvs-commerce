@@ -7,7 +7,7 @@
 - D03 Caracterización Compras + blindaje Inventario: COMPLETADO.
 - D04–D08: pendientes de D01/contratos MYM aprobados.
 - D09 Exportadores esenciales: COMPLETADO.
-- D10 Reportes esenciales: SIGUIENTE fase ejecutable.
+- D10 Reportes esenciales: COMPLETADO.
 - Fidelización F01–F45: cerrada previamente.
 
 ## Regla principal
@@ -126,10 +126,19 @@ Pendiente.
 - Build Vite, Pint focalizado y `git diff --check` correctos. No se modificó el Excel maestro ni BeautyOS.
 
 ## D10 — Reportes esenciales
-SIGUIENTE; depende de D02 y D09, ambos completos.
+
+**Estado: COMPLETADO.**
+
+- Centro de Datos conserva una sola entrada en el sidebar y aloja Reportes como sección interna, con categorías de Ventas, Inventario, Caja/Finanzas, Compras/Proveedores, Clientes y Fidelización.
+- `EssentialReportQuery` centraliza consultas de solo lectura sobre tablas y relaciones reales: ventas, utilidad/margen, inventario/Kardex, caja, compras, clientes, CxC/CxP y puntos. Los filtros disponibles se limitan a empresa activa, sucursales asignadas y entidades de esa empresa.
+- `ReportCenterController` mantiene autorización por `reportes.ver` más permiso de lectura del dominio; saldos CxC/CxP y exportaciones secundarias permanecen ocultos sin sus permisos específicos.
+- Las descargas aplicables enlazan los conjuntos XLSX/CSV ya implementados por D09; no se duplicó su generación ni se fijaron contratos de importación.
+- UI mobile-first verificada con grids 360/768/1280, controles de 44 px y tablas confinadas en `overflow-x-auto`.
+- `EssentialReportTest`: 7 tests, 46 aserciones. Integración D02/D09: 20 tests, 133 aserciones. Regresión operativa: 76 tests, 383 aserciones. Build Vite, Pint focalizado y `git diff --check` correctos.
+- No se modificó el Excel maestro ni BeautyOS.
 
 ## D11–D12 — Históricos opcionales
-Solo si son necesarios para el arranque.
+SIGUIENTE en el orden maestro, solo si son necesarios para el arranque y se aprueban sus contratos.
 
 ## D13 — Migración real MYM
 Carga por lotes con conciliación y rollback seguro.
