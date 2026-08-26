@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Notifications\ResetPasswordNotification;
+use App\Services\Modules\ModuleRegistry;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -134,6 +135,11 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission, Company $company): bool
     {
+        $module = app(ModuleRegistry::class)->forPermission($permission);
+        if ($module !== null && ! $company->isModuleEnabled($module)) {
+            return false;
+        }
+
         $role = $this->roleInCompany($company);
 
         if (! $role || ! $role->is_active) {

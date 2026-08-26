@@ -83,7 +83,7 @@ class PlatformAdminTest extends TestCase
         $this->assertFalse($user->fresh()->is_active);
     }
 
-    public function test_master_panel_is_mobile_first_and_does_not_fake_p02_modules(): void
+    public function test_master_panel_is_mobile_first_and_explains_module_permission_separation(): void
     {
         $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
         [$company] = $this->tenant('Empresa Responsive');
@@ -93,7 +93,7 @@ class PlatformAdminTest extends TestCase
             ->assertSee('grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3', false)
             ->assertSee('min-h-11', false);
         $this->get(route('platform.companies.show', $company))->assertOk()
-            ->assertSee('overflow-x-auto', false)->assertSee('La habilitación real por empresa se incorpora en P02');
+            ->assertSee('overflow-x-auto', false)->assertSee('Habilitar un módulo no concede permisos');
     }
 
     private function tenant(string $name): array

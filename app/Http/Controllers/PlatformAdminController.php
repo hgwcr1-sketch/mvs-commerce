@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\User;
+use App\Services\Modules\ModuleRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -39,9 +40,10 @@ class PlatformAdminController extends Controller
             'branches' => fn ($query) => $query->orderBy('name'),
             'users' => fn ($query) => $query->orderBy('name')->withPivot('role_id'),
             'roles:id,company_id,name,is_active',
+            'modules',
         ]);
 
-        return view('platform.show', compact('company'));
+        return view('platform.show', ['company' => $company, 'moduleCatalog' => ModuleRegistry::MODULES]);
     }
 
     public function updateCompany(Request $request, Company $company): RedirectResponse
@@ -76,5 +78,17 @@ class PlatformAdminController extends Controller
         $user->update($request->validate(['is_active' => ['required', 'boolean']]));
 
         return back()->with('success', 'Estado de usuario actualizado.');
+    }
+
+    public function updateModules(Request $request, Company $company): RedirectResponse
+    {
+        $data = $request->validate(['modules' => ['nullable', 'array'], 'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))]]);
+        $enabled = $data['modules'] ?? [];
+
+        foreach (array_keys(ModuleRegistry::MODULES) as $moduleKey) {
+            $company->modules()->updateOrCreate(['module_key' => $moduleKey], ['is_enabled' => in_array($moduleKey, $enabled, true)]);
+        }
+
+        return back()->with('success', 'Módulos contratados actualizados.');
     }
 }

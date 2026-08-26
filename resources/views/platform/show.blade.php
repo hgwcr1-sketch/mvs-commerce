@@ -17,6 +17,14 @@
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 class="font-bold">Usuarios y accesos</h2><div class="mt-4 overflow-x-auto"><table class="min-w-full text-sm"><thead><tr class="border-b text-left text-slate-500"><th class="p-3">Usuario</th><th class="p-3">Correo</th><th class="p-3">Rol</th><th class="p-3">Estado</th><th class="p-3">Acción</th></tr></thead><tbody>
         @foreach($company->users as $user)<tr class="border-b border-slate-100"><td class="p-3 font-semibold">{{ $user->name }}</td><td class="p-3">{{ $user->email }}</td><td class="p-3">{{ $company->roles->firstWhere('id', $user->pivot->role_id)?->name ?: 'Sin rol' }}</td><td class="p-3">{{ $user->is_active ? 'Activo' : 'Inactivo' }}</td><td class="p-3"><form method="POST" action="{{ route('platform.users.update', [$company, $user]) }}">@csrf @method('PATCH')<input type="hidden" name="is_active" value="{{ $user->is_active ? 0 : 1 }}"><button class="min-h-11 rounded-xl border px-4 font-semibold">{{ $user->is_active ? 'Desactivar' : 'Activar' }}</button></form></td></tr>@endforeach
     </tbody></table></div></section>
-    <section class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5"><h2 class="font-bold">Módulos contratados</h2><p class="mt-2 text-sm text-slate-600">La habilitación real por empresa se incorpora en P02. Esta sección no simula ni concede módulos.</p></section>
+    <form method="POST" action="{{ route('platform.modules.update', $company) }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">@csrf @method('PATCH')
+        <h2 class="font-bold">Módulos contratados</h2><p class="mt-2 text-sm text-slate-600">Habilitar un módulo no concede permisos: cada usuario sigue necesitando un rol autorizado dentro de esta empresa.</p>
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            @foreach($moduleCatalog as $key => $module)
+                <label class="flex min-h-14 items-center gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold"><input type="checkbox" name="modules[]" value="{{ $key }}" @checked($company->isModuleEnabled($key)) class="h-5 w-5 rounded text-amber-600"> {{ $module['label'] }}</label>
+            @endforeach
+        </div>
+        <button class="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar módulos</button>
+    </form>
 </div>
 @endsection

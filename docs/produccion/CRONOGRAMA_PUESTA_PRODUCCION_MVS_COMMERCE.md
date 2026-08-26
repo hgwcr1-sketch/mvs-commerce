@@ -52,10 +52,12 @@ Dashboard privado del propietario de MVS para administrar empresas, sucursales, 
 ### P02 — Módulos por empresa
 Permitir activar/desactivar módulos contratados por empresa. Separar módulos contratados de permisos de usuarios.
 
-**Estado: SIGUIENTE.**
+**Estado: COMPLETADO.** Catálogo extensible de nueve módulos, contrato por empresa en `company_modules` y verificación central previa al permiso del rol. Desactivar un módulo bloquea acceso real y navegación sin borrar permisos; otras empresas no cambian. Empresas existentes mantienen compatibilidad hasta configurar su contrato. Evidencia: `CompanyModuleAccessTest` 5/5 (15 aserciones), regresión de panel/roles/navegación 27/27 (110 aserciones), build Vite y `git diff --check` correctos.
 
 ### P03 — Onboarding nueva empresa + sucursales
 Asistente para datos de empresa, logo, información fiscal/comercial, sucursales, administrador, módulos y configuración inicial.
+
+**Estado: SIGUIENTE.**
 
 ### P04 — Impresión POS y comprobantes
 Auditar primero lo existente. Soportar:

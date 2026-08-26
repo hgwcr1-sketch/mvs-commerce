@@ -131,6 +131,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::patch('/empresas/{company}', [PlatformAdminController::class, 'updateCompany'])->name('companies.update');
     Route::patch('/empresas/{company}/sucursales/{branch}', [PlatformAdminController::class, 'updateBranch'])->name('branches.update');
     Route::patch('/empresas/{company}/usuarios/{user}', [PlatformAdminController::class, 'updateUser'])->name('users.update');
+    Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
 });
 
 Route::middleware(['auth', 'active.company'])->group(function () {

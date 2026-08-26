@@ -862,7 +862,17 @@ Evidencia: `ProfessionalAuthExperienceTest` (5 tests, 32 aserciones), regresión
 
 Evidencia: `PlatformAdminTest` (6 tests, 41 aserciones); regresión con `CompanyProvisioningTest` + `UserRoleSecurityTest` (20 tests, 87 aserciones en conjunto); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase: **P02 — Módulos por empresa**.
+### P02 — Módulos por empresa: COMPLETADO
+
+- `ModuleRegistry` define un catálogo extensible de Ventas/POS, Inventario, Compras, Clientes, Caja, Fidelización, Reportes, Agenda y Administración, sin referencias a BeautyOS ni clientes concretos.
+- `company_modules` conserva el contrato por tenant. Empresas anteriores sin contrato explícito mantienen sus capacidades para evitar una desactivación accidental al desplegar.
+- `User::hasPermission()` exige primero el módulo empresarial y después el permiso del rol; por ello el control alcanza Gates del sidebar, middleware de rutas y servicios/controladores existentes.
+- El Panel Maestro permite guardar el contrato completo. Desactivar no borra roles/permisos, y reactivar restaura el acceso según esos permisos.
+- Pruebas demuestran bloqueo de ruta POS, ocultamiento de navegación, separación módulo/permiso y aislamiento entre empresas.
+
+Evidencia: `CompanyModuleAccessTest` (5 tests, 15 aserciones); regresión Panel Maestro, roles y navegación (27 tests, 110 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase: **P03 — Onboarding nueva empresa + sucursales**.
 
 ---
 

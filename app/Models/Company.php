@@ -53,6 +53,20 @@ class Company extends Model
             ->withTimestamps();
     }
 
+    public function modules()
+    {
+        return $this->hasMany(CompanyModule::class);
+    }
+
+    public function isModuleEnabled(string $moduleKey): bool
+    {
+        $module = $this->relationLoaded('modules')
+            ? $this->modules->firstWhere('module_key', $moduleKey)
+            : $this->modules()->where('module_key', $moduleKey)->first();
+
+        return $module?->is_enabled ?? true;
+    }
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_user_id');
