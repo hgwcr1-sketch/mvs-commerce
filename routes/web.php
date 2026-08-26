@@ -491,7 +491,8 @@ Route::middleware(['auth', 'active.company'])->group(function () {
 
     Route::post('/compras/importar-xml',
         [PurchaseXmlImportController::class, 'store']
-    )->name('compras.import.xml');
+    )->middleware(['active.branch', 'permission:compras.crear'])
+        ->name('compras.import.xml');
 
     Route::resource('compras', PurchaseController::class)
         ->middleware('active.branch')
@@ -696,7 +697,7 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         ->name('importaciones.inventario.preview');
 
     Route::post('/importar-datos/inventario/confirmar', [DataImportController::class, 'inventoryImport'])
-        ->middleware('permission:inventario.ver')
+        ->middleware('permission:inventario.ajustar')
         ->name('importaciones.inventario.import');
     Route::resource('reportes', ReportController::class);
 

@@ -219,6 +219,7 @@
         </div>
 
         @if(
+            $canConfirm &&
             count($rows) > 0 &&
             collect($rows)->where('valid', false)->count() === 0
         )
@@ -246,6 +247,10 @@
 
             </form>
 
+        @elseif(! $canConfirm)
+            <p class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Puede revisar el archivo, pero necesita el permiso de ajuste de inventario para confirmarlo.
+            </p>
         @endif
 
     </div>

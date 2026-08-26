@@ -4,7 +4,9 @@
 - D00 Auditoría existente: COMPLETADO.
 - D01 Contratos y mapeo de plantillas MYM: EN CURSO, en paralelo.
 - D02 Centro de Datos base: COMPLETADO.
-- D03 Caracterización Compras + blindaje Inventario: SIGUIENTE, requiere revisión de D02 antes de iniciar.
+- D03 Caracterización Compras + blindaje Inventario: COMPLETADO.
+- D04–D08: pendientes de D01/contratos MYM aprobados.
+- D09 Exportadores esenciales: siguiente fase ejecutable autorizada sin fijar contratos de importación.
 - Fidelización F01–F45: cerrada previamente.
 
 ## Regla principal
@@ -78,7 +80,22 @@ Commit sugerido:
 ---
 
 ## D03 — Caracterización Compras + blindaje Inventario
-SIGUIENTE, pendiente de revisión explícita de D02 antes de iniciar.
+
+**Estado: COMPLETADO.**
+
+### Evidencia de cierre
+
+- Compras conserva `PurchaseExcelImport`, `PurchaseXmlImport`, `PurchaseImportManager` y `PurchaseProcessor`; no se duplicó ni reemplazó su lógica.
+- El POST XML quedó protegido igual que el resto del flujo con `active.branch` y `compras.crear`.
+- `PurchaseImportCharacterizationTest` fija lectores Excel/XML, contrato de la plantilla, middleware, sesión review y confirmación mediante `PurchaseProcessor`.
+- El importador existente de Inventario ahora delega análisis/confirmación en `InventoryImportService`; el preview no muta, consulta stock real y resuelve código interno, barcode principal y `product_barcodes` adicionales.
+- Productos nuevos resuelven categoría, unidad y marca activas de la empresa por los valores ya presentes en la plantilla; se eliminaron IDs hardcodeados y se crea `ProductBarcode` cuando corresponde.
+- Se validan empresa/sucursal, acceso a otras sucursales, cantidades, unidades enteras, mínimos/máximos, precios, impuesto, duplicados y conflictos de barcode; las salidas no pueden dejar stock negativo.
+- Confirmar requiere `inventario.ajustar`, vuelve a comprobar empresa/sucursal y ejecuta producto, stock y movimiento dentro de una transacción. La publicación de stock usa `InventoryPostingService` con bloqueo de fila.
+- `InventoryImportHardeningTest` cubre preview/confirm, permisos, multiempresa/multisucursal, stock real, duplicados/barcodes y rollback atómico.
+- No se modificaron plantillas, `PurchaseProcessor`, datos MYM, Excel maestro ni BeautyOS.
+
+Pruebas específicas D03: 13 tests, 68 aserciones. Regresión relacionada adicional: 54 tests, 300 aserciones. Build Vite, Pint focalizado y `git diff --check` correctos.
 
 ## D04 — Productos + múltiples códigos de barras
 Pendiente y bloqueado hasta contratos de plantilla D01 aprobados.
@@ -96,7 +113,7 @@ Pendiente.
 Pendiente.
 
 ## D09 — Exportadores esenciales
-Pendiente.
+Pendiente; siguiente fase ejecutable autorizada mientras D04–D08 esperan contratos MYM.
 
 ## D10 — Reportes esenciales
 Pendiente.

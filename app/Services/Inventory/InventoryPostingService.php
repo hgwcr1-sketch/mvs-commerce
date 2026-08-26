@@ -3,6 +3,7 @@
 namespace App\Services\Inventory;
 
 use App\Data\Purchases\PurchaseLineData;
+use App\Models\Branch;
 use App\Models\InventoryLot;
 use App\Models\InventoryMovement;
 use App\Models\LoyaltyRewardRedemption;
@@ -16,6 +17,63 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryPostingService
 {
+    public function postImportMovement(
+        Branch $branch,
+        Product $product,
+        int $userId,
+        string $movementType,
+        float $quantity,
+        float $minimumStock,
+        float $maximumStock,
+    ): InventoryMovement {
+        if ($branch->company_id !== $product->company_id || ! in_array($movementType, ['entry', 'exit'], true) || $quantity <= 0) {
+            throw ValidationException::withMessages(['inventory' => 'El movimiento de importación no es válido.']);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => $minimumStock,
+            'maximum_stock' => $maximumStock,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $stock = DB::table('branch_product')->where('branch_id', $branch->id)
+            ->where('product_id', $product->id)->lockForUpdate()->first();
+        if ($stock === null) {
+            throw ValidationException::withMessages(['inventory' => 'No se pudo obtener el inventario de la sucursal.']);
+        }
+
+        $previousStock = (float) $stock->stock;
+        $newStock = round($movementType === 'entry' ? $previousStock + $quantity : $previousStock - $quantity, 4);
+        if ($newStock < 0) {
+            throw ValidationException::withMessages(['inventory' => 'La salida no puede dejar el inventario con stock negativo.']);
+        }
+
+        DB::table('branch_product')->where('id', $stock->id)->update([
+            'stock' => $newStock,
+            'minimum_stock' => $minimumStock,
+            'maximum_stock' => $maximumStock,
+            'updated_at' => now(),
+        ]);
+
+        return InventoryMovement::create([
+            'company_id' => $branch->company_id,
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'user_id' => $userId,
+            'type' => $movementType,
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Importación de inventario',
+            'reference_type' => 'inventory_import',
+            'notes' => 'Movimiento generado por importación Excel.',
+        ]);
+    }
+
     public function postSale(Sale $sale, Product $product, float $quantity): InventoryMovement
     {
         if ($quantity <= 0 || $sale->company_id !== $product->company_id) {

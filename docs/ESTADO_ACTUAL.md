@@ -63,10 +63,10 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 - **D00 — Auditoría existente: COMPLETADO.**
 - **D01 — Contratos de plantillas MYM: EN CURSO EN PARALELO.** No bloqueó el shell y sigue siendo obligatorio antes de crear importadores nuevos dependientes de formatos reales.
 - **D02 — Centro de Datos base: COMPLETADO.** Entrada única mobile-first con Inicio, Importar, Exportar y Reportes; permisos existentes por capacidad y una sola entrada en la navegación compartida.
-- Importar enlaza sin duplicar: Compras Excel → pantalla actual de Compras, Compras XML → flujo XML actual e Inventario → prototipo existente con advertencia D03.
+- **D03 — Caracterización Compras + blindaje Inventario: COMPLETADO.** Compras Excel/XML quedó cubierta directamente sin reemplazar su lógica; POST XML protegido. Inventario ahora valida y previsualiza sin mutar, usa stock/barcodes reales, resuelve catálogo por empresa y confirma transaccionalmente mediante `InventoryPostingService` con `inventario.ajustar`.
 - Exportar y Reportes son espacios base, sin exportadores ni reportes de negocio anticipados.
 - Evidencia: `DataCenterShellTest` 6/6 (47 aserciones), regresión navegación/Compras 39/39 (210 aserciones), build Vite y `git diff --check` correctos.
-- **SIGUIENTE: D03 — Caracterización Compras + blindaje Inventario**, pero no iniciarlo sin revisión de D02.
+- D04–D08 permanecen pendientes de contratos/plantillas MYM de D01. **SIGUIENTE EJECUTABLE AUTORIZADA: D09 — Exportadores esenciales.**
 
 ---
 
@@ -99,7 +99,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Centro de Datos: D00 y D02 completados; D01 continúa en paralelo con plantillas MYM. D03 es la siguiente fase, detenida para revisión de D02.
+- Centro de Datos: D00, D02 y D03 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D09 es la siguiente fase ejecutable autorizada.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).

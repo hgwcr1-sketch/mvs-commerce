@@ -842,7 +842,7 @@ Antes de continuar una fase nueva, revisar:
 
 ## Centro de Datos
 
-Estado: D00 y D02 COMPLETADOS; D01 EN CURSO EN PARALELO.
+Estado: D00, D02 y D03 COMPLETADOS; D01 EN CURSO EN PARALELO.
 
 ### D02 — Centro de Datos base: COMPLETADO
 
@@ -858,7 +858,17 @@ Estado: D00 y D02 COMPLETADOS; D01 EN CURSO EN PARALELO.
 
 Evidencia: `DataCenterShellTest` (6 tests, 47 aserciones); regresión `ResponsiveNavigationTest` + Compras/Órdenes/Proveedor (39 tests, 210 aserciones); `npm run build`, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase: **D03 — Caracterización Compras + blindaje Inventario**, pendiente de revisión explícita de D02. D01 continúa en paralelo y sigue bloqueando importadores nuevos dependientes de plantillas reales.
+### D03 — Caracterización Compras + blindaje Inventario: COMPLETADO
+
+- Compras quedó caracterizado sin duplicar sus lectores, manager ni `PurchaseProcessor`: Excel, XML, plantilla, middleware, review y confirmación tienen pruebas directas; el único defecto funcional corregido fue el middleware faltante del POST XML.
+- Inventario conserva el flujo y la plantilla existentes, pero su lógica segura vive en `InventoryImportService`: preview sin escrituras, stock real, resolución por `products` y `product_barcodes`, catálogo por empresa y validación completa de filas.
+- La confirmación requiere `inventario.ajustar`, respeta empresa/sucursal y `inventario.ver_otras_sucursales`, es transaccional y publica stock/movimiento mediante `InventoryPostingService`, rechazando stock negativo incluso ante concurrencia.
+- Productos nuevos ya no usan IDs fijos; resuelven categoría/unidad/marca existentes y registran `ProductBarcode` sin aceptar conflictos ni duplicados.
+- No se modificaron plantillas, `PurchaseProcessor`, Excel maestro, datos MYM ni BeautyOS.
+
+Evidencia: `PurchaseImportCharacterizationTest` + `InventoryImportHardeningTest` (13 tests, 68 aserciones); `DataCenterShellTest` y regresión Compras/Inventario relacionada (54 tests, 300 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+D01 continúa en paralelo. D04–D08 siguen pendientes de contratos/plantillas MYM; la siguiente fase ejecutable autorizada que no fija esos contratos es **D09 — Exportadores esenciales**.
 
 ---
 
