@@ -900,7 +900,16 @@ Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones); regresión POS/
 
 Evidencia: `SaleReceiptMailTest` + `SaleReceiptProductionTest` (9 tests, 53 aserciones); regresión correo de caja/ventas (50 tests, 238 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P06 — Fidelización en todos los comprobantes**.
+### P06 — Fidelización en todos los comprobantes: COMPLETADO
+
+- `LoyaltySaleReceiptService` consulta exclusivamente los movimientos reales ligados a la venta y entrega snapshots de puntos ganados, utilizados, saldo anterior y saldo final.
+- La sección se presenta solo cuando la venta tiene cliente y movimientos aplicables, en 80 mm, 58 mm, carta y PDF; Blade se limita a presentar el resultado del servicio.
+- Reimpresión y PDF no mutan el kardex. Si existe reversión por anulación/devolución vinculada, el saldo final real se muestra con una advertencia de ajuste posterior.
+- El correo P05 hereda automáticamente la misma información porque adjunta el PDF común de P04.
+
+Evidencia: P04–P06 (12 tests, 82 aserciones); regresión real POS/Loyalty, canje, pagos mixtos, anulaciones y devoluciones (79 tests, 573 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P07A — Portal de Clientes — experiencia del cliente**.
 
 ---
 

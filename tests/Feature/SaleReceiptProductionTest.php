@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Customer;
+use App\Models\LoyaltyAccount;
+use App\Models\LoyaltyMovement;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Role;
@@ -71,6 +74,53 @@ class SaleReceiptProductionTest extends TestCase
 
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('ventas.index'))
             ->assertOk()->assertSee(route('pos.receipt', $sale), false)->assertSee('Reimprimir');
+    }
+
+    public function test_all_receipt_formats_use_persisted_loyalty_movement_snapshots(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        $this->attachLoyalty($sale, $company, $branch, $user);
+
+        foreach (['80mm', '58mm', 'letter'] as $format) {
+            $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+                ->get(route('pos.receipt', $sale).'?format='.$format)
+                ->assertOk()->assertSee('Fidelización')->assertSee('Puntos ganados')
+                ->assertSee('+50,00')->assertSee('-200,00')->assertSee('1.000,00')->assertSee('850,00');
+        }
+    }
+
+    public function test_receipt_without_customer_does_not_show_loyalty_section(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $sale))->assertOk()->assertDontSee('Puntos ganados');
+    }
+
+    public function test_reprint_and_pdf_do_not_mutate_kardex_and_reflect_void_adjustment_balance(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        [$account, $last] = $this->attachLoyalty($sale, $company, $branch, $user);
+        LoyaltyMovement::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'loyalty_account_id' => $account->id, 'customer_id' => $sale->customer_id, 'user_id' => $user->id, 'type' => LoyaltyMovement::TYPE_VOID, 'points' => 200, 'balance_before' => 850, 'balance_after' => 1050, 'description' => 'Reversión', 'source_type' => Sale::class, 'source_id' => $sale->id, 'related_movement_id' => $last->id, 'event_key' => "sale:{$sale->id}:void", 'effective_at' => now()]);
+        $count = LoyaltyMovement::count();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $sale))->assertOk()->assertSee('saldo ajustado posteriormente')->assertSee('1.050,00');
+        $this->get(route('pos.receipt.pdf', $sale))->assertOk();
+
+        $this->assertSame($count, LoyaltyMovement::count());
+        $this->assertSame('1050.0000', (string) LoyaltyMovement::latest('id')->first()->balance_after);
+    }
+
+    private function attachLoyalty(Sale $sale, Company $company, Branch $branch, User $user): array
+    {
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente fiel', 'is_active' => true]);
+        $sale->update(['customer_id' => $customer->id]);
+        $account = LoyaltyAccount::create(['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => 850, 'total_earned' => 50, 'total_redeemed' => 200, 'is_active' => true]);
+        LoyaltyMovement::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'loyalty_account_id' => $account->id, 'customer_id' => $customer->id, 'user_id' => $user->id, 'type' => LoyaltyMovement::TYPE_REDEMPTION, 'points' => -200, 'balance_before' => 1000, 'balance_after' => 800, 'description' => 'Canje', 'source_type' => Sale::class, 'source_id' => $sale->id, 'event_key' => "sale:{$sale->id}:redeem", 'effective_at' => now()]);
+        $earned = LoyaltyMovement::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'loyalty_account_id' => $account->id, 'customer_id' => $customer->id, 'user_id' => $user->id, 'type' => LoyaltyMovement::TYPE_PURCHASE, 'points' => 50, 'balance_before' => 800, 'balance_after' => 850, 'description' => 'Ganancia', 'source_type' => Sale::class, 'source_id' => $sale->id, 'event_key' => "sale:{$sale->id}:earn", 'effective_at' => now()]);
+
+        return [$account, $earned];
     }
 
     private function context(): array

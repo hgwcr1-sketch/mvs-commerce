@@ -41,6 +41,18 @@
         @endforeach
         </tbody>
     </table>
+    @if($loyalty ?? null)
+        <div class="rule"></div>
+        <section aria-label="Fidelización">
+            <p><strong>Fidelización</strong>@if($loyalty['adjusted']) — saldo ajustado posteriormente @endif</p>
+            <table>
+                <tr><td>Puntos ganados</td><td>+{{ number_format((float) $loyalty['earned'], 2, ',', '.') }}</td></tr>
+                <tr><td>Puntos utilizados</td><td>-{{ number_format((float) $loyalty['redeemed'], 2, ',', '.') }}</td></tr>
+                <tr><td>Saldo anterior</td><td>{{ number_format((float) $loyalty['balance_before'], 2, ',', '.') }}</td></tr>
+                <tr><td>Saldo actual</td><td><strong>{{ number_format((float) $loyalty['balance_after'], 2, ',', '.') }}</strong></td></tr>
+            </table>
+        </section>
+    @endif
     <div class="rule"></div>
     <table class="totals">
         <tr><td>Subtotal</td><td>₡{{ number_format((float) $sale->subtotal, 0, ',', '.') }}</td></tr>

@@ -70,7 +70,7 @@ Enviar comprobante desde la venta y reenviar desde historial. Auditar y reutiliz
 
 Implementado reutilizando el comprobante/PDF P04 y la infraestructura Laravel Mail existente. Permite envío desde el comprobante y reenvío desde el detalle histórico, valida destinatario y conserva la venta confirmada ante fallos de transporte. Evidencia: `SaleReceiptMailTest` (4 tests) y regresión de correo/caja/ventas (50 tests, 238 aserciones).
 
-### P06 — Fidelización en todos los comprobantes
+### P06 — Fidelización en todos los comprobantes — COMPLETADO
 Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
 - puntos ganados;
 - puntos utilizados;
@@ -79,9 +79,11 @@ Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
 
 Consumir el resultado real del módulo de fidelización; no recalcular puntos en la vista.
 
-**Estado:** SIGUIENTE.
+Implementado desde los movimientos persistidos del kardex asociados a la venta. Todos los formatos y el PDF muestran ganados, utilizados, saldo anterior y saldo actual cuando aplica, sin mutar ni recalcular reglas de fidelización; las anulaciones reflejan el último snapshot y advierten el ajuste. Evidencia: P04–P06 (12 tests, 82 aserciones) y regresión POS/Loyalty/devoluciones/anulaciones (79 tests, 573 aserciones).
 
 ### P07A — Portal de Clientes — experiencia del cliente
+
+**Estado:** SIGUIENTE.
 
 #### Regla de alcance
 El portal pertenece a la **empresa (`company_id`)**, nunca a una sucursal.

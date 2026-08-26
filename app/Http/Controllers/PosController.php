@@ -439,8 +439,9 @@ class PosController extends Controller
         $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
         $format = $receipts->format($sale, $request->query('format'));
         $autoPrint = $request->boolean('print') || $sale->branch->receipt_auto_print;
+        $loyalty = $receipts->loyaltySummary($sale);
 
-        return view('pos.receipt', compact('sale', 'company', 'format', 'autoPrint'));
+        return view('pos.receipt', compact('sale', 'company', 'format', 'autoPrint', 'loyalty'));
     }
 
     public function receiptPdf(Request $request, Sale $sale, SaleReceiptService $receipts)

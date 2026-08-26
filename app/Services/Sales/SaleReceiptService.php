@@ -5,12 +5,15 @@ namespace App\Services\Sales;
 use App\Models\Company;
 use App\Models\Sale;
 use App\Models\User;
+use App\Services\Loyalty\LoyaltySaleReceiptService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as DomPdf;
 
 class SaleReceiptService
 {
     public const FORMATS = ['80mm', '58mm', 'letter'];
+
+    public function __construct(private readonly LoyaltySaleReceiptService $loyalty) {}
 
     public function authorizedSale(Sale $sale, User $user, int $companyId, int $branchId): Sale
     {
@@ -37,9 +40,15 @@ class SaleReceiptService
             'format' => $format,
             'autoPrint' => false,
             'pdfMode' => true,
+            'loyalty' => $this->loyalty->forSale($sale),
         ]);
         $pdf->setPaper($format === 'letter' ? 'letter' : [0, 0, $format === '58mm' ? 164.41 : 226.77, 841.89]);
 
         return $pdf;
+    }
+
+    public function loyaltySummary(Sale $sale): ?array
+    {
+        return $this->loyalty->forSale($sale);
     }
 }
