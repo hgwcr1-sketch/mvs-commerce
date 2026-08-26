@@ -42,8 +42,12 @@ Reportes **NO** tendrá una entrada independiente en el sidebar.
 ### P00 — Login profesional MVS Commerce
 Rediseñar el login azul actual con identidad MVS Commerce moderna, limpia y responsive. Preservar autenticación y seguridad.
 
+**Estado: COMPLETADO.** Login, recuperación y restablecimiento comparten una identidad MVS profesional mobile-first; se conservaron autenticación, usuarios activos, rate limiting, sesiones y reglas de contraseña. Evidencia: `ProfessionalAuthExperienceTest` 5/5 (32 aserciones), regresión de usuarios/navegación 14/14 (50 aserciones), build Vite y `git diff --check` correctos.
+
 ### P01 — Panel Maestro MVS / Superadmin
 Dashboard privado del propietario de MVS para administrar empresas, sucursales, usuarios, estado, módulos y configuración. Aislamiento multiempresa estricto.
+
+**Estado: SIGUIENTE.**
 
 ### P02 — Módulos por empresa
 Permitir activar/desactivar módulos contratados por empresa. Separar módulos contratados de permisos de usuarios.

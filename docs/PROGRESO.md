@@ -840,6 +840,21 @@ Antes de continuar una fase nueva, revisar:
 
 ---
 
+## Puesta en Producción
+
+### P00 — Login profesional MVS Commerce: COMPLETADO
+
+- Login, recuperación y restablecimiento de contraseña reutilizan un solo shell visual con marca MVS Commerce y el logotipo existente.
+- Diseño mobile-first: una columna a 360 px, espaciado progresivo a 768 px y composición de dos paneles a 1280 px; controles táctiles de al menos 44 px.
+- Se preservaron controladores, CSRF, autenticación de usuarios activos, sesión regenerada, recordarme, rate limiting, notificación de recuperación y reglas fuertes de contraseña.
+- Errores y estados se presentan de forma accesible; los controles para mostrar contraseña mantienen estado ARIA.
+
+Evidencia: `ProfessionalAuthExperienceTest` (5 tests, 32 aserciones), regresión `UserRoleSecurityTest` + `ResponsiveNavigationTest` (14 tests, 50 aserciones), build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase: **P01 — Panel Maestro MVS / Superadmin**.
+
+---
+
 ## Centro de Datos
 
 Estado: D00, D02, D03, D09 y D10 COMPLETADOS; D01 EN CURSO EN PARALELO.
