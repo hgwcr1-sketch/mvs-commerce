@@ -872,7 +872,17 @@ Evidencia: `PlatformAdminTest` (6 tests, 41 aserciones); regresión con `Company
 
 Evidencia: `CompanyModuleAccessTest` (5 tests, 15 aserciones); regresión Panel Maestro, roles y navegación (27 tests, 110 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase: **P03 — Onboarding nueva empresa + sucursales**.
+### P03 — Onboarding nueva empresa + sucursales: COMPLETADO
+
+- Asistente mobile-first de siete pasos desde el Panel Maestro: empresa, identidad/logo, sucursales, administrador, módulos, configuración y finalización.
+- Reutiliza `CompanyProvisioner`, `PaymentMethodProvisioner`, `CompanyCashSettingsProvisioner` y `CashDenominationProvisioner`; no existe una ruta especial para MYM.
+- Una transacción crea administrador, empresa, rol con permisos, múltiples sucursales, asignaciones, contrato de módulos y configuración. El administrador queda listo para entrar y operar según sus módulos.
+- Valida identificación empresarial, correo del administrador y códigos de sucursal duplicados. Ante fallo revierte todos los registros y elimina el logo almacenado.
+- UI una columna a 360 px, progresión a siete indicadores en 768/1280, campos de ancho completo y controles táctiles.
+
+Evidencia: `CompanyOnboardingTest` (4 tests, 30 aserciones); regresión P00–P03 (34 tests, 164 aserciones); caja/métodos de pago aprovisionados (55 tests, 183 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P04 — Impresión POS y comprobantes**. No iniciada por límite expreso de esta sesión.
 
 ---
 

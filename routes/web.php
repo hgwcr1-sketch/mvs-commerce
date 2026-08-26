@@ -127,6 +127,8 @@ Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
 
 Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform.admin'])->group(function () {
     Route::get('/', [PlatformAdminController::class, 'index'])->name('index');
+    Route::get('/empresas-nueva', [PlatformAdminController::class, 'createCompany'])->name('companies.create');
+    Route::post('/empresas', [PlatformAdminController::class, 'storeCompany'])->name('companies.store');
     Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
     Route::patch('/empresas/{company}', [PlatformAdminController::class, 'updateCompany'])->name('companies.update');
     Route::patch('/empresas/{company}/sucursales/{branch}', [PlatformAdminController::class, 'updateBranch'])->name('branches.update');

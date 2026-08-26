@@ -2,7 +2,7 @@
 @section('title', 'Empresas')
 @section('content')
 <div class="space-y-6" data-platform-dashboard>
-    <header><p class="text-sm font-bold uppercase tracking-wide text-amber-700">Propietario de plataforma</p><h1 class="mt-1 text-2xl font-bold sm:text-3xl">Empresas en MVS Commerce</h1><p class="mt-2 text-sm text-slate-600">Vista administrativa global. Los datos operativos permanecen dentro de cada empresa.</p></header>
+    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold uppercase tracking-wide text-amber-700">Propietario de plataforma</p><h1 class="mt-1 text-2xl font-bold sm:text-3xl">Empresas en MVS Commerce</h1><p class="mt-2 text-sm text-slate-600">Vista administrativa global. Los datos operativos permanecen dentro de cada empresa.</p></div><a href="{{ route('platform.companies.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-5 font-bold text-slate-950">Nueva empresa</a></header>
     <section class="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumen">
         @foreach(['companies' => 'Empresas', 'active_companies' => 'Activas', 'branches' => 'Sucursales', 'users' => 'Usuarios'] as $key => $label)
             <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-xs font-bold uppercase text-slate-500">{{ $label }}</p><p class="mt-2 text-2xl font-bold">{{ $totals[$key] }}</p></article>

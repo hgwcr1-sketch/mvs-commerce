@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P02 COMPLETADOS**. Login MVS, Panel Maestro global y contratos de módulos por empresa están operativos; módulo y permiso de usuario son controles separados. **SIGUIENTE: P03 — Onboarding nueva empresa + sucursales.**
+- Puesta en Producción: **P00–P03 COMPLETADOS**. Login MVS, Panel Maestro, contratos de módulos y onboarding transaccional multiempresa/multisucursal están operativos. **SIGUIENTE: P04 — Impresión POS y comprobantes; no iniciado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
