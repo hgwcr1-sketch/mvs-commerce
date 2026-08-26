@@ -56,6 +56,7 @@ use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductSupplierController;
+use App\Http\Controllers\ProfessionalController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseImportController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -602,6 +603,14 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         ->middlewareFor(['create', 'store'], 'permission:usuarios.crear')
         ->middlewareFor(['edit', 'update'], 'permission:usuarios.editar')
         ->middlewareFor(['destroy'], 'permission:usuarios.eliminar');
+
+    Route::resource('profesionales', ProfessionalController::class)
+        ->parameters(['profesionales' => 'professional'])
+        ->names('professionals')
+        ->middlewareFor(['index', 'show'], 'permission:profesionales.ver')
+        ->middlewareFor(['create', 'store'], 'permission:profesionales.crear')
+        ->middlewareFor(['edit', 'update'], 'permission:profesionales.editar')
+        ->middlewareFor(['destroy'], 'permission:profesionales.eliminar');
 
     Route::resource('roles', RoleController::class)
         ->middlewareFor(['index', 'show'], 'permission:roles.ver')

@@ -53,6 +53,16 @@ class Professional extends Model
         return $query->where('company_id', $companyId);
     }
 
+    public function scopeForBranch(Builder $query, int $companyId, int $branchId): Builder
+    {
+        return $query->whereIn('professionals.id', function ($subquery) use ($companyId, $branchId): void {
+            $subquery->select('professional_id')
+                ->from('professional_branch')
+                ->where('company_id', $companyId)
+                ->where('branch_id', $branchId);
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

@@ -136,6 +136,12 @@ class PermissionSeeder extends Seeder
             ['name' => 'usuarios.desactivar', 'label' => 'Activar o desactivar usuarios', 'module' => 'Usuarios'],
             ['name' => 'usuarios.eliminar', 'label' => 'Retirar usuarios de la empresa', 'module' => 'Usuarios'],
 
+            // BeautyOS — Profesionales
+            ['name' => 'profesionales.ver', 'label' => 'Ver profesionales', 'module' => 'BeautyOS'],
+            ['name' => 'profesionales.crear', 'label' => 'Crear profesionales', 'module' => 'BeautyOS'],
+            ['name' => 'profesionales.editar', 'label' => 'Editar profesionales', 'module' => 'BeautyOS'],
+            ['name' => 'profesionales.eliminar', 'label' => 'Eliminar perfiles profesionales', 'module' => 'BeautyOS'],
+
             // Roles y permisos
             ['name' => 'roles.ver', 'label' => 'Ver roles', 'module' => 'Roles y Permisos'],
             ['name' => 'roles.crear', 'label' => 'Crear roles', 'module' => 'Roles y Permisos'],

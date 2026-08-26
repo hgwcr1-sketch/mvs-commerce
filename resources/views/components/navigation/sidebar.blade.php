@@ -252,6 +252,14 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     @endcan
 
 
+    @can('profesionales.ver')
+        <x-navigation.item
+            route="professionals.index"
+            icon="users"
+            label="Profesionales"
+            :active="request()->routeIs('professionals.*')" />
+    @endcan
+
     {{-- ADMINISTRACIÓN --}}
     @canany(['usuarios.ver', 'roles.ver'])
 
