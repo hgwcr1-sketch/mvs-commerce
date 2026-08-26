@@ -882,7 +882,16 @@ Evidencia: `CompanyModuleAccessTest` (5 tests, 15 aserciones); regresión Panel 
 
 Evidencia: `CompanyOnboardingTest` (4 tests, 30 aserciones); regresión P00–P03 (34 tests, 164 aserciones); caja/métodos de pago aprovisionados (55 tests, 183 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P04 — Impresión POS y comprobantes**. No iniciada por límite expreso de esta sesión.
+### P04 — Impresión POS y comprobantes: COMPLETADO
+
+- Comprobante profesional MVS reutilizable en térmica 80 mm, térmica 58 mm y formato carta, con TOTAL destacado y adaptación mobile-first.
+- Descarga PDF generada desde la misma vista, sin duplicar la composición ni incorporar datos ajenos al modelo real.
+- Reimpresión conservada desde historial de ventas; el acceso valida empresa, sucursal activa, módulo Ventas y creador o permiso `ventas.ver`.
+- Cada sucursal puede definir formato predeterminado y autoimpresión mediante el diálogo nativo del navegador; una migración aditiva conserva 80 mm como valor seguro para sucursales existentes.
+
+Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones); regresión POS/ventas/caja (29 tests, 172 aserciones); configuración/Panel Maestro (11 tests, 74 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P05 — Correo de comprobantes**.
 
 ---
 

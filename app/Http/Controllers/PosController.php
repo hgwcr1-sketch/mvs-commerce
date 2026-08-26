@@ -6,8 +6,8 @@ use App\Http\Requests\QuickStoreCustomerRequest;
 use App\Http\Requests\ResuspendSaleRequest;
 use App\Http\Requests\StorePosSaleRequest;
 use App\Http\Requests\StoreSuspendedSaleRequest;
-use App\Models\Branch;
 use App\Models\AccountReceivable;
+use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
@@ -15,9 +15,13 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
-use App\Services\Sales\PosSaleProcessor;
+use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
+use App\Services\PaymentMethodProvisioner;
+use App\Services\Sales\PosSaleProcessor;
+use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +37,7 @@ class PosController extends Controller
         $branchId = (int) session('active_branch_id');
 
         $company = Company::query()->findOrFail($companyId);
-        app(\App\Services\PaymentMethodProvisioner::class)->provision($company);
+        app(PaymentMethodProvisioner::class)->provision($company);
         $branch = Branch::query()
             ->where('company_id', $companyId)
             ->findOrFail($branchId);
@@ -41,7 +45,7 @@ class PosController extends Controller
             ->active()
             ->ordered()
             ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference']);
-        $cashSettings = app(\App\Services\CompanyCashSettingsProvisioner::class)->provision($company);
+        $cashSettings = app(CompanyCashSettingsProvisioner::class)->provision($company);
         $cashSessions = $cashSessionResolver->applicable($request->user(), $companyId, $branchId);
         $cashSession = $cashSessions->count() === 1 ? $cashSessions->first() : null;
 
@@ -104,13 +108,13 @@ class PosController extends Controller
                 'products.barcode',
                 'products.image',
                 'products.sale_price',
-'products.special_price',
-'products.wholesale_price',
-'products.price_a',
-'products.price_b',
-'products.price_c',
-'products.tax_rate',
-'products.track_inventory',
+                'products.special_price',
+                'products.wholesale_price',
+                'products.price_a',
+                'products.price_b',
+                'products.price_c',
+                'products.tax_rate',
+                'products.track_inventory',
             ])
             ->addSelect([
                 'available_stock' => DB::table('branch_product')
@@ -174,23 +178,23 @@ class PosController extends Controller
                 'matched_barcode' => $matchedBarcode,
                 'sale_price' => (float) ($product->special_price ?? $product->sale_price),
                 'is_offer' => $product->special_price !== null,
-'wholesale_price' => $product->wholesale_price !== null
-    ? (float) $product->wholesale_price
-    : null,
-'price_a' => $product->price_a !== null
-    ? (float) $product->price_a
-    : null,
-'price_b' => $product->price_b !== null
-    ? (float) $product->price_b
-    : null,
-'price_c' => $product->price_c !== null
-    ? (float) $product->price_c
-    : null,
-'tax_rate' => (float) ($product->tax_rate ?? 0),'controls_inventory' => (bool) $product->track_inventory,
+                'wholesale_price' => $product->wholesale_price !== null
+                    ? (float) $product->wholesale_price
+                    : null,
+                'price_a' => $product->price_a !== null
+                    ? (float) $product->price_a
+                    : null,
+                'price_b' => $product->price_b !== null
+                    ? (float) $product->price_b
+                    : null,
+                'price_c' => $product->price_c !== null
+                    ? (float) $product->price_c
+                    : null,
+                'tax_rate' => (float) ($product->tax_rate ?? 0), 'controls_inventory' => (bool) $product->track_inventory,
                 'available_stock' => $availableStock,
                 'unit' => $product->unit?->abbreviation,
                 'allows_decimals' => (bool) $product->unit?->allows_decimals,
-                'can_add_to_cart' => !$product->track_inventory || $availableStock > 0,
+                'can_add_to_cart' => ! $product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
                 'image_url' => $hasImage ? asset('storage/'.$imagePath) : null,
             ];
@@ -242,8 +246,8 @@ class PosController extends Controller
                 'email',
                 'customer_type',
                 'credit_limit',
-'credit_days',
-'price_level',
+                'credit_days',
+                'price_level',
             ]);
 
         return response()->json($customers->map(fn (Customer $customer) => [
@@ -255,10 +259,10 @@ class PosController extends Controller
             'email' => $customer->email,
             'customer_type' => $customer->customer_type,
             'credit_limit' => (float) $customer->credit_limit,
-'credit_days' => (int) ($customer->credit_days ?? 0),
-'credit_used' => (float) AccountReceivable::query()->forCompany((int) session('active_company_id'))->where('customer_id',$customer->id)->whereNotIn('status',[AccountReceivable::STATUS_PAID,AccountReceivable::STATUS_CANCELLED])->sum('balance_due'),
-'credit_due_date' => (int) ($customer->credit_days ?? 0) > 0 ? today()->addDays((int)$customer->credit_days)->toDateString() : null,
-'price_level' => $customer->price_level ?? 'normal',
+            'credit_days' => (int) ($customer->credit_days ?? 0),
+            'credit_used' => (float) AccountReceivable::query()->forCompany((int) session('active_company_id'))->where('customer_id', $customer->id)->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])->sum('balance_due'),
+            'credit_due_date' => (int) ($customer->credit_days ?? 0) > 0 ? today()->addDays((int) $customer->credit_days)->toDateString() : null,
+            'price_level' => $customer->price_level ?? 'normal',
         ])->values());
     }
 
@@ -277,25 +281,25 @@ class PosController extends Controller
             'email' => $data['email'] ?? null,
             'accepts_email_invoice' => false,
             'credit_limit' => 0,
-'credit_days' => 0,
-'price_level' => 'normal',
-'points' => 0,
-'is_active' => true,
+            'credit_days' => 0,
+            'price_level' => 'normal',
+            'points' => 0,
+            'is_active' => true,
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Cliente creado correctamente.',
             'customer' => [
-    'id' => $customer->id,
-    'name' => $customer->name,
-    'identification' => $customer->identification,
-    'phone' => $customer->phone,
-    'mobile' => $customer->mobile,
-    'email' => $customer->email,
-    'customer_type' => $customer->customer_type,
-    'price_level' => $customer->price_level,
-],
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'identification' => $customer->identification,
+                'phone' => $customer->phone,
+                'mobile' => $customer->mobile,
+                'email' => $customer->email,
+                'customer_type' => $customer->customer_type,
+                'price_level' => $customer->price_level,
+            ],
         ], 201);
     }
 
@@ -375,12 +379,14 @@ class PosController extends Controller
     public function storeSuspended(StoreSuspendedSaleRequest $request, SuspendedSaleService $service): JsonResponse
     {
         $sale = $service->suspend($request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+
         return response()->json(['success' => true, 'message' => "Venta {$sale->suspension_number} suspendida correctamente.", 'suspended_sale' => $sale], 201);
     }
 
     public function suspendedIndex(Request $request, SuspendedSaleService $service): JsonResponse
     {
         $sales = $service->list($request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+
         return response()->json($sales->map(fn (SuspendedSale $sale) => [
             'id' => $sale->id, 'suspension_number' => $sale->suspension_number,
             'suspended_at' => $sale->suspended_at?->toIso8601String(), 'cashier' => $sale->user->name,
@@ -392,6 +398,7 @@ class PosController extends Controller
     public function recoverSuspended(Request $request, SuspendedSale $suspendedSale, SuspendedSaleService $service): JsonResponse
     {
         $data = $request->validate(['recovery_token' => ['nullable', 'uuid']]);
+
         return response()->json($service->claimForRecovery($suspendedSale, $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'), $data['recovery_token'] ?? null));
     }
 
@@ -403,6 +410,7 @@ class PosController extends Controller
         }
         $data = $validator->validated();
         $service->cancel($suspendedSale, $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'), $data['reason']);
+
         return response()->json(['success' => true, 'message' => 'Venta suspendida cancelada correctamente.']);
     }
 
@@ -425,24 +433,28 @@ class PosController extends Controller
         ]);
     }
 
-    public function receipt(Request $request, Sale $sale): View
+    public function receipt(Request $request, Sale $sale, SaleReceiptService $receipts): View
     {
         $companyId = (int) session('active_company_id');
-
-        if ((int) $sale->company_id !== $companyId) {
-            abort(404);
-        }
-
         $company = Company::query()->findOrFail($companyId);
-        $isCreator = (int) $sale->user_id === (int) $request->user()->id;
+        $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
+        $format = $receipts->format($sale, $request->query('format'));
+        $autoPrint = $request->boolean('print') || $sale->branch->receipt_auto_print;
 
-        if (!$isCreator && !$request->user()->hasPermission('ventas.ver', $company)) {
-            abort(403);
-        }
+        return view('pos.receipt', compact('sale', 'company', 'format', 'autoPrint'));
+    }
 
-        $sale->load(['branch', 'user', 'customer', 'items', 'payments.paymentMethod', 'cashSession.cashRegister']);
+    public function receiptPdf(Request $request, Sale $sale, SaleReceiptService $receipts)
+    {
+        $companyId = (int) session('active_company_id');
+        $company = Company::query()->findOrFail($companyId);
+        $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
+        $format = $receipts->format($sale, $request->query('format', 'letter'));
+        $autoPrint = false;
+        $pdf = Pdf::loadView('pos.receipt', compact('sale', 'company', 'format', 'autoPrint') + ['pdfMode' => true]);
+        $pdf->setPaper($format === 'letter' ? 'letter' : [0, 0, $format === '58mm' ? 164.41 : 226.77, 841.89]);
 
-        return view('pos.receipt', compact('sale', 'company'));
+        return $pdf->download("comprobante-{$sale->sale_number}.pdf");
     }
 
     private function safeProductImagePath(?string $image): ?string
@@ -453,7 +465,7 @@ class PosController extends Controller
 
         $path = str_replace('\\', '/', trim($image));
 
-        if ($path === '' || !str_starts_with($path, 'products/') || str_contains($path, '..')) {
+        if ($path === '' || ! str_starts_with($path, 'products/') || str_contains($path, '..')) {
             return null;
         }
 

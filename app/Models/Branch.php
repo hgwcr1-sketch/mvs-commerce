@@ -16,10 +16,13 @@ class Branch extends Model
         'phone',
         'address',
         'is_active',
+        'receipt_format',
+        'receipt_auto_print',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'receipt_auto_print' => 'boolean',
     ];
 
     public function company(): BelongsTo

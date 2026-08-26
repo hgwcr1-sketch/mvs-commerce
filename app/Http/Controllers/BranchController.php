@@ -87,9 +87,12 @@ class BranchController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:500'],
             'is_active' => ['nullable', 'boolean'],
+            'receipt_format' => ['sometimes', Rule::in(['80mm', '58mm', 'letter'])],
+            'receipt_auto_print' => ['nullable', 'boolean'],
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['receipt_auto_print'] = $request->boolean('receipt_auto_print');
 
         $branch->update($validated);
 

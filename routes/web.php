@@ -171,8 +171,11 @@ Route::middleware(['auth', 'active.company'])->group(function () {
             Route::post('/pos/suspendidas/{suspendedSale}/volver-a-suspender', [PosController::class, 'resuspendSale'])->name('pos.suspended.resuspend');
             Route::post('/pos/suspendidas/{suspendedSale}/cancelar', [PosController::class, 'cancelSuspended'])->middleware('permission:ventas.anular')->name('pos.suspended.cancel');
         });
-        Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])
-            ->name('pos.receipt');
+    });
+
+    Route::middleware('active.branch')->group(function () {
+        Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])->name('pos.receipt');
+        Route::get('/pos/ventas/{sale}/comprobante.pdf', [PosController::class, 'receiptPdf'])->name('pos.receipt.pdf');
     });
 
     Route::middleware('active.branch')->group(function () {

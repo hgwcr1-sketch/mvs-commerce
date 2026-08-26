@@ -94,6 +94,18 @@
                       class="w-full rounded-xl border-slate-300">{{ old('address', $branch->address) }}</textarea>
         </div>
 
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h2 class="font-semibold text-slate-800">Comprobantes de venta</h2>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label class="text-sm font-semibold text-slate-700">Formato predeterminado
+                    <select name="receipt_format" class="mt-2 min-h-11 w-full rounded-xl border-slate-300">
+                        @foreach(['80mm' => 'Térmico 80 mm', '58mm' => 'Térmico 58 mm', 'letter' => 'Comprobante grande'] as $value => $label)<option value="{{ $value }}" @selected(old('receipt_format', $branch->receipt_format) === $value)>{{ $label }}</option>@endforeach
+                    </select>
+                </label>
+                <label class="flex min-h-11 items-center gap-3 self-end text-sm font-semibold text-slate-700"><input type="checkbox" name="receipt_auto_print" value="1" @checked(old('receipt_auto_print', $branch->receipt_auto_print)) class="h-5 w-5 rounded border-slate-300"> Abrir diálogo de impresión automáticamente</label>
+            </div>
+        </div>
+
         <div class="flex items-center gap-3 pt-4 border-t border-slate-200">
 
             <button type="submit"

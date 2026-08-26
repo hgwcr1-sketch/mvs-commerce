@@ -51,7 +51,7 @@ Permitir activar/desactivar módulos contratados por empresa. Separar módulos c
 ### P03 — Onboarding nueva empresa + sucursales
 Asistente para datos de empresa, logo, información fiscal/comercial, sucursales, administrador, módulos y configuración inicial.
 
-### P04 — Impresión POS y comprobantes
+### P04 — Impresión POS y comprobantes — COMPLETADO
 Auditar primero lo existente. Soportar:
 - térmica 80 mm;
 - térmica 58 mm;
@@ -63,8 +63,12 @@ Auditar primero lo existente. Soportar:
 
 La fotografía entregada por el usuario es **solo referencia conceptual**. No copiar el diseño ni sus datos. El diseño final debe ser MVS Commerce. El **TOTAL debe verse grande y en negrita**. No incluir elementos manuscritos o accidentales de la foto.
 
+Implementado con un comprobante MVS único y reutilizable en 80 mm, 58 mm y carta, descarga PDF, reimpresión desde historial, formato/autoimpresión configurables por sucursal y autorización por empresa, sucursal, módulo y permiso. Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones), regresión relacionada (29 tests, 172 aserciones) y build Vite correctos.
+
 ### P05 — Correo de comprobantes
 Enviar comprobante desde la venta y reenviar desde historial. Auditar y reutilizar PDF/correo existente antes de construir.
+
+**Estado:** SIGUIENTE.
 
 ### P06 — Fidelización en todos los comprobantes
 Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
