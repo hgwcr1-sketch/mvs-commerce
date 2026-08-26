@@ -34,6 +34,7 @@
             </div>
         </div>
         <p class="mt-4 truncate border-t border-white/10 pt-3 text-sm text-slate-300">{{ $customer->name }}</p>
+        @if($portalSetting->welcome_message)<p class="mt-3 text-sm text-slate-200">{{ $portalSetting->welcome_message }}</p>@endif
         @if($customerAuthenticated ?? false)
             <form method="POST" action="{{ route('loyalty.customer.logout', $company) }}" class="mt-3">@csrf<button class="min-h-10 text-sm font-semibold text-amber-300">Cerrar sesión</button></form>
         @endif

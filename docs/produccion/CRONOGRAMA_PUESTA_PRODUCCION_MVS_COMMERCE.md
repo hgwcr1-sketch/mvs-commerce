@@ -182,7 +182,7 @@ P07A amplía el portal F30–F35 sin crear saldos paralelos: acceso company+clie
 
 ### P07B — Gestión de Portal de Clientes
 
-**Estado:** SIGUIENTE.
+**Estado:** COMPLETADO.
 
 **Ubicación obligatoria:** `Sidebar → Fidelización → Portal de Clientes`.
 
@@ -220,8 +220,12 @@ Un **Cajero** o **Vendedor** puede recibir permiso para crear/publicar promocion
 
 Para este alcance se reutiliza el sistema de usuarios + roles + permisos existente. **No crear un módulo separado de Vendedores** únicamente para P07B.
 
+Implementado como una sola entrada `Fidelización → Portal de Clientes`, fuera del Panel Maestro. Incluye resumen, publicaciones CRUD con vigencia/orden/destacado y producto opcional, enlaces/CTA, configuración/autoofertas, accesos y vista previa. Los permisos `fidelidad.portal.ver`, `.configurar`, `.contenido` y `.enlaces` separan capacidades; los permisos anteriores de accesos/promociones siguen compatibles sin duplicar entradas. Evidencia: `LoyaltyPortalManagementTest` y regresión portal/roles/navegación (46 tests, 320 aserciones), build Vite correcto.
+
 ### P08 — Dominio, servidor provisional y backups
 Preparar acceso estable para San Ramón y Liberia. PC de San Ramón puede ser servidor provisional con HTTPS estable, servicios de arranque, sin suspensión, backups automáticos y recuperación probada. Diseñar para migrar posteriormente a VPS.
+
+**Estado:** SIGUIENTE; no autorizado en esta sesión.
 
 ### P09 — Primera empresa real: MYM Beauty Center
 Crear MYM mediante el mismo mecanismo del producto:

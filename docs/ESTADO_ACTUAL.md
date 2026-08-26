@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07A COMPLETADOS**. El portal de cliente por empresa incluye acceso/recuperación, saldo consolidado, vigencia/mínimos reales, movimientos/compras multisucursal, contenido, CTA, PDF/correo y perfil. **SIGUIENTE: P07B — Gestión de Portal de Clientes.**
+- Puesta en Producción: **P00–P07B COMPLETADOS**. Portal del cliente y administración empresarial están operativos con una sola entrada, catálogo reutilizado, contenidos/CTA/configuración y permisos granulares. **SIGUIENTE: P08 — Dominio, servidor provisional y backups; no iniciado por límite expreso.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

@@ -919,7 +919,17 @@ Evidencia: P04–P06 (12 tests, 82 aserciones); regresión real POS/Loyalty, can
 
 Evidencia: `LoyaltyCustomerPortalProductionTest` + portal/acceso/QR/P05 (29 tests, 228 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P07B — Gestión de Portal de Clientes**.
+### P07B — Gestión de Portal de Clientes: COMPLETADO
+
+- Una sola entrada `Fidelización → Portal de Clientes`; los accesos y promociones anteriores permanecen reutilizables desde la interfaz, pero ya no ocupan entradas separadas del sidebar.
+- Dashboard/resumen, publicaciones, productos destacados, enlaces/botones, configuración y vista previa se organizan en una interfaz mobile-first con targets táctiles y grids 360/768/1280.
+- Publicaciones permiten crear, editar, eliminar, activar, programar vigencia, ordenar y destacar; admiten producto real opcional (nombre/imagen/precio/oferta se leen del catálogo) o mensaje/imagen propia.
+- La opción empresarial “Mostrar ofertas activas automáticamente” controla la consulta real del catálogo. Los CTA aceptan web, compra, catálogo/WhatsApp u otro HTTPS válido sin destinos hardcodeados.
+- Permisos separados: `fidelidad.portal.ver`, `fidelidad.portal.configurar`, `fidelidad.portal.contenido` y `fidelidad.portal.enlaces`. Un usuario con contenido no obtiene configuración ni enlaces; no se creó un módulo Vendedores.
+
+Evidencia: `LoyaltyPortalManagementTest` + regresión portal/acceso/QR/promociones/roles/navegación (46 tests, 320 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P08 — Dominio, servidor provisional y backups**. No iniciada por prohibición expresa de esta sesión.
 
 ---
 

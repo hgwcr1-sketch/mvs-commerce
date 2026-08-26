@@ -46,6 +46,7 @@ use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
 use App\Http\Controllers\LoyaltyPortalSessionController;
+use App\Http\Controllers\LoyaltyPortalManagementController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
@@ -432,6 +433,17 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::get('/portal/{cliente}', [LoyaltyCustomerPortalController::class, 'show'])
             ->middleware('permission:fidelidad.ver')
             ->name('portal.show');
+        Route::prefix('portal-clientes')->name('portal-management.')->group(function () {
+            Route::get('/', [LoyaltyPortalManagementController::class, 'index'])->name('index');
+            Route::get('/vista-previa/{customer}', [LoyaltyPortalManagementController::class, 'preview'])->middleware('permission:fidelidad.portal.ver')->name('preview');
+            Route::put('/configuracion', [LoyaltyPortalManagementController::class, 'updateSetting'])->middleware('permission:fidelidad.portal.configurar')->name('settings.update');
+            Route::post('/publicaciones', [LoyaltyPortalManagementController::class, 'storePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.store');
+            Route::put('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'updatePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.update');
+            Route::delete('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'destroyPost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.destroy');
+            Route::post('/enlaces', [LoyaltyPortalManagementController::class, 'storeLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.store');
+            Route::put('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'updateLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.update');
+            Route::delete('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'destroyLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.destroy');
+        });
         Route::get('/oportunidades', [LoyaltyOpportunityController::class, 'index'])->middleware('permission:fidelidad.oportunidades')->name('opportunities.index');
         Route::post('/oportunidades/{customer}/contactar', [LoyaltyOpportunityController::class, 'contact'])->middleware('permission:fidelidad.contactar')->name('opportunities.contact');
         Route::get('/configuracion', [SettingController::class, 'loyaltySettings'])->middleware('permission:fidelidad.configuracion')->name('settings');

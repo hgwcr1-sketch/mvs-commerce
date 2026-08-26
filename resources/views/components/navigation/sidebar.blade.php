@@ -234,7 +234,7 @@
 
     {{-- FIDELIZACIÓN --}}
     <div class="nav-desktop-group">
-    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.ajustes', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes', 'fidelidad.portal', 'fidelidad.promociones'])
+    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.ajustes', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes', 'fidelidad.portal', 'fidelidad.promociones', 'fidelidad.portal.ver', 'fidelidad.portal.configurar', 'fidelidad.portal.contenido', 'fidelidad.portal.enlaces'])
         <x-navigation.dropdown icon="users" label="Fidelización" :active="request()->routeIs('loyalty.*')">
             @can('fidelidad.dashboard')
                 <x-navigation.submenu route="loyalty.dashboard" label="Dashboard" />
@@ -260,12 +260,9 @@
             @can('fidelidad.ajustes')
                 <x-navigation.submenu route="loyalty.adjustments.index" label="Ajustes de puntos" />
             @endcan
-            @can('fidelidad.portal')
-                <x-navigation.submenu route="loyalty.accesses.index" label="Accesos al portal" />
-            @endcan
-            @can('fidelidad.promociones')
-                <x-navigation.submenu route="loyalty.promotions.index" label="Promociones del portal" />
-            @endcan
+            @canany(['fidelidad.portal.ver', 'fidelidad.portal.configurar', 'fidelidad.portal.contenido', 'fidelidad.portal.enlaces', 'fidelidad.portal', 'fidelidad.promociones'])
+                <x-navigation.submenu route="loyalty.portal-management.index" label="Portal de Clientes" />
+            @endcanany
             @can('configuracion.editar')
                 <x-navigation.submenu route="configuracion.index" label="Configuración" />
             @endcan

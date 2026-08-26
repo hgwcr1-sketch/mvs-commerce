@@ -10,6 +10,7 @@ use App\Models\LoyaltyMultiplier;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\LoyaltyPortalLink;
 use App\Models\LoyaltyPortalPost;
+use App\Models\LoyaltyPortalSetting;
 use App\Models\LoyaltyReward;
 use App\Models\LoyaltySetting;
 use App\Models\Product;
@@ -47,11 +48,12 @@ class LoyaltyCustomerPortalService
 
         $balancePoints = (string) ($account->balance ?? '0.0000');
         $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
+        $portalSetting = LoyaltyPortalSetting::query()->firstOrNew(['company_id' => $company->id], ['is_active' => true, 'show_active_offers' => true]);
 
         return [
             'company' => $company,
             'customer' => $customer,
-            'module_active' => $moduleActive,
+            'module_active' => $moduleActive && $portalSetting->is_active,
             'balance_points' => $balancePoints,
             'total_earned' => (string) ($account->total_earned ?? '0.0000'),
             'total_redeemed' => (string) ($account->total_redeemed ?? '0.0000'),
@@ -63,11 +65,12 @@ class LoyaltyCustomerPortalService
             'redemption' => $account ? $this->eligibility->evaluate($account, $company) : null,
             'expiration' => $this->expiration($company, $setting, $account),
             'sales' => $this->sales((int) $company->id, (int) $customer->id),
-            'offers' => Product::query()->where('company_id', $company->id)->where('is_active', true)->whereNotNull('special_price')->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']),
+            'offers' => $portalSetting->show_active_offers ? Product::query()->where('company_id', $company->id)->where('is_active', true)->whereNotNull('special_price')->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']) : new Collection,
             'recommended' => $this->recommended((int) $company->id, (int) $customer->id),
             'credentialExists' => LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->exists(),
             'posts' => LoyaltyPortalPost::query()->where('company_id', $company->id)->where('is_active', true)->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))->with('product:id,company_id,name,image,sale_price,special_price')->orderByDesc('is_featured')->orderBy('sort_order')->get(),
             'portalLinks' => LoyaltyPortalLink::query()->where('company_id', $company->id)->where('is_active', true)->orderBy('sort_order')->get(),
+            'portalSetting' => $portalSetting,
         ];
     }
 

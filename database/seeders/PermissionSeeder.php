@@ -176,6 +176,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'fidelidad.ajustes', 'label' => 'Ajustar manualmente puntos de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.portal', 'label' => 'Administrar accesos al portal de Fidelidad', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.promociones', 'label' => 'Administrar promociones del portal de Fidelidad', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.portal.ver', 'label' => 'Ver y previsualizar Portal de Clientes', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.portal.configurar', 'label' => 'Configurar Portal de Clientes', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.portal.contenido', 'label' => 'Gestionar contenido del Portal de Clientes', 'module' => 'Fidelidad'],
+            ['name' => 'fidelidad.portal.enlaces', 'label' => 'Gestionar enlaces del Portal de Clientes', 'module' => 'Fidelidad'],
         ];
 
         foreach ($permissions as $permission) {
