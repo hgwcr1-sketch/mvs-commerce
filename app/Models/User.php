@@ -16,6 +16,7 @@ use Illuminate\Notifications\Notifiable;
     'photo',
     'password',
     'is_active',
+    'is_platform_admin',
     'last_login_at',
 ])]
 
@@ -34,6 +35,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_platform_admin' => 'boolean',
             'password' => 'hashed',
         ];
     }
@@ -50,6 +52,11 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->is_active;
+    }
+
+    public function isPlatformAdmin(): bool
+    {
+        return $this->is_active && $this->is_platform_admin;
     }
 
     public function updateLastLogin(): void
@@ -117,7 +124,7 @@ class User extends Authenticatable
             ->where('companies.id', $company->id)
             ->first();
 
-        if (!$companyAccess || !$companyAccess->pivot->role_id) {
+        if (! $companyAccess || ! $companyAccess->pivot->role_id) {
             return null;
         }
 
@@ -129,7 +136,7 @@ class User extends Authenticatable
     {
         $role = $this->roleInCompany($company);
 
-        if (!$role || !$role->is_active) {
+        if (! $role || ! $role->is_active) {
             return false;
         }
 

@@ -47,10 +47,12 @@ Rediseñar el login azul actual con identidad MVS Commerce moderna, limpia y res
 ### P01 — Panel Maestro MVS / Superadmin
 Dashboard privado del propietario de MVS para administrar empresas, sucursales, usuarios, estado, módulos y configuración. Aislamiento multiempresa estricto.
 
-**Estado: SIGUIENTE.**
+**Estado: COMPLETADO.** Panel global separado del contexto operativo, protegido por administrador de plataforma activo. Permite consultar empresas y sus conteos, editar configuración/estado, administrar estado de sucursales y usuarios y revisar roles/accesos sin cruzar tenants. El comando `platform:admin` concede o revoca el acceso sin editar la base manualmente. Evidencia: `PlatformAdminTest` 6/6 (41 aserciones), regresión de aprovisionamiento/roles 20/20 (87 aserciones), build Vite y `git diff --check` correctos.
 
 ### P02 — Módulos por empresa
 Permitir activar/desactivar módulos contratados por empresa. Separar módulos contratados de permisos de usuarios.
+
+**Estado: SIGUIENTE.**
 
 ### P03 — Onboarding nueva empresa + sucursales
 Asistente para datos de empresa, logo, información fiscal/comercial, sucursales, administrador, módulos y configuración inicial.

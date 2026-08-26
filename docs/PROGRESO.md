@@ -851,7 +851,18 @@ Antes de continuar una fase nueva, revisar:
 
 Evidencia: `ProfessionalAuthExperienceTest` (5 tests, 32 aserciones), regresión `UserRoleSecurityTest` + `ResponsiveNavigationTest` (14 tests, 50 aserciones), build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase: **P01 — Panel Maestro MVS / Superadmin**.
+### P01 — Panel Maestro MVS / Superadmin: COMPLETADO
+
+- Panel privado global en `/panel-maestro`, fuera del middleware de empresa activa y del shell operativo, protegido por `platform.admin`.
+- La identidad `is_platform_admin` es global y distinta de roles/permisos empresariales; exige además que la cuenta permanezca activa.
+- Dashboard de empresas con búsqueda y conteos de sucursales/usuarios; detalle administrativo con configuración básica, estados de empresa/sucursal/usuario y roles existentes.
+- Las rutas anidadas verifican que sucursal y usuario pertenezcan a la empresa indicada; nunca consultan ventas, inventario ni otros datos operativos.
+- `platform:admin correo` y `--revoke` administran el acceso inicial sin credenciales, correos o clientes hardcodeados.
+- La sección de módulos no simula habilitaciones: remite correctamente a P02.
+
+Evidencia: `PlatformAdminTest` (6 tests, 41 aserciones); regresión con `CompanyProvisioningTest` + `UserRoleSecurityTest` (20 tests, 87 aserciones en conjunto); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase: **P02 — Módulos por empresa**.
 
 ---
 

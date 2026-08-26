@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\EnsureActiveBranch;
+use App\Http\Middleware\EnsureActiveCompany;
+use App\Http\Middleware\EnsurePlatformAdmin;
+use App\Http\Middleware\PermissionMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,11 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
 
         $middleware->alias([
-            'active.company' => \App\Http\Middleware\EnsureActiveCompany::class,
+            'active.company' => EnsureActiveCompany::class,
 
-            'active.branch' => \App\Http\Middleware\EnsureActiveBranch::class,
+            'active.branch' => EnsureActiveBranch::class,
 
-            'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+            'permission' => PermissionMiddleware::class,
+
+            'platform.admin' => EnsurePlatformAdmin::class,
         ]);
 
     })

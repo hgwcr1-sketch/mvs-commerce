@@ -28,9 +28,9 @@ use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DataImportController;
-use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataCenterController;
+use App\Http\Controllers\DataExportController;
+use App\Http\Controllers\DataImportController;
 // Compras
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
@@ -38,9 +38,9 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
 // Ventas
 use App\Http\Controllers\LayawayController;
-use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
+use App\Http\Controllers\LoyaltyDashboardController;
 use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
@@ -51,6 +51,7 @@ use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\PlatformAdminController;
 // Finanzas
 use App\Http\Controllers\PosController;
 // Administración
@@ -123,6 +124,14 @@ Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::c
 Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
     ->middleware('auth')
     ->name('branch.active.update');
+
+Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform.admin'])->group(function () {
+    Route::get('/', [PlatformAdminController::class, 'index'])->name('index');
+    Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
+    Route::patch('/empresas/{company}', [PlatformAdminController::class, 'updateCompany'])->name('companies.update');
+    Route::patch('/empresas/{company}/sucursales/{branch}', [PlatformAdminController::class, 'updateBranch'])->name('branches.update');
+    Route::patch('/empresas/{company}/usuarios/{user}', [PlatformAdminController::class, 'updateUser'])->name('users.update');
+});
 
 Route::middleware(['auth', 'active.company'])->group(function () {
 
