@@ -2,6 +2,7 @@
 
 namespace App\Services\Loyalty;
 
+use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyMovement;
@@ -38,6 +39,11 @@ class LoyaltyRegistrationIncentiveService
                 'bypass_redemption_minimum' => false,
                 'expiration_enabled' => false,
                 'expiration_days' => null,
+                'participating_branch_ids' => null,
+                'allow_offer_products' => true,
+                'maximum_discount_enabled' => false,
+                'maximum_discount_amount' => '0.0000',
+                'stacking_allowed' => true,
             ],
         );
     }
@@ -74,6 +80,16 @@ class LoyaltyRegistrationIncentiveService
             throw ValidationException::withMessages(['expiration_days' => 'La vigencia debe ser un número entero entre 1 y 3650 días.']);
         }
 
+        $branchIds = array_key_exists('participating_branch_ids', $rules)
+            ? $rules['participating_branch_ids']
+            : $setting->participating_branch_ids;
+        $branchIds = $this->validateBranchIds($company, $branchIds);
+        $maximumDiscountEnabled = (bool) ($rules['maximum_discount_enabled'] ?? $setting->maximum_discount_enabled ?? false);
+        $maximumDiscountAmount = $this->nonNegativeDecimal($rules['maximum_discount_amount'] ?? $setting->maximum_discount_amount ?? '0');
+        if ($maximumDiscountEnabled && bccomp($maximumDiscountAmount, '0', 4) <= 0) {
+            throw ValidationException::withMessages(['maximum_discount_amount' => 'El descuento máximo debe ser mayor que cero.']);
+        }
+
         $setting->update([
             'is_enabled' => $enabled,
             'benefit_type' => $this->validateType($benefitType),
@@ -85,6 +101,11 @@ class LoyaltyRegistrationIncentiveService
             'bypass_redemption_minimum' => (bool) ($rules['bypass_redemption_minimum'] ?? $setting->bypass_redemption_minimum ?? false),
             'expiration_enabled' => $expirationEnabled,
             'expiration_days' => $expirationEnabled ? (int) $expirationDays : null,
+            'participating_branch_ids' => $branchIds,
+            'allow_offer_products' => (bool) ($rules['allow_offer_products'] ?? $setting->allow_offer_products ?? true),
+            'maximum_discount_enabled' => $maximumDiscountEnabled,
+            'maximum_discount_amount' => $maximumDiscountEnabled ? $maximumDiscountAmount : '0.0000',
+            'stacking_allowed' => (bool) ($rules['stacking_allowed'] ?? $setting->stacking_allowed ?? true),
         ]);
 
         return $setting->fresh();
@@ -135,6 +156,9 @@ class LoyaltyRegistrationIncentiveService
             if (! $this->meetsMinimum($setting, (string) $lockedSale->total)) {
                 return null;
             }
+            if (! $this->settingAllowsSale($setting, $lockedSale)) {
+                return null;
+            }
 
             return $this->award(
                 $customer,
@@ -156,12 +180,18 @@ class LoyaltyRegistrationIncentiveService
         string|int $purchaseAmount,
         CarbonInterface|string|null $at = null,
         ?int $currentSaleId = null,
+        array $context = [],
     ): array {
         $this->validateCustomerCompany($customer, $company);
         $amount = $this->positiveDecimal($purchaseAmount);
         $instant = $this->localInstant($company, $at)->utc();
 
-        return DB::transaction(function () use ($customer, $company, $amount, $instant, $currentSaleId) {
+        $branchId = isset($context['branch_id']) ? (int) $context['branch_id'] : null;
+        $hasOffers = (bool) ($context['has_offers'] ?? $context['is_offer'] ?? false);
+        $existingDiscount = $this->nonNegativeDecimal($context['existing_discount_amount'] ?? '0');
+        $this->validateEvaluationBranch($company, $branchId);
+
+        return DB::transaction(function () use ($customer, $company, $amount, $instant, $currentSaleId, $branchId, $hasOffers, $existingDiscount) {
             $claim = LoyaltyRegistrationIncentiveClaim::query()
                 ->where('company_id', $company->id)
                 ->where('customer_id', $customer->id)
@@ -189,15 +219,27 @@ class LoyaltyRegistrationIncentiveService
             if (! $claim->allow_on_first_purchase && ! $this->hasPreviousCompletedPurchase($customer, $company, $currentSaleId)) {
                 return $this->evaluation(false, 'first_purchase_not_allowed', $claim);
             }
+            if ($claim->participating_branch_ids !== null && ($branchId === null || ! in_array($branchId, $claim->participating_branch_ids, true))) {
+                return $this->evaluation(false, 'branch_not_participating', $claim);
+            }
+            if ($hasOffers && ! $claim->allow_offer_products) {
+                return $this->evaluation(false, 'offer_products_not_allowed', $claim);
+            }
+            if (bccomp($existingDiscount, '0', 4) > 0 && ! $claim->stacking_allowed) {
+                return $this->evaluation(false, 'stacking_not_allowed', $claim);
+            }
 
             $discountAmount = '0.0000';
             if ($claim->benefit_type === LoyaltyRegistrationIncentive::TYPE_PERCENTAGE) {
                 $discountAmount = $this->percentageOf($amount, (string) $claim->benefit_value);
             } elseif ($claim->benefit_type === LoyaltyRegistrationIncentive::TYPE_FIXED) {
-                if (bccomp((string) $claim->benefit_value, $amount, 4) > 0) {
-                    return $this->evaluation(false, 'discount_exceeds_purchase', $claim);
-                }
                 $discountAmount = (string) $claim->benefit_value;
+            }
+            if ($claim->maximum_discount_amount !== null && bccomp($discountAmount, (string) $claim->maximum_discount_amount, 4) > 0) {
+                $discountAmount = (string) $claim->maximum_discount_amount;
+            }
+            if (bccomp($discountAmount, $amount, 4) > 0) {
+                return $this->evaluation(false, 'discount_exceeds_purchase', $claim);
             }
 
             return $this->evaluation(true, null, $claim, $discountAmount);
@@ -211,9 +253,17 @@ class LoyaltyRegistrationIncentiveService
         ?int $saleId = null,
         CarbonInterface|string|null $at = null,
         ?string $discountAmount = null,
+        array $context = [],
     ): LoyaltyRegistrationIncentiveClaim {
         $this->validateCustomerCompany($customer, $company);
         $instant = $this->localInstant($company, $at)->utc();
+        if (! array_key_exists('purchase_amount', $context)) {
+            throw ValidationException::withMessages(['purchase_amount' => 'Debe validar la compra antes de consumir el incentivo.']);
+        }
+        $evaluation = $this->evaluateForPurchase($customer, $company, $context['purchase_amount'], $at, $saleId, $context);
+        if (! $evaluation['eligible'] || (int) $evaluation['claim_id'] !== $claimId) {
+            throw ValidationException::withMessages(['incentive' => 'El incentivo no es elegible para esta compra.']);
+        }
 
         return DB::transaction(function () use ($claimId, $customer, $company, $saleId, $instant, $discountAmount) {
             $claim = LoyaltyRegistrationIncentiveClaim::query()
@@ -293,7 +343,49 @@ class LoyaltyRegistrationIncentiveService
             'qualification_sale_id' => $qualificationSale?->id,
             'available_at' => $availableAt->utc(),
             'expires_at' => $expiresAt,
+            'participating_branch_ids' => $setting->participating_branch_ids,
+            'allow_offer_products' => $setting->allow_offer_products,
+            'maximum_discount_amount' => $setting->maximum_discount_enabled ? $setting->maximum_discount_amount : null,
+            'stacking_allowed' => $setting->stacking_allowed,
         ]);
+    }
+
+    private function settingAllowsSale(LoyaltyRegistrationIncentive $setting, Sale $sale): bool
+    {
+        if ($setting->participating_branch_ids !== null && ! in_array((int) $sale->branch_id, $setting->participating_branch_ids, true)) {
+            return false;
+        }
+        if (! $setting->allow_offer_products && $sale->items()->where('is_offer', true)->exists()) {
+            return false;
+        }
+
+        return $setting->stacking_allowed || bccomp((string) $sale->discount_total, '0', 4) === 0;
+    }
+
+    private function validateBranchIds(Company $company, mixed $branchIds): ?array
+    {
+        if ($branchIds === null) {
+            return null;
+        }
+        if (! is_array($branchIds) || $branchIds === []) {
+            throw ValidationException::withMessages(['participating_branch_ids' => 'Seleccione al menos una sucursal participante.']);
+        }
+
+        $normalized = array_values(array_unique(array_map('intval', $branchIds)));
+        if (Branch::query()->where('company_id', $company->id)->whereIn('id', $normalized)->count() !== count($normalized)) {
+            throw ValidationException::withMessages(['participating_branch_ids' => 'Una sucursal no pertenece a la empresa.']);
+        }
+
+        sort($normalized);
+
+        return $normalized;
+    }
+
+    private function validateEvaluationBranch(Company $company, ?int $branchId): void
+    {
+        if ($branchId !== null && ! Branch::query()->where('company_id', $company->id)->whereKey($branchId)->exists()) {
+            throw ValidationException::withMessages(['branch_id' => 'La sucursal no pertenece a la empresa.']);
+        }
     }
 
     private function meetsMinimum(LoyaltyRegistrationIncentive $setting, string $purchaseAmount): bool

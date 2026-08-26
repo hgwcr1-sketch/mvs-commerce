@@ -131,7 +131,7 @@
     <x-card>
         <x-slot:header>
             <div>
-                <h2 class="text-lg font-semibold text-slate-800">Incentivo de registro (P14–P15)</h2>
+                <h2 class="text-lg font-semibold text-slate-800">Incentivo de registro</h2>
                 <p class="text-sm text-slate-500">Define el beneficio que se concede una sola vez por cliente al registrarse.</p>
             </div>
         </x-slot:header>
@@ -199,6 +199,28 @@
                     <input id="registration_expiration_days" name="expiration_days" type="number" inputmode="numeric" min="1" max="3650" step="1" value="{{ old('expiration_days', $registrationIncentive->expiration_days) }}" class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-right text-sm tabular-nums outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
                     @error('expiration_days')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
+            </div>
+            <fieldset class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <legend class="px-1 text-sm font-semibold text-slate-700">Sucursales participantes</legend>
+                <label class="flex min-h-11 items-center gap-3"><input type="radio" name="branch_scope" value="all" @checked(old('branch_scope', $registrationIncentive->participating_branch_ids === null ? 'all' : 'selected') === 'all') class="h-5 w-5 text-amber-500 focus:ring-amber-400"><span>Todas las sucursales</span></label>
+                <label class="flex min-h-11 items-center gap-3"><input type="radio" name="branch_scope" value="selected" @checked(old('branch_scope', $registrationIncentive->participating_branch_ids === null ? 'all' : 'selected') === 'selected') class="h-5 w-5 text-amber-500 focus:ring-amber-400"><span>Solo las seleccionadas</span></label>
+                @php($selectedIncentiveBranches = array_map('intval', old('participating_branch_ids', $registrationIncentive->participating_branch_ids ?? [])))
+                <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                    @foreach($registrationIncentiveBranches as $branch)
+                        <label class="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3"><input type="checkbox" name="participating_branch_ids[]" value="{{ $branch->id }}" @checked(in_array($branch->id, $selectedIncentiveBranches, true)) class="h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span>{{ $branch->name }}</span></label>
+                    @endforeach
+                </div>
+                @error('participating_branch_ids')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                @error('participating_branch_ids.*')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </fieldset>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><input type="hidden" name="allow_offer_products" value="0"><label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="allow_offer_products" value="1" @checked(old('allow_offer_products', $registrationIncentive->allow_offer_products)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">Permitir productos en oferta</span><span class="block text-sm text-slate-500">Si se bloquea, una venta con al menos una línea en oferta no califica.</span></span></label></div>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><input type="hidden" name="stacking_allowed" value="0"><label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="stacking_allowed" value="1" @checked(old('stacking_allowed', $registrationIncentive->stacking_allowed)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">Permitir combinabilidad</span><span class="block text-sm text-slate-500">Autoriza combinar el incentivo con otros descuentos de la venta.</span></span></label></div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="maximum_discount_enabled" value="0">
+                <label class="flex min-h-11 items-start gap-3"><input type="checkbox" name="maximum_discount_enabled" value="1" @checked(old('maximum_discount_enabled', $registrationIncentive->maximum_discount_enabled)) class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500 focus:ring-amber-400"><span><span class="block font-semibold text-slate-800">Limitar descuento del incentivo</span><span class="block text-sm text-slate-500">El beneficio porcentual o fijo se topa en este monto.</span></span></label>
+                <div class="mt-3"><label for="registration_maximum_discount_amount" class="mb-1 block text-sm font-semibold text-slate-700">Descuento máximo</label><input id="registration_maximum_discount_amount" name="maximum_discount_amount" type="number" inputmode="decimal" min="0.0001" step="0.0001" value="{{ $dec(old('maximum_discount_amount', $registrationIncentive->maximum_discount_amount)) }}" class="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-right text-sm tabular-nums outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">@error('maximum_discount_amount')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
             </div>
             <button type="submit" class="min-h-11 rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar incentivo</button>
         </form>

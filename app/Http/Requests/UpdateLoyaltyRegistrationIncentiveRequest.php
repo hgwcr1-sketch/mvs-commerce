@@ -21,6 +21,12 @@ class UpdateLoyaltyRegistrationIncentiveRequest extends FormRequest
             'bypass_redemption_minimum' => $setting?->bypass_redemption_minimum ?? false,
             'expiration_enabled' => $setting?->expiration_enabled ?? false,
             'expiration_days' => $setting?->expiration_days,
+            'branch_scope' => $setting?->participating_branch_ids === null ? 'all' : 'selected',
+            'participating_branch_ids' => $setting?->participating_branch_ids ?? [],
+            'allow_offer_products' => $setting?->allow_offer_products ?? true,
+            'maximum_discount_enabled' => $setting?->maximum_discount_enabled ?? false,
+            'maximum_discount_amount' => $setting?->maximum_discount_amount ?? '0',
+            'stacking_allowed' => $setting?->stacking_allowed ?? true,
         ];
 
         $missing = [];
@@ -70,6 +76,21 @@ class UpdateLoyaltyRegistrationIncentiveRequest extends FormRequest
             'expiration_days' => $this->boolean('expiration_enabled')
                 ? ['required', 'integer', 'min:1', 'max:3650']
                 : ['nullable', 'prohibited'],
+            'branch_scope' => ['required', Rule::in(['all', 'selected'])],
+            'participating_branch_ids' => [Rule::requiredIf($this->input('branch_scope') === 'selected'), 'array'],
+            'participating_branch_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('branches', 'id')->where('company_id', (int) session('active_company_id')),
+            ],
+            'allow_offer_products' => ['required', 'boolean'],
+            'maximum_discount_enabled' => ['required', 'boolean'],
+            'maximum_discount_amount' => [
+                Rule::requiredIf($this->boolean('maximum_discount_enabled')),
+                'nullable', 'numeric', 'min:0', 'lte:999999999999999.9999', 'decimal:0,4',
+                Rule::when($this->boolean('maximum_discount_enabled'), ['gt:0']),
+            ],
+            'stacking_allowed' => ['required', 'boolean'],
         ];
     }
 

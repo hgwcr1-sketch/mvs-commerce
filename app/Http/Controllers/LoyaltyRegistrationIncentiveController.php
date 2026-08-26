@@ -25,6 +25,13 @@ class LoyaltyRegistrationIncentiveController extends Controller
                 'bypass_redemption_minimum' => $request->boolean('bypass_redemption_minimum'),
                 'expiration_enabled' => $request->boolean('expiration_enabled'),
                 'expiration_days' => $request->validated('expiration_days'),
+                'participating_branch_ids' => $request->validated('branch_scope') === 'all'
+                    ? null
+                    : $request->validated('participating_branch_ids'),
+                'allow_offer_products' => $request->boolean('allow_offer_products'),
+                'maximum_discount_enabled' => $request->boolean('maximum_discount_enabled'),
+                'maximum_discount_amount' => $request->validated('maximum_discount_amount') ?? '0',
+                'stacking_allowed' => $request->boolean('stacking_allowed'),
             ],
         );
 

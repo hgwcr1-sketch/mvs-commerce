@@ -507,6 +507,7 @@ class PosSaleProcessor
                             'effective_at' => $sale->completed_at,
                             'metadata' => ['sale_number' => $sale->sale_number],
                             'is_offer' => $hasOffers,
+                            'existing_discount_amount' => (string) $sale->discount_total,
                         ],
                     );
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateLoyaltySettingRequest;
+use App\Models\Branch;
 use App\Models\LoyaltySetting;
 use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use Illuminate\Http\RedirectResponse;
@@ -29,8 +30,13 @@ class LoyaltyRuleCenterController extends Controller
             ?? new LoyaltySetting(['company_id' => $companyId] + self::DEFAULTS);
 
         $registrationIncentive = $incentives->settingForCompanyId($companyId);
+        $registrationIncentiveBranches = Branch::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
-        return view('loyalty.rules.index', ['loyaltySetting' => $loyaltySetting, 'registrationIncentive' => $registrationIncentive]);
+        return view('loyalty.rules.index', compact('loyaltySetting', 'registrationIncentive', 'registrationIncentiveBranches'));
     }
 
     public function update(UpdateLoyaltySettingRequest $request): RedirectResponse

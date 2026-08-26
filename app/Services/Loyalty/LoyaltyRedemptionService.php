@@ -58,6 +58,11 @@ class LoyaltyRedemptionService
                 $eligibleAmount,
                 $context['effective_at'] ?? null,
                 ($context['source_type'] ?? null) === Sale::class ? ($context['source_id'] ?? null) : null,
+                [
+                    'branch_id' => $context['branch_id'] ?? (is_object($context['branch'] ?? null) ? $context['branch']->id : ($context['branch'] ?? null)),
+                    'has_offers' => (bool) ($context['is_offer'] ?? false),
+                    'existing_discount_amount' => $context['existing_discount_amount'] ?? '0',
+                ],
             );
             $bypassMinimum = $incentive['eligible']
                 && $incentive['benefit_type'] === LoyaltyRegistrationIncentive::TYPE_POINTS
@@ -113,6 +118,13 @@ class LoyaltyRedemptionService
                     $company,
                     ($context['source_type'] ?? null) === Sale::class ? ($context['source_id'] ?? null) : null,
                     $context['effective_at'] ?? null,
+                    null,
+                    [
+                        'purchase_amount' => $eligibleAmount,
+                        'branch_id' => $context['branch_id'] ?? (is_object($context['branch'] ?? null) ? $context['branch']->id : ($context['branch'] ?? null)),
+                        'has_offers' => (bool) ($context['is_offer'] ?? false),
+                        'existing_discount_amount' => $context['existing_discount_amount'] ?? '0',
+                    ],
                 );
             }
 

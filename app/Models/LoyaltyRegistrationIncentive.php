@@ -26,6 +26,8 @@ class LoyaltyRegistrationIncentive extends Model
         'minimum_purchase_enabled', 'minimum_purchase_amount', 'award_timing',
         'allow_on_first_purchase', 'bypass_redemption_minimum',
         'expiration_enabled', 'expiration_days',
+        'participating_branch_ids', 'allow_offer_products',
+        'maximum_discount_enabled', 'maximum_discount_amount', 'stacking_allowed',
     ];
 
     protected $casts = [
@@ -37,6 +39,11 @@ class LoyaltyRegistrationIncentive extends Model
         'bypass_redemption_minimum' => 'boolean',
         'expiration_enabled' => 'boolean',
         'expiration_days' => 'integer',
+        'participating_branch_ids' => 'array',
+        'allow_offer_products' => 'boolean',
+        'maximum_discount_enabled' => 'boolean',
+        'maximum_discount_amount' => 'decimal:4',
+        'stacking_allowed' => 'boolean',
     ];
 
     public function company(): BelongsTo
