@@ -785,6 +785,16 @@ Evidencia: ejecución completa y reproducción aislada sobre `ba8a2c8`; sin camb
 
 Evidencia: `LoyaltyUiUsabilityTest` (2 tests, 15 aserciones); validación focalizada dashboard/UI (16 tests, 70 aserciones); regresión `php artisan test --filter Loyalty` (305 tests, 1942 aserciones); `npm run build`, Pint focalizado y `git diff --check` correctos.
 
+#### F44 — Regresión — COMPLETADO
+
+- se ejecutaron los 26 archivos de Clientes, POS, Compras, Caja y Cotizaciones vinculadas al POS: 289 tests, 283 pasan, 1698 aserciones y 6 fallos;
+- los 6 fallos son exactamente los preexistentes documentados en F42: tres contratos antiguos en `PosAccessAndSearchTest`, dos en `PosSuspendedSalesTest` (tipo monetario y caja obligatoria) y uno en `QuoteTest` (caja obligatoria);
+- evidencia limpia separada: Clientes/Compras/Caja 134/134 (761 aserciones) y POS sin los dos archivos históricos 100/100 (573 aserciones);
+- reproducción aislada: los tres archivos conocidos ejecutan 55 tests, 49 pasan y repiten los mismos 6 fallos; no apareció un fallo nuevo;
+- el séptimo fallo global de F42 es `ExampleTest` y queda fuera del criterio Clientes/POS/Compras/Caja; no se corrigió deuda ajena ni se cambió código de negocio.
+
+La etapa 14 de Calidad queda completa. Evidencia adicional: árbol limpio al iniciar F44 y `git diff --check` sin incidencias.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -804,11 +814,11 @@ Evidencia: `LoyaltyUiUsabilityTest` (2 tests, 15 aserciones); validación focali
 
 ### Estado reciente
 
-F01–F43 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial.
+F01–F44 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10–14 completas.
 
-Último hito confirmado: F43 — UI / usabilidad.
+Último hito confirmado: F44 — Regresión.
 
-Siguiente fase según cronograma: **F44 — Regresión** (etapa 14. Calidad).
+Siguiente fase según cronograma: **F45 — Respaldo GitHub** (etapa 15. Cierre).
 
 Antes de continuar una fase nueva, revisar:
 
