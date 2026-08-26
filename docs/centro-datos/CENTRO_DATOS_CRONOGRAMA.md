@@ -6,7 +6,8 @@
 - D02 Centro de Datos base: COMPLETADO.
 - D03 Caracterización Compras + blindaje Inventario: COMPLETADO.
 - D04–D08: pendientes de D01/contratos MYM aprobados.
-- D09 Exportadores esenciales: siguiente fase ejecutable autorizada sin fijar contratos de importación.
+- D09 Exportadores esenciales: COMPLETADO.
+- D10 Reportes esenciales: SIGUIENTE fase ejecutable.
 - Fidelización F01–F45: cerrada previamente.
 
 ## Regla principal
@@ -113,10 +114,19 @@ Pendiente.
 Pendiente.
 
 ## D09 — Exportadores esenciales
-Pendiente; siguiente fase ejecutable autorizada mientras D04–D08 esperan contratos MYM.
+
+**Estado: COMPLETADO.**
+
+- Un solo `DataExportController` y `DataExportService` generan XLSX/CSV para productos, clientes, proveedores, inventario, CxC, CxP y fidelización.
+- Cada conjunto tiene encabezados estables, CSV UTF-8 con BOM y XLSX con filtro/encabezado congelado; no se alteran datos ni contratos de importación.
+- Todas las consultas se limitan a la empresa activa. Inventario, CxC y CxP requieren sucursal asignada; inventario entre sucursales exige además `inventario.ver_otras_sucursales`.
+- `reportes.exportar` es obligatorio y se combina con el permiso de lectura del dominio. La pantalla muestra únicamente exportadores autorizados.
+- UI mobile-first: una columna a 360 px, dos a 768 px y tres a 1280 px; selectores y descargas mantienen targets de 44 px.
+- `DataExportTest`: 7 tests, 40 aserciones. `DataCenterShellTest`: 6 tests, 47 aserciones. Regresión de dominios: 31 tests, 177 aserciones.
+- Build Vite, Pint focalizado y `git diff --check` correctos. No se modificó el Excel maestro ni BeautyOS.
 
 ## D10 — Reportes esenciales
-Pendiente.
+SIGUIENTE; depende de D02 y D09, ambos completos.
 
 ## D11–D12 — Históricos opcionales
 Solo si son necesarios para el arranque.

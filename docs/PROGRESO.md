@@ -842,7 +842,7 @@ Antes de continuar una fase nueva, revisar:
 
 ## Centro de Datos
 
-Estado: D00, D02 y D03 COMPLETADOS; D01 EN CURSO EN PARALELO.
+Estado: D00, D02, D03 y D09 COMPLETADOS; D01 EN CURSO EN PARALELO.
 
 ### D02 — Centro de Datos base: COMPLETADO
 
@@ -868,7 +868,20 @@ Evidencia: `DataCenterShellTest` (6 tests, 47 aserciones); regresión `Responsiv
 
 Evidencia: `PurchaseImportCharacterizationTest` + `InventoryImportHardeningTest` (13 tests, 68 aserciones); `DataCenterShellTest` y regresión Compras/Inventario relacionada (54 tests, 300 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-D01 continúa en paralelo. D04–D08 siguen pendientes de contratos/plantillas MYM; la siguiente fase ejecutable autorizada que no fija esos contratos es **D09 — Exportadores esenciales**.
+D01 continúa en paralelo. D04–D08 siguen pendientes de contratos/plantillas MYM.
+
+### D09 — Exportadores esenciales: COMPLETADO
+
+- Centro de Datos exporta productos, clientes, proveedores, inventario, CxC, CxP y fidelización en XLSX o CSV UTF-8 mediante una sola capa reutilizable.
+- Encabezados estables, aislamiento por empresa y filtros de sucursal asignada; inventario de otra sucursal requiere el permiso específico existente.
+- Autorización en dos niveles: `reportes.exportar` más lectura del dominio. La UI oculta conjuntos no autorizados y mantiene layout 360/768/1280.
+- Los exportadores son solo lectura y no fijan ni cambian contratos de importación MYM.
+
+Evidencia: `DataExportTest` (7 tests, 40 aserciones), `DataCenterShellTest` (6 tests, 47 aserciones) y regresión de dominios (31 tests, 177 aserciones). Build Vite, Pint focalizado y `git diff --check` correctos.
+
+Fallo preexistente ajeno: `PosAccessAndSearchTest` mantiene 3 fallos por expectativas antiguas de payload/markup POS; D09 no modifica archivos POS y las otras 29 pruebas del archivo pasan. No se corrigió esa deuda.
+
+Siguiente fase ejecutable: **D10 — Centro de Reportes esenciales**. D04–D08 siguen pendientes de D01.
 
 ---
 

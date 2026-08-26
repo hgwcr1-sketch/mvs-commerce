@@ -29,6 +29,7 @@ use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataImportController;
+use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataCenterController;
 // Compras
 use App\Http\Controllers\InventoryAdjustmentController;
@@ -671,6 +672,10 @@ Route::middleware(['auth', 'active.company'])->group(function () {
         Route::get('/importar', [DataCenterController::class, 'imports'])->name('imports');
         Route::get('/exportar', [DataCenterController::class, 'exports'])->name('exports');
         Route::get('/reportes', [DataCenterController::class, 'reports'])->name('reports');
+        Route::get('/exportar/{dataset}/{format}', [DataExportController::class, 'download'])
+            ->middleware('permission:reportes.exportar')
+            ->whereIn('format', ['xlsx', 'csv'])
+            ->name('exports.download');
     });
 
     Route::redirect('/importar-datos', '/centro-de-datos/importar')

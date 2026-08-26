@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Services\Exports\DataExportService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -36,7 +37,16 @@ class DataCenterController extends Controller
         $company = $this->company();
         $this->authorizeAny($request, $company, ['reportes.exportar']);
 
-        return view('data-center.exports');
+        $datasets = collect(DataExportService::DATASETS)->filter(
+            fn (array $definition) => $request->user()->hasPermission($definition['permission'], $company),
+        );
+        $branches = $request->user()->branches()->where('company_id', $company->id)
+            ->where('is_active', true)->orderBy('name')->get();
+        $inventoryBranches = $request->user()->hasPermission('inventario.ver_otras_sucursales', $company)
+            ? $branches
+            : $branches->where('id', (int) session('active_branch_id'));
+
+        return view('data-center.exports', compact('datasets', 'branches', 'inventoryBranches'));
     }
 
     public function reports(Request $request): View
