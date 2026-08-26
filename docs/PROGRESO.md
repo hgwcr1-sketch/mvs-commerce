@@ -909,7 +909,17 @@ Evidencia: `SaleReceiptMailTest` + `SaleReceiptProductionTest` (9 tests, 53 aser
 
 Evidencia: P04–P06 (12 tests, 82 aserciones); regresión real POS/Loyalty, canje, pagos mixtos, anulaciones y devoluciones (79 tests, 573 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P07A — Portal de Clientes — experiencia del cliente**.
+### P07A — Portal de Clientes — experiencia del cliente: COMPLETADO
+
+- El portal sigue perteneciendo a `(company_id, customer_id)`: un solo saldo y acceso por empresa, con movimientos/compras de todas sus sucursales y origen visible.
+- El enlace seguro F33/F34 permite activar usuario/contraseña. Se añadió login independiente del staff, cierre de sesión y recuperación con token aleatorio almacenado solo como hash, expirable y de un uso.
+- Presenta saldo/valor, totales ganados y utilizados, mínimo/faltante, fecha y días de vencimiento calculados desde la política real, premios y cuánto falta, movimientos, compras, comprobantes PDF/correo y perfil/preferencias.
+- Publicaciones vigentes, productos en oferta, CTA empresariales y “Para ti” V1 reutilizan catálogo/categorías y ventas reales; no se incorporó IA, carrito ni enlaces hardcodeados.
+- P04/P05 se reutilizan para PDF y reenvío; el cliente solo puede acceder a ventas propias dentro de su empresa.
+
+Evidencia: `LoyaltyCustomerPortalProductionTest` + portal/acceso/QR/P05 (29 tests, 228 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P07B — Gestión de Portal de Clientes**.
 
 ---
 

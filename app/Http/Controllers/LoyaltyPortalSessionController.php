@@ -1,0 +1,183 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Mail\LoyaltyPortalPasswordResetMail;
+use App\Mail\SaleReceiptMail;
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\LoyaltyPortalCredential;
+use App\Models\Sale;
+use App\Services\Loyalty\LoyaltyCustomerPortalService;
+use App\Services\Sales\SaleReceiptService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\View\View;
+
+class LoyaltyPortalSessionController extends Controller
+{
+    public function loginForm(Company $company): View
+    {
+        abort_unless($company->is_active, 404);
+
+        return view('loyalty.portal.login', compact('company'));
+    }
+
+    public function login(Request $request, Company $company): RedirectResponse
+    {
+        $data = $request->validate(['username' => ['required', 'string', 'max:150'], 'password' => ['required', 'string']]);
+        $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('is_active', true)
+            ->where(fn ($query) => $query->where('username', $data['username'])->orWhere('email', $data['username']))->first();
+        if (! $credential || ! Hash::check($data['password'], $credential->password)) {
+            return back()->withErrors(['username' => 'Las credenciales no son válidas.'])->onlyInput('username');
+        }
+
+        $request->session()->regenerate();
+        $this->putPortalSession($request, $credential->company_id, $credential->customer_id);
+        $credential->update(['last_login_at' => now()]);
+
+        return redirect()->route('loyalty.customer.home', $company);
+    }
+
+    public function home(Request $request, Company $company, LoyaltyCustomerPortalService $portal): View
+    {
+        $customer = $this->sessionCustomer($request, $company);
+
+        return view('loyalty.portal.show', $portal->data($company, $customer) + ['customerAuthenticated' => true]);
+    }
+
+    public function activate(Request $request): RedirectResponse
+    {
+        $company = Company::query()->findOrFail((int) $request->session()->get('loyalty_portal_company_id'));
+        $customer = $this->sessionCustomer($request, $company);
+        $data = $request->validate([
+            'username' => ['required', 'string', 'max:100', 'alpha_dash'],
+            'email' => ['required', 'email:rfc', 'max:150'],
+            'password' => ['required', 'confirmed', 'min:8'],
+        ]);
+        $duplicate = LoyaltyPortalCredential::query()->where('company_id', $company->id)
+            ->where('customer_id', '!=', $customer->id)
+            ->where(fn ($query) => $query->where('username', $data['username'])->orWhere('email', $data['email']))->exists();
+        if ($duplicate) {
+            return back()->withErrors(['username' => 'El usuario o correo ya está registrado en esta empresa.']);
+        }
+        LoyaltyPortalCredential::updateOrCreate(['customer_id' => $customer->id], $data + ['company_id' => $company->id, 'is_active' => true]);
+
+        return back()->with('success', 'Tu acceso con contraseña quedó configurado.');
+    }
+
+    public function profile(Request $request, Company $company): RedirectResponse
+    {
+        $customer = $this->sessionCustomer($request, $company);
+        $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:50'],
+            'mobile' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'email:rfc', 'max:150'],
+            'accepts_email_invoice' => ['nullable', 'boolean'],
+        ]);
+        $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
+        $customer->update($data);
+
+        return back()->with('success', 'Preferencias actualizadas.');
+    }
+
+    public function logout(Request $request): RedirectResponse
+    {
+        $companyId = (int) $request->session()->pull('loyalty_portal_company_id');
+        $request->session()->forget('loyalty_portal_customer_id');
+
+        return redirect()->route('loyalty.customer.login', $companyId);
+    }
+
+    public function receiptPdf(Request $request, Company $company, Sale $sale, SaleReceiptService $receipts)
+    {
+        $customer = $this->sessionCustomer($request, $company);
+        $sale = $this->customerSale($sale, $company, $customer);
+
+        return $receipts->pdf($sale, $company)->download("comprobante-{$sale->sale_number}.pdf");
+    }
+
+    public function sendReceipt(Request $request, Company $company, Sale $sale, SaleReceiptService $receipts): RedirectResponse
+    {
+        $customer = $this->sessionCustomer($request, $company);
+        $sale = $this->customerSale($sale, $company, $customer);
+        $data = $request->validate(['email' => ['required', 'email:rfc', 'max:150']]);
+        Mail::to($data['email'])->send(new SaleReceiptMail($sale, $receipts->pdf($sale, $company)->output()));
+
+        return back()->with('success', 'Comprobante enviado.');
+    }
+
+    public function forgotForm(Company $company): View
+    {
+        return view('loyalty.portal.forgot-password', compact('company'));
+    }
+
+    public function forgot(Request $request, Company $company): RedirectResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email:rfc', 'max:150']]);
+        $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('email', $data['email'])->where('is_active', true)->first();
+        if ($credential) {
+            $token = Str::random(64);
+            DB::table('loyalty_portal_password_resets')->where('credential_id', $credential->id)->delete();
+            DB::table('loyalty_portal_password_resets')->insert(['credential_id' => $credential->id, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addHour(), 'created_at' => now(), 'updated_at' => now()]);
+            Mail::to($credential->email)->send(new LoyaltyPortalPasswordResetMail($credential, route('loyalty.customer.password.reset', ['company' => $company, 'token' => $token])));
+        }
+
+        return back()->with('success', 'Si el correo está registrado, recibirás un enlace de recuperación.');
+    }
+
+    public function resetForm(Company $company, string $token): View
+    {
+        abort_unless($this->validReset($company, $token), 404);
+
+        return view('loyalty.portal.reset-password', compact('company', 'token'));
+    }
+
+    public function reset(Request $request, Company $company, string $token): RedirectResponse
+    {
+        $data = $request->validate(['password' => ['required', 'confirmed', 'min:8']]);
+        $reset = $this->validReset($company, $token);
+        abort_unless($reset, 404);
+        DB::transaction(function () use ($reset, $data) {
+            LoyaltyPortalCredential::query()->findOrFail($reset->credential_id)->update(['password' => $data['password']]);
+            DB::table('loyalty_portal_password_resets')->where('id', $reset->id)->update(['used_at' => now(), 'updated_at' => now()]);
+        });
+
+        return redirect()->route('loyalty.customer.login', $company)->with('success', 'Contraseña actualizada. Ya puedes ingresar.');
+    }
+
+    public function establishSession(Request $request, Company $company, Customer $customer): void
+    {
+        $this->putPortalSession($request, $company->id, $customer->id);
+    }
+
+    private function sessionCustomer(Request $request, Company $company): Customer
+    {
+        abort_unless((int) $request->session()->get('loyalty_portal_company_id') === (int) $company->id, 403);
+
+        return Customer::query()->where('company_id', $company->id)->findOrFail((int) $request->session()->get('loyalty_portal_customer_id'));
+    }
+
+    private function putPortalSession(Request $request, int $companyId, int $customerId): void
+    {
+        $request->session()->put(['loyalty_portal_company_id' => $companyId, 'loyalty_portal_customer_id' => $customerId]);
+    }
+
+    private function customerSale(Sale $sale, Company $company, Customer $customer): Sale
+    {
+        abort_unless((int) $sale->company_id === (int) $company->id && (int) $sale->customer_id === (int) $customer->id, 404);
+
+        return $sale->load(['company', 'branch', 'user', 'customer', 'items', 'payments.paymentMethod', 'cashSession.cashRegister']);
+    }
+
+    private function validReset(Company $company, string $token): ?object
+    {
+        return DB::table('loyalty_portal_password_resets as reset')->join('loyalty_portal_credentials as credential', 'credential.id', '=', 'reset.credential_id')
+            ->where('credential.company_id', $company->id)->where('reset.token_hash', hash('sha256', $token))->whereNull('reset.used_at')->where('reset.expires_at', '>', now())
+            ->select('reset.*')->first();
+    }
+}

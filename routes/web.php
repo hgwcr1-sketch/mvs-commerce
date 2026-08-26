@@ -45,6 +45,7 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
+use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
@@ -121,6 +122,21 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::class, 'access'])
     ->middleware('throttle:30,1')
     ->name('loyalty.portal.access');
+
+Route::prefix('portal-clientes/{company}')->name('loyalty.customer.')->middleware('throttle:30,1')->group(function () {
+    Route::get('/ingresar', [LoyaltyPortalSessionController::class, 'loginForm'])->name('login');
+    Route::post('/ingresar', [LoyaltyPortalSessionController::class, 'login'])->name('login.store');
+    Route::get('/', [LoyaltyPortalSessionController::class, 'home'])->name('home');
+    Route::post('/salir', [LoyaltyPortalSessionController::class, 'logout'])->name('logout');
+    Route::patch('/perfil', [LoyaltyPortalSessionController::class, 'profile'])->name('profile');
+    Route::get('/compras/{sale}/comprobante.pdf', [LoyaltyPortalSessionController::class, 'receiptPdf'])->name('receipt.pdf');
+    Route::post('/compras/{sale}/comprobante/correo', [LoyaltyPortalSessionController::class, 'sendReceipt'])->name('receipt.mail');
+    Route::get('/recuperar', [LoyaltyPortalSessionController::class, 'forgotForm'])->name('password.request');
+    Route::post('/recuperar', [LoyaltyPortalSessionController::class, 'forgot'])->name('password.email');
+    Route::get('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'resetForm'])->name('password.reset');
+    Route::post('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'reset'])->name('password.update');
+});
+Route::post('/portal-clientes/activar', [LoyaltyPortalSessionController::class, 'activate'])->middleware('throttle:10,1')->name('loyalty.customer.activate');
 
 Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
     ->middleware('auth')

@@ -81,9 +81,9 @@ Consumir el resultado real del módulo de fidelización; no recalcular puntos en
 
 Implementado desde los movimientos persistidos del kardex asociados a la venta. Todos los formatos y el PDF muestran ganados, utilizados, saldo anterior y saldo actual cuando aplica, sin mutar ni recalcular reglas de fidelización; las anulaciones reflejan el último snapshot y advierten el ajuste. Evidencia: P04–P06 (12 tests, 82 aserciones) y regresión POS/Loyalty/devoluciones/anulaciones (79 tests, 573 aserciones).
 
-### P07A — Portal de Clientes — experiencia del cliente
+### P07A — Portal de Clientes — experiencia del cliente — COMPLETADO
 
-**Estado:** SIGUIENTE.
+**Estado:** COMPLETADO.
 
 #### Regla de alcance
 El portal pertenece a la **empresa (`company_id`)**, nunca a una sucursal.
@@ -177,8 +177,12 @@ V1 puede recomendar contenido usando categorías o compras anteriores del client
 - Wallet.
 - Campañas/segmentación avanzada.
 
+P07A amplía el portal F30–F35 sin crear saldos paralelos: acceso company+cliente por contraseña con activación desde enlace seguro y recuperación hash/expirable; saldo, totales, mínimo y vencimiento desde servicios/configuración reales; movimientos y compras consolidados con sucursal; PDF/correo P04/P05; perfil/preferencias; publicaciones, ofertas, CTA y recomendaciones V1 por categorías reales. Evidencia: `LoyaltyCustomerPortalProductionTest` y regresión de portal/accesos/correo (29 tests, 228 aserciones), build Vite correcto.
+
 
 ### P07B — Gestión de Portal de Clientes
+
+**Estado:** SIGUIENTE.
 
 **Ubicación obligatoria:** `Sidebar → Fidelización → Portal de Clientes`.
 

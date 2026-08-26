@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P06 COMPLETADOS**. Los comprobantes adaptables/PDF y su envío por correo incluyen snapshots reales del kardex de Fidelización, sin recalcular reglas ni mutar movimientos. **SIGUIENTE: P07A — Portal de Clientes — experiencia del cliente.**
+- Puesta en Producción: **P00–P07A COMPLETADOS**. El portal de cliente por empresa incluye acceso/recuperación, saldo consolidado, vigencia/mínimos reales, movimientos/compras multisucursal, contenido, CTA, PDF/correo y perfil. **SIGUIENTE: P07B — Gestión de Portal de Clientes.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

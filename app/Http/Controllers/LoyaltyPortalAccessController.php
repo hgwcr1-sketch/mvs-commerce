@@ -17,12 +17,16 @@ class LoyaltyPortalAccessController extends Controller
      * Acceso público del cliente (F33/F34): resuelve el token seguro y renderiza
      * el mismo portal F30-F32, sin sesión staff.
      */
-    public function access(string $token, LoyaltyPortalAccessService $portalAccess, LoyaltyCustomerPortalService $portal): View
+    public function access(Request $request, string $token, LoyaltyPortalAccessService $portalAccess, LoyaltyCustomerPortalService $portal): View
     {
         $resolved = $portalAccess->resolve($token);
         abort_unless($resolved !== null, 404);
+        $request->session()->put([
+            'loyalty_portal_company_id' => $resolved['company']->id,
+            'loyalty_portal_customer_id' => $resolved['customer']->id,
+        ]);
 
-        return view('loyalty.portal.show', $portal->data($resolved['company'], $resolved['customer']));
+        return view('loyalty.portal.show', $portal->data($resolved['company'], $resolved['customer']) + ['customerAuthenticated' => true]);
     }
 
     public function index(Request $request, LoyaltyPortalAccessService $service): View
