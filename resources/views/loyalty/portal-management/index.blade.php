@@ -45,10 +45,18 @@
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
                 <p class="text-xs font-semibold uppercase text-slate-500">QR del Portal</p>
+                <div id="portal-qr-brand-card" class="mt-3 rounded-xl border bg-white p-3" style="border-color:{{ $setting->brand_accent_color }}">
+                <div class="flex items-center justify-center gap-2">
+                    @if($company->logo)<img src="{{ asset('storage/'.$company->logo) }}" alt="Logo de {{ $company->trade_name }}" class="h-10 w-10 rounded-lg border bg-white object-contain p-1">@endif
+                    <span class="font-semibold" style="color:{{ $setting->brand_primary_color }}">{{ $company->trade_name }}</span>
+                </div>
                 @if($portalQr)
                     <div class="mx-auto mt-3 w-[160px] max-w-full rounded-xl border border-slate-100 bg-white p-2 sm:w-[180px] lg:w-[200px] [&_svg]:h-auto [&_svg]:w-full [&_svg]:max-w-full">{!! $portalQr !!}</div>
-                    <button type="button" onclick="const w=window.open('','_blank'); w.document.write('<html><head><title>QR Portal</title></head><body style=\'display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\'><div style=\'max-width:360px;width:100%;padding:16px\'>'+ @js($portalQr) + '<p style=\'text-align:center;font-family:sans-serif;font-size:12px;margin-top:12px;word-break:break-all\'>'+ @js($portalUrl) +'</p></div></body></html>'); w.document.close(); w.focus(); setTimeout(()=>w.print(), 250);" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir QR</button>
+                    <p class="mt-2 break-all text-xs text-slate-500">{{ $portalUrl }}</p>
+                    </div>
+                    <button type="button" onclick="const w=window.open('','_blank'); w.document.write('<html><head><title>QR Portal</title></head><body style=\'display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:sans-serif\'><div style=\'max-width:360px;width:100%;padding:16px\'>'+document.getElementById('portal-qr-brand-card').outerHTML+'</div></body></html>'); w.document.close(); w.focus(); setTimeout(()=>w.print(), 250);" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir QR</button>
                 @else
+                    </div>
                     <p class="mt-2 text-sm text-slate-500">QR no disponible</p>
                 @endif
             </div>
@@ -81,7 +89,7 @@
 
     @can('fidelidad.portal.configurar')
     <div id="panel-configuracion" role="tabpanel" aria-labelledby="tab-configuracion" x-show="activeTab === 'configuracion'" x-cloak>
-    <section id="configuracion" class="rounded-2xl border bg-white p-4 sm:p-6"><h2 class="text-lg font-semibold">Configuración</h2><form method="POST" action="{{ route('loyalty.portal-management.settings.update') }}" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">@csrf @method('PUT')<label class="text-sm font-semibold sm:col-span-2">Mensaje de bienvenida<textarea name="welcome_message" maxlength="300" class="mt-2 w-full rounded-xl border-slate-300">{{ $setting->welcome_message }}</textarea></label><label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($setting->is_active)> Portal activo</label><label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="show_active_offers" value="1" @checked($setting->show_active_offers)> Mostrar ofertas activas automáticamente</label><button class="min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white sm:col-span-2">Guardar configuración</button></form></section>
+    <section id="configuracion" class="rounded-2xl border bg-white p-4 sm:p-6"><h2 class="text-lg font-semibold">Configuración</h2><form method="POST" action="{{ route('loyalty.portal-management.settings.update') }}" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">@csrf @method('PUT')<label class="text-sm font-semibold sm:col-span-2">Mensaje de bienvenida<textarea name="welcome_message" maxlength="300" class="mt-2 w-full rounded-xl border-slate-300">{{ $setting->welcome_message }}</textarea></label><label class="text-sm font-semibold">Color principal<input type="color" name="brand_primary_color" required value="{{ $setting->brand_primary_color }}" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white p-1"></label><label class="text-sm font-semibold">Color de acento<input type="color" name="brand_accent_color" required value="{{ $setting->brand_accent_color }}" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white p-1"></label><label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($setting->is_active)> Portal activo</label><label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="show_active_offers" value="1" @checked($setting->show_active_offers)> Mostrar ofertas activas automáticamente</label><p class="text-xs text-slate-500 sm:col-span-2">El logo y nombre provienen de la empresa activa. La firma “Hecho con MVS Commerce” permanece visible.</p><button class="min-h-11 rounded-xl bg-slate-900 px-4 font-semibold text-white sm:col-span-2">Guardar configuración</button></form></section>
     </div>
     @endcan
 

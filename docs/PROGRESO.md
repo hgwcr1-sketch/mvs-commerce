@@ -994,7 +994,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P19: COMPLETADO (P20 siguiente)
+### Portal de Clientes — P01–P20: COMPLETADO
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`). **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -1009,7 +1009,8 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P17 — COMPLETADO** — sucursales participantes con `null` como todas y selección validada por empresa; productos en oferta permitidos/bloqueados; descuento máximo `DECIMAL(19,4)`; stacking/combinabilidad configurable. Las reglas se congelan en el claim y se revalidan antes del consumo en el motor existente. Evidencia: `LoyaltyRegistrationIncentiveP17Test` 6/6, 16 aserciones; regresión P14–P17/Portal/POS/canjes 162 tests, 972 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
 - **P18 — COMPLETADO** — constraint único e idempotencia existente preservados; requisitos independientes de teléfono y correo verificado configurables por empresa, evaluados antes de conceder y guardados en el snapshot del claim. Evidencia: `LoyaltyRegistrationIncentiveP18Test` 5/5, 16 aserciones; regresión P14–P18/Portal/POS/canje 80 tests, 395 aserciones; Pint focalizado y `git diff --check` correctos.
 - **P19 — COMPLETADO** — el claim existente enlaza la regla y registra cliente, beneficio, compra calificadora/consumo, sucursal, configurador y `awarded_at`; el consumo completa compra/sucursal sin alterar la fecha original. Evidencia: `LoyaltyRegistrationIncentiveP19Test` 3/3, 15 aserciones; regresión P14–P19/Portal/POS/canje 134 tests, 785 aserciones; Pint focalizado y `git diff --check` correctos.
-- **P20 — SIGUIENTE** — logo, nombre y colores de empresa en portal/QR manteniendo identidad MVS. P31 queda después de P20.
+- **P20 — COMPLETADO** — nombre/logo y colores primario/acento configurables por empresa aplicados al acceso, registro, portal y tarjeta QR imprimible; conserva “Hecho con MVS Commerce”. Evidencia: `LoyaltyPortalBrandingP20Test` 4/4, 21 aserciones; regresión P14–P20/Portal/POS/canjes 167 tests, 1.040 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
+- **Siguiente bloque — REQUIERE RECONCILIACIÓN DOCUMENTAL** — el cronograma declara Correcciones P21–P30, pero omite P21 en la tabla y empieza en P23, ID ya usado por Onboarding. No renumerar ni iniciar un bloque ambiguo.
 
 **Regla producción:** desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado. Los agentes no despliegan producción automáticamente.
 
@@ -1027,7 +1028,7 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P09C — Escaneo QR/Code128 en POS: COMPLETADO.** `PosController::searchCustomers` expone `public_code` + like, `pos/index` botón escáner cliente + `onMvsScan` (public_code exact → `selectCustomer`).
 - **P09D — PIN/QR temporal de un solo uso: COMPLETADO.** `customer_one_time_tokens` (`token_hash` SHA256, 5min, `used_at`), `CustomerOneTimeTokenService` genera PIN 6 dígitos + QR local y verifica single-use/expiración/aislamiento, `clientes/show` genera/muestra/verifica.
 - **Evidencia P01–P09D:** `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos**. `LoyaltyCustomerPortal` 13/13, 89 aserciones.
-- **P14–P19 — COMPLETADOS.** Siguiente **P20** – identidad visual de empresa en Portal/QR manteniendo identidad MVS.
+- **P14–P20 — COMPLETADOS.** Portal P01–P20 cerrado; antes de Correcciones debe reconciliarse P21 ausente/colisión P23 en la fuente oficial.
 
 ---
 

@@ -2,6 +2,7 @@
 @section('title', 'Crear cuenta · '.$company->trade_name)
 @section('content')
 <div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+    <x-portal-brand :company="$company" class="mb-5" />
     <h1 class="text-2xl font-bold text-slate-900">Crear mi cuenta en {{ $company->trade_name }}</h1>
     <p class="mt-2 text-sm text-slate-600">Tu cuenta quedará disponible de inmediato en esta empresa para compras, POS y fidelización.</p>
     @if(session('success'))<p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</p>@endif
@@ -18,7 +19,7 @@
         <label class="block text-sm font-semibold">Contraseña *<input type="password" name="password" required autocomplete="new-password" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3"></label>
         <label class="block text-sm font-semibold">Confirmar contraseña *<input type="password" name="password_confirmation" required class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3"></label>
         <p class="text-xs text-slate-500">Al registrarte aceptas registrar tu cliente dentro de {{ $company->trade_name }}. Si ya existe un cliente con la misma identificación, teléfono o correo, se enlazará a ese cliente existente.</p>
-        <button type="submit" class="min-h-11 w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white">Crear mi cuenta</button>
+        <button type="submit" class="min-h-11 w-full rounded-xl px-4 py-3 font-semibold text-white" style="background-color:var(--portal-primary)">Crear mi cuenta</button>
     </form>
     <a href="{{ route('loyalty.customer.login', $company) }}" class="mt-4 block min-h-11 py-3 text-center text-sm font-semibold text-slate-600">Ya tengo cuenta · Ingresar</a>
 </div>

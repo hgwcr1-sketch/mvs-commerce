@@ -8,6 +8,8 @@
     <title>@yield('title', 'Programa de fidelización')</title>
 
     @vite(['resources/css/app.css'])
+    @php($branding = $portalBranding ?? $portalSetting ?? null)
+    <style>:root{--portal-primary:{{ $branding?->brand_primary_color ?? '#0F172A' }};--portal-accent:{{ $branding?->brand_accent_color ?? '#F59E0B' }};}</style>
 </head>
 
 <body class="min-h-screen bg-slate-100 text-slate-800 antialiased">
@@ -20,7 +22,7 @@
 
     {{-- Marca discreta del portal (F32). Sin enlace: no existe URL oficial configurada. --}}
     <footer class="px-4 pb-8 text-center sm:px-6">
-        <p class="text-xs font-medium tracking-wide text-slate-400">Hecho con MVS Commerce</p>
+        <p class="text-xs font-semibold tracking-wide text-slate-400">Hecho con MVS Commerce</p>
     </footer>
 
 </body>

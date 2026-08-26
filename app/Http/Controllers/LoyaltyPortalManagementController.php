@@ -39,6 +39,7 @@ class LoyaltyPortalManagementController extends Controller
 
         return view('loyalty.portal-management.index', [
             'setting' => LoyaltyPortalSetting::firstOrCreate(['company_id' => $companyId], ['is_active' => true, 'show_active_offers' => true]),
+            'company' => $company,
             'posts' => LoyaltyPortalPost::where('company_id', $companyId)->with('product:id,company_id,name,image,sale_price,special_price')->orderBy('sort_order')->latest()->get(),
             'links' => LoyaltyPortalLink::where('company_id', $companyId)->orderBy('sort_order')->get(),
             'products' => Product::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'image', 'sale_price', 'special_price']),
@@ -52,7 +53,18 @@ class LoyaltyPortalManagementController extends Controller
     public function updateSetting(Request $request): RedirectResponse
     {
         $companyId = (int) session('active_company_id');
-        $data = $request->validate(['welcome_message' => ['nullable', 'string', 'max:300'], 'is_active' => ['nullable', 'boolean'], 'show_active_offers' => ['nullable', 'boolean']]);
+        $current = LoyaltyPortalSetting::query()->where('company_id', $companyId)->first();
+        $request->merge([
+            'brand_primary_color' => $request->input('brand_primary_color', $current?->brand_primary_color ?? '#0F172A'),
+            'brand_accent_color' => $request->input('brand_accent_color', $current?->brand_accent_color ?? '#F59E0B'),
+        ]);
+        $data = $request->validate([
+            'welcome_message' => ['nullable', 'string', 'max:300'],
+            'is_active' => ['nullable', 'boolean'],
+            'show_active_offers' => ['nullable', 'boolean'],
+            'brand_primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
         $data['is_active'] = $request->boolean('is_active');
         $data['show_active_offers'] = $request->boolean('show_active_offers');
         LoyaltyPortalSetting::updateOrCreate(['company_id' => $companyId], $data);

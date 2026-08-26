@@ -7,6 +7,7 @@ use App\Mail\SaleReceiptMail;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalCredential;
+use App\Models\LoyaltyPortalSetting;
 use App\Models\Sale;
 use App\Services\Loyalty\LoyaltyAccountService;
 use App\Services\Loyalty\LoyaltyCustomerPortalService;
@@ -29,14 +30,14 @@ class LoyaltyPortalSessionController extends Controller
     {
         abort_unless($company->is_active, 404);
 
-        return view('loyalty.portal.login', compact('company'));
+        return view('loyalty.portal.login', ['company' => $company, 'portalBranding' => $this->branding($company)]);
     }
 
     public function registerForm(Company $company): View
     {
         abort_unless($company->is_active, 404);
 
-        return view('loyalty.portal.register', compact('company'));
+        return view('loyalty.portal.register', ['company' => $company, 'portalBranding' => $this->branding($company)]);
     }
 
     public function register(Request $request, Company $company): RedirectResponse
@@ -387,5 +388,13 @@ class LoyaltyPortalSessionController extends Controller
         return DB::table('loyalty_portal_password_resets as reset')->join('loyalty_portal_credentials as credential', 'credential.id', '=', 'reset.credential_id')
             ->where('credential.company_id', $company->id)->where('reset.token_hash', hash('sha256', $token))->whereNull('reset.used_at')->where('reset.expires_at', '>', now())
             ->select('reset.*')->first();
+    }
+
+    private function branding(Company $company): LoyaltyPortalSetting
+    {
+        return LoyaltyPortalSetting::query()->firstOrCreate(
+            ['company_id' => $company->id],
+            ['is_active' => true, 'show_active_offers' => true],
+        );
     }
 }

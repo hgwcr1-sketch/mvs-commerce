@@ -21,15 +21,15 @@
     @if(session('success'))<p class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</p>@endif
 
     {{-- Encabezado con la identidad visual de la empresa (F31) --}}
-    <header class="rounded-2xl bg-slate-900 px-5 py-6 text-white shadow-sm sm:px-8">
+    <header class="rounded-2xl px-5 py-6 text-white shadow-sm sm:px-8" style="background-color:var(--portal-primary)">
         <div class="flex items-center gap-4">
             @if($company->logo)
                 <img src="{{ asset('storage/'.$company->logo) }}" alt="Logo de {{ $company->trade_name }}" class="h-14 w-14 shrink-0 rounded-xl border border-white/10 bg-white object-contain p-1.5">
             @else
-                <div data-brand-initial class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-xl font-bold text-black" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($company->trade_name), 0, 1)) }}</div>
+                <div data-brand-initial class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white" style="background-color:var(--portal-accent)" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($company->trade_name), 0, 1)) }}</div>
             @endif
             <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-amber-400">{{ $company->trade_name }}</p>
+                <p class="truncate text-sm font-semibold" style="color:var(--portal-accent)">{{ $company->trade_name }}</p>
                 <h1 class="mt-0.5 truncate text-xl font-bold sm:text-2xl">Programa de fidelización</h1>
             </div>
         </div>
