@@ -51,7 +51,7 @@ Permitir activar/desactivar módulos contratados por empresa. Separar módulos c
 ### P03 — Onboarding nueva empresa + sucursales
 Asistente para datos de empresa, logo, información fiscal/comercial, sucursales, administrador, módulos y configuración inicial.
 
-### P04 — Impresión POS y comprobantes — COMPLETADO
+### P04 — Impresión POS y comprobantes
 Auditar primero lo existente. Soportar:
 - térmica 80 mm;
 - térmica 58 mm;
@@ -63,14 +63,10 @@ Auditar primero lo existente. Soportar:
 
 La fotografía entregada por el usuario es **solo referencia conceptual**. No copiar el diseño ni sus datos. El diseño final debe ser MVS Commerce. El **TOTAL debe verse grande y en negrita**. No incluir elementos manuscritos o accidentales de la foto.
 
-Implementado con un comprobante MVS único y reutilizable en 80 mm, 58 mm y carta, descarga PDF, reimpresión desde historial, formato/autoimpresión configurables por sucursal y autorización por empresa, sucursal, módulo y permiso. Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones), regresión relacionada (29 tests, 172 aserciones) y build Vite correctos.
-
-### P05 — Correo de comprobantes — COMPLETADO
+### P05 — Correo de comprobantes
 Enviar comprobante desde la venta y reenviar desde historial. Auditar y reutilizar PDF/correo existente antes de construir.
 
-Implementado reutilizando el comprobante/PDF P04 y la infraestructura Laravel Mail existente. Permite envío desde el comprobante y reenvío desde el detalle histórico, valida destinatario y conserva la venta confirmada ante fallos de transporte. Evidencia: `SaleReceiptMailTest` (4 tests) y regresión de correo/caja/ventas (50 tests, 238 aserciones).
-
-### P06 — Fidelización en todos los comprobantes — COMPLETADO
+### P06 — Fidelización en todos los comprobantes
 Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
 - puntos ganados;
 - puntos utilizados;
@@ -79,11 +75,7 @@ Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
 
 Consumir el resultado real del módulo de fidelización; no recalcular puntos en la vista.
 
-Implementado desde los movimientos persistidos del kardex asociados a la venta. Todos los formatos y el PDF muestran ganados, utilizados, saldo anterior y saldo actual cuando aplica, sin mutar ni recalcular reglas de fidelización; las anulaciones reflejan el último snapshot y advierten el ajuste. Evidencia: P04–P06 (12 tests, 82 aserciones) y regresión POS/Loyalty/devoluciones/anulaciones (79 tests, 573 aserciones).
-
-### P07A — Portal de Clientes — experiencia del cliente — COMPLETADO
-
-**Estado:** COMPLETADO.
+### P07A — Portal de Clientes — experiencia del cliente
 
 #### Regla de alcance
 El portal pertenece a la **empresa (`company_id`)**, nunca a una sucursal.
@@ -177,12 +169,8 @@ V1 puede recomendar contenido usando categorías o compras anteriores del client
 - Wallet.
 - Campañas/segmentación avanzada.
 
-P07A amplía el portal F30–F35 sin crear saldos paralelos: acceso company+cliente por contraseña con activación desde enlace seguro y recuperación hash/expirable; saldo, totales, mínimo y vencimiento desde servicios/configuración reales; movimientos y compras consolidados con sucursal; PDF/correo P04/P05; perfil/preferencias; publicaciones, ofertas, CTA y recomendaciones V1 por categorías reales. Evidencia: `LoyaltyCustomerPortalProductionTest` y regresión de portal/accesos/correo (29 tests, 228 aserciones), build Vite correcto.
-
 
 ### P07B — Gestión de Portal de Clientes
-
-**Estado:** COMPLETADO.
 
 **Ubicación obligatoria:** `Sidebar → Fidelización → Portal de Clientes`.
 
@@ -220,12 +208,8 @@ Un **Cajero** o **Vendedor** puede recibir permiso para crear/publicar promocion
 
 Para este alcance se reutiliza el sistema de usuarios + roles + permisos existente. **No crear un módulo separado de Vendedores** únicamente para P07B.
 
-Implementado como una sola entrada `Fidelización → Portal de Clientes`, fuera del Panel Maestro. Incluye resumen, publicaciones CRUD con vigencia/orden/destacado y producto opcional, enlaces/CTA, configuración/autoofertas, accesos y vista previa. Los permisos `fidelidad.portal.ver`, `.configurar`, `.contenido` y `.enlaces` separan capacidades; los permisos anteriores de accesos/promociones siguen compatibles sin duplicar entradas. Evidencia: `LoyaltyPortalManagementTest` y regresión portal/roles/navegación (46 tests, 320 aserciones), build Vite correcto.
-
 ### P08 — Dominio, servidor provisional y backups
 Preparar acceso estable para San Ramón y Liberia. PC de San Ramón puede ser servidor provisional con HTTPS estable, servicios de arranque, sin suspensión, backups automáticos y recuperación probada. Diseñar para migrar posteriormente a VPS.
-
-**Estado:** SIGUIENTE; no autorizado en esta sesión.
 
 ### P09 — Primera empresa real: MYM Beauty Center
 Crear MYM mediante el mismo mecanismo del producto:
@@ -247,6 +231,30 @@ Primero ensayo con copia; después corte final. Prioridad de datos:
 
 Históricos D11/D12 no bloquean la salida salvo decisión expresa.
 
+
+### P11 — Centro de Etiquetas
+Herramienta simple y responsive para Administrador o usuarios autorizados. Buscar productos, usar plantillas comunes, vista previa e imprimir una o varias etiquetas.
+
+Cada producto tendrá **Imprime etiqueta: Sí / No**. El listado/reporte permitirá filtrar y seleccionar qué sí se imprime y en qué cantidad.
+
+Destino/responsable configurable según empresa/sucursal/permisos:
+- **Imprime Cajero**
+- **Imprime Administrador**
+
+No asumir que todo cajero tiene impresora. El permiso de imprimir etiquetas será independiente.
+
+### P12 — Verificación Digital de Mercadería
+Auditar primero Compras. No reemplazar el flujo funcional existente.
+
+Al ingresar mercadería se podrá asignar una verificación a un usuario autorizado. Tendrá notificación persistente en campana/badge hasta resolverse.
+
+Estados: Pendiente, En revisión, Conforme, Con diferencias y Cerrada.
+
+Por línea: esperado, recibido, faltante, sobrante, check y observación. Guardar quién creó, asignó, verificó y resolvió, con fechas.
+
+Una diferencia **no modifica inventario automáticamente**. Al cerrar, ofrecer **Imprimir etiquetas** solo para productos con `Imprime etiqueta = Sí`, respetando cantidad y destino Cajero/Administrador. Todo digital, sin hoja impresa obligatoria.
+
+
 ## V0.2 — Wallet
 Evaluar Apple Wallet y Samsung Wallet/equivalente después de estabilizar portal, QR y fidelización. No bloquea el MVP.
 
@@ -257,7 +265,8 @@ Evaluar Apple Wallet y Samsung Wallet/equivalente después de estabilizar portal
 3. D04 → D05 → D06 → D07 → D08 usando plantillas MYM aprobadas.
 4. P08 → P09.
 5. P10 junto con D13 → D14.
-6. D11/D12 y Wallet V0.2 después del piloto, salvo necesidad operativa aprobada.
+6. P11 → P12 después del piloto inicial, salvo necesidad operativa.
+7. D11/D12 y Wallet V0.2 después del piloto.
 
 ## Criterio final de salida
 
