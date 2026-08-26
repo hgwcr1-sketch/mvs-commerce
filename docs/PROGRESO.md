@@ -424,7 +424,7 @@ Sí existe como funcionalidad interna: comprobante de venta del POS, impresión/
 
 ## Fidelización
 
-Estado: DESARROLLO ACTIVO — F01–F41 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11, 12 y 13 completas. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+Estado: DESARROLLO ACTIVO — F01–F42 COMPLETADOS según el Cronograma Maestro (F28 de forma adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial. Fuente oficial del orden: `docs/CRONOGRAMA_FIDELIZACION.md` (sincronizado con `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
 Infraestructura principal creada.
 
@@ -765,6 +765,16 @@ Evidencia: `LoyaltyDashboardIndicatorTest` (3 tests, 5 aserciones); validación 
 
 Evidencia: `LoyaltyDashboardIndicatorTest` ampliado (5 tests, 17 aserciones); validación focalizada dashboard: 14 tests, 55 aserciones; regresión `php artisan test --filter Loyalty`: 303 tests, 1927 aserciones, 0 fallos.
 
+#### F42 — Suite de pruebas — COMPLETADO
+
+- suite completa de Fidelización desde F01 hasta F41 ejecutada con `php artisan test --filter Loyalty`: 303 tests, 1927 aserciones, 0 fallos;
+- cubre infraestructura, cuenta/Kardex, acumulación, canje, premios, vencimiento, administración, multisucursal, reversiones, portal, online, permisos y dashboard;
+- auditoría adicional de la suite global sobre el punto limpio `ba8a2c8`: 728 tests, 721 pasan, 4190 aserciones y 7 fallos preexistentes fuera de F42;
+- fallos reproducidos aisladamente (56 tests, 49 pasan, mismos 7): `ExampleTest` espera 200 donde la aplicación redirige 302; `PosAccessAndSearchTest` conserva tres contratos antiguos (payloads ampliados y flujo de pago actualizado); `PosSuspendedSalesTest` conserva una expectativa de tipo antigua y un checkout sin caja; `QuoteTest` convierte sin la caja ahora obligatoria;
+- no se corrigieron esas pruebas ajenas durante F42. Se conserva la línea base explícita para F44 (regresión Clientes/POS/Compras/Caja).
+
+Evidencia: ejecución completa y reproducción aislada sobre `ba8a2c8`; sin cambios de código de negocio en F42.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -784,11 +794,11 @@ Evidencia: `LoyaltyDashboardIndicatorTest` ampliado (5 tests, 17 aserciones); va
 
 ### Estado reciente
 
-F01–F41 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas.
+F01–F42 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10, 11, 12 y 13 completas; etapa 14 parcial.
 
-Último hito confirmado: F41 — Empresa / sucursal.
+Último hito confirmado: F42 — Suite de pruebas.
 
-Siguiente fase según cronograma: **F42 — Suite de pruebas** (etapa 14. Calidad).
+Siguiente fase según cronograma: **F43 — UI / usabilidad** (etapa 14. Calidad).
 
 Antes de continuar una fase nueva, revisar:
 
