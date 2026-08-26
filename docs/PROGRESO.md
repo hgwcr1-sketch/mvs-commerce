@@ -795,6 +795,16 @@ Evidencia: `LoyaltyUiUsabilityTest` (2 tests, 15 aserciones); validación focali
 
 La etapa 14 de Calidad queda completa. Evidencia adicional: árbol limpio al iniciar F44 y `git diff --check` sin incidencias.
 
+#### F45 — Respaldo GitHub — COMPLETADO
+
+- rama autorizada `feature/pos`, sincronizada con `origin/feature/pos` en `5decbca` antes de crear el registro final;
+- F43 (`3efe76f`) y F44 (`5decbca`) publicados como commits exclusivos y recuperables;
+- validación final de Fidelización: 305 tests, 1942 aserciones, 0 fallos;
+- `git diff --check` correcto y working tree limpio antes del commit documental de cierre;
+- el commit exclusivo de F45 completa el respaldo y se verifica con push y working tree limpio.
+
+El Cronograma Maestro de Fidelización F01–F45 queda completo. No existe una fase funcional posterior dentro de este cronograma.
+
 ### Brechas detectadas pendientes
 
 - **F29 — Ajuste por devolución: COMPLETADO (cerraba esta brecha).** Toda devolución total o parcial ajusta fidelización dentro de la transacción de `SaleReturnService` vía `LoyaltySaleReturnAdjustmentService`: reversión proporcional de puntos ganados y restauración proporcional de puntos canjeados (BCMath escala 4, redondeo half-up, deltas acumulativos con tope sobre lo original), idempotencia por `event_key` por devolución y tipo, Kardex auditable y rechazo atómico ante saldo insuficiente. Ver sección F29 más abajo.
@@ -814,11 +824,11 @@ La etapa 14 de Calidad queda completa. Evidencia adicional: árbol limpio al ini
 
 ### Estado reciente
 
-F01–F44 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Etapas 10–14 completas.
+F01–F45 COMPLETADOS según el Cronograma Maestro (F28 adelantada). Todas las etapas completas.
 
-Último hito confirmado: F44 — Regresión.
+Último hito confirmado: F45 — Respaldo GitHub.
 
-Siguiente fase según cronograma: **F45 — Respaldo GitHub** (etapa 15. Cierre).
+Siguiente fase según cronograma: **ninguna; F01–F45 están completas**.
 
 Antes de continuar una fase nueva, revisar:
 

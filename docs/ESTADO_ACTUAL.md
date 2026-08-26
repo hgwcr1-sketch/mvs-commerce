@@ -10,16 +10,16 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 Fuente oficial del orden de fases: `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`, reflejada en `docs/CRONOGRAMA_FIDELIZACION.md`.
 
-**F01–F44: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Etapas 10–14 completas, sujeto al detalle en `docs/PROGRESO.md`.
+**F01–F45: COMPLETADO** según el cronograma maestro (F28 de forma adelantada). Todas las etapas de Fidelización están completas, sujeto al detalle en `docs/PROGRESO.md`.
 
 Último hito confirmado:
 
-**F44 — Regresión: COMPLETADO.**
+**F45 — Respaldo GitHub: COMPLETADO.**
 
-- Regresión de Clientes, POS, Compras y Caja: 289 tests en 26 archivos, 283 pasan y solo aparecen los 6 fallos preexistentes aplicables de F42.
-- Clientes/Compras/Caja: 134/134; POS fuera de los dos archivos históricos: 100/100.
-- Los tres archivos históricos repiten 6 fallos en 55 tests; no hay fallos nuevos ni cambios de código de negocio.
-- El séptimo fallo global de F42 (`ExampleTest`) queda fuera del criterio modular de F44.
+- F43 (`3efe76f`) y F44 (`5decbca`) publicados en `origin/feature/pos` como puntos de recuperación exclusivos.
+- Antes del registro final: HEAD local/remoto sincronizados, working tree limpio y `git diff --check` correcto.
+- Suite final de Fidelización: 305 tests, 1942 aserciones, 0 fallos.
+- El commit documental exclusivo de F45 completa el cronograma F01–F45; verificar push y árbol limpio en Git al tomar el relevo.
 
 Hito anterior:
 
@@ -46,7 +46,8 @@ Además:
 - **F42 — Suite de pruebas: COMPLETADO** (etapa 14. Calidad).
 - **F43 — UI / usabilidad: COMPLETADO** (etapa 14. Calidad).
 - **F44 — Regresión: COMPLETADO** (etapa 14. Calidad).
-- **F45 — Respaldo GitHub: SIGUIENTE** (etapa 15. Cierre).
+- **F45 — Respaldo GitHub: COMPLETADO** (etapa 15. Cierre).
+- No quedan fases pendientes en el Cronograma Maestro de Fidelización F01–F45.
 - **F28 — Reversión de puntos por anulación: COMPLETADO de forma adelantada** durante la integración POS (`7be1f80`).
 
 Evidencia histórica: `8392dd4` (canje de puntos) y `7be1f80` (integración de fidelización en POS). Auditoría posterior a F18: 152 tests Loyalty/POS-Loyalty con 0 fallos. Tras F22: regresión Loyalty en verde (134 tests) más POS-Loyalty (48 tests); vencimiento configurable: 7 tests, 62 aserciones. Tras F23: `LoyaltyExpirationTest` (13 tests, 78 aserciones); regresión Loyalty + POS-Loyalty (177 tests, 1160 aserciones) en verde. Tras F24-F25: `LoyaltyRuleCenterTest` (6) y `LoyaltyManualAdjustmentTest` (10). Tras F26-F27: `LoyaltyMultiBranchTest` (5 tests, 40 aserciones); regresión Loyalty + POS-Loyalty (198 tests, 1295 aserciones) en verde. Tras F29: `SaleReturnLoyaltyTest` (9 tests, 79 aserciones); regresión Devoluciones+F28+Loyalty+POS-Loyalty (228 tests, 1481 aserciones) en verde.
@@ -84,7 +85,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Fidelización: etapas 10–14 completas — F30–F44 confirmados. Siguiente fase según cronograma: **F45 — Respaldo GitHub** (etapa 15).
+- Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.
