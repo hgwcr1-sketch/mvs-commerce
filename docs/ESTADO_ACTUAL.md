@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07B COMPLETADOS**. Portal del cliente y administración empresarial están operativos con una sola entrada, catálogo reutilizado, contenidos/CTA/configuración y permisos granulares. **SIGUIENTE: P08 — Dominio, servidor provisional y backups; no iniciado por límite expreso.**
+- Puesta en Producción: **P00–P07B y P11 COMPLETADOS**. P11 fue adelantada por autorización expresa: Centro de Etiquetas integrado en Productos, con selección/lotes, Code 128, seis plantillas, cuatro tamaños, bandera por producto, permisos independientes y destino Cajero/Administrador por sucursal. **SIGUIENTE AUTORIZADA: P12 — Verificación Digital de Mercadería. P08 continúa pendiente y no debe iniciarse en esta sesión.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

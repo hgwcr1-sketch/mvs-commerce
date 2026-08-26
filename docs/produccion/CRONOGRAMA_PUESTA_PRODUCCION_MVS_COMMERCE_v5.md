@@ -233,6 +233,8 @@ Históricos D11/D12 no bloquean la salida salvo decisión expresa.
 
 
 ### P11 — Centro de Etiquetas
+**Estado: COMPLETADO (adelantado antes de P08 por autorización expresa).**
+
 Herramienta simple y responsive para Administrador o usuarios autorizados. Buscar productos, usar plantillas comunes, vista previa e imprimir una o varias etiquetas.
 
 Cada producto tendrá **Imprime etiqueta: Sí / No**. El listado/reporte permitirá filtrar y seleccionar qué sí se imprime y en qué cantidad.
@@ -243,7 +245,11 @@ Destino/responsable configurable según empresa/sucursal/permisos:
 
 No asumir que todo cajero tiene impresora. El permiso de imprimir etiquetas será independiente.
 
+Evidencia: Centro integrado bajo Productos con filtros por catálogo y barcodes adicionales, selección múltiple y cantidades; seis plantillas sencillas, tamaños 32×19/40×25/50×30/60×40, vista previa imprimible con Code 128 y configuración aislada por empresa/sucursal para Cajero/Administrador. Permisos independientes `productos.etiquetas.imprimir` y `productos.etiquetas.configurar`. `LabelCenterTest` cubre permisos, aislamiento, Sí/No, filtros, cantidades, barcode, destinos y responsive.
+
 ### P12 — Verificación Digital de Mercadería
+**Estado: SIGUIENTE (autorizada para ejecución adelantada).**
+
 Auditar primero Compras. No reemplazar el flujo funcional existente.
 
 Al ingresar mercadería se podrá asignar una verificación a un usuario autorizado. Tendrá notificación persistente en campana/badge hasta resolverse.

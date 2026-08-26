@@ -40,6 +40,7 @@ class Product extends Model
         'tax_rate',
         'image',
         'is_active',
+        'prints_label',
     ];
 
     protected $casts = [
@@ -54,6 +55,7 @@ class Product extends Model
         'track_inventory' => 'boolean',
         'allow_negative_stock' => 'boolean',
         'is_active' => 'boolean',
+        'prints_label' => 'boolean',
     ];
 
     /**

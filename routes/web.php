@@ -60,6 +60,7 @@ use App\Http\Controllers\SaleReceiptMailController;
 // Administración
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\LabelCenterController;
 use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseImportController;
@@ -244,6 +245,14 @@ Route::middleware(['auth', 'active.company'])->group(function () {
     | Productos
     |--------------------------------------------------------------------------
     */
+
+    Route::middleware(['active.branch', 'permission:productos.etiquetas.imprimir'])->prefix('productos/etiquetas')->name('labels.')->group(function () {
+        Route::get('/', [LabelCenterController::class, 'index'])->name('index');
+        Route::post('/vista-previa', [LabelCenterController::class, 'preview'])->name('preview');
+        Route::patch('/productos/{product}', [LabelCenterController::class, 'updateProduct'])->name('products.update');
+        Route::put('/configuracion', [LabelCenterController::class, 'updateSettings'])
+            ->middleware('permission:productos.etiquetas.configurar')->name('settings.update');
+    });
 
     Route::get('/productos-buscar', [ProductController::class, 'search'])
         ->middleware(['active.branch', 'permission:productos.ver'])

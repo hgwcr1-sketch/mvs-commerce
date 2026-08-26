@@ -136,6 +136,7 @@
     <div class="nav-desktop-group">
     @canany([
         'productos.ver',
+        'productos.etiquetas.imprimir',
         'categorias.ver',
         'marcas.ver',
         'unidades.ver'
@@ -149,6 +150,10 @@
                 <x-navigation.submenu
                     route="productos.index"
                     label="Listado de Productos" />
+            @endcan
+
+            @can('productos.etiquetas.imprimir')
+                <x-navigation.submenu route="labels.index" label="Centro de Etiquetas" />
             @endcan
 
             @can('categorias.ver')

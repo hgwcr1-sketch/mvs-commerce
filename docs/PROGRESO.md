@@ -929,7 +929,16 @@ Evidencia: `LoyaltyCustomerPortalProductionTest` + portal/acceso/QR/P05 (29 test
 
 Evidencia: `LoyaltyPortalManagementTest` + regresión portal/acceso/QR/promociones/roles/navegación (46 tests, 320 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P08 — Dominio, servidor provisional y backups**. No iniciada por prohibición expresa de esta sesión.
+### P11 — Centro de Etiquetas: COMPLETADO
+
+- Una sola subentrada bajo Productos; no se añadió otro módulo superior al sidebar.
+- Reutiliza `Product`, `ProductBarcode`, categorías, marcas y roles/permisos existentes, con aislamiento por empresa y configuración por sucursal.
+- Cada producto define `prints_label`; el centro filtra por nombre, código, barcode principal/adicional, categoría, marca y Sí/No, y prepara lotes de uno o varios productos con cantidades validadas.
+- Seis plantillas simples y tamaños comerciales 32×19, 40×25, 50×30 y 60×40 mm; vista previa imprimible desde navegador con SVG Code 128 local, sin driver ni dependencia nueva.
+- Destinos Cajero/Administrador combinables por sucursal, preparados como lista extensible; permisos separados `productos.etiquetas.imprimir` y `productos.etiquetas.configurar`.
+- Evidencia: `LabelCenterTest` 5/5 (32 aserciones); regresión Productos/roles 22/22 (110 aserciones); build Vite correcto y `git diff --check` correcto.
+
+Siguiente fase autorizada: **P12 — Verificación Digital de Mercadería**. P08 permanece pendiente y no se inicia en esta sesión.
 
 ---
 

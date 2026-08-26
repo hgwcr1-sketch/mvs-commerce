@@ -34,6 +34,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'productos.crear', 'label' => 'Crear productos', 'module' => 'Productos'],
             ['name' => 'productos.editar', 'label' => 'Editar productos', 'module' => 'Productos'],
             ['name' => 'productos.eliminar', 'label' => 'Eliminar productos', 'module' => 'Productos'],
+            ['name' => 'productos.etiquetas.imprimir', 'label' => 'Preparar e imprimir etiquetas', 'module' => 'Productos'],
+            ['name' => 'productos.etiquetas.configurar', 'label' => 'Configurar etiquetas por sucursal', 'module' => 'Productos'],
             // Categorías
             ['name' => 'categorias.ver', 'label' => 'Ver categorías', 'module' => 'Productos'],
             ['name' => 'categorias.crear', 'label' => 'Crear categorías', 'module' => 'Productos'],
