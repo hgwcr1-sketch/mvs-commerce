@@ -6,6 +6,7 @@ use App\Models\BranchLabelSetting;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\PurchaseVerification;
 use App\Services\Labels\Code128Barcode;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -92,5 +93,21 @@ class LabelCenterController extends Controller
         });
         $setting = BranchLabelSetting::where('company_id', session('active_company_id'))->where('branch_id', session('active_branch_id'))->first();
         return view('labels.preview', ['labels' => $labels, 'template' => $data['template'], 'size' => $data['size'], 'setting' => $setting]);
+    }
+
+    public function fromVerification(Request $request, PurchaseVerification $purchaseVerification, Code128Barcode $barcode)
+    {
+        abort_unless((int) $purchaseVerification->company_id === (int) session('active_company_id') && (int) $purchaseVerification->branch_id === (int) session('active_branch_id'), 404);
+        abort_unless(in_array($purchaseVerification->status, ['conform', 'closed'], true), 422);
+        $items = $purchaseVerification->items()->where('received_quantity', '>', 0)->whereHas('product', fn ($query) => $query->where('company_id', session('active_company_id'))->where('prints_label', true))->with(['product.barcodes' => fn ($query) => $query->where('is_active', true)->orderByDesc('is_primary')])->get();
+        if ($items->isEmpty()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['labels' => 'La recepción no contiene productos marcados para imprimir etiqueta.']);
+        }
+        $setting = BranchLabelSetting::firstOrCreate(['company_id' => session('active_company_id'), 'branch_id' => session('active_branch_id')], ['print_destinations' => ['administrator']]);
+        $labels = $items->flatMap(function ($item) use ($barcode) {
+            $code = $item->product->barcode ?: $item->product->barcodes->first()?->barcode;
+            return collect(range(1, max(1, (int) floor((float) $item->received_quantity))))->map(fn () => ['product' => $item->product, 'barcode' => $code, 'barcode_svg' => $barcode->svg($code)]);
+        });
+        return view('labels.preview', ['labels' => $labels, 'template' => $setting->default_template, 'size' => $setting->default_size, 'setting' => $setting]);
     }
 }

@@ -123,6 +123,24 @@
 
 </div>
 
+@can('compras.recepcion.asignar')
+<section class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" data-reception-assignment>
+    <h3 class="font-semibold text-slate-900">Verificación física de mercadería</h3>
+    @if($purchase->verification)
+        <p class="mt-1 text-sm text-slate-600">Asignada a {{ $purchase->verification->assignee?->name }} · {{ str_replace('_', ' ', ucfirst($purchase->verification->status)) }}</p>
+        <a href="{{ route('purchase-verifications.show', $purchase->verification) }}" class="mt-3 inline-flex min-h-11 items-center rounded-xl bg-indigo-600 px-4 font-semibold text-white">Abrir verificación</a>
+    @elseif($purchase->status === 'posted')
+        <form method="POST" action="{{ route('purchase-verifications.store', $purchase) }}" class="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+            @csrf
+            <label><span class="form-label">Responsable autorizado</span><select required name="assigned_to" class="form-input w-full" data-assignee-select data-url="{{ route('purchase-verifications.assignable', $purchase) }}"><option value="">Cargando usuarios…</option></select></label>
+            <button class="min-h-11 self-end rounded-xl bg-indigo-600 px-4 font-semibold text-white">Asignar revisión</button>
+        </form>
+    @else
+        <p class="mt-1 text-sm text-slate-500">Solo las compras registradas pueden verificarse.</p>
+    @endif
+</section>
+@endcan
+
 
 <x-card>
 
@@ -264,3 +282,7 @@
 
 
 @endsection
+
+@push('scripts')
+<script>document.querySelectorAll('[data-assignee-select]').forEach(async(select)=>{const option=(value,text)=>{const element=document.createElement('option');element.value=value;element.textContent=text;return element;};try{const response=await fetch(select.dataset.url,{headers:{Accept:'application/json'}});if(!response.ok)throw new Error();const users=await response.json();select.replaceChildren(option('','Seleccione responsable'),...users.map(user=>option(user.id,user.name)));}catch(error){select.replaceChildren(option('','No fue posible cargar responsables'));}});</script>
+@endpush

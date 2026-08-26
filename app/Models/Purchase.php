@@ -88,6 +88,11 @@ class Purchase extends Model
         return $this->hasOne(AccountPayable::class);
     }
 
+    public function verification(): HasOne
+    {
+        return $this->hasOne(PurchaseVerification::class);
+    }
+
     /**
      * Usuario que anuló la compra.
      */

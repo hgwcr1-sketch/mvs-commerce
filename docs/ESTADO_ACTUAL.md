@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07B y P11 COMPLETADOS**. P11 fue adelantada por autorización expresa: Centro de Etiquetas integrado en Productos, con selección/lotes, Code 128, seis plantillas, cuatro tamaños, bandera por producto, permisos independientes y destino Cajero/Administrador por sucursal. **SIGUIENTE AUTORIZADA: P12 — Verificación Digital de Mercadería. P08 continúa pendiente y no debe iniciarse en esta sesión.**
+- Puesta en Producción: **P00–P07B, P11 y P12 COMPLETADOS**. P11/P12 fueron adelantadas por autorización expresa. La recepción digital se monta sobre Compras sin modificar `PurchaseProcessor`: asignación y badge persistente, revisión línea por línea, trazabilidad, cierre sin ajuste automático de stock e integración selectiva con etiquetas. **SIGUIENTE EXACTA: P08 — Dominio, servidor provisional y backups; no iniciada por límite expreso.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

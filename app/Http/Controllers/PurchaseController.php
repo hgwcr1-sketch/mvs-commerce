@@ -275,6 +275,7 @@ class PurchaseController extends Controller
         'branch',
         'user',
             'items.product.unit',
+            'verification.assignee:id,name',
     ])
     ->where('company_id', $companyId)
     ->where('branch_id', $branchId)

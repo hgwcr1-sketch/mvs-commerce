@@ -73,6 +73,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'compras.editar', 'label' => 'Editar compras', 'module' => 'Compras'],
             ['name' => 'compras.anular', 'label' => 'Anular compras', 'module' => 'Compras'],
             ['name' => 'compras.ordenes', 'label' => 'Administrar órdenes de compra', 'module' => 'Compras'],
+            ['name' => 'compras.recepcion.asignar', 'label' => 'Asignar verificación de mercadería', 'module' => 'Compras'],
+            ['name' => 'compras.recepcion.verificar', 'label' => 'Verificar recepción de mercadería', 'module' => 'Compras'],
+            ['name' => 'compras.recepcion.resolver', 'label' => 'Resolver y cerrar verificaciones', 'module' => 'Compras'],
 
             // Ventas
             ['name' => 'ventas.ver', 'label' => 'Ver ventas', 'module' => 'Ventas'],

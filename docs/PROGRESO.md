@@ -938,7 +938,17 @@ Evidencia: `LoyaltyPortalManagementTest` + regresión portal/acceso/QR/promocion
 - Destinos Cajero/Administrador combinables por sucursal, preparados como lista extensible; permisos separados `productos.etiquetas.imprimir` y `productos.etiquetas.configurar`.
 - Evidencia: `LabelCenterTest` 5/5 (32 aserciones); regresión Productos/roles 22/22 (110 aserciones); build Vite correcto y `git diff --check` correcto.
 
-Siguiente fase autorizada: **P12 — Verificación Digital de Mercadería**. P08 permanece pendiente y no se inicia en esta sesión.
+### P12 — Verificación Digital de Mercadería: COMPLETADO
+
+- Se añadió una capa transaccional de verificación ligada a la compra existente; no se modificaron `PurchaseProcessor`, importadores ni contabilización de inventario.
+- Asignación limitada a usuarios activos de la misma empresa y sucursal con `compras.recepcion.verificar`; permisos separados para asignar, verificar y resolver/cerrar.
+- Tarea persistente con badge en el encabezado y estados Pendiente, En revisión, Conforme, Con diferencias y Cerrada; persiste entre sesiones hasta el cierre.
+- Revisión mobile-first por línea con esperado, recibido, faltante, sobrante, confirmación y observación. Guarda auditoría de registro, asignación, verificación, resolución y fechas.
+- Las diferencias quedan registradas y no alteran `branch_product`, movimientos ni lotes. El cierre con diferencias exige nota de resolución.
+- “Preparar etiquetas” reutiliza P11 solo tras conformidad/cierre, usa cantidades recibidas, configuración de sucursal y productos con `prints_label = true`; nunca imprime automáticamente.
+- Evidencia: `PurchaseVerificationTest` 8/8 (48 aserciones); P11+Compras/Inventario relacionada 42/42 (233 aserciones); build Vite correcto y `git diff --check` correcto.
+
+Siguiente fase exacta: **P08 — Dominio, servidor provisional y backups**. No iniciada por prohibición expresa de esta sesión.
 
 ---
 

@@ -6,6 +6,14 @@
         ->where('branches.is_active', true)
         ->orderBy('branches.name')
         ->get();
+    $pendingReceptionCount = \Illuminate\Support\Facades\Schema::hasTable('purchase_verifications') && session('active_branch_id')
+        ? \App\Models\PurchaseVerification::query()
+            ->where('company_id', session('active_company_id'))
+            ->where('branch_id', session('active_branch_id'))
+            ->where('assigned_to', auth()->id())
+            ->whereIn('status', \App\Models\PurchaseVerification::OPEN_STATUSES)
+            ->count()
+        : 0;
 @endphp
 
 <header
@@ -35,6 +43,13 @@
 
     {{-- ACCIONES --}}
     <div class="flex shrink-0 items-center gap-2">
+
+        @can('compras.recepcion.verificar')
+            <a href="{{ route('purchase-verifications.index') }}" class="relative flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100" title="Verificaciones de mercadería" aria-label="Verificaciones pendientes: {{ $pendingReceptionCount }}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0a3 3 0 01-6 0"/></svg>
+                @if($pendingReceptionCount)<span class="absolute right-0.5 top-0.5 min-w-5 rounded-full bg-red-600 px-1 text-center text-xs font-bold leading-5 text-white">{{ $pendingReceptionCount > 99 ? '99+' : $pendingReceptionCount }}</span>@endif
+            </a>
+        @endcan
 
         @if($headerBranches->isNotEmpty())
 

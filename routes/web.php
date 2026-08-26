@@ -66,6 +66,7 @@ use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseImportController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseXmlImportController;
+use App\Http\Controllers\PurchaseVerificationController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
@@ -539,6 +540,20 @@ Route::middleware(['auth', 'active.company'])->group(function () {
     Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
         ->middleware(['active.branch', 'permission:compras.ver'])
         ->name('compras.search-products');
+
+    Route::middleware('active.branch')->prefix('compras/verificaciones')->name('purchase-verifications.')->group(function () {
+        Route::get('/', [PurchaseVerificationController::class, 'index'])->name('index');
+        Route::get('/{purchaseVerification}', [PurchaseVerificationController::class, 'show'])->name('show');
+        Route::post('/{purchaseVerification}/iniciar', [PurchaseVerificationController::class, 'start'])->middleware('permission:compras.recepcion.verificar')->name('start');
+        Route::put('/{purchaseVerification}/verificar', [PurchaseVerificationController::class, 'verify'])->middleware('permission:compras.recepcion.verificar')->name('verify');
+        Route::post('/{purchaseVerification}/cerrar', [PurchaseVerificationController::class, 'close'])->middleware('permission:compras.recepcion.resolver')->name('close');
+        Route::post('/{purchaseVerification}/etiquetas', [LabelCenterController::class, 'fromVerification'])->middleware('permission:productos.etiquetas.imprimir')->name('labels');
+    });
+
+    Route::get('/compras/{purchase}/verificacion/responsables', [PurchaseVerificationController::class, 'assignable'])
+        ->middleware(['active.branch', 'permission:compras.recepcion.asignar'])->name('purchase-verifications.assignable');
+    Route::post('/compras/{purchase}/verificacion', [PurchaseVerificationController::class, 'store'])
+        ->middleware(['active.branch', 'permission:compras.recepcion.asignar'])->name('purchase-verifications.store');
 
     Route::get('/compras/importar-xml',
         [PurchaseXmlImportController::class, 'create'])

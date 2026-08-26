@@ -248,7 +248,7 @@ No asumir que todo cajero tiene impresora. El permiso de imprimir etiquetas ser�
 Evidencia: Centro integrado bajo Productos con filtros por catálogo y barcodes adicionales, selección múltiple y cantidades; seis plantillas sencillas, tamaños 32×19/40×25/50×30/60×40, vista previa imprimible con Code 128 y configuración aislada por empresa/sucursal para Cajero/Administrador. Permisos independientes `productos.etiquetas.imprimir` y `productos.etiquetas.configurar`. `LabelCenterTest` cubre permisos, aislamiento, Sí/No, filtros, cantidades, barcode, destinos y responsive.
 
 ### P12 — Verificación Digital de Mercadería
-**Estado: SIGUIENTE (autorizada para ejecución adelantada).**
+**Estado: COMPLETADO (adelantado antes de P08 por autorización expresa).**
 
 Auditar primero Compras. No reemplazar el flujo funcional existente.
 
@@ -259,6 +259,8 @@ Estados: Pendiente, En revisión, Conforme, Con diferencias y Cerrada.
 Por línea: esperado, recibido, faltante, sobrante, check y observación. Guardar quién creó, asignó, verificó y resolvió, con fechas.
 
 Una diferencia **no modifica inventario automáticamente**. Al cerrar, ofrecer **Imprimir etiquetas** solo para productos con `Imprime etiqueta = Sí`, respetando cantidad y destino Cajero/Administrador. Todo digital, sin hoja impresa obligatoria.
+
+Evidencia: tarea persistente ligada uno-a-uno a la compra, estados Pendiente/En revisión/Conforme/Con diferencias/Cerrada, snapshot de cantidades y auditoría de creador/asignador/responsable/verificador/resolutor con fechas. Permisos `compras.recepcion.asignar`, `compras.recepcion.verificar` y `compras.recepcion.resolver`; asignables limitados a empresa+sucursal+permiso. Badge persistente por usuario, revisión mobile-first con faltante/sobrante/check/observación y cierre transaccional sin escritura de inventario. Integración revisable con P11 usa cantidades recibidas y solo `prints_label = true`. `PurchaseVerificationTest` cubre el flujo y el aislamiento.
 
 
 ## V0.2 — Wallet
