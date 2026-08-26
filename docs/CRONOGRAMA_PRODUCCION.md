@@ -51,12 +51,12 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P19** | Auditar incentivo: cliente, regla, beneficio, compra, sucursal, configurador y fecha | **COMPLETADO** | Claim enlaza regla y cliente, conserva tipo/valor, compra calificadora/consumo, sucursal, configurador y `awarded_at`; índice por empresa/fecha; `LoyaltyRegistrationIncentiveP19Test` 3/3 |
 | **P20** | Logo, nombre y colores de empresa en portal/QR manteniendo identidad MVS | **COMPLETADO** | Nombre/logo y colores configurables por empresa en acceso, registro, portal y tarjeta QR; identidad discreta “Hecho con MVS Commerce”; `LoyaltyPortalBrandingP20Test` 4/4 |
 
-### Bloque Base SaaS y Onboarding — P22–P23 (completados previamente, sin alterar secuencia actual)
+### Bloque Base SaaS y Onboarding — P21–P22 (completados previamente)
 
 | ID | Trabajo | Estado | Evidencia |
 |---|---|---|---|
-| **P22** | Separación Platform Admin / Tenant Admin | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `ManagePlatformAdmin.php`, `LoginController`, `BranchController`, `PlatformAdminTest` |
-| **P23** | Empresa + primera sucursal + primer administrador | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController` |
+| **P21** | Separación Platform Admin / Tenant Admin | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `ManagePlatformAdmin.php`, `LoginController`, `BranchController`, `PlatformAdminTest` |
+| **P22** | Empresa + primera sucursal + primer administrador | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController` |
 
 ### Bloque Correcciones — P23–P30
 
@@ -121,8 +121,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P18: COMPLETADO** – Una sola concesión por cliente conserva el constraint y locks existentes; teléfono y correo verificados son requisitos independientes configurables por empresa, comprobados antes del claim y congelados en su snapshot. Evidencia: `LoyaltyRegistrationIncentiveP18Test` 5/5, 16 aserciones; regresión P14–P18/Portal/POS/canje 80 tests, 395 aserciones; Pint focalizado y `git diff --check` correctos.
 - **P19: COMPLETADO** – El claim existente es el registro de auditoría único: enlaza cliente y regla, conserva beneficio, compra calificadora/consumo, sucursal, configurador y fecha explícita de concesión; consumo completa compra/sucursal sin alterar `awarded_at`. Evidencia: `LoyaltyRegistrationIncentiveP19Test` 3/3, 15 aserciones; regresión P14–P19/Portal/POS/canje 134 tests, 785 aserciones; Pint focalizado y `git diff --check` correctos.
 - **P20: COMPLETADO** – Nombre/logo y colores primario/acento por empresa aplicados al acceso, registro, portal y tarjeta QR imprimible, conservando la identidad discreta MVS. Evidencia: `LoyaltyPortalBrandingP20Test` 4/4, 21 aserciones; regresión P14–P20/Portal/POS/canjes 167 tests, 1.040 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
-- **Siguiente bloque pendiente de reconciliación documental:** la secuencia declara Correcciones P21–P30, pero la tabla no contiene P21 y comienza en P23, identificador ya usado por Onboarding. No renumerar ni iniciar hasta corregir la fuente oficial.
-- **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
+- **P21 y P22: COMPLETADOS en a60425f** – P21 Separación Platform/Tenant y P22 Onboarding empresa + primera sucursal + primer administrador.
+- **P23: SIGUIENTE BLOQUE** – Auditar la implementación existente de transferencias; no reconstruir.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.
 - **Fidelización:** solo pendientes reales P41–P48 tras auditoría (no reconstruir F01–F18, F28, F29 ya completados).
@@ -159,10 +159,11 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 
 ## Control de cambios
 
-- 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08), marca P22/P23 en a60425f.
-- 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplia a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente. P09A–P09D y P22/P23 se conservan con IDs exactos.
+- 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08); inicialmente documentó `a60425f` como P22/P23, etiquetas corregidas posteriormente a P21/P22 sin alterar el commit.
+- 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplía a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente y P09A–P09D conservan sus IDs exactos.
 - 2026-08-29 (noche): **sincronizado P09–P14 con Excel único y estado real del repositorio** – P09 ajuste QR compacto commit `58aba11` documentado; P10–P13 añadidos como bloques siguientes en orden (P10 patrón pestañas, P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal); P14 marcado PAUSADO/PARCIAL con código parcial preservado; regla de producción añadida (desarrollo → validación local → APROBADO PARA PRODUCCIÓN → despliegue controlado); regla P10–P13 responsive/touch/overflow añadida.
 - 2026-08-29 (noche): **P10 y P11 completados** – P10 publicado en `b383aad`; P11 aplica el patrón al Portal con panel único, permisos existentes, teclado y QR compacto. P12 queda siguiente.
 - 2026-08-29 (noche): **P14 completado retomando el trabajo parcial** – configuración por empresa, activación/desactivación, concesión única, `LoyaltyAccountService`/Kardex y claim auditable; P15 queda siguiente sin implementar sus reglas comerciales.
 - 2026-08-29 (noche): **P15 completado** – beneficio configurable como puntos, porcentaje o descuento fijo con valor decimal, validación doble HTTP/servicio, aislamiento e idempotencia; descuentos quedan pendientes hasta P16.
-- 2026-08-29 (noche): **P20 completado** – identidad visual de empresa aplicada al Portal y tarjeta QR, manteniendo marca MVS; se deja explícita la inconsistencia del siguiente ID (P21 ausente en la tabla oficial).
+- 2026-08-29 (noche): **P20 completado** – identidad visual de empresa aplicada al Portal y tarjeta QR, manteniendo marca MVS; se detecta una inconsistencia documental posterior a P20.
+- 2026-08-29 (noche): **reconciliación documental P21–P23 aprobada** – se alinea el Markdown con el Excel único: P21 Separación Platform/Tenant y P22 Onboarding permanecen completados con evidencia `a60425f`; P23 Auditoría de transferencias queda como siguiente bloque pendiente. No cambia código, estados ni historial Git.

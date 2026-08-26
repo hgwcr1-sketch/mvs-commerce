@@ -236,7 +236,7 @@ Fuente oficial del orden P01–P50 de Portal de Clientes + Correcciones + Migrac
 
 - P01–P09D COMPLETADOS; **P10 es el siguiente bloque** (Patrón UI reutilizable de pestañas MVS), no reutilizar numeraciones antiguas.
 - P09A, P09B, P09C y P09D conservan esos IDs exactos.
-- P22 = Separación Platform Admin / Tenant Admin, COMPLETADO; P23 = Onboarding empresa + sucursales + primer administrador, COMPLETADO.
+- P21 = Separación Platform Admin / Tenant Admin, COMPLETADO; P22 = Onboarding empresa + primera sucursal + primer administrador, COMPLETADO; ambos conservan `a60425f` como evidencia histórica. P23 = auditoría de transferencias existentes, PENDIENTE.
 - Migración completa P31–P40 queda después de los bloques existentes, sin reutilizar IDs.
 - Fidelización pendiente solo P41–P48 si sigue pendiente según código/tests (no reconstruir F01–F18, F28–F29 ya completados).
 - **Regla P10–P13:** responsive obligatorio, móvil primero, tablet y escritorio, mínimo táctil 44px, sin overflow horizontal, pestañas con scroll horizontal controlado en móvil, no eliminar funciones ni cambiar lógica.
