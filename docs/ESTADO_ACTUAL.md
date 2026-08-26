@@ -15,11 +15,11 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - Empresas existentes conservan su contexto y no repiten onboarding.
 
 
-## Estado actual de Portal de Clientes (P01–P18) — reconciliado con Excel único
+## Estado actual de Portal de Clientes (P01–P19) — reconciliado con Excel único
 
-**P10–P18 COMPLETADOS.** P14–P17 crean el incentivo único y sus reglas. P18 preserva la concesión única por empresa/cliente y añade requisitos configurables de teléfono/correo verificado, evaluados antes del claim y guardados como snapshot. Regresión P14–P18/Portal/POS/canje: 80 tests, 395 aserciones. **P19 es el siguiente bloque.**
+**P10–P19 COMPLETADOS.** P14–P18 crean el incentivo único y sus reglas. P19 completa trazabilidad en el claim existente: cliente, regla, beneficio, compra, sucursal, configurador y fecha de concesión. Regresión P14–P19/Portal/POS/canje: 134 tests, 785 aserciones. **P20 es el siguiente bloque.**
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P18 COMPLETADOS** (incluidos P09A–P09D con sus IDs exactos), P19 es el siguiente bloque y la migración P31–P40 permanece después de P19–P20 sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P19 COMPLETADOS** (incluidos P09A–P09D con sus IDs exactos), P20 es el siguiente bloque y la migración P31–P40 permanece después de P20 sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 - **P01 — Registrarme: COMPLETADO.** Enlace “Registrarme / Crear mi cuenta” en `loyalty.portal.login` (`resources/views/loyalty/portal/login.blade.php:14`) hacia `portal-clientes/{company}/registro`.
 - **P02 — Autorregistro: COMPLETADO.** `LoyaltyPortalSessionController::register` crea cliente activo (`is_active=true`) disponible en `clientes`, `pos.customers.search` y Fidelización, dentro de la empresa de la URL (`portal-clientes/{company}`), vía `Customer` + `LoyaltyPortalCredential`; sin factura/incentivo/QR individual. Rutas `loyalty.customer.register` / `register.store` (`routes/web.php:139`, `throttle:10,1`).
@@ -133,7 +133,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P18 COMPLETADOS** (incluidos P09A–P09D). P18 conserva idempotencia y agrega requisitos verificables de contacto sin implementar P19/P20. **P19 SIGUIENTE BLOQUE** – auditoría completa del incentivo. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
+- Puesta en Producción: **P01–P19 COMPLETADOS** (incluidos P09A–P09D). P19 completa auditoría del incentivo dentro del claim, sin sistema paralelo. **P20 SIGUIENTE BLOQUE** – logo, nombre y colores de empresa en portal/QR manteniendo identidad MVS. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -151,7 +151,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P19 — auditar cliente, regla, beneficio, compra, sucursal, configurador y fecha; P31 no inicia hasta cerrar P19–P20 en orden.**
+**Prioridad inmediata: P20 — logo, nombre y colores de empresa en portal/QR manteniendo identidad MVS; P31 queda después de cerrar P20.**
 
 No asumir que el último estado conocido sigue vigente.
 

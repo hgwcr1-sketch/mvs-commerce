@@ -34,6 +34,7 @@ class LoyaltyRegistrationIncentiveController extends Controller
                 'stacking_allowed' => $request->boolean('stacking_allowed'),
                 'require_verified_phone' => $request->boolean('require_verified_phone'),
                 'require_verified_email' => $request->boolean('require_verified_email'),
+                'configured_by' => $request->user()?->id,
             ],
         );
 

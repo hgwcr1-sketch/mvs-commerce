@@ -22,7 +22,7 @@ class LoyaltyRegistrationIncentive extends Model
     public const TIMINGS = [self::TIMING_REGISTRATION, self::TIMING_AFTER_FIRST_VALID_PURCHASE];
 
     protected $fillable = [
-        'company_id', 'is_enabled', 'benefit_type', 'benefit_value',
+        'company_id', 'configured_by', 'is_enabled', 'benefit_type', 'benefit_value',
         'minimum_purchase_enabled', 'minimum_purchase_amount', 'award_timing',
         'allow_on_first_purchase', 'bypass_redemption_minimum',
         'expiration_enabled', 'expiration_days',
@@ -52,5 +52,10 @@ class LoyaltyRegistrationIncentive extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function configurator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'configured_by');
     }
 }

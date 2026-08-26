@@ -8,12 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class LoyaltyRegistrationIncentiveClaim extends Model
 {
     protected $fillable = [
-        'company_id', 'customer_id', 'loyalty_movement_id', 'benefit_type', 'benefit_value',
+        'company_id', 'customer_id', 'incentive_rule_id', 'loyalty_movement_id', 'benefit_type', 'benefit_value',
         'award_timing', 'minimum_purchase_amount', 'allow_on_first_purchase',
         'bypass_redemption_minimum', 'awarded_points', 'discount_amount', 'branch_id',
         'participating_branch_ids', 'allow_offer_products', 'maximum_discount_amount', 'stacking_allowed',
         'required_verified_phone', 'required_verified_email',
-        'sale_id', 'qualification_sale_id', 'configured_by', 'available_at', 'expires_at',
+        'sale_id', 'qualification_sale_id', 'configured_by', 'awarded_at', 'available_at', 'expires_at',
         'expired_at', 'used_at',
     ];
 
@@ -34,6 +34,7 @@ class LoyaltyRegistrationIncentiveClaim extends Model
         'expires_at' => 'datetime',
         'expired_at' => 'datetime',
         'used_at' => 'datetime',
+        'awarded_at' => 'datetime',
     ];
 
     public function company(): BelongsTo
@@ -49,6 +50,11 @@ class LoyaltyRegistrationIncentiveClaim extends Model
     public function loyaltyMovement(): BelongsTo
     {
         return $this->belongsTo(LoyaltyMovement::class);
+    }
+
+    public function incentiveRule(): BelongsTo
+    {
+        return $this->belongsTo(LoyaltyRegistrationIncentive::class, 'incentive_rule_id');
     }
 
     public function branch(): BelongsTo
