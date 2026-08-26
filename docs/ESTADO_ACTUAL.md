@@ -51,13 +51,11 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ## Rama actual
 
-`feature/beautyos-b05`
+`feature/beautyos-opencode`
 
 ## Estado del repositorio
 
-BeautyOS B05–B08 están completados en `d74aad6`, `b284c1a`, `bfca7f6` y `8557fa8`. B09 — Aprobar alcance MVP y lista NO-MVP está completado por decisión del 25-08-2026. La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
-
-Los cambios locales actuales corresponden únicamente a la actualización del cronograma y documentación oficial de B09. No se modificó código funcional ni se inició B10.
+BeautyOS B05–B10 están completados. B05 (`d74aad6`), B06 (`b284c1a`), B07 (`bfca7f6`), B08 (`8557fa8`), B09 (`690ae77`), B10 (commit definitivo tras revisión del WIP `a956e66`). La planificación oficial se encuentra en `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx` y su guía de relevo en `docs/beautyos/README.md`.
 
 Verificar siempre con `git status` antes de trabajar.
 
@@ -84,12 +82,12 @@ Según historial reciente de commits en esta rama:
 
 - Fidelización: fases confirmadas hasta F34 y F33 (QR local) completadas; etapa 10 (portal) en curso — solo falta F35. Siguiente fase según cronograma: **F35 — Publicidad/promociones**.
 - POS: expansión activa (uno de los módulos principales).
-- BeautyOS: B05–B08 completados; B09 aprobado y completado. El MVP Professional y el Post-MVP están congelados en el cronograma maestro. B10 no iniciado.
+- BeautyOS: B05–B10 completados. El MVP Professional y el Post-MVP están congelados en el cronograma maestro. B11 (Asignar servicios a profesionales) es la siguiente tareaBeautyOS depende de B10-B11).
 - Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
 ## Próximo paso
 
-BeautyOS: **B10 — Crear módulo de profesionales** es la siguiente tarea. No iniciarla sin una tarea explícita.
+BeautyOS: **B11 — Asignar servicios a profesionales** es la siguiente tarea (depende de B10, completado). No iniciarla sin una tarea explícita.
 
 Antes de programar cualquier tarea nueva:
 

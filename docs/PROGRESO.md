@@ -188,7 +188,7 @@ El POS es uno de los módulos principales actualmente en expansión.
 
 ## BeautyOS
 
-Estado: B05–B08 COMPLETADOS; B09 COMPLETADO; B10 SIGUIENTE TAREA, NO INICIADA.
+Estado: B05–B10 COMPLETADOS.
 
 La fuente oficial de fases, IDs, orden, dependencias y criterios de aceptación es `docs/beautyos/BeautyOS_Cronograma_Maestro.xlsx`. `docs/beautyos/README.md` resume las decisiones aprobadas, las fases Academy y las hipótesis comerciales sin duplicar el detalle del Excel.
 
@@ -200,12 +200,16 @@ Evidencia de B07: commit `bfca7f6`, base `Appointment/Booking` implementada y va
 
 Evidencia de B08: commit `8557fa8`, base de Portal Cliente / Acceso Seguro implementada y validada.
 
+Evidencia de B10: CRUD mobile-first de perfiles Professional sobre User Core, scopes por empresa/sucursal, permisos `profesionales.{ver,crear,editar,eliminar}`, asignación de sucursales/especialidades y aislamiento cross-company. Archivos: `ProfessionalController`, `StoreProfessionalRequest`, `UpdateProfessionalRequest`, `Professional` (scope `forBranch`), 5 vistas Blade, rutas con middleware, `PermissionSeeder` (4 permisos BeautyOS), sidebar. Tests: `BeautyProfessionalManagementTest` (8 pruebas, 34 aserciones). PruebasBeautyOS completas: 29 tests, 119 aserciones. Pint limpio en archivos B10.
+
 B09 aprobó y congeló el alcance del MVP Professional:
 
 - MVP: `B00–B17`, `B20–B28`, `B40`, `B41`, `B46`, `B47`, `B70–B74` y `B77–B81`;
 - Post-MVP: `B30–B37`, `B42–B45`, `B50–B56`, `B60–B64`, `B75`, `B76` y `B82–B93`.
 
-El MVP es mobile-first, multiempresa/multisucursal, usa una identidad Core sin duplicaciones y debe poder venderse independientemente. Academy completa, fichas técnicas profundas, retención/IA y analítica avanzada quedan Post-MVP Professional. El piloto no depende de Academy y valida dos rubros distintos. La siguiente tarea es B10; documentar este estado no autoriza iniciarla.
+El MVP es mobile-first, multiempresa/multisucursal, usa una identidad Core sin duplicaciones y debe poder venderse independientemente. Academy completa, fichas técnicas profundas, retención/IA y analítica avanzada quedan Post-MVP Professional. El piloto no depende de Academy y valida dos rubros distintos.
+
+La siguiente tarea según el cronograma es **B11 — Asignar servicios a profesionales** (depende de B10 completado).
 
 ---
 
