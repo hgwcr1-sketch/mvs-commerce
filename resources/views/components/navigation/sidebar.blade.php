@@ -299,6 +299,14 @@
         <x-navigation.item route="ordenes-compra.index" icon="tag" label="Pedidos a proveedor" :active="request()->routeIs('ordenes-compra.*')" />
     @endcan
 
+    @canany(['compras.crear', 'inventario.ver', 'reportes.exportar', 'reportes.ver'])
+        <x-navigation.item
+            route="data-center.index"
+            icon="cube"
+            label="Centro de Datos"
+            :active="request()->routeIs('data-center.*', 'importaciones.*')" />
+    @endcanany
+
 
     {{-- ADMINISTRACIÓN --}}
     @canany(['usuarios.ver', 'roles.ver'])

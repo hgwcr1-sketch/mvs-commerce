@@ -56,6 +56,20 @@ Las denominaciones F18A–F18F se usaron durante el desarrollo pero no están et
 
 ---
 
+## Estado actual del Centro de Datos
+
+Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-datos/Cronograma_Maestro_Centro_de_Datos_MVS_Commerce_v2.xlsx`.
+
+- **D00 — Auditoría existente: COMPLETADO.**
+- **D01 — Contratos de plantillas MYM: EN CURSO EN PARALELO.** No bloqueó el shell y sigue siendo obligatorio antes de crear importadores nuevos dependientes de formatos reales.
+- **D02 — Centro de Datos base: COMPLETADO.** Entrada única mobile-first con Inicio, Importar, Exportar y Reportes; permisos existentes por capacidad y una sola entrada en la navegación compartida.
+- Importar enlaza sin duplicar: Compras Excel → pantalla actual de Compras, Compras XML → flujo XML actual e Inventario → prototipo existente con advertencia D03.
+- Exportar y Reportes son espacios base, sin exportadores ni reportes de negocio anticipados.
+- Evidencia: `DataCenterShellTest` 6/6 (47 aserciones), regresión navegación/Compras 39/39 (210 aserciones), build Vite y `git diff --check` correctos.
+- **SIGUIENTE: D03 — Caracterización Compras + blindaje Inventario**, pero no iniciarlo sin revisión de D02.
+
+---
+
 ## Rama actual
 
 `feature/pos`
@@ -85,6 +99,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
+- Centro de Datos: D00 y D02 completados; D01 continúa en paralelo con plantillas MYM. D03 es la siguiente fase, detenida para revisión de D02.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).

@@ -840,6 +840,28 @@ Antes de continuar una fase nueva, revisar:
 
 ---
 
+## Centro de Datos
+
+Estado: D00 y D02 COMPLETADOS; D01 EN CURSO EN PARALELO.
+
+### D02 — Centro de Datos base: COMPLETADO
+
+- shell único en `/centro-de-datos`, con entradas claras a Importar, Exportar y Reportes;
+- `DataCenterController` no consulta ni muta datos de negocio: solo resuelve la empresa activa, aplica autorización por permisos existentes y renderiza las cuatro vistas del shell;
+- Importar reutiliza destinos existentes sin controladores paralelos: Compras Excel (`compras.index`), Compras XML (`compras.import.xml.create`) e Inventario (`importaciones.inventario`);
+- `/importar-datos` conserva compatibilidad mediante redirección al área Importar, eliminando el destino roto sin alterar `DataImportController`;
+- Exportar y Reportes muestran únicamente su espacio futuro (D09/D10), sin crear archivos, queries ni reportes ficticios;
+- una sola entrada "Centro de Datos" en la fuente única del sidebar, visible cuando el usuario posee alguna capacidad aplicable;
+- permisos reutilizados: `compras.crear`, `compras.ver`, `inventario.ver`, `reportes.exportar` y `reportes.ver`; acceso 403 cuando no existe capacidad;
+- UI mobile-first con una columna a 360 px, navegación/tarjetas progresivas en `sm/md/lg`, targets de 44 px y ancho máximo seguro para 1280 px;
+- no se tocaron importadores, `PurchaseProcessor`, plantillas, datos MYM, Excel maestro ni BeautyOS.
+
+Evidencia: `DataCenterShellTest` (6 tests, 47 aserciones); regresión `ResponsiveNavigationTest` + Compras/Órdenes/Proveedor (39 tests, 210 aserciones); `npm run build`, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase: **D03 — Caracterización Compras + blindaje Inventario**, pendiente de revisión explícita de D02. D01 continúa en paralelo y sigue bloqueando importadores nuevos dependientes de plantillas reales.
+
+---
+
 ## Comercio electrónico
 
 Estado: PLANIFICADO

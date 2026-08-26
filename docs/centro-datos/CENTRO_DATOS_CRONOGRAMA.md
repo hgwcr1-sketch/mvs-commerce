@@ -3,7 +3,8 @@
 ## Estado
 - D00 Auditoría existente: COMPLETADO.
 - D01 Contratos y mapeo de plantillas MYM: EN CURSO, en paralelo.
-- D02 Centro de Datos base: EN CURSO y autorizado para iniciar ahora.
+- D02 Centro de Datos base: COMPLETADO.
+- D03 Caracterización Compras + blindaje Inventario: SIGUIENTE, requiere revisión de D02 antes de iniciar.
 - Fidelización F01–F45: cerrada previamente.
 
 ## Regla principal
@@ -20,6 +21,8 @@ No se autoriza crear importadores nuevos dependientes de plantillas no aprobadas
 7. No tocar BeautyOS.
 
 ## D02 — Centro de Datos base
+
+**Estado: COMPLETADO.**
 
 ### Objetivo
 Crear una entrada central, mobile-first, para:
@@ -60,13 +63,22 @@ Crear una entrada central, mobile-first, para:
 ### Criterio de cierre
 Centro de Datos permite entrar claramente a Importar / Exportar / Reportes y reutiliza las capacidades ya existentes sin duplicar lógica.
 
+### Evidencia de cierre
+- `DataCenterController` aporta únicamente autorización y navegación: Inicio, Importar, Exportar y Reportes.
+- Se reutilizan rutas existentes: Compras Excel abre `compras.index`, Compras XML abre `compras.import.xml.create` e Inventario abre `importaciones.inventario`.
+- No se modificaron `PurchaseExcelImport`, `PurchaseXmlImport`, `PurchaseProcessor`, `DataImportController` ni plantillas.
+- Permisos existentes: `compras.crear`, `compras.ver`, `inventario.ver`, `reportes.exportar` y `reportes.ver`; no se creó un sistema paralelo.
+- UI mobile-first verificada conceptualmente en 360/768/1280, con grids progresivos y controles táctiles.
+- `DataCenterShellTest`: 6 tests, 47 aserciones; regresión relacionada: 39 tests, 210 aserciones; build Vite y `git diff --check` correctos.
+- El Excel maestro `_v2.xlsx` se usó como fuente de control y no fue modificado.
+
 Commit sugerido:
 `feat: crear centro de datos D02`
 
 ---
 
 ## D03 — Caracterización Compras + blindaje Inventario
-Pendiente después de D02.
+SIGUIENTE, pendiente de revisión explícita de D02 antes de iniciar.
 
 ## D04 — Productos + múltiples códigos de barras
 Pendiente y bloqueado hasta contratos de plantilla D01 aprobados.

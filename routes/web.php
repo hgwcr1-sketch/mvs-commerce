@@ -29,6 +29,7 @@ use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataImportController;
+use App\Http\Controllers\DataCenterController;
 // Compras
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
@@ -664,7 +665,14 @@ Route::middleware(['auth', 'active.company'])->group(function () {
 
     Route::resource('agenda', AgendaController::class);
 
-    Route::get('/importar-datos', [DataImportController::class, 'index'])
+    Route::prefix('centro-de-datos')->name('data-center.')->group(function () {
+        Route::get('/', [DataCenterController::class, 'index'])->name('index');
+        Route::get('/importar', [DataCenterController::class, 'imports'])->name('imports');
+        Route::get('/exportar', [DataCenterController::class, 'exports'])->name('exports');
+        Route::get('/reportes', [DataCenterController::class, 'reports'])->name('reports');
+    });
+
+    Route::redirect('/importar-datos', '/centro-de-datos/importar')
         ->name('importaciones.index');
 
     Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
