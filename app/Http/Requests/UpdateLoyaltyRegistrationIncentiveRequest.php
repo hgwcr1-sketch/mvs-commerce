@@ -27,6 +27,8 @@ class UpdateLoyaltyRegistrationIncentiveRequest extends FormRequest
             'maximum_discount_enabled' => $setting?->maximum_discount_enabled ?? false,
             'maximum_discount_amount' => $setting?->maximum_discount_amount ?? '0',
             'stacking_allowed' => $setting?->stacking_allowed ?? true,
+            'require_verified_phone' => $setting?->require_verified_phone ?? false,
+            'require_verified_email' => $setting?->require_verified_email ?? false,
         ];
 
         $missing = [];
@@ -91,6 +93,8 @@ class UpdateLoyaltyRegistrationIncentiveRequest extends FormRequest
                 Rule::when($this->boolean('maximum_discount_enabled'), ['gt:0']),
             ],
             'stacking_allowed' => ['required', 'boolean'],
+            'require_verified_phone' => ['required', 'boolean'],
+            'require_verified_email' => ['required', 'boolean'],
         ];
     }
 

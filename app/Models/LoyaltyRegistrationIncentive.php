@@ -28,6 +28,7 @@ class LoyaltyRegistrationIncentive extends Model
         'expiration_enabled', 'expiration_days',
         'participating_branch_ids', 'allow_offer_products',
         'maximum_discount_enabled', 'maximum_discount_amount', 'stacking_allowed',
+        'require_verified_phone', 'require_verified_email',
     ];
 
     protected $casts = [
@@ -44,6 +45,8 @@ class LoyaltyRegistrationIncentive extends Model
         'maximum_discount_enabled' => 'boolean',
         'maximum_discount_amount' => 'decimal:4',
         'stacking_allowed' => 'boolean',
+        'require_verified_phone' => 'boolean',
+        'require_verified_email' => 'boolean',
     ];
 
     public function company(): BelongsTo

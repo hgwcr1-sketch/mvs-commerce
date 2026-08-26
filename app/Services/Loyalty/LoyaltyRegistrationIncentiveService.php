@@ -44,6 +44,8 @@ class LoyaltyRegistrationIncentiveService
                 'maximum_discount_enabled' => false,
                 'maximum_discount_amount' => '0.0000',
                 'stacking_allowed' => true,
+                'require_verified_phone' => false,
+                'require_verified_email' => false,
             ],
         );
     }
@@ -106,6 +108,8 @@ class LoyaltyRegistrationIncentiveService
             'maximum_discount_enabled' => $maximumDiscountEnabled,
             'maximum_discount_amount' => $maximumDiscountEnabled ? $maximumDiscountAmount : '0.0000',
             'stacking_allowed' => (bool) ($rules['stacking_allowed'] ?? $setting->stacking_allowed ?? true),
+            'require_verified_phone' => (bool) ($rules['require_verified_phone'] ?? $setting->require_verified_phone ?? false),
+            'require_verified_email' => (bool) ($rules['require_verified_email'] ?? $setting->require_verified_email ?? false),
         ]);
 
         return $setting->fresh();
@@ -130,6 +134,9 @@ class LoyaltyRegistrationIncentiveService
             if (! $setting?->is_enabled || $setting->award_timing !== LoyaltyRegistrationIncentive::TIMING_REGISTRATION) {
                 return null;
             }
+            if (! $this->meetsVerificationRequirements($customer, $setting)) {
+                return null;
+            }
 
             return $this->award($customer, $company, $setting, now(), $branchId);
         });
@@ -151,6 +158,9 @@ class LoyaltyRegistrationIncentiveService
 
             $setting = LoyaltyRegistrationIncentive::query()->where('company_id', $company->id)->lockForUpdate()->first();
             if (! $setting?->is_enabled || $setting->award_timing !== LoyaltyRegistrationIncentive::TIMING_AFTER_FIRST_VALID_PURCHASE) {
+                return null;
+            }
+            if (! $this->meetsVerificationRequirements($customer, $setting)) {
                 return null;
             }
             if (! $this->meetsMinimum($setting, (string) $lockedSale->total)) {
@@ -347,7 +357,15 @@ class LoyaltyRegistrationIncentiveService
             'allow_offer_products' => $setting->allow_offer_products,
             'maximum_discount_amount' => $setting->maximum_discount_enabled ? $setting->maximum_discount_amount : null,
             'stacking_allowed' => $setting->stacking_allowed,
+            'required_verified_phone' => $setting->require_verified_phone,
+            'required_verified_email' => $setting->require_verified_email,
         ]);
+    }
+
+    private function meetsVerificationRequirements(Customer $customer, LoyaltyRegistrationIncentive $setting): bool
+    {
+        return (! $setting->require_verified_phone || $customer->phone_verified_at !== null)
+            && (! $setting->require_verified_email || $customer->email_verified_at !== null);
     }
 
     private function settingAllowsSale(LoyaltyRegistrationIncentive $setting, Sale $sale): bool

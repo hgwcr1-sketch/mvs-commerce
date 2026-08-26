@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CustomerPublicCodeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,7 +24,9 @@ class Customer extends Model
         'phone',
         'phone_country_code',
         'mobile',
+        'phone_verified_at',
         'email',
+        'email_verified_at',
         'accepts_email_invoice',
         'country_id',
         'province_id',
@@ -45,17 +48,19 @@ class Customer extends Model
         'credit_limit' => 'decimal:2',
         'is_active' => 'boolean',
         'accepts_email_invoice' => 'boolean',
+        'phone_verified_at' => 'datetime',
+        'email_verified_at' => 'datetime',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (Customer $customer) {
             if (empty($customer->public_code)) {
-                $customer->public_code = app(\App\Services\CustomerPublicCodeService::class)->randomCode();
+                $customer->public_code = app(CustomerPublicCodeService::class)->randomCode();
                 // Reserva: reintentar si colisión dentro del mismo request (único por empresa)
                 $attempts = 0;
                 while ($attempts < 5 && static::query()->where('company_id', $customer->company_id)->where('public_code', $customer->public_code)->exists()) {
-                    $customer->public_code = app(\App\Services\CustomerPublicCodeService::class)->randomCode();
+                    $customer->public_code = app(CustomerPublicCodeService::class)->randomCode();
                     $attempts++;
                 }
             }

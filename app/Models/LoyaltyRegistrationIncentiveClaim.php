@@ -12,6 +12,7 @@ class LoyaltyRegistrationIncentiveClaim extends Model
         'award_timing', 'minimum_purchase_amount', 'allow_on_first_purchase',
         'bypass_redemption_minimum', 'awarded_points', 'discount_amount', 'branch_id',
         'participating_branch_ids', 'allow_offer_products', 'maximum_discount_amount', 'stacking_allowed',
+        'required_verified_phone', 'required_verified_email',
         'sale_id', 'qualification_sale_id', 'configured_by', 'available_at', 'expires_at',
         'expired_at', 'used_at',
     ];
@@ -25,6 +26,8 @@ class LoyaltyRegistrationIncentiveClaim extends Model
         'allow_offer_products' => 'boolean',
         'maximum_discount_amount' => 'decimal:4',
         'stacking_allowed' => 'boolean',
+        'required_verified_phone' => 'boolean',
+        'required_verified_email' => 'boolean',
         'awarded_points' => 'decimal:4',
         'discount_amount' => 'decimal:4',
         'available_at' => 'datetime',

@@ -32,6 +32,8 @@ class LoyaltyRegistrationIncentiveController extends Controller
                 'maximum_discount_enabled' => $request->boolean('maximum_discount_enabled'),
                 'maximum_discount_amount' => $request->validated('maximum_discount_amount') ?? '0',
                 'stacking_allowed' => $request->boolean('stacking_allowed'),
+                'require_verified_phone' => $request->boolean('require_verified_phone'),
+                'require_verified_email' => $request->boolean('require_verified_email'),
             ],
         );
 
