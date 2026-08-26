@@ -21,7 +21,6 @@ use App\Services\PaymentMethodProvisioner;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -450,9 +449,7 @@ class PosController extends Controller
         $company = Company::query()->findOrFail($companyId);
         $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
         $format = $receipts->format($sale, $request->query('format', 'letter'));
-        $autoPrint = false;
-        $pdf = Pdf::loadView('pos.receipt', compact('sale', 'company', 'format', 'autoPrint') + ['pdfMode' => true]);
-        $pdf->setPaper($format === 'letter' ? 'letter' : [0, 0, $format === '58mm' ? 164.41 : 226.77, 841.89]);
+        $pdf = $receipts->pdf($sale, $company, $format);
 
         return $pdf->download("comprobante-{$sale->sale_number}.pdf");
     }

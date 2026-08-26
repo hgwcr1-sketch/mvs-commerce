@@ -64,6 +64,15 @@
 
     </div>
 
+    <form method="POST" action="{{ route('pos.receipt.mail', $sale) }}" class="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        @csrf
+        <label class="text-sm font-semibold text-slate-700">
+            Enviar o reenviar comprobante por correo
+            <input type="email" name="email" required maxlength="150" value="{{ old('email', $sale->customer?->email) }}" placeholder="cliente@correo.com" class="mt-2 min-h-11 w-full rounded-xl border-slate-300">
+        </label>
+        <button type="submit" class="min-h-11 rounded-xl bg-amber-600 px-5 py-2 font-semibold text-white hover:bg-amber-700">Enviar PDF</button>
+    </form>
+
     <x-card>
 
     @can('ventas.anular')

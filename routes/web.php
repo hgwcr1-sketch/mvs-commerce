@@ -54,6 +54,7 @@ use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\PlatformAdminController;
 // Finanzas
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\SaleReceiptMailController;
 // Administración
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
@@ -176,6 +177,7 @@ Route::middleware(['auth', 'active.company'])->group(function () {
     Route::middleware('active.branch')->group(function () {
         Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::get('/pos/ventas/{sale}/comprobante.pdf', [PosController::class, 'receiptPdf'])->name('pos.receipt.pdf');
+        Route::post('/pos/ventas/{sale}/comprobante/correo', SaleReceiptMailController::class)->name('pos.receipt.mail');
     });
 
     Route::middleware('active.branch')->group(function () {

@@ -5,6 +5,8 @@ namespace App\Services\Sales;
 use App\Models\Company;
 use App\Models\Sale;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\PDF as DomPdf;
 
 class SaleReceiptService
 {
@@ -25,5 +27,19 @@ class SaleReceiptService
     public function format(Sale $sale, ?string $requested): string
     {
         return in_array($requested, self::FORMATS, true) ? $requested : ($sale->branch->receipt_format ?: '80mm');
+    }
+
+    public function pdf(Sale $sale, Company $company, string $format = 'letter'): DomPdf
+    {
+        $pdf = Pdf::loadView('pos.receipt', [
+            'sale' => $sale,
+            'company' => $company,
+            'format' => $format,
+            'autoPrint' => false,
+            'pdfMode' => true,
+        ]);
+        $pdf->setPaper($format === 'letter' ? 'letter' : [0, 0, $format === '58mm' ? 164.41 : 226.77, 841.89]);
+
+        return $pdf;
     }
 }

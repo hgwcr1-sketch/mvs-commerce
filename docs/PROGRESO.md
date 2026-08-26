@@ -891,7 +891,16 @@ Evidencia: `CompanyOnboardingTest` (4 tests, 30 aserciones); regresión P00–P0
 
 Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones); regresión POS/ventas/caja (29 tests, 172 aserciones); configuración/Panel Maestro (11 tests, 74 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
 
-Siguiente fase exacta: **P05 — Correo de comprobantes**.
+### P05 — Correo de comprobantes: COMPLETADO
+
+- Envío desde el comprobante y reenvío desde el detalle del historial con destinatario validado y correo del cliente como valor sugerido.
+- `SaleReceiptMail` adjunta el PDF producido por `SaleReceiptService`; P04 y P05 comparten una sola composición de comprobante.
+- Empresa, sucursal, módulo y autorización usan el mismo contrato de acceso de P04. Un fallo de transporte se informa sin modificar ni revertir la venta completada.
+- No se configuraron credenciales reales ni se modificó el entorno.
+
+Evidencia: `SaleReceiptMailTest` + `SaleReceiptProductionTest` (9 tests, 53 aserciones); regresión correo de caja/ventas (50 tests, 238 aserciones); build Vite, Pint focalizado y `git diff --check` correctos.
+
+Siguiente fase exacta: **P06 — Fidelización en todos los comprobantes**.
 
 ---
 

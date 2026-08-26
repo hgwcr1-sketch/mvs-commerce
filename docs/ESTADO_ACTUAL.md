@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P04 COMPLETADOS**. P04 incorpora comprobantes MVS 80 mm/58 mm/carta, PDF, reimpresión y configuración por sucursal con aislamiento y permisos. **SIGUIENTE: P05 — Correo de comprobantes.**
+- Puesta en Producción: **P00–P05 COMPLETADOS**. P04 aporta comprobantes adaptables/PDF; P05 permite enviarlos o reenviarlos por correo sin comprometer una venta confirmada ante fallos. **SIGUIENTE: P06 — Fidelización en todos los comprobantes.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

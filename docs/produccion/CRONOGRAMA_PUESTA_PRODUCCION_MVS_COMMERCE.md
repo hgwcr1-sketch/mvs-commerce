@@ -65,10 +65,10 @@ La fotografía entregada por el usuario es **solo referencia conceptual**. No co
 
 Implementado con un comprobante MVS único y reutilizable en 80 mm, 58 mm y carta, descarga PDF, reimpresión desde historial, formato/autoimpresión configurables por sucursal y autorización por empresa, sucursal, módulo y permiso. Evidencia: `SaleReceiptProductionTest` (5 tests, 33 aserciones), regresión relacionada (29 tests, 172 aserciones) y build Vite correctos.
 
-### P05 — Correo de comprobantes
+### P05 — Correo de comprobantes — COMPLETADO
 Enviar comprobante desde la venta y reenviar desde historial. Auditar y reutilizar PDF/correo existente antes de construir.
 
-**Estado:** SIGUIENTE.
+Implementado reutilizando el comprobante/PDF P04 y la infraestructura Laravel Mail existente. Permite envío desde el comprobante y reenvío desde el detalle histórico, valida destinatario y conserva la venta confirmada ante fallos de transporte. Evidencia: `SaleReceiptMailTest` (4 tests) y regresión de correo/caja/ventas (50 tests, 238 aserciones).
 
 ### P06 — Fidelización en todos los comprobantes
 Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
@@ -78,6 +78,8 @@ Cuando exista cliente y aplique, mostrar en térmica y factura grande/PDF:
 - saldo actual.
 
 Consumir el resultado real del módulo de fidelización; no recalcular puntos en la vista.
+
+**Estado:** SIGUIENTE.
 
 ### P07A — Portal de Clientes — experiencia del cliente
 

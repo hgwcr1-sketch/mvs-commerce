@@ -71,6 +71,18 @@
     <p class="center muted">Gracias por su compra</p>
 </main>
 @unless($pdfMode ?? false)
+    @if(session('success'))
+        <p class="center">{{ session('success') }}</p>
+    @endif
+    @if($errors->has('email'))
+        <p class="center warning">{{ $errors->first('email') }}</p>
+    @endif
+    <form class="actions" method="POST" action="{{ route('pos.receipt.mail', $sale) }}">
+        @csrf
+        <label class="muted" for="receipt-email">Correo del cliente</label>
+        <input id="receipt-email" type="email" name="email" required maxlength="150" value="{{ old('email', $sale->customer?->email) }}" placeholder="cliente@correo.com" style="min-height:44px;padding:10px;border:1px solid #94a3b8;border-radius:10px">
+        <button type="submit">Enviar comprobante</button>
+    </form>
     <nav class="actions" aria-label="Acciones del comprobante">
         <button type="button" onclick="window.print()">Imprimir</button>
         @foreach(['80mm' => '80 mm', '58mm' => '58 mm', 'letter' => 'Grande'] as $value => $label)
