@@ -100,7 +100,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07B, P11 y P12 COMPLETADOS**. P11/P12 fueron adelantadas por autorización expresa. La recepción digital se monta sobre Compras sin modificar `PurchaseProcessor`: asignación y badge persistente, revisión línea por línea, trazabilidad, cierre sin ajuste automático de stock e integración selectiva con etiquetas. **SIGUIENTE EXACTA: P08 — Dominio, servidor provisional y backups; no iniciada por límite expreso.**
+- Puesta en Producción: **P00–P07B, P11 y P12 COMPLETADOS; P08 TÉCNICAMENTE PREPARADO / PENDIENTE DE ACTIVACIÓN**. P08 dejó entorno productivo de referencia, preflight, despliegue, backup/restore probado sobre copia y manual de servidor Windows/VPS. No se tocaron datos reales, red, secretos ni motor de BD. Pendientes humanos: dominio/DNS/TLS, servidor/servicios Windows, red, SMTP, almacenamiento externo, motor de BD y validación desde ambas sedes. **SIGUIENTE DEL CRONOGRAMA: P09, NO INICIADA; activar P08 antes de operación real.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).

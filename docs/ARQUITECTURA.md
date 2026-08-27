@@ -845,3 +845,13 @@ Si un agente detecta una diferencia importante entre esta documentación y el re
 3. determinar cuál es el estado correcto;
 4. actualizar la documentación correspondiente.
 
+---
+
+## 36. Topología de Producción P08
+
+La instancia productiva es un despliegue separado de Desarrollo. Usa configuración y datos exclusivos, assets compilados, `storage/app/public` persistente, worker de cola y scheduler supervisados. HTTPS termina en un servidor web/proxy; `php artisan serve` queda limitado a Desarrollo.
+
+La PC provisional de San Ramón puede alojar una única instancia con SQLite local mientras la concurrencia sea baja. Liberia accede a esa misma instancia mediante HTTPS seguro; no se replican archivos SQLite activos entre sedes. La topología debe poder trasladarse a VPS conservando `APP_URL`, storage, secretos externos y un procedimiento controlado de migración de base de datos.
+
+Los artefactos operativos versionables viven en `scripts/production/`; la guía de activación, backup, restore y despliegue es `docs/produccion/P08_OPERACION_PRODUCCION.md`.
+

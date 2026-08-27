@@ -948,7 +948,18 @@ Evidencia: `LoyaltyPortalManagementTest` + regresión portal/acceso/QR/promocion
 - “Preparar etiquetas” reutiliza P11 solo tras conformidad/cierre, usa cantidades recibidas, configuración de sucursal y productos con `prints_label = true`; nunca imprime automáticamente.
 - Evidencia: `PurchaseVerificationTest` 8/8 (48 aserciones); P11+Compras/Inventario relacionada 42/42 (233 aserciones); build Vite correcto y `git diff --check` correcto.
 
-Siguiente fase exacta: **P08 — Dominio, servidor provisional y backups**. No iniciada por prohibición expresa de esta sesión.
+### P08 — Dominio, servidor provisional y backups: TÉCNICAMENTE PREPARADO / PENDIENTE DE ACTIVACIÓN
+
+- Se separó explícitamente Desarrollo de una futura instalación de Producción con checkout, `.env`, base y datos independientes; no se copiaron secretos ni datos reales.
+- `docs/produccion/env.production.example` fija los mínimos seguros versionables: `production`, debug desactivado, HTTPS, cookies seguras, logs diarios y SQLite productivo en ruta absoluta externa al checkout.
+- Scripts PowerShell fail-safe cubren preflight, backup consistente de SQLite + uploads con hashes/retención, restore aislado sin sobrescritura y despliegue fast-forward con backup, mantenimiento, dependencias, migraciones no destructivas, build, caches y reinicio de cola.
+- `docs/produccion/P08_OPERACION_PRODUCCION.md` documenta PC Windows provisional, servicios automáticos, recuperación tras apagón/reinicio, acceso de Liberia, TLS/DNS, seguridad, despliegue y migración posterior a VPS.
+- SQLite queda permitido solo como alternativa provisional de baja concurrencia y una instancia. La elección/instalación de PostgreSQL o MySQL para VPS requiere decisión humana y ensayo de conciliación; no se cambió motor.
+- Evidencia: 107 migraciones correctas en SQLite `:memory:`; backup/restore sobre copia segura con `integrity_check`, hashes y rechazo de destino existente; login 5/5 (32 aserciones), P12 8/8 dentro de la corrida focalizada, rutas/scheduler/storage correctos y build Vite correcto.
+- Activación pendiente: dominio/DNS/TLS, servidor web/administrador de procesos, router/firewall o túnel, cuenta/tareas Windows, UPS/energía, SMTP, almacenamiento externo, decisión de BD y validación real desde San Ramón y Liberia.
+- Discrepancia conservada: el Excel maestro v5 todavía marca fases P como pendientes (incluidas P11/P12), mientras este cronograma Markdown, Git, código y tests prueban P00–P07B/P11/P12 completadas. No se sobrescribió el Excel.
+
+Siguiente fase del cronograma: **P09 — Primera empresa real: MYM Beauty Center**, no iniciada. P08 debe completar su activación humana antes de declarar acceso productivo estable.
 
 ---
 

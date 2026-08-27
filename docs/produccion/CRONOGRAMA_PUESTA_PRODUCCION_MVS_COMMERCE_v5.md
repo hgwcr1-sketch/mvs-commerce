@@ -209,7 +209,11 @@ Un **Cajero** o **Vendedor** puede recibir permiso para crear/publicar promocion
 Para este alcance se reutiliza el sistema de usuarios + roles + permisos existente. **No crear un módulo separado de Vendedores** únicamente para P07B.
 
 ### P08 — Dominio, servidor provisional y backups
+**Estado: TÉCNICAMENTE PREPARADO / PENDIENTE DE ACTIVACIÓN.**
+
 Preparar acceso estable para San Ramón y Liberia. PC de San Ramón puede ser servidor provisional con HTTPS estable, servicios de arranque, sin suspensión, backups automáticos y recuperación probada. Diseñar para migrar posteriormente a VPS.
+
+Evidencia versionada: plantilla de entorno productivo sin secretos, preflight, despliegue seguro, backup consistente SQLite + uploads y restore aislado verificado en `scripts/production/`; procedimiento integral en `P08_OPERACION_PRODUCCION.md`. La prueba sobre copia segura validó integridad, hashes y rechazo de sobrescritura. Permanecen pendientes de intervención humana dominio/DNS/TLS, servidor web y servicios Windows, router/firewall o túnel, SMTP, almacenamiento externo, decisión de motor y validación desde ambas sedes. No se creó MYM ni se tocaron datos reales.
 
 ### P09 — Primera empresa real: MYM Beauty Center
 Crear MYM mediante el mismo mecanismo del producto:

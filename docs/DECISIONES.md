@@ -282,6 +282,16 @@ Revisar siempre Git antes de modificar y antes de respaldar.
 
 ---
 
+## D021 — Separación de Desarrollo y Producción
+
+Desarrollo y Producción deben ser instalaciones independientes, con checkout, `.env`, base de datos y archivos operativos separados. Los datos productivos no se usan para desarrollo normal y una actualización nunca reemplaza la base productiva con `database.sqlite` de Desarrollo.
+
+SQLite puede usarse provisionalmente en una sola PC y una sola instancia si la concurrencia real lo permite, con archivo local fuera del checkout y backup consistente. La elección de PostgreSQL/MySQL para VPS requiere decisión, drivers y ensayo de migración/conciliación; no se cambia automáticamente.
+
+Los despliegues productivos requieren versión probada, backup verificado, fast-forward, migraciones no destructivas, build/caches, smoke tests y recuperación documentada. Dominio, TLS, red, secretos y servicios del sistema permanecen bajo activación humana.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:
