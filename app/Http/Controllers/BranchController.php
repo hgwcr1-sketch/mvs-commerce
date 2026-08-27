@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\Company;
+use App\Services\CompanyLicenseService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -24,9 +26,10 @@ class BranchController extends Controller
         return view('branches.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CompanyLicenseService $licenses)
     {
         $companyId = session('active_company_id');
+        $licenses->assertCapacity(Company::findOrFail($companyId), 'branches');
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],

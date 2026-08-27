@@ -97,6 +97,8 @@ volumen crece.
 
 ## 8. Licencias SaaS
 
+Implementación P08L: `company_licenses` conserva el estado vigente y `company_license_events` registra cada transición con actor, estados, snapshot y nota. `licenses:refresh` corre diariamente. `trial`, `active` y `grace` permiten operar; `expired`, `suspended` y `cancelled` redirigen a `/licencia`. El bloqueo no elimina datos. Reactivar exige fechas futuras coherentes. Los cupos se validan antes de vincular usuarios o crear sucursales. Los módulos permanecen en `company_modules`.
+
 ### Unidad de licencia
 
 Una licencia por empresa.

@@ -302,6 +302,12 @@ La seguridad HTTP incluye throttling por actor/IP, regeneración de sesión, coo
 
 ---
 
+## D023 — Licencia SaaS empresarial separada de módulos y permisos
+
+Existe una licencia única por empresa. Su estado y vigencia gobiernan el acceso operativo; `company_modules` gobierna funcionalidades contratadas y roles/permisos gobiernan acciones de usuarios. Suspender, vencer o cancelar nunca elimina datos. Solo Platform Superadmin cambia licencias y toda transición queda auditada. El cobro recurrente queda fuera del MVP.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

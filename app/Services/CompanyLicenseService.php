@@ -1,0 +1,63 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Company;
+use App\Models\CompanyLicense;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class CompanyLicenseService
+{
+    public function ensure(Company $company): CompanyLicense
+    {
+        return $company->license()->firstOrCreate([], [
+            'status' => 'trial', 'plan' => 'Prueba', 'starts_at' => now(),
+            'expires_at' => now()->addDays(30), 'grace_until' => now()->addDays(37),
+        ]);
+    }
+
+    public function refresh(CompanyLicense $license): CompanyLicense
+    {
+        if (in_array($license->status, ['suspended', 'cancelled'], true)) {
+            return $license;
+        }
+        $status = $license->status;
+        if ($license->expires_at?->isPast()) {
+            $status = $license->grace_until?->isFuture() ? 'grace' : 'expired';
+        } elseif ($status === 'grace' || $status === 'expired') {
+            $status = $license->plan === 'Prueba' ? 'trial' : 'active';
+        }
+        if ($status !== $license->status) {
+            $this->transition($license, $status, null, 'Actualización automática por vigencia.', 'automatic');
+        }
+
+        return $license->refresh();
+    }
+
+    public function transition(CompanyLicense $license, string $status, ?User $actor, ?string $notes, string $action = 'transition', array $attributes = []): CompanyLicense
+    {
+        if (! in_array($status, CompanyLicense::STATUSES, true)) {
+            abort(422);
+        }
+
+        return DB::transaction(function () use ($license, $status, $actor, $notes, $action, $attributes) {
+            $from = $license->status;
+            $license->update([...$attributes, 'status' => $status, 'notes' => $notes, 'updated_by' => $actor?->id]);
+            $license->events()->create(['company_id' => $license->company_id, 'actor_id' => $actor?->id, 'action' => $action, 'from_status' => $from, 'to_status' => $status, 'snapshot' => $license->fresh()->only(['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit']), 'notes' => $notes]);
+
+            return $license->fresh();
+        });
+    }
+
+    public function assertCapacity(Company $company, string $resource): void
+    {
+        $license = $this->refresh($this->ensure($company));
+        $limit = $resource === 'users' ? $license->user_limit : $license->branch_limit;
+        $used = $resource === 'users' ? $company->users()->count() : $company->branches()->count();
+        if ($limit !== null && $used >= $limit) {
+            throw ValidationException::withMessages([$resource => "La licencia alcanzó el límite de {$resource} ({$limit})."]);
+        }
+    }
+}

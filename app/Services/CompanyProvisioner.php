@@ -19,6 +19,7 @@ class CompanyProvisioner
         private readonly PaymentMethodProvisioner $paymentMethodProvisioner,
         private readonly CompanyCashSettingsProvisioner $companyCashSettingsProvisioner,
         private readonly CashDenominationProvisioner $cashDenominationProvisioner,
+        private readonly CompanyLicenseService $companyLicenseService,
     ) {}
 
     /**
@@ -102,6 +103,8 @@ class CompanyProvisioner
                 'owner_user_id' => $owner->id,
                 'is_active' => true,
             ]);
+
+            $this->companyLicenseService->ensure($company);
 
             $this->paymentMethodProvisioner->provision($company);
             $this->companyCashSettingsProvisioner->provision($company);

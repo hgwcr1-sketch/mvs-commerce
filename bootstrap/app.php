@@ -3,6 +3,7 @@
 use App\Http\Middleware\AddSecurityHeaders;
 use App\Http\Middleware\EnsureActiveBranch;
 use App\Http\Middleware\EnsureActiveCompany;
+use App\Http\Middleware\EnsureCompanyLicense;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\PermissionMiddleware;
 use Illuminate\Foundation\Application;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,
+            'company.licensed' => EnsureCompanyLicense::class,
 
             'active.branch' => EnsureActiveBranch::class,
 

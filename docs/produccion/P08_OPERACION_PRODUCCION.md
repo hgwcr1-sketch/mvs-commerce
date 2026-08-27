@@ -86,6 +86,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\production\Tes
 
 Para una recuperación real: detener web/worker/scheduler; preservar la instalación dañada; ejecutar primero `Test-MvsRestore.ps1 -KeepRestore` hacia una ruta nueva; apuntar una instalación de recuperación y un `.env` temporal a esa copia; ejecutar `migrate:status`, login y smoke tests; solo después intercambiar rutas bajo ventana aprobada. Nunca sobrescribir la base activa directamente.
 
+## Operación de licencias P08L
+
+- Solo el Panel Maestro cambia plan, fechas, límites y estado; toda transición queda auditada.
+- El scheduler ejecuta `php artisan licenses:refresh` diariamente.
+- Suspender, cancelar o vencer bloquea rutas operativas sin eliminar datos.
+- Renovar/reactivar exige nota y fechas futuras coherentes; el acceso vuelve inmediatamente.
+- Los módulos continúan en `company_modules`; una licencia no concede permisos.
+
 ## Despliegue repetible
 
 1. En Desarrollo: árbol limpio, pruebas y build correctos; commit exclusivo y push a GitHub.

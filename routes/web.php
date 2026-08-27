@@ -23,6 +23,7 @@ use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashSessionHistoryController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyLicenseController;
 use App\Http\Controllers\CustomerAddressController;
 // Inventario
 use App\Http\Controllers\CustomerContactController;
@@ -157,9 +158,14 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::patch('/empresas/{company}/sucursales/{branch}', [PlatformAdminController::class, 'updateBranch'])->name('branches.update');
     Route::patch('/empresas/{company}/usuarios/{user}', [PlatformAdminController::class, 'updateUser'])->name('users.update');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
+    Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
 });
 
 Route::middleware(['auth', 'active.company'])->group(function () {
+    Route::get('/licencia', [CompanyLicenseController::class, 'show'])->name('license.status');
+});
+
+Route::middleware(['auth', 'active.company', 'company.licensed'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------

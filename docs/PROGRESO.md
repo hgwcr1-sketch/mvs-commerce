@@ -975,6 +975,15 @@ Siguiente fase del cronograma: **P09 — Primera empresa real: MYM Beauty Center
 
 P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Licenciamiento SaaS por empresa**. P09 no iniciada.
 
+### P08L — Licenciamiento SaaS por empresa: COMPLETADO
+
+- Licencia única por empresa con seis estados, plan, fechas, límites, notas e historial con actor/snapshot.
+- Actualización diaria; bloqueo sin borrar datos y reactivación al renovar.
+- Panel Maestro exclusivo, aislamiento, vista responsive y módulos separados en `company_modules`.
+- Límites centralizados en altas de usuarios y sucursales. Evidencia: 10 pruebas, 60 aserciones.
+- Regresión cercana: 23/23 pruebas, 102 aserciones. Suite global: 824 pruebas, 814 pasan, 4.764 aserciones y los mismos 10 fallos históricos documentados en P08S; no aparecieron fallos nuevos.
+- **P09 NO INICIADA.** Pausa hasta autorización explícita; PostgreSQL/staging P08S sigue pendiente.
+
 ---
 
 ## Centro de Datos

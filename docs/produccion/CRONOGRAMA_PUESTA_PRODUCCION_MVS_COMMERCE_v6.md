@@ -61,6 +61,8 @@ backup/restore probado y capacidad base medida.
 
 ## P08L --- Licenciamiento SaaS
 
+**Estado: COMPLETADO (27-08-2026).** Licencia única por empresa con seis estados, vigencia, renovación, plan, límites, notas, historial con actor/snapshot, actualización diaria, Panel Maestro exclusivo, bloqueo central y reactivación sin borrar datos. Los módulos continúan en `company_modules`. Evidencia focal: 10 pruebas y 60 aserciones. **P09 no iniciada; pausa obligatoria hasta autorización explícita.**
+
 La licencia pertenece a la **empresa**, no a cada usuario.
 
 Estados mínimos: - Prueba - Activa - Gracia - Vencida - Suspendida -

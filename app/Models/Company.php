@@ -58,6 +58,11 @@ class Company extends Model
         return $this->hasMany(CompanyModule::class);
     }
 
+    public function license()
+    {
+        return $this->hasOne(CompanyLicense::class);
+    }
+
     public function isModuleEnabled(string $moduleKey): bool
     {
         $module = $this->relationLoaded('modules')

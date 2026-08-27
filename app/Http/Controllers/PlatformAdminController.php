@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CompanyLicense;
 use App\Models\User;
+use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
 use App\Services\Modules\ModuleRegistry;
 use Illuminate\Http\RedirectResponse;
@@ -61,7 +63,7 @@ class PlatformAdminController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search'));
-        $companies = Company::query()->withCount(['branches', 'users'])
+        $companies = Company::query()->with('license')->withCount(['branches', 'users'])
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
                 ->where('trade_name', 'like', "%{$search}%")
                 ->orWhere('legal_name', 'like', "%{$search}%")
@@ -79,7 +81,7 @@ class PlatformAdminController extends Controller
         ]);
     }
 
-    public function show(Company $company): View
+    public function show(Company $company, CompanyLicenseService $licenses): View
     {
         $company->load([
             'branches' => fn ($query) => $query->orderBy('name'),
@@ -88,7 +90,26 @@ class PlatformAdminController extends Controller
             'modules',
         ]);
 
+        $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
+        $company->license->load(['events.actor']);
+
         return view('platform.show', ['company' => $company, 'moduleCatalog' => ModuleRegistry::MODULES]);
+    }
+
+    public function updateLicense(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', Rule::in(CompanyLicense::STATUSES)], 'plan' => ['required', 'string', 'max:80'],
+            'starts_at' => ['nullable', 'date'], 'expires_at' => ['nullable', 'date'],
+            'next_renewal_at' => ['nullable', 'date'], 'grace_until' => ['nullable', 'date', 'after_or_equal:expires_at'],
+            'user_limit' => ['nullable', 'integer', 'min:1'], 'branch_limit' => ['nullable', 'integer', 'min:1'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $status = $data['status'];
+        unset($data['status']);
+        $licenses->transition($licenses->ensure($company), $status, $request->user(), $data['notes'] ?? null, 'manual', $data);
+
+        return back()->with('success', 'Licencia actualizada y registrada en el historial.');
     }
 
     public function updateCompany(Request $request, Company $company): RedirectResponse
