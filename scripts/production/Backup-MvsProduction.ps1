@@ -10,10 +10,7 @@ $application = Resolve-MvsPath $ApplicationPath
 $backupRootPath = Resolve-MvsPath $BackupRoot
 $environment = Get-MvsEnvironment $application
 Assert-MvsProductionEnvironment $environment
-if ($environment['DB_CONNECTION'] -ne 'sqlite') { throw 'Backup-MvsProduction P08 soporta únicamente SQLite.' }
-
-$database = Resolve-MvsPath $environment['DB_DATABASE']
-if (-not (Test-Path -LiteralPath $database -PathType Leaf)) { throw "No existe la base: $database" }
+if ($environment['DB_CONNECTION'] -notin @('sqlite', 'pgsql')) { throw 'Motor no soportado: use sqlite o pgsql.' }
 if ($backupRootPath.StartsWith($application, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'BackupRoot debe estar fuera del checkout activo.'
 }
@@ -25,13 +22,29 @@ $workingDirectory = Join-Path $backupRootPath ".mvs-$stamp-$([guid]::NewGuid().T
 New-Item -ItemType Directory -Path $workingDirectory | Out-Null
 
 try {
-    $databaseCopy = Join-Path $workingDirectory 'database.sqlite'
-    $sqliteHelper = Join-Path $PSScriptRoot 'sqlite-backup.php'
-    & php $sqliteHelper backup $database $databaseCopy
-    if ($LASTEXITCODE -ne 0) { throw 'Falló la copia consistente de SQLite.' }
-
-    & php $sqliteHelper integrity $databaseCopy
-    if ($LASTEXITCODE -ne 0) { throw 'La copia SQLite no superó integrity_check.' }
+    if ($environment['DB_CONNECTION'] -eq 'sqlite') {
+        $database = Resolve-MvsPath $environment['DB_DATABASE']
+        if (-not (Test-Path -LiteralPath $database -PathType Leaf)) { throw "No existe la base: $database" }
+        $databaseCopy = Join-Path $workingDirectory 'database.sqlite'
+        $sqliteHelper = Join-Path $PSScriptRoot 'sqlite-backup.php'
+        & php $sqliteHelper backup $database $databaseCopy
+        if ($LASTEXITCODE -ne 0) { throw 'Falló la copia consistente de SQLite.' }
+        & php $sqliteHelper integrity $databaseCopy
+        if ($LASTEXITCODE -ne 0) { throw 'La copia SQLite no superó integrity_check.' }
+    } else {
+        foreach ($command in @('pg_dump', 'pg_restore')) { if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "No está disponible $command." } }
+        $databaseCopy = Join-Path $workingDirectory 'database.dump'
+        $previousPassword = $env:PGPASSWORD
+        try {
+            $env:PGPASSWORD = $environment['DB_PASSWORD']
+            & pg_dump --format=custom --no-owner --no-acl --host=$($environment['DB_HOST']) --port=$($environment['DB_PORT']) --username=$($environment['DB_USERNAME']) --file=$databaseCopy $environment['DB_DATABASE']
+            if ($LASTEXITCODE -ne 0) { throw 'pg_dump falló.' }
+            & pg_restore --list $databaseCopy | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'pg_restore no pudo leer el backup.' }
+        } finally {
+            if ($null -eq $previousPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue } else { $env:PGPASSWORD = $previousPassword }
+        }
+    }
 
     $uploads = Join-Path $application 'storage/app/public'
     if (-not (Test-Path -LiteralPath $uploads -PathType Container)) { throw "No existe el directorio de uploads: $uploads" }
@@ -43,7 +56,8 @@ try {
     $manifest = [ordered]@{
         format = 1
         created_at = (Get-Date).ToUniversalTime().ToString('o')
-        database_driver = 'sqlite'
+        database_driver = $environment['DB_CONNECTION']
+        database_file = Split-Path -Leaf $databaseCopy
         database_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $databaseCopy).Hash
         uploads_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $workingDirectory 'uploads.zip')).Hash
         git_commit = $gitCommit.Trim()

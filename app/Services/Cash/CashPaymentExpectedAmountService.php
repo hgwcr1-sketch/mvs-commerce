@@ -41,17 +41,17 @@ class CashPaymentExpectedAmountService
             ->where('payments.status', SalePayment::STATUS_COMPLETED)
             ->where('sales.status', Sale::STATUS_COMPLETED)
             ->groupBy('payments.payment_method_id')
-            ->selectRaw('payments.payment_method_id, SUM(CASE WHEN payments.affects_cash_snapshot = 1 THEN COALESCE(payments.cash_effect_amount, payments.amount) ELSE payments.amount END) as expected_amount')
+            ->selectRaw('payments.payment_method_id, SUM(CASE WHEN payments.affects_cash_snapshot THEN COALESCE(payments.cash_effect_amount, payments.amount) ELSE payments.amount END) as expected_amount')
             ->pluck('expected_amount', 'payments.payment_method_id')
             ->map(fn ($amount) => (float) $amount);
         $receivables = DB::table('accounts_receivable_payments as payments')
             ->where('payments.cash_session_id', $session->id)
             ->groupBy('payments.payment_method_id')
-            ->selectRaw('payments.payment_method_id, SUM(CASE WHEN payments.affects_cash_snapshot = 1 THEN payments.cash_effect_amount ELSE payments.amount END) as expected_amount')
+            ->selectRaw('payments.payment_method_id, SUM(CASE WHEN payments.affects_cash_snapshot THEN payments.cash_effect_amount ELSE payments.amount END) as expected_amount')
             ->pluck('expected_amount', 'payments.payment_method_id')
             ->map(fn ($amount) => (float) $amount);
-        $layaways = DB::table('layaway_payments')->where('cash_session_id',$session->id)->groupBy('payment_method_id')->selectRaw('payment_method_id, SUM(CASE WHEN affects_cash_snapshot = 1 THEN cash_effect_amount ELSE amount END) as expected_amount')->pluck('expected_amount','payment_method_id');
-        $payables = DB::table('accounts_payable_payments')->where('cash_session_id',$session->id)->groupBy('payment_method_id')->selectRaw('payment_method_id, SUM(amount) as expected_amount')->pluck('expected_amount','payment_method_id');
+        $layaways = DB::table('layaway_payments')->where('cash_session_id', $session->id)->groupBy('payment_method_id')->selectRaw('payment_method_id, SUM(CASE WHEN affects_cash_snapshot THEN cash_effect_amount ELSE amount END) as expected_amount')->pluck('expected_amount', 'payment_method_id');
+        $payables = DB::table('accounts_payable_payments')->where('cash_session_id', $session->id)->groupBy('payment_method_id')->selectRaw('payment_method_id, SUM(amount) as expected_amount')->pluck('expected_amount', 'payment_method_id');
 
         return $sales->keys()->merge($receivables->keys())->merge($layaways->keys())->merge($payables->keys())->unique()
             ->mapWithKeys(function ($methodId) use ($sales, $receivables, $layaways, $payables) {

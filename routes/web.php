@@ -37,6 +37,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
 // Ventas
+use App\Http\Controllers\LabelCenterController;
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
@@ -45,34 +46,33 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
-use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPortalManagementController;
+use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
-use App\Http\Controllers\PlatformAdminController;
 // Finanzas
+use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PosController;
-use App\Http\Controllers\SaleReceiptMailController;
 // Administración
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\LabelCenterController;
 use App\Http\Controllers\ProductSupplierController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseImportController;
 use App\Http\Controllers\PurchaseOrderController;
-use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\PurchaseVerificationController;
+use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SaleReceiptMailController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransferController;
@@ -92,18 +92,21 @@ Route::middleware('guest')->group(function () {
         ->name('login');
 
     Route::post('/login', [LoginController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('login.store');
 
     Route::get('/forgot-password', [ForgotPasswordController::class, 'create'])
         ->name('password.request');
 
     Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('password.email');
 
     Route::get('/reset-password/{token}', [ResetPasswordController::class, 'create'])
         ->name('password.reset');
 
     Route::post('/reset-password', [ResetPasswordController::class, 'store'])
+        ->middleware('throttle:6,1')
         ->name('password.update');
 
 });

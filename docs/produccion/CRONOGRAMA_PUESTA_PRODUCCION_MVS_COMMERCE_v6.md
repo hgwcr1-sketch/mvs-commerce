@@ -17,7 +17,7 @@ controladas.
 -   Dominio `mvscommerce.com`: **COMPRADO**.
 -   Decisión actual: Producción principal en **cloud**, no en la PC de
     San Ramón.
--   P08S: **SIGUIENTE**.
+-   P08S: **VALIDADO ESTÁTICAMENTE / PRUEBA REAL POSTGRESQL PENDIENTE**.
 -   P08L: **PENDIENTE DESPUÉS DE P08S**.
 -   P09 MYM Beauty Center: **PENDIENTE**.
 -   P10 piloto/salida: **PENDIENTE**.
@@ -36,6 +36,10 @@ controladas.
 8.  **V0.2 Wallet** después del MVP.
 
 ## P08S --- Seguridad + PostgreSQL + capacidad
+
+**Estado:** validación de código y SQLite completada. La ejecución sobre PostgreSQL y la carga HTTP k6 quedan pendientes porque el entorno local no dispone de `pdo_pgsql`, `psql`, `pg_dump`, `pg_restore` ni servidor PostgreSQL; no se instaló software sin autorización.
+
+Evidencia: SQL booleano portable, headers de seguridad, throttles de autenticación/Portal, regeneración de sesión, índices de Portal y herramientas fail-safe para migraciones, backup, restore y carga PostgreSQL. Regresión P08S: 58/58 pruebas, 479 aserciones. Línea base SQLite efímera: 3.001 clientes, cuatro consultas críticas, 2,37–8,22 ms observados; no representa capacidad máxima. Suite global: 820 pruebas, 810 pasan y 10 contratos históricos fallan sin relación con P08S.
 
 Objetivo: no introducir datos reales hasta demostrar que MVS puede
 operar de forma segura en PostgreSQL y bajo carga razonable.

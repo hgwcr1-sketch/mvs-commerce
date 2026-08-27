@@ -292,6 +292,16 @@ Los despliegues productivos requieren versión probada, backup verificado, fast-
 
 ---
 
+## D022 — Producción cloud en PostgreSQL
+
+La Producción principal de MVS Commerce se desplegará en cloud con PostgreSQL privado. SQLite permanece como motor normal de Desarrollo y solo como contingencia provisional de una única instancia; el código de negocio debe ser portable entre ambos motores.
+
+Ninguna compatibilidad PostgreSQL se declara operativa solo por auditoría estática. Antes de datos reales se requieren migraciones/regresión, backup/restore aislado y carga controlada en staging PostgreSQL. Las herramientas de prueba rechazan bases no vacías o sin sufijos `_test`/`_restore_test` y nunca eliminan bases.
+
+La seguridad HTTP incluye throttling por actor/IP, regeneración de sesión, cookies seguras en Producción y headers defensivos. Los límites de carga son métricas observadas, no promesas de capacidad máxima.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

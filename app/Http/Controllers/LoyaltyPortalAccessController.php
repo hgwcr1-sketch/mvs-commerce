@@ -21,6 +21,7 @@ class LoyaltyPortalAccessController extends Controller
     {
         $resolved = $portalAccess->resolve($token);
         abort_unless($resolved !== null, 404);
+        $request->session()->regenerate();
         $request->session()->put([
             'loyalty_portal_company_id' => $resolved['company']->id,
             'loyalty_portal_customer_id' => $resolved['customer']->id,

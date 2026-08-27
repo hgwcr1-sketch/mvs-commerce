@@ -13,6 +13,8 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'El back
 if (Test-Path -LiteralPath $restore) { throw 'RestoreRoot ya existe; se rechaza sobrescribirlo.' }
 
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+$driver = if ($manifest.database_driver) { $manifest.database_driver } else { 'sqlite' }
+if ($driver -ne 'sqlite') { throw 'Para PostgreSQL use Test-PostgreSqlRestore.ps1 con una base *_restore_test vacía.' }
 $databaseSource = Join-Path $backup 'database.sqlite'
 $uploadsSource = Join-Path $backup 'uploads.zip'
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $databaseSource).Hash -ne $manifest.database_sha256) { throw 'Hash de base de datos inválido.' }

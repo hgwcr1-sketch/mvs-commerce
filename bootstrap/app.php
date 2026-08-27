@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
 use App\Http\Middleware\EnsureActiveBranch;
 use App\Http\Middleware\EnsureActiveCompany;
 use App\Http\Middleware\EnsurePlatformAdmin;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
 
         $middleware->trustProxies(at: '*');
+        $middleware->append(AddSecurityHeaders::class);
 
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,

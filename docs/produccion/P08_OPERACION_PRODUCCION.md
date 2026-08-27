@@ -8,7 +8,7 @@ Desarrollo y Producción son instalaciones distintas:
 
 | Elemento | Desarrollo | Producción |
 |---|---|---|
-| Checkout | repositorio de trabajo actual | `C:\MVSCommerce\production\app` o ruta dedicada |
+| Checkout | repositorio de trabajo actual | release/checkout dedicado en servidor cloud |
 | Entorno | `.env` local, `APP_ENV=local` | `.env` no versionado basado en `env.production.example` |
 | Datos | SQLite de desarrollo y bases temporales de tests | archivo/servidor de BD exclusivo; nunca copiar `database.sqlite` de desarrollo |
 | Assets | Vite dev/build local | `npm ci && npm run build` durante despliegue |
@@ -24,7 +24,11 @@ Desarrollo y Producción son instalaciones distintas:
 - Vite genera assets en `public/build`, ignorado por Git. Logs actuales son `stack/single`; Producción debe usar `daily`.
 - La instalación local usa `APP_DEBUG=true` y es únicamente Desarrollo.
 
-## Servidor provisional Windows
+## Producción cloud y contingencia Windows
+
+La decisión v6 establece cloud como Producción principal: proxy HTTPS, aplicación PHP, worker, scheduler, PostgreSQL privado, storage persistente, backups externos y monitoreo. Exponer únicamente 443; SSH solo por llave y red/IP administrativa; PostgreSQL nunca público. Separar usuario de despliegue, usuario del proceso y rol de base de datos con privilegios mínimos. Aplicar actualizaciones de seguridad en ventana controlada y alertar por disponibilidad, CPU, RAM, disco, errores 5xx, cola y conexiones PostgreSQL.
+
+La PC Windows de San Ramón queda únicamente como alternativa provisional/contingencia y no como arquitectura objetivo.
 
 Arquitectura recomendada: router/DNS o túnel empresarial → HTTPS en IIS con ARR/FastCGI o Caddy → PHP/Laravel. `php artisan serve` no es servidor productivo. No activar exposición directa hasta contar con dominio, certificado, firewall restringido y revisión humana.
 
@@ -52,11 +56,21 @@ Para Liberia, preferir `https://app.mvscommerce.com` mediante un túnel/VPN empr
 
 SQLite es aceptable únicamente como etapa provisional de baja concurrencia, con el archivo en disco local estable, una sola instancia de aplicación y backups consistentes. No ubicarlo en OneDrive, carpeta de red ni repositorio. Sus límites son la serialización de escrituras, operación/observabilidad limitada y mayor dependencia de una sola PC.
 
-Para el VPS se recomienda PostgreSQL administrado (o MySQL/MariaDB si el proveedor/operador lo estandariza), después de una decisión humana y una prueba completa de compatibilidad. PHP actual no tiene esos drivers. La migración futura será: congelar escrituras, backup verificado, crear esquema con migraciones en BD vacía, importar mediante herramienta aprobada, conciliar conteos/totales/relaciones, ejecutar pruebas end-to-end y cambiar `DB_CONNECTION` solo en una ventana controlada. No copiar el SQLite sobre otra base ni improvisar conversión en P08.
+La arquitectura cloud v6 adopta PostgreSQL como objetivo. PHP local todavía no tiene `pdo_pgsql` y tampoco existen las herramientas cliente; la prueba real no se simuló. `Test-PostgreSqlCompatibility.ps1` exige una base vacía cuyo nombre termine en `_test`, ejecuta solo `migrate --force`, nunca limpia una base existente y conserva el resultado para inspección. La plantilla está en `env.postgresql.testing.example`.
+
+La migración futura será: congelar escrituras, backup verificado, crear esquema con migraciones en BD vacía, importar mediante herramienta aprobada, conciliar conteos/totales/relaciones, ejecutar pruebas end-to-end y cambiar `DB_CONNECTION` solo en una ventana controlada. No copiar SQLite sobre PostgreSQL ni improvisar conversión.
 
 ## Backup y restore
 
 Programar `Backup-MvsProduction.ps1` cada noche y adicionalmente antes de cada despliegue. Conservación inicial: 30 diarios; añadir 12 mensuales en almacenamiento externo. `BackupRoot` debe estar fuera del checkout y, cuando sea posible, sincronizarse cifrado a otro dispositivo/ubicación. El script crea una copia consistente mediante API SQLite, valida `integrity_check`, comprime uploads, guarda hashes y elimina únicamente respaldos MVS vencidos con manifiesto.
+
+Con `DB_CONNECTION=pgsql`, el mismo script usa `pg_dump --format=custom --no-owner --no-acl` y valida el archivo con `pg_restore --list`. `Test-PostgreSqlRestore.ps1` solo acepta una base vacía terminada en `_restore_test`, valida hashes de dump/uploads, restaura con `--exit-on-error` y nunca elimina ni reemplaza una base. PostgreSQL y sus herramientas deben ser instalados/configurados por el operador cloud.
+
+## Capacidad P08S
+
+`P08SecurityPostgresCapacityTest` genera 3.001 clientes y 100 ventas/movimientos en SQLite efímero, mide cliente/saldo/movimientos/compras y comprueba índices. Se observaron cuatro consultas y 2,37–8,22 ms en las ejecuciones locales; no es un máximo ni extrapola concurrencia cloud.
+
+`scripts/load/p08s-k6.js` mide Portal y POS concurrentes únicamente contra local/staging/test y exige `ALLOW_P08_LOAD_TEST=true`. Antes de Producción debe ejecutarse contra staging PostgreSQL, registrando VUs, solicitudes/minuto, p50/p95/p99, errores, CPU, RAM, disco, conexiones y consultas lentas. El payload POS debe usar datos desechables e idempotencia real.
 
 Ejemplo (la ruta y cuenta deben aprobarse):
 

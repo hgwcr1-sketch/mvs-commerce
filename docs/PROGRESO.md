@@ -961,6 +961,20 @@ Evidencia: `LoyaltyPortalManagementTest` + regresión portal/acceso/QR/promocion
 
 Siguiente fase del cronograma: **P09 — Primera empresa real: MYM Beauty Center**, no iniciada. P08 debe completar su activación humana antes de declarar acceso productivo estable.
 
+### P08S — Seguridad + PostgreSQL + capacidad: VALIDADO ESTÁTICAMENTE / POSTGRESQL REAL PENDIENTE
+
+- Auditoría completa de migraciones, SQL crudo, booleanos, fechas, JSON, constraints, transacciones, rutas públicas, autenticación, Portal, comprobantes, storage y aislamiento.
+- Corregidas tres comparaciones booleanas SQL incompatibles con PostgreSQL; consultas restantes usan Query Builder o expresiones comunes (`COUNT`, `SUM`, `CASE`, `DATE`, `LOWER`).
+- Headers globales (`nosniff`, `DENY`, referrer, permissions y HSTS productivo HTTPS), throttles staff/Portal, contraseña fuerte y regeneración de sesión al usar enlace seguro.
+- Índices nuevos para historial de ventas, movimientos del Portal y ofertas activas.
+- Herramientas PostgreSQL fail-safe: plantilla, migración sobre base `_test` vacía, `pg_dump`, validación, restore aislado `_restore_test` y uploads con hashes. No se instaló software ni se tocaron credenciales.
+- Capacidad local reproducible: 3.001 clientes, 100 ventas/movimientos, cuatro consultas, 2,37–8,22 ms en SQLite `:memory:`. k6 preparado para Portal/POS solo en staging/test. No se inventa capacidad máxima.
+- Evidencia verde P08S: 58 pruebas, 479 aserciones; migraciones SQLite completas; build Vite y `git diff --check` correctos.
+- Suite global con 512 MB: 820 pruebas, 810 pasan, 4.745 aserciones y 10 fallos históricos reproducibles: siete ya documentados (Example/POS/Cotización) y tres contratos desactualizados de P03/P07B (`CompanyOnboardingTest`, `LoyaltyAdminAuthorizationTest`). Ninguno toca archivos P08S.
+- Pendiente externa: instalar/configurar PostgreSQL y `pdo_pgsql` en staging autorizado; ejecutar migraciones/regresión, backup/restore real y k6 con telemetría.
+
+P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Licenciamiento SaaS por empresa**. P09 no iniciada.
+
 ---
 
 ## Centro de Datos

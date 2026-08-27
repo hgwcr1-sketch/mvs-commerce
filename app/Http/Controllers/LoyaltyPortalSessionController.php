@@ -15,7 +15,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
 
 class LoyaltyPortalSessionController extends Controller
@@ -30,12 +32,19 @@ class LoyaltyPortalSessionController extends Controller
     public function login(Request $request, Company $company): RedirectResponse
     {
         $data = $request->validate(['username' => ['required', 'string', 'max:150'], 'password' => ['required', 'string']]);
+        $rateKey = 'loyalty-portal-login:'.$company->id.':'.Str::lower($data['username']).'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($rateKey, 5)) {
+            return back()->withErrors(['username' => 'Demasiados intentos. Inténtalo nuevamente en '.RateLimiter::availableIn($rateKey).' segundos.'])->onlyInput('username');
+        }
         $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('is_active', true)
             ->where(fn ($query) => $query->where('username', $data['username'])->orWhere('email', $data['username']))->first();
         if (! $credential || ! Hash::check($data['password'], $credential->password)) {
+            RateLimiter::hit($rateKey, 60);
+
             return back()->withErrors(['username' => 'Las credenciales no son válidas.'])->onlyInput('username');
         }
 
+        RateLimiter::clear($rateKey);
         $request->session()->regenerate();
         $this->putPortalSession($request, $credential->company_id, $credential->customer_id);
         $credential->update(['last_login_at' => now()]);
@@ -57,7 +66,7 @@ class LoyaltyPortalSessionController extends Controller
         $data = $request->validate([
             'username' => ['required', 'string', 'max:100', 'alpha_dash'],
             'email' => ['required', 'email:rfc', 'max:150'],
-            'password' => ['required', 'confirmed', 'min:8'],
+            'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()],
         ]);
         $duplicate = LoyaltyPortalCredential::query()->where('company_id', $company->id)
             ->where('customer_id', '!=', $customer->id)
@@ -89,6 +98,7 @@ class LoyaltyPortalSessionController extends Controller
     {
         $companyId = (int) $request->session()->pull('loyalty_portal_company_id');
         $request->session()->forget('loyalty_portal_customer_id');
+        $request->session()->regenerateToken();
 
         return redirect()->route('loyalty.customer.login', $companyId);
     }
@@ -139,7 +149,7 @@ class LoyaltyPortalSessionController extends Controller
 
     public function reset(Request $request, Company $company, string $token): RedirectResponse
     {
-        $data = $request->validate(['password' => ['required', 'confirmed', 'min:8']]);
+        $data = $request->validate(['password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()]]);
         $reset = $this->validReset($company, $token);
         abort_unless($reset, 404);
         DB::transaction(function () use ($reset, $data) {

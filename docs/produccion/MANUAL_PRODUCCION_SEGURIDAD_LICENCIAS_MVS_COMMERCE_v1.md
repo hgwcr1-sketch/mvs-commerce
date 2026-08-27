@@ -67,6 +67,8 @@ tipos y constraints; - índices; - SQL crudo; - transacciones; -
 ordenamientos/fechas; - búsquedas; - pruebas de módulos críticos; -
 backup y restore.
 
+Estado P08S: auditoría estática completa y SQLite verdes. Se eliminaron comparaciones booleanas incompatibles, se agregaron índices de historial del Portal y se prepararon plantilla/runner PostgreSQL sin secretos. La ejecución real sigue pendiente por ausencia de driver, cliente y servidor PostgreSQL; no se autoriza declarar compatibilidad operativa hasta ejecutar migraciones y regresión en una base `_test` vacía.
+
 ## 6. Capacidad
 
 No medir capacidad por "cantidad de empresas" solamente.
@@ -78,6 +80,8 @@ consultas lentas; - carga del Portal.
 Miles de clientes registrados no significan miles conectados. P08S debe
 generar una referencia de carga antes de MYM y Producción deberá
 monitorearse continuamente.
+
+Referencia local P08S: 3.001 clientes, 100 movimientos y 100 ventas; cuatro consultas críticas en 2,37–8,22 ms sobre SQLite en memoria. No es capacidad máxima. La concurrencia Portal/POS debe medirse con `scripts/load/p08s-k6.js` en staging PostgreSQL y correlacionarse con métricas del servidor.
 
 ## 7. Portal del Cliente
 
@@ -130,6 +134,8 @@ checksum/integridad; - restauración aislada probada; - procedimiento de
 emergencia.
 
 Un backup que nunca se restauró no se considera validado.
+
+Para PostgreSQL, `Backup-MvsProduction.ps1` genera formato custom y valida el catálogo; `Test-PostgreSqlRestore.ps1` restaura solo en una base vacía `_restore_test`, valida hashes y puede extraer uploads a una ruta nueva. La prueba real queda pendiente hasta disponer de PostgreSQL autorizado.
 
 ## 10. Primera empresa real --- MYM Beauty Center
 
