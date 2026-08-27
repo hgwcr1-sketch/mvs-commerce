@@ -62,8 +62,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 | ID | Trabajo | Estado | Origen |
 |---|---|---|---|
-| P23 | Auditar implementación existente de transferencias; no reconstruir | **PENDIENTE** | Corrección |
-| P24 | Probar origen/destino, stock, Kardex, permisos y decidir instantánea vs envío/recepción | **PENDIENTE** | Corrección |
+| P23 | Auditar implementación existente de transferencias; no reconstruir | **COMPLETADO** | `TransferController::store` delegado a `InventoryPostingService::postTransfer`; Kardex (`transfer_out`/`transfer_in`), ID `TR-` y stock preservados; sin reconstruir. Evidencia: `InventoryTransferP24Test` 7/7, 54 aserciones. |
+| P24 | Probar origen/destino, stock, Kardex, permisos y decidir instantánea vs envío/recepción | **COMPLETADO** | `InventoryTransferP24Test` 7/7, 54 aserciones + regresión relacionada (excl. `PosAccessAndSearchTest`) verde excepto 2 fallos históricos de deriva (`PosSuspendedSalesTest` formato precio recuperación, `OrderPosCreationTest` 302). Decisión: transferencia **instantánea** (status `completed`, `transferred_at` inmediato); NO se implementó envío/recepción. |
 | P25 | Reparar/terminar sidebar responsive | **PENDIENTE** | Corrección |
 | P26 | Nombres claros 58 mm, 80 mm, Carta, etc. | **PENDIENTE** | Corrección |
 | P27 | Crear empresa/sucursal MVS Commerce Demo con datos ficticios | **PENDIENTE** | Demo |
@@ -122,7 +122,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P19: COMPLETADO** – El claim existente es el registro de auditoría único: enlaza cliente y regla, conserva beneficio, compra calificadora/consumo, sucursal, configurador y fecha explícita de concesión; consumo completa compra/sucursal sin alterar `awarded_at`. Evidencia: `LoyaltyRegistrationIncentiveP19Test` 3/3, 15 aserciones; regresión P14–P19/Portal/POS/canje 134 tests, 785 aserciones; Pint focalizado y `git diff --check` correctos.
 - **P20: COMPLETADO** – Nombre/logo y colores primario/acento por empresa aplicados al acceso, registro, portal y tarjeta QR imprimible, conservando la identidad discreta MVS. Evidencia: `LoyaltyPortalBrandingP20Test` 4/4, 21 aserciones; regresión P14–P20/Portal/POS/canjes 167 tests, 1.040 aserciones; build Vite, Pint focalizado y `git diff --check` correctos.
 - **P21 y P22: COMPLETADOS en a60425f** – P21 Separación Platform/Tenant y P22 Onboarding empresa + primera sucursal + primer administrador.
-- **P23: SIGUIENTE BLOQUE** – Auditar la implementación existente de transferencias; no reconstruir.
+- **P23: COMPLETADO** – Auditoría de transferencias existentes: implementación preservada, stock/kardex centralizados en `InventoryPostingService::postTransfer`; sin reconstruir.
+- **P24: COMPLETADO** – Prueba origen/destino, stock (4 decimales), Kardex y permisos; decisión: transferencia instantánea (no envío/recepción). `InventoryTransferP24Test` 7/7, 54 aserciones; `git diff --check` limpio; Pint focalizado limpio.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.
 - **Fidelización:** solo pendientes reales P41–P48 tras auditoría (no reconstruir F01–F18, F28, F29 ya completados).

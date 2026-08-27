@@ -6,6 +6,8 @@ use App\Data\Purchases\PurchaseLineData;
 use App\Models\Branch;
 use App\Models\InventoryLot;
 use App\Models\InventoryMovement;
+use App\Models\InventoryTransfer;
+use App\Models\InventoryTransferItem;
 use App\Models\LoyaltyRewardRedemption;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -17,6 +19,161 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryPostingService
 {
+    private const QUANTITY_SCALE = 4;
+
+    public function postTransfer(
+        Branch $fromBranch,
+        Branch $toBranch,
+        Product $product,
+        string $quantity,
+        int $userId,
+        ?string $notes = null,
+    ): InventoryTransfer {
+        $quantity = $this->transferQuantity($quantity);
+
+        if ($fromBranch->company_id !== $toBranch->company_id
+            || $fromBranch->company_id !== $product->company_id
+            || ! $fromBranch->is_active
+            || ! $toBranch->is_active) {
+            throw ValidationException::withMessages([
+                'to_branch_id' => 'Las sucursales y el producto deben pertenecer a la empresa activa.',
+            ]);
+        }
+
+        if ($fromBranch->is($toBranch)) {
+            throw ValidationException::withMessages([
+                'to_branch_id' => 'La sucursal destino debe ser diferente a la sucursal origen.',
+            ]);
+        }
+
+        if (! $product->track_inventory) {
+            throw ValidationException::withMessages([
+                'product_id' => 'El producto seleccionado no controla inventario.',
+            ]);
+        }
+
+        if (! $product->unit?->allows_decimals && str_contains($quantity, '.') && rtrim(substr($quantity, strpos($quantity, '.') + 1), '0') !== '') {
+            throw ValidationException::withMessages([
+                'quantity' => 'Este producto solo admite cantidades enteras.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($fromBranch, $toBranch, $product, $quantity, $userId, $notes) {
+            $lot = InventoryLot::query()
+                ->where('company_id', $fromBranch->company_id)
+                ->where('product_id', $product->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($lot !== null) {
+                throw ValidationException::withMessages([
+                    'product_id' => 'Los productos gestionados por lote requieren un flujo de traslado de lotes.',
+                ]);
+            }
+
+            DB::table('branch_product')->insertOrIgnore([
+                'branch_id' => $toBranch->id,
+                'product_id' => $product->id,
+                'stock' => '0.0000',
+                'minimum_stock' => null,
+                'maximum_stock' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $stocks = DB::table('branch_product')
+                ->whereIn('branch_id', [$fromBranch->id, $toBranch->id])
+                ->where('product_id', $product->id)
+                ->orderBy('branch_id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('branch_id');
+
+            $fromInventory = $stocks->get($fromBranch->id);
+            $toInventory = $stocks->get($toBranch->id);
+
+            if ($fromInventory === null || $toInventory === null) {
+                throw ValidationException::withMessages([
+                    'quantity' => 'No se pudo obtener el inventario de las sucursales.',
+                ]);
+            }
+
+            $fromPreviousStock = $this->inventoryDecimal($fromInventory->stock);
+            $toPreviousStock = $this->inventoryDecimal($toInventory->stock);
+
+            if (bccomp($fromPreviousStock, $quantity, self::QUANTITY_SCALE) < 0) {
+                throw ValidationException::withMessages([
+                    'quantity' => 'No hay suficiente inventario en la sucursal origen. Disponible: '.$fromPreviousStock,
+                ]);
+            }
+
+            $fromNewStock = bcsub($fromPreviousStock, $quantity, self::QUANTITY_SCALE);
+            $toNewStock = bcadd($toPreviousStock, $quantity, self::QUANTITY_SCALE);
+
+            DB::table('branch_product')->where('id', $fromInventory->id)->update([
+                'stock' => $fromNewStock,
+                'updated_at' => now(),
+            ]);
+            DB::table('branch_product')->where('id', $toInventory->id)->update([
+                'stock' => $toNewStock,
+                'updated_at' => now(),
+            ]);
+
+            $transfer = InventoryTransfer::create([
+                'company_id' => $fromBranch->company_id,
+                'from_branch_id' => $fromBranch->id,
+                'to_branch_id' => $toBranch->id,
+                'user_id' => $userId,
+                'transfer_number' => $this->nextTransferNumber(),
+                'status' => 'completed',
+                'notes' => $notes,
+                'transferred_at' => now(),
+            ]);
+
+            InventoryTransferItem::create([
+                'inventory_transfer_id' => $transfer->id,
+                'product_id' => $product->id,
+                'quantity' => $quantity,
+                'from_previous_stock' => $fromPreviousStock,
+                'from_new_stock' => $fromNewStock,
+                'to_previous_stock' => $toPreviousStock,
+                'to_new_stock' => $toNewStock,
+            ]);
+
+            InventoryMovement::create([
+                'company_id' => $fromBranch->company_id,
+                'branch_id' => $fromBranch->id,
+                'product_id' => $product->id,
+                'user_id' => $userId,
+                'type' => 'transfer_out',
+                'quantity' => $quantity,
+                'previous_stock' => $fromPreviousStock,
+                'new_stock' => $fromNewStock,
+                'reason' => 'Transferencia a '.$toBranch->name,
+                'reference_type' => 'inventory_transfer',
+                'reference_id' => $transfer->id,
+                'notes' => $notes,
+            ]);
+
+            InventoryMovement::create([
+                'company_id' => $fromBranch->company_id,
+                'branch_id' => $toBranch->id,
+                'product_id' => $product->id,
+                'user_id' => $userId,
+                'type' => 'transfer_in',
+                'quantity' => $quantity,
+                'previous_stock' => $toPreviousStock,
+                'new_stock' => $toNewStock,
+                'reason' => 'Transferencia recibida',
+                'reference_type' => 'inventory_transfer',
+                'reference_id' => $transfer->id,
+                'notes' => $notes,
+            ]);
+
+            return $transfer->load('items');
+        });
+    }
+
     public function postImportMovement(
         Branch $branch,
         Product $product,
@@ -121,63 +278,63 @@ class InventoryPostingService
     }
 
     public function voidSale(Sale $sale, Product $product, float $quantity, int $userId): InventoryMovement
-{
-    if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
-        throw ValidationException::withMessages([
-            'items' => 'La devolución de inventario de la venta no es válida.',
-        ]);
-    }
+    {
+        if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La devolución de inventario de la venta no es válida.',
+            ]);
+        }
 
-    DB::table('branch_product')->insertOrIgnore([
-        'branch_id' => $sale->branch_id,
-        'product_id' => $product->id,
-        'stock' => 0,
-        'minimum_stock' => null,
-        'maximum_stock' => null,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    $branchProduct = DB::table('branch_product')
-        ->where('branch_id', $sale->branch_id)
-        ->where('product_id', $product->id)
-        ->lockForUpdate()
-        ->first();
-
-    if ($branchProduct === null) {
-        throw ValidationException::withMessages([
-            'inventory' => 'No se pudo obtener el inventario de la sucursal.',
-        ]);
-    }
-
-    $previousStock = (float) $branchProduct->stock;
-    $newStock = round($previousStock + $quantity, 4);
-
-    DB::table('branch_product')
-        ->where('id', $branchProduct->id)
-        ->update([
-            'stock' => $newStock,
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-    return InventoryMovement::create([
-        'company_id' => $sale->company_id,
-        'branch_id' => $sale->branch_id,
-        'product_id' => $product->id,
-        'inventory_lot_id' => null,
-        'user_id' => $userId,
-        'type' => 'sale_void',
-        'quantity' => round($quantity, 4),
-        'previous_stock' => round($previousStock, 4),
-        'new_stock' => $newStock,
-        'reason' => 'Entrada por anulación de venta',
-        'reference_type' => Sale::class,
-        'reference_id' => $sale->id,
-        'notes' => 'Anulación de venta '.$sale->sale_number,
-    ]);
-}
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $sale->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
 
-public function saleReturn(
+        if ($branchProduct === null) {
+            throw ValidationException::withMessages([
+                'inventory' => 'No se pudo obtener el inventario de la sucursal.',
+            ]);
+        }
+
+        $previousStock = (float) $branchProduct->stock;
+        $newStock = round($previousStock + $quantity, 4);
+
+        DB::table('branch_product')
+            ->where('id', $branchProduct->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        return InventoryMovement::create([
+            'company_id' => $sale->company_id,
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'sale_void',
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Entrada por anulación de venta',
+            'reference_type' => Sale::class,
+            'reference_id' => $sale->id,
+            'notes' => 'Anulación de venta '.$sale->sale_number,
+        ]);
+    }
+
+    public function saleReturn(
         Sale $sale,
         SaleReturn $saleReturn,
         Product $product,
@@ -384,7 +541,7 @@ public function saleReturn(
             'reason' => 'Entrada por compra',
             'reference_type' => Purchase::class,
             'reference_id' => $purchase->id,
-            'notes' => 'Compra ' . $purchase->number,
+            'notes' => 'Compra '.$purchase->number,
         ]);
     }
 
@@ -401,5 +558,41 @@ public function saleReturn(
         }
 
         return trim($value);
+    }
+
+    private function transferQuantity(string $value): string
+    {
+        $value = trim($value);
+
+        if (! preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+            throw ValidationException::withMessages([
+                'quantity' => 'La cantidad debe tener como máximo cuatro decimales.',
+            ]);
+        }
+
+        $quantity = bcadd($value, '0', self::QUANTITY_SCALE);
+
+        if (bccomp($quantity, '0', self::QUANTITY_SCALE) <= 0
+            || bccomp($quantity, '99999999999.9999', self::QUANTITY_SCALE) > 0) {
+            throw ValidationException::withMessages([
+                'quantity' => 'La cantidad está fuera del rango permitido.',
+            ]);
+        }
+
+        return $quantity;
+    }
+
+    private function inventoryDecimal(mixed $value): string
+    {
+        return bcadd((string) $value, '0', self::QUANTITY_SCALE);
+    }
+
+    private function nextTransferNumber(): string
+    {
+        do {
+            $number = 'TR-'.now()->format('YmdHis').'-'.random_int(100000, 999999);
+        } while (InventoryTransfer::query()->where('transfer_number', $number)->exists());
+
+        return $number;
     }
 }

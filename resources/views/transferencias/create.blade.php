@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
 
                 const response = await fetch(
-                    `{{ route('productos.search') }}?q=${encodeURIComponent(search)}`,
+                    `{{ route('transferencias.products.search') }}?q=${encodeURIComponent(search)}`,
                     {
                         headers: {
                             'Accept': 'application/json'

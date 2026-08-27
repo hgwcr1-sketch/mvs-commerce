@@ -3,29 +3,40 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\InventoryMovement;
+use App\Models\Company;
 use App\Models\InventoryTransfer;
-use App\Models\InventoryTransferItem;
 use App\Models\Product;
+use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class TransferController extends Controller
 {
     /**
      * Listado de transferencias.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $companyId = session('active_company_id');
+        $companyId = (int) session('active_company_id');
+        $company = Company::query()->findOrFail($companyId);
+        $assignedBranchIds = $request->user()->branches()
+            ->where('branches.company_id', $companyId)
+            ->pluck('branches.id');
 
         $transfers = InventoryTransfer::with([
-                'fromBranch',
-                'toBranch',
-                'user',
-                'items.product',
-            ])
+            'fromBranch',
+            'toBranch',
+            'user',
+            'items.product',
+        ])
             ->where('company_id', $companyId)
+            ->when(
+                ! $request->user()->hasPermission('inventario.ver_otras_sucursales', $company),
+                fn ($query) => $query->where(function ($branches) use ($assignedBranchIds) {
+                    $branches->whereIn('from_branch_id', $assignedBranchIds)
+                        ->orWhereIn('to_branch_id', $assignedBranchIds);
+                }),
+            )
             ->latest()
             ->paginate(20);
 
@@ -35,16 +46,20 @@ class TransferController extends Controller
     /**
      * Formulario de nueva transferencia.
      */
-    public function create()
+    public function create(Request $request)
     {
-        $companyId = session('active_company_id');
-        $branchId = session('active_branch_id');
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
 
-        $branches = Branch::where('company_id', $companyId)
+        $branches = Branch::query()
+            ->where('company_id', $companyId)
             ->where('is_active', true)
             ->where('id', '!=', $branchId)
-            ->orderBy('name')
-            ->get();
+            ->when(
+                ! $request->user()->hasPermission('inventario.ver_otras_sucursales', Company::query()->findOrFail($companyId)),
+                fn ($query) => $query->whereIn('id', $request->user()->branches()->select('branches.id')),
+            )
+            ->orderBy('name')->get();
 
         return view('transferencias.create', compact('branches'));
     }
@@ -52,225 +67,85 @@ class TransferController extends Controller
     /**
      * Guardar transferencia.
      */
-    public function store(Request $request)
+    public function searchProducts(Request $request)
     {
-        $companyId = session('active_company_id');
-        $fromBranchId = session('active_branch_id');
+        $data = $request->validate([
+            'q' => ['required', 'string', 'max:100'],
+        ]);
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
+        $search = trim($data['q']);
+
+        if ($search === '') {
+            return response()->json([]);
+        }
+
+        $products = Product::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->where('track_inventory', true)
+            ->with(['unit:id,allows_decimals'])
+            ->with(['branches' => fn ($query) => $query->where('branches.id', $branchId)])
+            ->where(function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('internal_code', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%")
+                    ->orWhereHas('barcodes', fn ($barcodes) => $barcodes
+                        ->where('is_active', true)
+                        ->where('barcode', 'like', "%{$search}%"));
+            })
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'name', 'internal_code', 'barcode', 'unit_id']);
+
+        return response()->json($products->map(function (Product $product) {
+            $branch = $product->branches->first();
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'barcode' => $product->barcode,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'branch_stock' => $branch?->pivot?->stock,
+            ];
+        }));
+    }
+
+    public function store(Request $request, InventoryPostingService $inventory)
+    {
+        $companyId = (int) session('active_company_id');
+        $fromBranchId = (int) session('active_branch_id');
 
         $data = $request->validate([
-            'to_branch_id' => [
-                'required',
-                'integer',
-                'exists:branches,id',
-            ],
-
-            'product_id' => [
-                'required',
-                'integer',
-                'exists:products,id',
-            ],
-
-            'quantity' => [
-                'required',
-                'numeric',
-                'gt:0',
-            ],
-
-            'notes' => [
-                'nullable',
-                'string',
-                'max:1000',
-            ],
+            'to_branch_id' => ['required', 'integer'],
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('company_id', $companyId)],
+            'quantity' => ['required', 'decimal:0,4', 'gt:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        /*
-         * Validar que la sucursal destino pertenezca
-         * a la empresa activa.
-         */
-        $toBranch = Branch::where('company_id', $companyId)
+        $company = Company::query()->findOrFail($companyId);
+        $destinations = Branch::query()
+            ->where('company_id', $companyId)
             ->where('is_active', true)
-            ->findOrFail($data['to_branch_id']);
+            ->whereKeyNot($fromBranchId);
 
-        if ((int) $toBranch->id === (int) $fromBranchId) {
-            return back()
-                ->withInput()
-                ->withErrors([
-                    'to_branch_id' =>
-                        'La sucursal destino debe ser diferente a la sucursal origen.',
-                ]);
+        if (! $request->user()->hasPermission('inventario.ver_otras_sucursales', $company)) {
+            $destinations->whereIn('id', $request->user()->branches()->select('branches.id'));
         }
 
-        $product = Product::where('company_id', $companyId)
-    ->where('is_active', true)
-    ->findOrFail($data['product_id']);
+        $fromBranch = Branch::query()->where('company_id', $companyId)->findOrFail($fromBranchId);
+        $toBranch = $destinations->findOrFail($data['to_branch_id']);
+        $product = Product::query()->where('company_id', $companyId)->where('is_active', true)->findOrFail($data['product_id']);
 
-        if (! $product->unit?->allows_decimals && floor((float) $data['quantity']) !== (float) $data['quantity']) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'quantity' => 'Este producto solo admite cantidades enteras.',
-            ]);
-        }
-    
-        $quantity = (float) $data['quantity'];
-
-        DB::transaction(function () use (
-            $companyId,
-            $fromBranchId,
+        $inventory->postTransfer(
+            $fromBranch,
             $toBranch,
             $product,
-            $quantity,
-            $data
-        ) {
-
-            /*
-             * STOCK ORIGEN
-             */
-            $fromInventory = DB::table('branch_product')
-                ->where('branch_id', $fromBranchId)
-                ->where('product_id', $product->id)
-                ->first();
-
-            $fromPreviousStock = $fromInventory
-                ? (float) $fromInventory->stock
-                : 0;
-
-            if ($fromPreviousStock < $quantity) {
-    throw \Illuminate\Validation\ValidationException::withMessages([
-        'quantity' => 'No hay suficiente inventario en la sucursal origen. Disponible: '
-            . number_format($fromPreviousStock, 2),
-    ]);
-}
-
-            $fromNewStock = $fromPreviousStock - $quantity;
-
-            /*
-             * STOCK DESTINO
-             */
-            $toInventory = DB::table('branch_product')
-                ->where('branch_id', $toBranch->id)
-                ->where('product_id', $product->id)
-                ->first();
-
-            $toPreviousStock = $toInventory
-                ? (float) $toInventory->stock
-                : 0;
-
-            $toNewStock = $toPreviousStock + $quantity;
-
-            /*
-             * Crear transferencia.
-             */
-            $transfer = InventoryTransfer::create([
-                'company_id' => $companyId,
-                'from_branch_id' => $fromBranchId,
-                'to_branch_id' => $toBranch->id,
-                'user_id' => auth()->id(),
-
-                'transfer_number' =>
-                    'TR-' . now()->format('YmdHis') . '-' . random_int(100, 999),
-
-                'status' => 'completed',
-                'notes' => $data['notes'] ?? null,
-                'transferred_at' => now(),
-            ]);
-
-            /*
-             * Descontar origen.
-             */
-            DB::table('branch_product')
-                ->where('branch_id', $fromBranchId)
-                ->where('product_id', $product->id)
-                ->update([
-                    'stock' => $fromNewStock,
-                    'updated_at' => now(),
-                ]);
-
-            /*
-             * Aumentar destino.
-             */
-            if ($toInventory) {
-
-                DB::table('branch_product')
-                    ->where('branch_id', $toBranch->id)
-                    ->where('product_id', $product->id)
-                    ->update([
-                        'stock' => $toNewStock,
-                        'updated_at' => now(),
-                    ]);
-
-            } else {
-
-                DB::table('branch_product')->insert([
-                    'branch_id' => $toBranch->id,
-                    'product_id' => $product->id,
-                    'stock' => $toNewStock,
-                    'minimum_stock' => 0,
-                    'maximum_stock' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            /*
-             * Detalle de transferencia.
-             */
-            InventoryTransferItem::create([
-                'inventory_transfer_id' => $transfer->id,
-                'product_id' => $product->id,
-                'quantity' => $quantity,
-
-                'from_previous_stock' => $fromPreviousStock,
-                'from_new_stock' => $fromNewStock,
-
-                'to_previous_stock' => $toPreviousStock,
-                'to_new_stock' => $toNewStock,
-            ]);
-
-            /*
-             * KARDEX - SALIDA ORIGEN
-             */
-            InventoryMovement::create([
-                'company_id' => $companyId,
-                'branch_id' => $fromBranchId,
-                'product_id' => $product->id,
-                'user_id' => auth()->id(),
-
-                'type' => 'transfer_out',
-                'quantity' => $quantity,
-
-                'previous_stock' => $fromPreviousStock,
-                'new_stock' => $fromNewStock,
-
-                'reason' => 'Transferencia a ' . $toBranch->name,
-
-                'reference_type' => 'inventory_transfer',
-                'reference_id' => $transfer->id,
-
-                'notes' => $data['notes'] ?? null,
-            ]);
-
-            /*
-             * KARDEX - ENTRADA DESTINO
-             */
-            InventoryMovement::create([
-                'company_id' => $companyId,
-                'branch_id' => $toBranch->id,
-                'product_id' => $product->id,
-                'user_id' => auth()->id(),
-
-                'type' => 'transfer_in',
-                'quantity' => $quantity,
-
-                'previous_stock' => $toPreviousStock,
-                'new_stock' => $toNewStock,
-
-                'reason' => 'Transferencia recibida',
-
-                'reference_type' => 'inventory_transfer',
-                'reference_id' => $transfer->id,
-
-                'notes' => $data['notes'] ?? null,
-            ]);
-        });
+            (string) $data['quantity'],
+            (int) $request->user()->id,
+            $data['notes'] ?? null,
+        );
 
         return redirect()
             ->route('transferencias.index')

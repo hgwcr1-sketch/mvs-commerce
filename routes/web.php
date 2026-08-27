@@ -516,9 +516,13 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         });
     });
 
+    Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.products.search');
+
     Route::resource('transferencias', TransferController::class)
         ->only(['index', 'create', 'store'])
-        ->middleware('permission:inventario.transferir');
+        ->middleware(['active.branch', 'permission:inventario.transferir']);
 
     /*
     |--------------------------------------------------------------------------

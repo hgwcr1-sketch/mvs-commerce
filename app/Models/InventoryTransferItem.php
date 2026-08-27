@@ -18,11 +18,11 @@ class InventoryTransferItem extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'decimal:2',
-        'from_previous_stock' => 'decimal:2',
-        'from_new_stock' => 'decimal:2',
-        'to_previous_stock' => 'decimal:2',
-        'to_new_stock' => 'decimal:2',
+        'quantity' => 'decimal:4',
+        'from_previous_stock' => 'decimal:4',
+        'from_new_stock' => 'decimal:4',
+        'to_previous_stock' => 'decimal:4',
+        'to_new_stock' => 'decimal:4',
     ];
 
     public function transfer(): BelongsTo
