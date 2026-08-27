@@ -1,0 +1,268 @@
+<?php
+
+namespace App\Services\Imports;
+
+use App\Models\Company;
+use App\Models\Customer;
+use App\Services\PhoneNumberService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+class CustomerImportService
+{
+    public const HEADERS = [
+        'tipo_cliente*', 'tipo_identificacion', 'identificacion', 'nombre*', 'nombre_comercial',
+        'codigo_pais', 'telefono', 'movil', 'correo', 'direccion', 'limite_credito',
+        'dias_credito', 'nivel_precio', 'fecha_nacimiento', 'activo',
+    ];
+
+    private const HEADER_MAP = [
+        'tipo_cliente' => 'customer_type',
+        'tipo_identificacion' => 'identification_type',
+        'identificacion' => 'identification',
+        'nombre' => 'name',
+        'nombre_comercial' => 'commercial_name',
+        'codigo_pais' => 'phone_country_code',
+        'telefono' => 'phone',
+        'movil' => 'mobile',
+        'correo' => 'email',
+        'direccion' => 'address',
+        'limite_credito' => 'credit_limit',
+        'dias_credito' => 'credit_days',
+        'nivel_precio' => 'price_level',
+        'fecha_nacimiento' => 'birth_date',
+        'activo' => 'is_active',
+    ];
+
+    private const FIELD_LABELS = [
+        'customer_type' => 'tipo_cliente', 'identification_type' => 'tipo_identificacion',
+        'identification' => 'identificacion', 'name' => 'nombre', 'commercial_name' => 'nombre_comercial',
+        'phone_country_code' => 'codigo_pais', 'phone' => 'telefono', 'mobile' => 'movil',
+        'email' => 'correo', 'address' => 'direccion', 'credit_limit' => 'limite_credito',
+        'credit_days' => 'dias_credito', 'price_level' => 'nivel_precio',
+        'birth_date' => 'fecha_nacimiento', 'is_active' => 'activo',
+    ];
+
+    public function __construct(private readonly PhoneNumberService $phones) {}
+
+    public function preview(string $path, int $companyId): array
+    {
+        Company::query()->findOrFail($companyId);
+        $sheetRows = IOFactory::load($path)->getActiveSheet()->toArray(null, true, true, false);
+
+        if (count($sheetRows) < 2) {
+            throw ValidationException::withMessages([
+                'customer_file' => 'El archivo debe incluir encabezados y al menos una fila de clientes.',
+            ]);
+        }
+
+        $headers = $this->resolveHeaders(array_shift($sheetRows));
+        $rows = [];
+
+        foreach ($sheetRows as $offset => $values) {
+            if (collect($values)->every(fn ($value) => trim((string) $value) === '')) {
+                continue;
+            }
+
+            $data = [];
+            foreach ($headers as $column => $field) {
+                if ($field !== null) {
+                    $data[$field] = $values[$column] ?? null;
+                }
+            }
+
+            $rows[] = $this->normalizeRow($data, $offset + 2, $companyId);
+        }
+
+        if ($rows === []) {
+            throw ValidationException::withMessages([
+                'customer_file' => 'El archivo no contiene filas de clientes para revisar.',
+            ]);
+        }
+
+        return $this->validateRows($rows, $companyId);
+    }
+
+    public function confirm(array $preview, int $companyId): int
+    {
+        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
+            throw ValidationException::withMessages([
+                'customer_file' => 'La vista previa no pertenece a la empresa activa.',
+            ]);
+        }
+
+        $rows = $this->validateRows($preview['rows'] ?? [], $companyId);
+        $invalid = collect($rows)->firstWhere('valid', false);
+
+        if ($invalid !== null) {
+            throw ValidationException::withMessages([
+                'customer_file' => 'La importación cambió o contiene errores. Vuelva a cargar el archivo y revise la fila '.($invalid['row_number'] ?? '?').'.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($rows, $companyId): int {
+            foreach ($rows as $row) {
+                Customer::create(['company_id' => $companyId, ...$this->attributes($row)]);
+            }
+
+            return count($rows);
+        });
+    }
+
+    private function resolveHeaders(array $headers): array
+    {
+        $resolved = [];
+        foreach ($headers as $column => $header) {
+            $key = trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
+            $resolved[$column] = self::HEADER_MAP[$key] ?? null;
+        }
+
+        foreach (['customer_type', 'name'] as $required) {
+            if (! in_array($required, $resolved, true)) {
+                throw ValidationException::withMessages([
+                    'customer_file' => 'Falta la columna obligatoria '.array_search($required, self::HEADER_MAP, true).'. Descargue la plantilla vigente.',
+                ]);
+            }
+        }
+
+        return $resolved;
+    }
+
+    private function normalizeRow(array $data, int $rowNumber, int $companyId): array
+    {
+        $companyCode = Company::query()->whereKey($companyId)->value('default_phone_country_code');
+        $phone = $this->phones->normalizePhone($this->nullable($data['phone'] ?? null));
+        $mobile = $this->phones->normalizePhone($this->nullable($data['mobile'] ?? null));
+        $countryCode = $this->phones->normalizeCountryCode($this->nullable($data['phone_country_code'] ?? null));
+
+        return [
+            'row_number' => $rowNumber,
+            'customer_type' => Str::lower(trim((string) ($data['customer_type'] ?? ''))),
+            'identification_type' => $this->nullable($data['identification_type'] ?? null),
+            'identification' => $this->nullable($data['identification'] ?? null),
+            'name' => trim((string) ($data['name'] ?? '')),
+            'commercial_name' => $this->nullable($data['commercial_name'] ?? null),
+            'phone_country_code' => ($phone !== null || $mobile !== null)
+                ? ($countryCode ?? $this->phones->normalizeCountryCode($companyCode))
+                : null,
+            'phone' => $phone,
+            'mobile' => $mobile,
+            'email' => ($email = $this->nullable($data['email'] ?? null)) ? Str::lower($email) : null,
+            'address' => $this->nullable($data['address'] ?? null),
+            'credit_limit' => $this->nullable($data['credit_limit'] ?? null) ?? '0',
+            'credit_days' => $this->nullable($data['credit_days'] ?? null) ?? '0',
+            'price_level' => Str::lower($this->nullable($data['price_level'] ?? null) ?? 'normal'),
+            'birth_date' => $this->nullable($data['birth_date'] ?? null),
+            'is_active' => $this->booleanValue($data['is_active'] ?? null),
+            'valid' => true,
+            'errors' => [],
+        ];
+    }
+
+    private function validateRows(array $rows, int $companyId): array
+    {
+        $seen = ['identification' => [], 'phone' => [], 'email' => []];
+
+        foreach ($rows as $index => $row) {
+            $row['errors'] = [];
+            $validator = Validator::make($row, [
+                'customer_type' => ['required', 'in:individual,company'],
+                'identification_type' => ['nullable', 'in:01,02,03,04,05'],
+                'identification' => ['nullable', 'string', 'max:50'],
+                'name' => ['required', 'string', 'max:150'],
+                'commercial_name' => ['nullable', 'string', 'max:150'],
+                'phone_country_code' => ['nullable', 'regex:/^\+[1-9]\d{0,3}$/'],
+                'phone' => ['nullable', 'regex:/^\d{4,15}$/'],
+                'mobile' => ['nullable', 'regex:/^\d{4,15}$/'],
+                'email' => ['nullable', 'email', 'max:150'],
+                'address' => ['nullable', 'string'],
+                'credit_limit' => ['required', 'decimal:0,2', 'gte:0'],
+                'credit_days' => ['required', 'integer', 'gte:0'],
+                'price_level' => ['required', 'in:normal,wholesale,a,b,c'],
+                'birth_date' => ['nullable', 'date_format:Y-m-d'],
+                'is_active' => ['required', 'boolean'],
+            ], [], self::FIELD_LABELS);
+
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                foreach ($messages as $message) {
+                    $row['errors'][] = ['field' => self::FIELD_LABELS[$field] ?? $field, 'message' => $message];
+                }
+            }
+
+            $identities = [
+                'identification' => array_filter([$row['identification'] ?? null]),
+                'phone' => array_values(array_unique(array_filter([$row['phone'] ?? null, $row['mobile'] ?? null]))),
+                'email' => array_filter([$row['email'] ?? null]),
+            ];
+
+            foreach ($identities as $kind => $values) {
+                foreach ($values as $value) {
+                    if (isset($seen[$kind][$value])) {
+                        $row['errors'][] = ['field' => self::FIELD_LABELS[$kind] ?? $kind, 'message' => 'El valor se repite en la fila '.$seen[$kind][$value].' del archivo.'];
+                    } else {
+                        $seen[$kind][$value] = $row['row_number'];
+                    }
+                }
+            }
+
+            $this->appendExistingErrors($row, $companyId);
+            $row['valid'] = $row['errors'] === [];
+            $rows[$index] = $row;
+        }
+
+        return $rows;
+    }
+
+    private function appendExistingErrors(array &$row, int $companyId): void
+    {
+        $query = Customer::withTrashed()->where('company_id', $companyId);
+        $matches = [];
+
+        if ($row['identification'] !== null && (clone $query)->where('identification', $row['identification'])->exists()) {
+            $matches[] = ['field' => 'identificacion', 'message' => 'Ya existe un cliente de esta empresa con esa identificación.'];
+        }
+
+        $companyPhones = null;
+        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
+            $companyPhones ??= (clone $query)->get(['phone', 'mobile']);
+            $exists = $companyPhones->contains(fn (Customer $customer) => in_array($phone, array_filter([
+                $this->phones->normalizePhone($customer->phone),
+                $this->phones->normalizePhone($customer->mobile),
+            ]), true));
+            if ($exists) {
+                $matches[] = ['field' => 'telefono', 'message' => 'Ya existe un cliente de esta empresa con ese teléfono o móvil.'];
+            }
+        }
+
+        if ($row['email'] !== null && (clone $query)->whereRaw('LOWER(email) = ?', [$row['email']])->exists()) {
+            $matches[] = ['field' => 'correo', 'message' => 'Ya existe un cliente de esta empresa con ese correo.'];
+        }
+
+        $row['errors'] = [...$row['errors'], ...$matches];
+    }
+
+    private function attributes(array $row): array
+    {
+        return collect($row)->except(['row_number', 'valid', 'errors'])->all() + [
+            'accepts_email_invoice' => true,
+            'points' => 0,
+        ];
+    }
+
+    private function nullable(mixed $value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+
+        return $value === '' ? null : $value;
+    }
+
+    private function booleanValue(mixed $value): bool
+    {
+        $value = Str::lower(trim((string) ($value ?? 'si')));
+
+        return ! in_array($value, ['0', 'no', 'n', 'false', 'inactivo'], true);
+    }
+}

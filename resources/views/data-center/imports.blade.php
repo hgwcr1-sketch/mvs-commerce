@@ -19,10 +19,19 @@
     <section aria-labelledby="existing-imports" class="space-y-3">
         <div>
             <h2 id="existing-imports" class="text-lg font-bold text-slate-800">Capacidades disponibles</h2>
-            <p class="mt-1 text-sm text-slate-500">No se crean importadores nuevos en D02.</p>
+            <p class="mt-1 text-sm text-slate-500">Cada flujo conserva las reglas y permisos de su módulo.</p>
         </div>
 
         <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            @can('clientes.crear')
+                <article class="flex flex-col rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                    <span class="w-fit rounded-full bg-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-900">P32 completo</span>
+                    <h3 class="mt-3 text-lg font-bold text-slate-800">Clientes Excel</h3>
+                    <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">Plantilla, vista previa, validación por fila y confirmación atómica para la empresa activa.</p>
+                    <a data-existing-import="customers" href="{{ route('importaciones.clientes') }}" class="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Importar clientes</a>
+                </article>
+            @endcan
+
             @can('compras.crear')
                 @can('compras.ver')
                     <article class="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

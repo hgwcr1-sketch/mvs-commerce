@@ -38,7 +38,9 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P22 – Onboarding empresa + primera sucursal + primer administrador: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController`).
 - **P23 – Auditoría de transferencias existentes: COMPLETADO.** Auditoría de la implementación preexistente: Kardex (`transfer_out`/`transfer_in`), ID `TR-` y stock preservados; el movimiento de inventario se centraliza en `InventoryPostingService::postTransfer` (4 decimales, locking, rollback atómico) sin reconstruir la transferencia.
 - **P24 – Probar origen/destino, stock, Kardex, permisos + decisión: COMPLETADO.** `InventoryTransferP24Test` 7/7, 54 aserciones; scoping empresa/sucursal, 4 decimales, rollback atómico, permisos `inventario.transferir` + `inventario.ver_otras_sucursales` + middleware `active.branch`. Decisión: transferencia **instantánea** (`status=completed`, `transferred_at` inmediato); NO se implementó envío/recepción.
-- **Migración P31–P40 y Fidelización pendiente P41–P48:** quedan después del bloque actual sin pisar IDs; Fidelización solo si sigue pendiente según código/tests (F01–F18, F28–F29 ya no se reconstruyen).
+- **P31/P32 — COMPLETADOS ADELANTADAMENTE por autorización expresa.** P31 reutiliza Centro de Datos, PhpSpreadsheet, exportación D09, patrones de Compras/Inventario y `PhoneNumberService`. P32 deja Clientes con plantilla XLSX, importación XLSX/XLS/CSV, preview, validación fila/campo, deduplicación por identificación/teléfono/correo dentro de `company_id`, confirmación atómica y exportación existente. `CustomerImportP32Test` 6/6, 42 aserciones; regresión relacionada 23/23, 139 aserciones. Clientes no tiene `branch_id`: su ámbito real es empresa.
+- **P33–P36 — PENDIENTES, no implementados:** P33 debe reutilizar catálogo/productos/códigos/precios e `InventoryImportService`; P34/P35 requieren modo histórico de ventas sin caja/stock y contratos de encabezado/detalle; P36 requiere separar inventario inicial y Kardex histórico sin alterar stock actual.
+- **Migración P37–P40 y Fidelización pendiente P41–P48:** quedan sin pisar IDs; Fidelización solo si sigue pendiente según código/tests (F01–F18, F28–F29 ya no se reconstruyen).
 - Evidencia P01–P09D: `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos** (PIN 6 dígitos, single-use, expiración, aislamiento, static QR no confiable). `LoyaltyCustomerPortal` 13/13.
 
 ## Estado actual de Fidelización
@@ -132,11 +134,12 @@ Según historial reciente de commits en esta rama:
 - pedidos internos (`Order`) y órdenes de compra con conversión a compras;
 - integración de caja con POS;
 - P23/P24 transferencias: auditoría de la implementación existente + pruebas en `InventoryTransferP24Test` (7/7, 54 aserciones), centralización del movimiento de stock/Kardex en `InventoryPostingService::postTransfer` (4 decimales, locking, rollback atómico) y scoping/permiso por sucursal; decisión: transferencia instantánea (no envío/recepción);
+- P31/P32 adelantados por autorización: infraestructura de migración reutilizada y flujo completo de Clientes con plantilla, preview, deduplicación, confirmación atómica y exportación;
 - documentación: `INTEGRACIONES.md` completado, módulos nuevos registrados en arquitectura/progreso y este archivo creado.
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P24 COMPLETADOS** (incluidos P09A–P09D; P21/P22 completados en `a60425f`; P23 auditoría y P24 pruebas/decisión completados). P20 conserva identidad de empresa en portal/QR sin retirar la marca MVS. **P25 SIGUIENTE BLOQUE** – Reparar/terminar sidebar responsive. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
+- Puesta en Producción: **P01–P24 y P31–P32 COMPLETADOS** (P31/P32 adelantados por autorización expresa, sin iniciar P33–P36). **P25 SIGUIENTE BLOQUE OFICIAL** – Reparar/terminar sidebar responsive. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -154,7 +157,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31 permanece después del bloque de Correcciones.**
+**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31/P32 quedaron completados adelantadamente; P33 permanece pendiente y no desplaza P25–P30.**
 
 No asumir que el último estado conocido sigue vigente.
 

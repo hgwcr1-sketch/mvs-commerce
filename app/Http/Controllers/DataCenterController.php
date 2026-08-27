@@ -12,6 +12,7 @@ class DataCenterController extends Controller
 {
     private const ENTRY_PERMISSIONS = [
         'compras.crear',
+        'clientes.crear',
         'inventario.ver',
         'reportes.exportar',
         'reportes.ver',
@@ -28,7 +29,7 @@ class DataCenterController extends Controller
     public function imports(Request $request): View
     {
         $company = $this->company();
-        $this->authorizeAny($request, $company, ['compras.crear', 'inventario.ver']);
+        $this->authorizeAny($request, $company, ['compras.crear', 'clientes.crear', 'inventario.ver']);
 
         return view('data-center.imports');
     }

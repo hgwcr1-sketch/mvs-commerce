@@ -8,7 +8,21 @@
 
 <div class="space-y-6">
 
-    <div class="flex justify-end">
+    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+
+        @can('clientes.crear')
+            <a href="{{ route('importaciones.clientes') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-600 bg-white px-4 py-2 text-sm font-semibold text-emerald-700">
+                Importar clientes
+            </a>
+        @endcan
+
+        @can('reportes.exportar')
+            @can('clientes.ver')
+                <a href="{{ route('data-center.exports.download', ['customers', 'xlsx']) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                    Exportar Excel
+                </a>
+            @endcan
+        @endcan
 
         <a href="{{ route('clientes.create') }}">
 

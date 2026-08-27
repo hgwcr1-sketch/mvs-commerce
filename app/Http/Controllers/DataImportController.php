@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\InventoryImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -12,6 +13,49 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataImportController extends Controller
 {
+    public function customers()
+    {
+        return view('importaciones.clientes');
+    }
+
+    public function customerTemplate()
+    {
+        return $this->spreadsheetDownload(
+            CustomerImportService::HEADERS,
+            'plantilla_importacion_clientes.xlsx',
+            true,
+            'Clientes',
+        );
+    }
+
+    public function customerPreview(Request $request, CustomerImportService $import)
+    {
+        $data = $request->validate([
+            'customer_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+        $companyId = (int) session('active_company_id');
+        $rows = $import->preview($request->file('customer_file')->getRealPath(), $companyId);
+
+        session(['customer_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
+
+        return view('importaciones.clientes-preview', compact('rows'));
+    }
+
+    public function customerImport(Request $request, CustomerImportService $import)
+    {
+        $preview = session('customer_import_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.clientes')->withErrors([
+                'customer_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
+            ]);
+        }
+
+        $count = $import->confirm($preview, (int) session('active_company_id'));
+        session()->forget('customer_import_preview');
+
+        return redirect()->route('clientes.index')->with('success', "Se importaron {$count} clientes correctamente.");
+    }
+
     public function inventory(Request $request)
     {
         $companyId = (int) session('active_company_id');
@@ -116,12 +160,12 @@ class DataImportController extends Controller
             ->orderBy('name')->get();
     }
 
-    private function spreadsheetDownload(array $row, string $fileName, bool $isTemplate = false)
+    private function spreadsheetDownload(array $row, string $fileName, bool $isTemplate = false, string $title = 'Inventario')
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         if ($isTemplate) {
-            $sheet->setTitle('Inventario');
+            $sheet->setTitle($title);
         }
         $sheet->fromArray([$row], null, 'A1');
         $writer = new Xlsx($spreadsheet);

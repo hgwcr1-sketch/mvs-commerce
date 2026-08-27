@@ -785,6 +785,19 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::redirect('/importar-datos', '/centro-de-datos/importar')
         ->name('importaciones.index');
 
+    Route::get('/importar-datos/clientes', [DataImportController::class, 'customers'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes');
+    Route::get('/importar-datos/clientes/plantilla', [DataImportController::class, 'customerTemplate'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.template');
+    Route::post('/importar-datos/clientes/revisar', [DataImportController::class, 'customerPreview'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.preview');
+    Route::post('/importar-datos/clientes/confirmar', [DataImportController::class, 'customerImport'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.import');
+
     Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
         ->middleware('permission:inventario.ver')
         ->name('importaciones.inventario');
