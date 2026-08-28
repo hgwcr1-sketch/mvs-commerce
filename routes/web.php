@@ -138,6 +138,8 @@ Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::c
 Route::prefix('portal-clientes/{company}')->name('loyalty.customer.')->middleware('throttle:30,1')->group(function () {
     Route::get('/ingresar', [LoyaltyPortalSessionController::class, 'loginForm'])->name('login');
     Route::post('/ingresar', [LoyaltyPortalSessionController::class, 'login'])->name('login.store');
+    Route::get('/registro', [LoyaltyPortalSessionController::class, 'registerForm'])->name('register');
+    Route::post('/registro', [LoyaltyPortalSessionController::class, 'register'])->middleware('throttle:10,1')->name('register.store');
     Route::get('/', [LoyaltyPortalSessionController::class, 'home'])->name('home');
     Route::post('/salir', [LoyaltyPortalSessionController::class, 'logout'])->name('logout');
     Route::patch('/perfil', [LoyaltyPortalSessionController::class, 'profile'])->name('profile');

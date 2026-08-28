@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Sale;
 use App\Services\Loyalty\LoyaltyCustomerPortalService;
+use App\Services\PhoneNumberService;
 use App\Services\Sales\SaleReceiptService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,134 @@ class LoyaltyPortalSessionController extends Controller
         abort_unless($company->is_active, 404);
 
         return view('loyalty.portal.login', compact('company'));
+    }
+
+    public function registerForm(Company $company): View
+    {
+        abort_unless($company->is_active, 404);
+
+        return view('loyalty.portal.register', compact('company'));
+    }
+
+    public function register(Request $request, Company $company): RedirectResponse
+    {
+        abort_unless($company->is_active, 404);
+
+        $rateKey = 'loyalty-portal-register:'.$company->id.'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($rateKey, 5)) {
+            return back()->withErrors(['name' => 'Demasiados intentos. Inténtalo nuevamente en '.RateLimiter::availableIn($rateKey).' segundos.'])->onlyInput();
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'identification_type' => ['nullable', 'string', 'in:01,02,03,04,05'],
+            'identification' => ['nullable', 'string', 'max:50'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email:rfc', 'max:150'],
+            'username' => ['required', 'string', 'max:100', 'alpha_dash'],
+            'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()],
+        ]);
+
+        // Normalización
+        $phones = app(PhoneNumberService::class);
+        $identification = isset($data['identification']) ? trim($data['identification']) : null;
+        if ($identification === '') {
+            $identification = null;
+        }
+        $phoneNormalized = $phones->normalizePhone($data['phone'] ?? null);
+        $phoneCountryCode = $phones->normalizeCountryCode($company->default_phone_country_code);
+        $emailNormalized = isset($data['email']) ? mb_strtolower(trim($data['email'])) : null;
+        if ($emailNormalized === '') {
+            $emailNormalized = null;
+        }
+        $username = trim($data['username']);
+
+        // Validación mínima: al menos teléfono o correo o identificación para poder dedup y contacto
+        // Se permite registro solo con nombre+credenciales, pero P03 exige chequear duplicados si alguno viene.
+
+        // P03 – deduplicación y bloqueo por conflicto de identidad
+        // Si identificación, teléfono o correo apuntan a clientes distintos, bloquear sin fusionar.
+        $byIdentification = $identification ? Customer::query()->where('company_id', $company->id)->where('identification', $identification)->first() : null;
+        $byPhone = $phoneNormalized ? Customer::query()->where('company_id', $company->id)->where(function ($query) use ($phoneNormalized) {
+            $query->where('phone', $phoneNormalized)->orWhere('mobile', $phoneNormalized);
+        })->first() : null;
+        $byEmail = $emailNormalized ? Customer::query()->where('company_id', $company->id)->whereRaw('LOWER(email) = ?', [$emailNormalized])->first() : null;
+
+        $foundMap = array_filter(['identification' => $byIdentification, 'phone' => $byPhone, 'email' => $byEmail]);
+        $uniqueIds = collect($foundMap)->pluck('id')->unique()->filter();
+
+        if ($uniqueIds->count() > 1) {
+            RateLimiter::hit($rateKey, 60);
+
+            return back()->withErrors(['identification' => 'Los datos proporcionados coinciden con clientes distintos. Contacta a soporte o verifica tu información.'])->onlyInput('name', 'identification', 'phone', 'email', 'username');
+        }
+
+        $existingCustomer = $foundMap ? reset($foundMap) : null;
+
+        if ($existingCustomer && LoyaltyPortalCredential::query()->where('customer_id', $existingCustomer->id)->exists()) {
+            RateLimiter::hit($rateKey, 60);
+
+            return back()->withErrors(['username' => 'Este cliente ya tiene acceso. Inicia sesión o recupera tu contraseña.'])->onlyInput('name', 'identification', 'phone', 'email', 'username');
+        }
+
+        // Validar unicidad de username/email de portal dentro de la empresa (aislado)
+        $credentialDuplicate = LoyaltyPortalCredential::query()
+            ->where('company_id', $company->id)
+            ->where(function ($query) use ($username, $emailNormalized) {
+                $query->where('username', $username);
+                if ($emailNormalized !== null) {
+                    $query->orWhere('email', $emailNormalized);
+                }
+            })
+            ->when($existingCustomer, fn ($query) => $query->where('customer_id', '!=', $existingCustomer->id))
+            ->exists();
+
+        if ($credentialDuplicate) {
+            RateLimiter::hit($rateKey, 60);
+
+            return back()->withErrors(['username' => 'El usuario o correo ya está registrado en esta empresa.'])->onlyInput('name', 'identification', 'phone', 'email', 'username');
+        }
+
+        $result = DB::transaction(function () use ($company, $data, $identification, $phoneNormalized, $phoneCountryCode, $emailNormalized, $username, $existingCustomer) {
+            // Reutilizar cliente existente si aplica (P03), sino crear activo disponible para Clientes/POS/Fidelización
+            if ($existingCustomer) {
+                $customer = $existingCustomer;
+            } else {
+                $customer = Customer::create([
+                    'company_id' => $company->id,
+                    'customer_type' => 'individual',
+                    'identification_type' => $data['identification_type'] ?? null,
+                    'identification' => $identification,
+                    'name' => trim($data['name']),
+                    'phone' => $phoneNormalized,
+                    'phone_country_code' => $phoneNormalized ? $phoneCountryCode : null,
+                    'mobile' => null,
+                    'email' => $emailNormalized,
+                    'is_active' => true,
+                    'credit_limit' => 0,
+                    'credit_days' => 0,
+                    'price_level' => 'normal',
+                ]);
+            }
+
+            $credential = LoyaltyPortalCredential::create([
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'username' => $username,
+                'email' => $emailNormalized ?? $username.'@portal.local',
+                'password' => $data['password'],
+                'is_active' => true,
+            ]);
+
+            return ['customer' => $customer, 'credential' => $credential];
+        });
+
+        RateLimiter::clear($rateKey);
+        $request->session()->regenerate();
+        $this->putPortalSession($request, $company->id, $result['customer']->id);
+        $result['credential']->update(['last_login_at' => now()]);
+
+        return redirect()->route('loyalty.customer.home', $company)->with('success', 'Cuenta creada correctamente.');
     }
 
     public function login(Request $request, Company $company): RedirectResponse
@@ -175,6 +304,35 @@ class LoyaltyPortalSessionController extends Controller
     private function putPortalSession(Request $request, int $companyId, int $customerId): void
     {
         $request->session()->put(['loyalty_portal_company_id' => $companyId, 'loyalty_portal_customer_id' => $customerId]);
+    }
+
+    private function findExistingCustomer(Company $company, ?string $identification, ?string $phoneNormalized, ?string $emailNormalized): ?Customer
+    {
+        if ($identification !== null && $identification !== '') {
+            $found = Customer::query()->where('company_id', $company->id)->where('identification', $identification)->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        if ($phoneNormalized !== null && $phoneNormalized !== '') {
+            $found = Customer::query()->where('company_id', $company->id)
+                ->where(function ($query) use ($phoneNormalized) {
+                    $query->where('phone', $phoneNormalized)->orWhere('mobile', $phoneNormalized);
+                })->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        if ($emailNormalized !== null && $emailNormalized !== '') {
+            $found = Customer::query()->where('company_id', $company->id)->whereRaw('LOWER(email) = ?', [$emailNormalized])->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        return null;
     }
 
     private function customerSale(Sale $sale, Company $company, Customer $customer): Sale

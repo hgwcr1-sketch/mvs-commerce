@@ -11,6 +11,7 @@
         <label class="block text-sm font-semibold">Contraseña<input type="password" name="password" required autocomplete="current-password" class="mt-2 min-h-11 w-full rounded-xl border-slate-300"></label>
         <button class="min-h-11 w-full rounded-xl bg-slate-900 px-4 font-semibold text-white">Ingresar</button>
     </form>
-    <a href="{{ route('loyalty.customer.password.request', $company) }}" class="mt-5 block min-h-11 py-3 text-center text-sm font-semibold text-amber-700">Olvidé mi contraseña</a>
+     <a href="{{ route('loyalty.customer.password.request', $company) }}" class="mt-5 block min-h-11 py-3 text-center text-sm font-semibold text-amber-700">Olvidé mi contraseña</a>
+    <p class="mt-2 text-center text-sm text-slate-600">¿No tienes cuenta? <a href="{{ route('loyalty.customer.register', $company) }}" class="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 hover:text-slate-700">Registrarme / Crear mi cuenta</a></p>
 </div>
 @endsection

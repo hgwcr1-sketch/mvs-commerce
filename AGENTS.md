@@ -42,7 +42,7 @@ No depender de la memoria de una conversación anterior.
 Antes de realizar una tarea:
 
 1. Leer este `AGENTS.md`.
-2. Revisar los documentos de `docs/` relacionados con la tarea.
+2. Revisar los documentos de `docs/` relacionados con la tarea — incluyendo obligatoriamente `docs/CRONOGRAMA_PRODUCCION.md` cuando la tarea toque Portal de Clientes o Puesta en Producción — y no saltar bloques sin autorización.
 3. Revisar `docs/ESTADO_ACTUAL.md` para conocer el estado de relevo entre agentes, especialmente al iniciar una sesión o al tomar una tarea que otro agente dejó a medias.
 4. Inspeccionar el código real involucrado.
 5. Revisar `git status`.
@@ -229,6 +229,14 @@ Control permanente de fases del módulo de Fidelización: orden previsto, estado
 Regla específica de Fidelización:
 
 > Toda tarea de Fidelización debe comenzar leyendo `docs/CRONOGRAMA_FIDELIZACION.md`, `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede saltar, retroceder, renumerar o inventar fases sin autorización. Si descubre una funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál fase corresponde ejecutar a continuación según el cronograma.
+
+### `docs/CRONOGRAMA_PRODUCCION.md`
+
+Fuente oficial del orden P01–P30 de Portal de Clientes y Puesta en Producción (refleja `docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx` y el bloque Portal P01–P30, con sub-bloques P09A–P09D).
+
+Regla específica de Producción/Portal:
+
+> Toda tarea de Portal/Puesta en Producción debe comenzar leyendo `docs/CRONOGRAMA_PRODUCCION.md`, `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede saltar bloques sin autorización. Si descubre funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál bloque corresponde ejecutar a continuación.
 
 No llenar `AGENTS.md` con detalles que correspondan a esos documentos.
 
