@@ -266,6 +266,23 @@
 
         {{-- Botones --}}
 
+        <section class="mt-6 border-t border-slate-200 pt-6">
+            <h2 class="text-lg font-semibold text-slate-800">Primera sucursal</h2>
+            <p class="mt-1 text-sm text-slate-500">Esta sucursal quedará activa al finalizar el registro.</p>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label for="branch_name" class="mb-2 block text-sm font-semibold text-slate-700">Nombre *</label>
+                    <input id="branch_name" name="branch_name" required value="{{ old('branch_name', 'Principal') }}" class="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3">
+                    @error('branch_name')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="branch_code" class="mb-2 block text-sm font-semibold text-slate-700">Código *</label>
+                    <input id="branch_code" name="branch_code" required value="{{ old('branch_code', 'PRINCIPAL') }}" class="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3">
+                    @error('branch_code')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+        </section>
+
         <div class="mt-6 flex justify-end gap-3">
 
             <a

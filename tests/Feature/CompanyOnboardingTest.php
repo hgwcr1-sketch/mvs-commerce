@@ -56,6 +56,7 @@ class CompanyOnboardingTest extends TestCase
     {
         Storage::fake('public');
         $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
+        Permission::query()->delete();
 
         $this->actingAs($admin)->post(route('platform.companies.store'), $this->payload([
             'logo' => UploadedFile::fake()->image('rollback.png'),

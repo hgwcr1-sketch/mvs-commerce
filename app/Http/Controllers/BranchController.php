@@ -48,7 +48,8 @@ class BranchController extends Controller
         $validated['company_id'] = $companyId;
         $validated['is_active'] = true;
 
-        Branch::create($validated);
+        $branch = Branch::create($validated);
+        $request->user()->branches()->syncWithoutDetaching([$branch->id]);
 
         return redirect()
             ->route('branches.index')

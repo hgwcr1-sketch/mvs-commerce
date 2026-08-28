@@ -20,6 +20,10 @@ class EnsureActiveCompany
             return $next($request);
         }
 
+        if ($user->isPlatformAdmin()) {
+            return redirect()->route('platform.index');
+        }
+
         $activeCompanyId = session('active_company_id');
 
         /**
@@ -53,7 +57,12 @@ class EnsureActiveCompany
                 ->first();
 
             if (!$company) {
-                return $next($request);
+                session()->forget([
+                    'active_company_id',
+                    'active_branch_id',
+                ]);
+
+                return redirect()->route('empresa.create');
             }
 
             $activeCompanyId = $company->id;

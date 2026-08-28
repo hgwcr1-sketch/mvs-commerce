@@ -20,7 +20,7 @@ class ProfessionalAuthExperienceTest extends TestCase
 
         $response = $this->post(route('login.store'), ['email' => $user->email, 'password' => 'Secure123', 'remember' => 'on']);
 
-        $response->assertRedirect('/dashboard');
+        $response->assertRedirect(route('empresa.create'));
         $this->assertAuthenticatedAs($user);
         $this->assertNotNull($user->fresh()->last_login_at);
     }

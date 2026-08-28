@@ -60,15 +60,25 @@ class P08CashOpeningGateTest extends TestCase
         $this->get(route('pos.index'))->assertRedirect(route('cash.open.create'));
     }
 
-    public function test_permissions_admin_and_tenant_isolation_have_no_implicit_bypass(): void
+    public function test_platform_and_tenant_administrators_are_separate_without_implicit_bypass(): void
     {
-        [$company, $branch, $admin] = $this->context(['pos.acceder'], true);
-        [$other, $otherBranch, $otherUser] = $this->context(['pos.acceder', 'caja.abrir']);
-        $this->openSession($other, $otherBranch, $otherUser);
+        [$company, $branch, $tenantAdmin] = $this->context([
+            'dashboard.ver', 'pos.acceder', 'configuracion.ver', 'configuracion.editar',
+        ]);
+        $tenantAdmin->update(['email' => 'mymbeautycenter@gmail.com']);
+        $this->openSession($company, $branch, $tenantAdmin);
+        $platformAdmin = User::factory()->create(['is_active' => true, 'is_platform_admin' => true]);
 
-        $this->actingAs($admin)->withSession($this->contextSession($company, $branch))
-            ->get(route('pos.index'))->assertRedirect(route('cash.required'));
-        $this->get(route('cash.required'))->assertOk()->assertSee('Solicite a un administrador');
+        $this->actingAs($platformAdmin)->get(route('dashboard'))
+            ->assertRedirect(route('platform.index'));
+        $this->get(route('pos.index'))->assertRedirect(route('platform.index'));
+
+        $this->actingAs($tenantAdmin->fresh())->withSession($this->contextSession($company, $branch));
+        $this->assertFalse($tenantAdmin->fresh()->is_platform_admin);
+        $this->get(route('platform.index'))->assertForbidden();
+        $this->get(route('dashboard'))->assertOk();
+        $this->get(route('pos.index'))->assertOk();
+        $this->get(route('branches.index'))->assertOk();
 
         $withoutPos = $this->user($company, $branch, []);
         $this->actingAs($withoutPos)->withSession($this->contextSession($company, $branch))

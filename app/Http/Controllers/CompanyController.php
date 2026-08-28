@@ -45,6 +45,9 @@ class CompanyController extends Controller
      */
     public function create()
 {
+    if (request()->user()->isPlatformAdmin()) {
+        return redirect()->route('platform.index');
+    }
     return view('empresa.create', [
 
         'company' => new Company(),
@@ -74,19 +77,40 @@ class CompanyController extends Controller
 {
     $user = $request->user();
 
-    if (!$user->canCreateCompany()) {
+    if ($user->isPlatformAdmin()) {
+        return redirect()->route('platform.index');
+    }
+
+    $isOnboarding = ! $user->companies()->exists();
+
+    if (! $isOnboarding && !$user->canCreateCompany()) {
         return redirect()
             ->route('empresa.index')
             ->with('error', 'No tiene cupos disponibles para crear una nueva empresa.');
     }
 
     $data = $request->validated();
+    $branchName = $data['branch_name'];
+    $branchCode = $data['branch_code'];
+    unset($data['branch_name'], $data['branch_code']);
 
     if ($request->hasFile('logo')) {
         $data['logo'] = $request->file('logo')->store('companies', 'public');
     }
 
-    app(CompanyProvisioner::class)->provision($user, $data);
+    $company = app(CompanyProvisioner::class)->provision($user, $data, $branchName, $branchCode);
+
+    if ($isOnboarding) {
+        $branch = $company->branches()->orderBy('id')->firstOrFail();
+        $request->session()->put([
+            'active_company_id' => $company->id,
+            'active_branch_id' => $branch->id,
+        ]);
+
+        return redirect()
+            ->route('dashboard')
+            ->with('success', 'Empresa y primera sucursal creadas correctamente.');
+    }
 
     return redirect()
         ->route('empresa.index')

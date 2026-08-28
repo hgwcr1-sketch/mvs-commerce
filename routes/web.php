@@ -116,6 +116,11 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
+Route::middleware('auth')->group(function () {
+    Route::get('/empresa/create', [CompanyController::class, 'create'])->name('empresa.create');
+    Route::post('/empresa', [CompanyController::class, 'store'])->name('empresa.store');
+});
+
 /*
 |--------------------------------------------------------------------------
 | Portal del cliente de Fidelización (F33/F34)
@@ -693,9 +698,12 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
 
     Route::resource('sucursales', BranchController::class)
         ->parameters(['sucursales' => 'branch'])
-        ->names('branches');
+        ->names('branches')
+        ->middlewareFor(['index', 'show'], 'permission:configuracion.ver')
+        ->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:configuracion.editar');
 
-    Route::resource('empresa', CompanyController::class);
+    Route::resource('empresa', CompanyController::class)
+        ->except(['create', 'store']);
 
     Route::prefix('configuracion/caja')
         ->name('settings.cash.')

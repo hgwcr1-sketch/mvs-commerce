@@ -56,6 +56,14 @@ if (RateLimiter::tooManyAttempts($key, 5)) {
 
         $request->user()->updateLastLogin();
 
+        if ($request->user()->isPlatformAdmin()) {
+            return redirect()->route('platform.index');
+        }
+
+        if (! $request->user()->companies()->where('companies.is_active', true)->exists()) {
+            return redirect()->route('empresa.create');
+        }
+
         return redirect()->intended('/dashboard');
     }
 

@@ -66,7 +66,7 @@
     $company = \App\Models\Company::find(session('active_company_id'));
 @endphp
 
-@if(auth()->user()->hasPermission('dashboard.admin', $company))
+@if($company && auth()->user()->hasPermission('dashboard.admin', $company))
 
 <x-navigation.item
     route="dashboard"
@@ -74,7 +74,7 @@
     label="Dashboard"
     :active="request()->routeIs('dashboard')" />
 
-@elseif(auth()->user()->hasPermission('dashboard.ver', $company))
+@elseif($company && auth()->user()->hasPermission('dashboard.ver', $company))
 
 <x-navigation.item
     route="dashboard"
@@ -393,6 +393,7 @@
     <div x-cloak x-show="open" x-transition class="nav-sub mt-2 space-y-1 pl-5">
         @can('configuracion.ver')
             <a href="{{ route('configuracion.index') }}" class="block py-1 text-xs {{ request()->routeIs('configuracion.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración general</a>
+            <a href="{{ route('branches.index') }}" class="block py-1 text-xs {{ request()->routeIs('branches.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Sucursales</a>
         @endcan
         @can('caja.administrar')
             <a href="{{ route('settings.cash.edit') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash.edit', 'settings.cash.update') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración de Caja</a>

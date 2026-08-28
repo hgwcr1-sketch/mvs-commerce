@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class PlatformAdminTest extends TestCase
@@ -34,6 +35,75 @@ class PlatformAdminTest extends TestCase
         $this->assertTrue($user->fresh()->is_platform_admin);
         $this->artisan('platform:admin', ['email' => $user->email, '--revoke' => true])->assertSuccessful();
         $this->assertFalse($user->fresh()->is_platform_admin);
+    }
+
+    public function test_independent_platform_administrator_can_be_created_interactively(): void
+    {
+        $this->artisan('platform:admin', ['email' => 'platform@example.test', '--create' => true])
+            ->expectsQuestion('Nombre de la persona administradora', 'Administración Plataforma')
+            ->expectsQuestion('Contraseña', 'SeguraAdmin9')
+            ->expectsQuestion('Confirme la contraseña', 'SeguraAdmin9')
+            ->expectsOutput('Cuenta de plataforma creada.')
+            ->assertSuccessful();
+
+        $user = User::query()->where('email', 'platform@example.test')->firstOrFail();
+
+        $this->assertSame('Administración Plataforma', $user->name);
+        $this->assertTrue($user->is_active);
+        $this->assertTrue($user->is_platform_admin);
+        $this->assertTrue(Hash::check('SeguraAdmin9', $user->password));
+        $this->assertFalse($user->companies()->exists());
+        $this->assertFalse($user->branches()->exists());
+    }
+
+    public function test_platform_account_creation_requires_a_confirmed_secure_password(): void
+    {
+        $this->artisan('platform:admin', ['email' => 'platform@example.test', '--create' => true])
+            ->expectsQuestion('Nombre de la persona administradora', 'Administración Plataforma')
+            ->expectsQuestion('Contraseña', 'SeguraAdmin9')
+            ->expectsQuestion('Confirme la contraseña', 'OtraAdmin9')
+            ->assertFailed();
+
+        $this->assertDatabaseMissing('users', ['email' => 'platform@example.test']);
+    }
+
+    public function test_created_platform_account_remains_separate_from_tenant_accounts(): void
+    {
+        [$company, $branch, $tenantAdmin] = $this->tenant('Empresa Tenant');
+
+        $this->artisan('platform:admin', ['email' => 'platform@example.test', '--create' => true])
+            ->expectsQuestion('Nombre de la persona administradora', 'Administración Plataforma')
+            ->expectsQuestion('Contraseña', 'SeguraAdmin9')
+            ->expectsQuestion('Confirme la contraseña', 'SeguraAdmin9')
+            ->assertSuccessful();
+
+        $platformAdmin = User::query()->where('email', 'platform@example.test')->firstOrFail();
+
+        $this->assertFalse($platformAdmin->companies()->whereKey($company->id)->exists());
+        $this->assertFalse($platformAdmin->branches()->whereKey($branch->id)->exists());
+        $this->assertFalse($tenantAdmin->fresh()->is_platform_admin);
+    }
+
+    public function test_tenant_administrator_cannot_be_promoted_to_platform_administrator(): void
+    {
+        [$company, , $tenantAdmin] = $this->tenant('Empresa Tenant');
+
+        $this->artisan('platform:admin', ['email' => $tenantAdmin->email])->assertFailed();
+
+        $this->assertFalse($tenantAdmin->fresh()->is_platform_admin);
+        $this->assertTrue($tenantAdmin->companies()->whereKey($company->id)->exists());
+    }
+    public function test_platform_access_can_be_revoked_even_from_a_tenant_account(): void
+    {
+        [$company, , $tenantAdmin] = $this->tenant('Empresa Tenant');
+        $tenantAdmin->update(['is_platform_admin' => true]);
+
+        $this->artisan('platform:admin', ['email' => $tenantAdmin->email, '--revoke' => true])
+            ->expectsOutput('Acceso maestro retirado.')
+            ->assertSuccessful();
+
+        $this->assertFalse($tenantAdmin->fresh()->is_platform_admin);
+        $this->assertTrue($tenantAdmin->companies()->whereKey($company->id)->exists());
     }
 
     public function test_dashboard_lists_tenants_without_loading_operational_records(): void
