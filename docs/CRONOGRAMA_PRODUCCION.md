@@ -30,7 +30,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P02** | Autorregistro por link/QR asociado a empresa correcta | **COMPLETADO** | `LoyaltyPortalSessionController::register`, `routes/web.php:139`, aislamiento `company_id`, `10/10 tests` |
 | **P03** | Deduplicación por identificación, teléfono normalizado y correo; bloquear conflictos entre clientes distintos | **COMPLETADO** | `LoyaltyPortalSessionController` `uniqueIds>1` → `identification: Los datos...`, `PhoneNumberService`, `10/10 tests, 46 aserciones` (incl. conflictos) |
 | **P04** | Cliente nuevo visible inmediatamente en Clientes y búsqueda POS | **COMPLETADO – evidencia actual** | `PosController::searchCustomers` LIKE, `LoyaltyPortalSelfRegistrationTest` `posCustomerVisible` por nombre y `8888` |
-| **P05** | Crear/activar automáticamente cuenta de fidelización al autorregistrarse | **PENDIENTE – siguiente bloque** | No implementado; siguiente tarea |
+| **P05** | Crear/activar automáticamente cuenta de fidelización al autorregistrarse | **COMPLETADO** | `LoyaltyPortalSessionController::register` `LoyaltyAccountService::getOrCreateAccount`, `LoyaltyPortalSelfRegistrationTest::test_register_creates_loyalty_account_automatically` 11/11, 52 aserciones |
 | P06 | Crear acceso al Portal al registrar/crear cliente rápido (POS/Clientes) | **PENDIENTE** | Checkbox/acción desde POS |
 | P07 | Contraseña temporal única, mostrada una vez, con cambio obligatorio en primer ingreso | **PENDIENTE** | No genérica compartida |
 | P08 | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **PENDIENTE** | Cajero no memoriza URL |
@@ -105,8 +105,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 ## Estado y próxima fase
 
-- **P01–P04: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 10/10, 46 aserciones; `LoyaltyCustomerPortal` 13/13).
-- **P05: SIGUIENTE BLOQUE** – Crear/activar cuenta de fidelización al autorregistrarse. No implementar todavía.
+- **P01–P05: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11, 52 aserciones – incluye `test_register_creates_loyalty_account_automatically` con `loyalty_accounts` `balance 0.0000`; `LoyaltyCustomerPortal` 13/13).
+- **P06: SIGUIENTE BLOQUE** – Crear acceso al Portal al registrar/crear cliente rápido (POS/Clientes).
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

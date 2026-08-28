@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\LoyaltyAccount;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Permission;
 use App\Models\Role;
@@ -182,6 +183,31 @@ class LoyaltyPortalSelfRegistrationTest extends TestCase
 
         $this->assertSame($initialCustomerCount, Customer::where('company_id', $company->id)->count());
         $this->assertDatabaseMissing('loyalty_portal_credentials', ['username' => 'conflicto_email']);
+    }
+
+    public function test_register_creates_loyalty_account_automatically(): void
+    {
+        $company = $this->company('Loyalty Account');
+        $this->post(route('loyalty.customer.register.store', $company), [
+            'name' => 'Cliente Loyalty',
+            'phone' => '9999-9999',
+            'username' => 'loyalty_user',
+            'password' => 'ClaveSegura1',
+            'password_confirmation' => 'ClaveSegura1',
+        ])->assertRedirect(route('loyalty.customer.home', $company));
+        $customer = Customer::where('company_id', $company->id)->where('phone', '99999999')->firstOrFail();
+        $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => '0.0000']);
+        // Reuso también activa cuenta si no existía
+        $existing = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Existente Loyalty', 'email' => 'existente_loyalty@example.com', 'is_active' => true]);
+        $this->assertDatabaseMissing('loyalty_accounts', ['customer_id' => $existing->id]);
+        $this->post(route('loyalty.customer.register.store', $company), [
+            'name' => 'Otro',
+            'email' => 'existente_loyalty@example.com',
+            'username' => 'loyalty_reuse',
+            'password' => 'ClaveSegura1',
+            'password_confirmation' => 'ClaveSegura1',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('loyalty_accounts', ['customer_id' => $existing->id]);
     }
 
     public function test_new_customer_appears_in_pos_search(): void

@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Sale;
+use App\Services\Loyalty\LoyaltyAccountService;
 use App\Services\Loyalty\LoyaltyCustomerPortalService;
 use App\Services\PhoneNumberService;
 use App\Services\Sales\SaleReceiptService;
@@ -137,6 +138,9 @@ class LoyaltyPortalSessionController extends Controller
                     'price_level' => 'normal',
                 ]);
             }
+
+            // P05 – Crear/activar cuenta de fidelización al autorregistrarse (sin duplicar, sin bono)
+            app(LoyaltyAccountService::class)->getOrCreateAccount($customer, $company);
 
             $credential = LoyaltyPortalCredential::create([
                 'company_id' => $company->id,

@@ -994,7 +994,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P04: COMPLETADO (reconciliado con Excel único, P05 siguiente)
+### Portal de Clientes — P01–P05: COMPLETADO (reconciliado con Excel único, P06 siguiente)
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`).
 
@@ -1002,8 +1002,9 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P02 — Autorregistro:** `LoyaltyPortalSessionController::register` dentro de la empresa de la URL; crea `Customer` `is_active=true` + `LoyaltyPortalCredential`, `throttle:10,1`, `RateLimiter`, disponible en `clientes`, `pos.customers.search` y Fidelización; sin factura/incentivo/QR individual.
 - **P03 — Deduplicación y bloqueo por conflicto:** Busca por `identification` exacto / `phone` normalizado (`PhoneNumberService::normalizePhone`, `phone/mobile`) / `email` lower dentro de la empresa; si coincide, enlaza al cliente existente. **Si dos identificadores apuntan a clientes distintos (ej. identificación→A y teléfono→B, o correo→C distinto), bloquea** con `identification: Los datos proporcionados coinciden con clientes distintos...`, sin fusionar, sin crear `Customer` ni `LoyaltyPortalCredential`. Aislamiento multiempresa probado.
 - **P04 — Visibilidad POS (evidencia actual):** Cliente nuevo activo y encontrado por `PosController::searchCustomers` (`pos.customers.search` LIKE `name/identification/phone/mobile/email`) con `pos.acceder` y sesión `active_company_id/active_branch_id`.
-- **Evidencia P01–P03:** `LoyaltyPortalSelfRegistrationTest` **10 tests, 46 aserciones, 0 fallos** (5 base + `test_register_blocks_when_identification_and_phone_match_different_customers` y `test_register_blocks_when_email_matches_different_customer_than_phone` verifican no creación). `LoyaltyCustomerPortal` 13/13, 89 aserciones.
-- **P05 y siguientes: PENDIENTES.** No P05 incentivo, no P09A identidad pública única, no P09B QR+Code128, no P09C lectura POS, no P09D PIN/QR temporal.
+- **P05 — Cuenta fidelización al autorregistrarse: COMPLETADO.** `LoyaltyPortalSessionController::register` crea/activa `LoyaltyAccount` vía `LoyaltyAccountService::getOrCreateAccount` en la misma transacción; sin bono.
+- **Evidencia P01–P05:** `LoyaltyPortalSelfRegistrationTest` **11 tests, 52 aserciones, 0 fallos** (incl. `test_register_creates_loyalty_account_automatically` con `loyalty_accounts` `balance 0.0000`). `LoyaltyCustomerPortal` 13/13, 89 aserciones.
+- **P06 y siguientes: PENDIENTES.** Siguiente **P06** – Crear acceso al Portal al registrar/crear cliente rápido; no P09A identidad pública única, no P09B QR+Code128, no P09C lectura POS, no P09D PIN/QR temporal.
 
 ---
 
