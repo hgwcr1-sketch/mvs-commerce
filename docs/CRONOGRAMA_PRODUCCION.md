@@ -1,77 +1,148 @@
-# MVS Commerce — Cronograma de Producción (Portal de Clientes y Puesta en Producción)
+# MVS Commerce — Cronograma de Producción (Portal de Clientes + Correcciones + Migración)
 
-Fuente oficial del orden y numeración de bloques de Producción / Portal de Clientes.
-Refleja `docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx` y el bloque Portal de Clientes P01–P30.
+**Fuente oficial del orden P01–P50:** este archivo.
+**Referencia visual única:** `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx` (7 hojas: Cronograma Maestro, Portal Detalle, Migración Completa, Fidelización Pendiente, Decisiones, Reconciliación, Resumen).
 
-> Git + código + tests determinan qué está realmente implementado. Ningún agente puede saltar, retroceder, renumerar o inventar bloques sin autorización.
+> Este cronograma reemplaza los Excel de seguimiento anteriores (`docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx`, `docs/Cronograma_Correcciones_Produccion_MVS_Commerce_29-08-2026.xlsx` y `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx` para el bloque general). Ningún agente puede usar cronogramas Excel anteriores ni renumerar tareas.
+
+> **Git + código + tests = evidencia.** El orden lo determina este archivo; la implementación real la determina el repositorio.
 
 ---
 
 ## Regla de interpretación
 
-- **CRONOGRAMA_PRODUCCION.md (este archivo)** = orden oficial y numeración P01–P30.
-- **Git + código + tests** = evidencia.
-- **ESTADO_ACTUAL.md / PROGRESO.md** = relevo y resumen.
+- **CRONOGRAMA_PRODUCCION.md (este archivo)** = orden oficial P01–P50.
+- **Excel único** = referencia visual consolidada (Portal P01–P20 primero; luego Correcciones P21–P30, Migración P31–P40, Fidelización pendiente P41–P48 y Cierre P49–P50).
+- **Git + código + tests** = qué está realmente implementado.
+- **ESTADO_ACTUAL.md / PROGRESO.md** = relevo.
 
-Si cronograma y código difieren: registrar discrepancia y esperar decisión.
+Si cronograma y código difieren: registrar discrepancia, no saltar bloques silenciosamente.
 
 ---
 
-## Tabla maestra P01–P30
+## Tabla maestra P01–P50 (consolidada del Excel único)
 
-| ID | Bloque | Entregable | Estado | Evidencia |
-|---|---|---|---|---|
-| P01 | Portal – Registro | Agregar “Registrarme / Crear mi cuenta” al login del Portal de Clientes (`loyalty.portal.login` → `loyalty.customer.register`) | **COMPLETADO** | `resources/views/loyalty/portal/login.blade.php:14`, `resources/views/loyalty/portal/register.blade.php`, `LoyaltyPortalSelfRegistrationTest::test_login_shows_register_link` |
-| P02 | Portal – Autorregistro | Permitir autorregistro desde Portal/QR dentro de la empresa de la URL; cliente nuevo queda `is_active=true` y disponible en `clientes`, `pos.customers.search` y Fidelización | **COMPLETADO** | `LoyaltyPortalSessionController::register:40`, `routes/web.php:139`, `LoyaltyPortalSelfRegistrationTest::test_register_creates_new_active_customer_and_credential` |
-| P03 | Portal – Deduplicación | Antes de crear, evitar duplicados dentro de la misma empresa por identificación / teléfono normalizado (`PhoneNumberService`) / correo (case-insensitive); si existe, enlazar al cliente existente. **Si los tres identificadores apuntan a clientes distintos, bloquear** sin fusionar ni crear credencial, mensaje seguro | **COMPLETADO** | `LoyaltyPortalSessionController::register` conflicto P03 `uniqueIds>1` → `identification: Los datos proporcionados coinciden...`, `LoyaltyPortalSelfRegistrationTest` 10 tests (incl. `test_register_blocks_when_identification_and_phone_match_different_customers`, `test_register_blocks_when_email_matches_different_customer_than_phone` sin crear `customers` ni `loyalty_portal_credentials`) |
-| P04 | Portal – Visibilidad POS | Cliente nuevo activo y visible en búsqueda POS (`pos.customers.search` like) | **COMPLETADO – evidencia actual** | `LoyaltyPortalSelfRegistrationTest::test_new_customer_appears_in_pos_search` y `test_register_creates_new_active_customer_and_credential` (`posCustomerVisible` por nombre y `8888`) |
-| P05 | Portal – Incentivo de registro | No implementado – pendiente, no crear bono/puntos automáticos | **PENDIENTE** | — |
-| P06 | Portal – Validaciones | Harden de validaciones de registro (límites, formatos) | **PENDIENTE** | — |
-| P07 | Portal – UX registro | Pulido mobile-first del formulario de registro | **PENDIENTE** | — |
-| P08 | Portal – Términos | Aceptación de términos / privacidad | **PENDIENTE** | — |
-| P09A | Portal – Identidad pública única | Identidad pública única por cliente/empresa (sin exponer IDs internos) | **PENDIENTE** | No implementar todavía |
-| P09B | Portal – QR individual + Code 128 | QR individual + Code 128 por cliente | **PENDIENTE** | No implementar todavía |
-| P09C | Portal – Lectura desde POS | Lectura del QR/Code 128 desde POS para identificar cliente | **PENDIENTE** | No implementar todavía |
-| P09D | Portal – PIN/QR temporal | PIN o QR temporal para autorizaciones sensibles (canje, crédito, etc.) | **PENDIENTE** | No implementar todavía |
-| P10 | Portal – Notificaciones | Notificaciones post-registro (email/WhatsApp) | **PENDIENTE** | — |
-| P11 | Producción – Centro de Etiquetas | Centro de etiquetas (ya completado en PROGRESO) | COMPLETADO | `PROGRESO.md` |
-| P12 | Producción – Verificación mercadería | Verificación digital de mercadería | COMPLETADO | `PROGRESO.md` |
-| P13 | Producción – Dashboard | Dashboard operativo | PENDIENTE | — |
-| P14 | Producción – Reportes | Reportes esenciales | PENDIENTE | — |
-| P15 | Producción – Caja | Caja y sesiones | PENDIENTE | — |
-| P16 | Producción – Inventario | Inventario por sucursal | PENDIENTE | — |
-| P17 | Producción – Compras | Compras e importaciones | PENDIENTE | — |
-| P18 | Producción – Ventas | POS y ventas | PENDIENTE | — |
-| P19 | Producción – Clientes | Clientes CRUD | PENDIENTE | — |
-| P20 | Producción – Proveedores | Proveedores | PENDIENTE | — |
-| P21 | Producción – Fidelización | Fidelización F01–F45 | COMPLETADO | `CRONOGRAMA_FIDELIZACION.md` |
-| P22 | Producción – Separación Platform/Tenant | Separación Platform Admin / Tenant Admin (`platform:admin --create`, `LoginController`, `BranchController`, `sidebar`, `ManagePlatformAdmin.php`) – identidades separadas, promoción bloqueada, `is_platform_admin` | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `ManagePlatformAdmin.php`, `LoginController.php`, `PlatformAdminTest` |
-| P23 | Producción – Onboarding empresa + sucursales | Onboarding obligatorio de empresa + sucursales + primer administrador (`CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController`, `CompanyLicenseService`) | **COMPLETADO en a60425f** | `a60425f`, `app/Http/Controllers/CompanyController.php`, `EnsureActiveCompany.php`, `BranchController.php` |
-| P24 | Producción – Licencias | Licenciamiento SaaS por empresa | COMPLETADO | `PROGRESO.md` P08L |
-| P25 | Producción – Seguridad | Seguridad PostgreSQL / headers / throttles | COMPLETADO (técnico) | `PROGRESO.md` P08S |
-| P26 | Producción – Backups | Backups y restore | PENDIENTE | — |
-| P27 | Producción – Dominio/TLS | Dominio y TLS | PENDIENTE | — |
-| P28 | Producción – Monitoreo | Monitoreo y alertas | PENDIENTE | — |
-| P29 | Producción – Migración datos | Migración datos reales MYM | PENDIENTE | — |
-| P30 | Producción – Go-live | Go-live y corte | PENDIENTE | — |
+### Bloque Portal de Clientes — P01–P20 (prioridad inmediata)
+
+| ID | Trabajo | Estado | Evidencia / resultado |
+|---|---|---|---|
+| **P01** | Registrarme / Crear mi cuenta en login público | **COMPLETADO** | `resources/views/loyalty/portal/login.blade.php:14`, `register.blade.php`, `LoyaltyPortalSelfRegistrationTest::test_login_shows_register_link` |
+| **P02** | Autorregistro por link/QR asociado a empresa correcta | **COMPLETADO** | `LoyaltyPortalSessionController::register`, `routes/web.php:139`, aislamiento `company_id`, `10/10 tests` |
+| **P03** | Deduplicación por identificación, teléfono normalizado y correo; bloquear conflictos entre clientes distintos | **COMPLETADO** | `LoyaltyPortalSessionController` `uniqueIds>1` → `identification: Los datos...`, `PhoneNumberService`, `10/10 tests, 46 aserciones` (incl. conflictos) |
+| **P04** | Cliente nuevo visible inmediatamente en Clientes y búsqueda POS | **COMPLETADO – evidencia actual** | `PosController::searchCustomers` LIKE, `LoyaltyPortalSelfRegistrationTest` `posCustomerVisible` por nombre y `8888` |
+| **P05** | Crear/activar automáticamente cuenta de fidelización al autorregistrarse | **PENDIENTE – siguiente bloque** | No implementado; siguiente tarea |
+| P06 | Crear acceso al Portal al registrar/crear cliente rápido (POS/Clientes) | **PENDIENTE** | Checkbox/acción desde POS |
+| P07 | Contraseña temporal única, mostrada una vez, con cambio obligatorio en primer ingreso | **PENDIENTE** | No genérica compartida |
+| P08 | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **PENDIENTE** | Cajero no memoriza URL |
+| P09 | Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes) | **PENDIENTE** | — |
+| **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **PENDIENTE** | Base para QR y barcode |
+| **P09B** | QR individual + Code 128 generados por MVS | **PENDIENTE** | Sin servicio externo |
+| **P09C** | Escaneo QR/Code128 para seleccionar cliente en POS | **PENDIENTE** | Mantener búsqueda manual |
+| **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **PENDIENTE** | No confiar solo en QR estático |
+| P14 | Incentivo de registro configurable | **PENDIENTE** | Habilitar/deshabilitar |
+| P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
+| P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
+| P17 | Sucursales, ofertas, descuento máximo y stacking/combinabilidad | **PENDIENTE** | Condiciones por empresa |
+| P18 | Una vez por cliente + teléfono/correo verificado | **PENDIENTE** | Prevención abuso |
+| P19 | Auditar incentivo: cliente, regla, beneficio, compra, sucursal, configurador y fecha | **PENDIENTE** | Trazabilidad |
+| P20 | Logo, nombre y colores de empresa en portal/QR manteniendo identidad MVS | **PENDIENTE** | Responsive |
+
+### Bloque Base SaaS y Onboarding — P22–P23 (completados previamente, sin alterar secuencia actual)
+
+| ID | Trabajo | Estado | Evidencia |
+|---|---|---|---|
+| **P22** | Separación Platform Admin / Tenant Admin | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `ManagePlatformAdmin.php`, `LoginController`, `BranchController`, `PlatformAdminTest` |
+| **P23** | Empresa + primera sucursal + primer administrador | **COMPLETADO en a60425f** | `a60425f feat: completar onboarding de empresa y separacion platform tenant`, `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController` |
+
+### Bloque Correcciones — P23–P30
+
+| ID | Trabajo | Estado | Origen |
+|---|---|---|---|
+| P23 | Auditar implementación existente de transferencias; no reconstruir | **PENDIENTE** | Corrección |
+| P24 | Probar origen/destino, stock, Kardex, permisos y decidir instantánea vs envío/recepción | **PENDIENTE** | Corrección |
+| P25 | Reparar/terminar sidebar responsive | **PENDIENTE** | Corrección |
+| P26 | Nombres claros 58 mm, 80 mm, Carta, etc. | **PENDIENTE** | Corrección |
+| P27 | Crear empresa/sucursal MVS Commerce Demo con datos ficticios | **PENDIENTE** | Demo |
+| P28 | Usuario administrativo demo + cliente Portal demo + QR demo | **PENDIENTE** | Demo |
+| P29 | Bloquear operaciones peligrosas y comunicaciones reales | **PENDIENTE** | Demo |
+| P30 | Reset automático de datos ficticios | **PENDIENTE** | Demo |
+
+### Bloque Migración Completa — P31–P40 (después del bloque actual, sin pisar IDs)
+
+| ID | Trabajo | Estado | Criterio clave |
+|---|---|---|---|
+| P31 | Auditar importadores/exportadores/plantillas existentes | **PENDIENTE** | No duplicar funcionalidad existente |
+| P32 | Importar clientes desde Excel con deduplicación | **PENDIENTE** | Cliente disponible para historial y POS |
+| P33 | Importar productos, códigos, precios y catálogo; inventario opcional | **PENDIENTE** | Errores por fila y plantilla |
+| P34 | Importar encabezados de facturas: fecha, cliente, sucursal, totales y origen | **PENDIENTE** | Histórico sin afectar caja |
+| P35 | Importar detalle por artículo + cliente + sucursal + fecha | **PENDIENTE** | Última compra por cliente |
+| P36 | Importar inventario inicial y Kardex histórico por sucursal | **PENDIENTE** | Modo histórico no altera stock actual |
+| P37 | Importar saldos y movimientos históricos de puntos | **PENDIENTE** | Conciliación por cliente |
+| P38 | Exportar paquete completo: clientes, productos, facturas, líneas, Kardex y puntos | **PENDIENTE** | Migración futura |
+| P39 | Vista previa, conciliación, errores descargables, reintento y rollback | **PENDIENTE** | Ensayo sin duplicados |
+| P40 | Ensayo de migración completa + conciliación final | **PENDIENTE** | Última compra, ventas, Kardex y saldos coinciden |
+
+### Bloque Fidelización Pendiente — P41–P50 (solo si siguen pendientes según código/tests)
+
+> El maestro de Fidelización `23-08-2026` está desactualizado. **Solo los pendientes reales** pasan a este bloque, previa auditoría contra código/tests (no reconstruir lo ya hecho).
+
+| ID | Referencia | Estado | Tratamiento |
+|---|---|---|---|
+| P41 | Auditoría general fidelización | **PENDIENTE** | Auditar todo el maestro antiguo contra código actual |
+| P42 | Premios stock/disponibilidad/historial (F19–F21) | **PENDIENTE DE AUDITORÍA** | F19 CRUD ya completado; implementar solo brechas (stock, canje, historial) |
+| P43 | Vencimiento configurable + automático (F22–F23) | **PENDIENTE DE AUDITORÍA** | Confirmar si ya existe |
+| P44 | Centro de Reglas + ajustes manuales (F24–F25) | **PENDIENTE DE AUDITORÍA** | No duplicar Centro de Reglas existente; P14–P19 de Portal ya cubren incentivo |
+| P45 | Saldo global y canje entre sucursales (F26–F27) | **PENDIENTE DE AUDITORÍA** | Aislamiento empresa, saldo compartido |
+| P46 | Fidelización online acumulación/canje (F36–F37) | **PENDIENTE DE AUDITORÍA** | Auditar integración existente |
+| P47 | Permisos administrador/cajero/portal (F38–F39) | **PENDIENTE DE AUDITORÍA** | 403/permitido correcto |
+| P48 | Dashboard indicadores empresa/sucursal (F40–F41) | **PENDIENTE DE AUDITORÍA** | Clientes, generados, canjeados, vencidos, saldo |
+| P49 | Regresión completa Portal + Fidelización + POS + Inventario + migraciones | **PENDIENTE** | Suite verde; documentar fallos históricos |
+| P50 | Instalación limpia, colas/scheduler, despliegue, prueba de humo y rollback | **PENDIENTE** | Producción repetible |
+
+**F01–F45 del maestro de Fidelización:** F01–F18, F28, F29 ya **COMPLETADOS previamente** y no se reconstruyen; F30–F35 parcialmente en Portal P01–P20; el resto queda en P41–P48 solo si la auditoría confirma que sigue pendiente.
 
 ---
 
 ## Estado y próxima fase
 
-- **P22 – Separación Platform/Tenant: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – `platform:admin --create`, identidades separadas, `LoginController`, `BranchController`, `sidebar`).
-- **P23 – Onboarding empresa + sucursales: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, primera sucursal + primer administrador).
-- **P01–P03: COMPLETADOS** solo si las nuevas pruebas de conflicto pasan. Evidencia: `LoyaltyPortalSelfRegistrationTest` 10 tests, 46 aserciones, 0 fallos (incl. `test_register_blocks_when_identification_and_phone_match_different_customers` y `test_register_blocks_when_email_matches_different_customer_than_phone` que verifican bloqueo sin crear `customers` ni `loyalty_portal_credentials`).
-- **P04: COMPLETADO – evidencia actual** – cliente nuevo queda `is_active=true` y es encontrado por `PosController::searchCustomers` (`pos.customers.search` LIKE sobre `name/identification/phone/mobile/email`), probado en `test_register_creates_new_active_customer_and_credential` y `test_new_customer_appears_in_pos_search` con `pos.acceder` y sesión `active_company_id/active_branch_id`.
-- **P05 y siguientes: PENDIENTES.** No implementar P05 (incentivo), ni QR individual/Code128 (P09B), ni lectura POS (P09C), ni PIN/QR temporal (P09D) todavía.
-- **P09A–P09D: PENDIENTES.** Definidos como identidad pública única, QR individual + Code 128, lectura desde POS, PIN/QR temporal para autorizaciones sensibles. No se crea QR individual antes de P09B.
+- **P01–P04: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 10/10, 46 aserciones; `LoyaltyCustomerPortal` 13/13).
+- **P05: SIGUIENTE BLOQUE** – Crear/activar cuenta de fidelización al autorregistrarse. No implementar todavía.
+- **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
+- **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
+- **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.
+- **Fidelización:** solo pendientes reales P41–P48 tras auditoría (no reconstruir F01–F18, F28, F29 ya completados).
 
 ---
 
 ## Regla para agentes
 
-Antes de cualquier tarea, leer `docs/CRONOGRAMA_PRODUCCION.md` (este archivo) y no saltar bloques sin autorización. El orden P01–P30 es obligatorio.
+- **Fuente oficial:** `docs/CRONOGRAMA_PRODUCCION.md` (este archivo). 
+- **Referencia visual única:** `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. 
+- **Prohibido** usar cronogramas Excel anteriores (`Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx`, `Cronograma_Correcciones_Produccion_MVS_Commerce_29-08-2026.xlsx`, `Cronograma_Maestro_Fidelizacion_23-08-2026.xlsx`) como fuente de orden, y prohibido renumerar tareas.
+
+Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección `docs/PROGRESO.md`; no saltar bloques.
+
+---
+
+## Decisiones oficiales (del Excel único, hoja Decisiones)
+
+- D01: Primero cerrar Portal P01–P20; luego correcciones/migración/fidelización pendiente.
+- D02: Este archivo reemplaza los Excel anteriores de seguimiento general.
+- D03: Este cronograma debe leerse antes de trabajar.
+- D04: Cliente Portal no es usuario empleado.
+- D05: QR/link siempre ligado a empresa correcta.
+- D06: Conflictos entre clientes distintos bloquean; no fusionar.
+- D07: Contraseña temporal única; no genérica compartida.
+- D08: QR/barcode los genera MVS.
+- D09: Canjes sensibles usan PIN o QR temporal.
+- D10: Toda importación crítica tendrá exportación equivalente.
+- D11: Histórico no altera caja/stock actual.
+- D12: Detalle histórico debe permitir saber qué compró, cuándo, sucursal y última compra.
+- D13: Maestro viejo 23-08 solo como referencia auditada.
+
+---
 
 ## Control de cambios
 
-- 2026-08-29: creado como fuente oficial P01–P30, incorpora P09A–P09D, marca P22/P23 en a60425f, registra P01–P04 completados con evidencia de `LoyaltyPortalSelfRegistrationTest` 10/10.
+- 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08), marca P22/P23 en a60425f.
+- 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplia a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente. P09A–P09D y P22/P23 se conservan con IDs exactos.

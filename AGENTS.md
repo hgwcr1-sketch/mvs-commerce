@@ -232,11 +232,17 @@ Regla específica de Fidelización:
 
 ### `docs/CRONOGRAMA_PRODUCCION.md`
 
-Fuente oficial del orden P01–P30 de Portal de Clientes y Puesta en Producción (refleja `docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx` y el bloque Portal P01–P30, con sub-bloques P09A–P09D).
+Fuente oficial del orden P01–P50 de Portal de Clientes + Correcciones + Migración + Fidelización pendiente (refleja el Excel único `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`). Reemplaza los cronogramas anteriores (`docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx`, `docs/Cronograma_Correcciones_Produccion_MVS_Commerce_29-08-2026.xlsx` y la parte general de `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
+
+- P01–P04 COMPLETADOS, **P05 es el siguiente bloque**, no reutilizar numeraciones antiguas.
+- P09A, P09B, P09C y P09D conservan esos IDs exactos.
+- P22 = Separación Platform Admin / Tenant Admin, COMPLETADO; P23 = Onboarding empresa + sucursales + primer administrador, COMPLETADO.
+- Migración completa P31–P40 queda después de los bloques existentes, sin reutilizar IDs.
+- Fidelización pendiente solo P41–P48 si sigue pendiente según código/tests (no reconstruir F01–F18, F28–F29 ya completados).
 
 Regla específica de Producción/Portal:
 
-> Toda tarea de Portal/Puesta en Producción debe comenzar leyendo `docs/CRONOGRAMA_PRODUCCION.md`, `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede saltar bloques sin autorización. Si descubre funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál bloque corresponde ejecutar a continuación.
+> Toda tarea de Portal/Puesta en Producción debe comenzar leyendo `docs/CRONOGRAMA_PRODUCCION.md` (fuente oficial) y el Excel único como referencia visual (`docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`), además de `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede usar cronogramas Excel anteriores ni renumerar tareas; si descubre funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál bloque corresponde ejecutar a continuación.
 
 No llenar `AGENTS.md` con detalles que correspondan a esos documentos.
 

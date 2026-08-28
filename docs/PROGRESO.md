@@ -994,9 +994,9 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P04: COMPLETADO (con validación P03 de conflicto)
+### Portal de Clientes — P01–P04: COMPLETADO (reconciliado con Excel único, P05 siguiente)
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P30, sub-bloques P09A–P09D). **P22 – Separación Platform/Tenant: COMPLETADO en a60425f** y **P23 – Onboarding empresa + sucursales: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`).
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`).
 
 - **P01 — Registrarme:** Enlace “Registrarme / Crear mi cuenta” en `loyalty.portal.login` hacia `portal-clientes/{company}/registro` (`resources/views/loyalty/portal/login.blade.php:14`, `resources/views/loyalty/portal/register.blade.php`, `routes/web.php:139`).
 - **P02 — Autorregistro:** `LoyaltyPortalSessionController::register` dentro de la empresa de la URL; crea `Customer` `is_active=true` + `LoyaltyPortalCredential`, `throttle:10,1`, `RateLimiter`, disponible en `clientes`, `pos.customers.search` y Fidelización; sin factura/incentivo/QR individual.

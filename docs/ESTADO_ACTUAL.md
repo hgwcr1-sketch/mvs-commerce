@@ -15,17 +15,18 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - Empresas existentes conservan su contexto y no repiten onboarding.
 
 
-## Estado actual de Portal de Clientes (P01–P04)
+## Estado actual de Portal de Clientes (P01–P04) — reconciliado con Excel único
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P30, sub-bloques P09A–P09D).
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P05 es el siguiente bloque, P09A–P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs.
 
 - **P01 — Registrarme: COMPLETADO.** Enlace “Registrarme / Crear mi cuenta” en `loyalty.portal.login` (`resources/views/loyalty/portal/login.blade.php:14`) hacia `portal-clientes/{company}/registro`.
 - **P02 — Autorregistro: COMPLETADO.** `LoyaltyPortalSessionController::register` crea cliente activo (`is_active=true`) disponible en `clientes`, `pos.customers.search` y Fidelización, dentro de la empresa de la URL (`portal-clientes/{company}`), vía `Customer` + `LoyaltyPortalCredential`; sin factura/incentivo/QR individual. Rutas `loyalty.customer.register` / `register.store` (`routes/web.php:139`, `throttle:10,1`).
 - **P03 — Deduplicación + bloqueo por conflicto: COMPLETADO.** Antes de crear, busca por `identification` / `phone` normalizado (`PhoneNumberService`) / `email` lower dentro de la empresa; si algún dato coincide, enlaza al cliente existente en vez de duplicar. **Si dos identificadores apuntan a clientes distintos (ej. identificación→A y teléfono→B, o correo→C distinto de teléfono→B), bloquea** con mensaje seguro `Los datos proporcionados coinciden con clientes distintos...`, sin fusionar, sin crear `Customer` ni `LoyaltyPortalCredential`, sin crear credencial. Aislamiento multiempresa obligatorio probado (identificación `ID-123` duplicada en empresas distintas crea registros separados).
 - **P04 — Visibilidad POS: COMPLETADO (evidencia actual).** Cliente nuevo queda activo y es encontrado por `PosController::searchCustomers` (`pos.customers.search` LIKE `name/identification/phone/mobile/email`) con `pos.acceder` y sesión `active_company_id/active_branch_id`. Evidencia: `LoyaltyPortalSelfRegistrationTest::test_register_creates_new_active_customer_and_credential` y `test_new_customer_appears_in_pos_search` (por nombre y por `8888` normalizado).
-- **P05 y siguientes: PENDIENTES.** No incentivo de registro, no QR individual/Code128, no lectura POS, no PIN/QR temporal (P09A–P09D pendientes).
-- **P22 – Separación Platform/Tenant: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – Platform Admin / Tenant Admin separados, `platform:admin --create`, `LoginController`, `BranchController`).
-- **P23 – Onboarding empresa + sucursales: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – onboarding empresa + sucursales + primer administrador, `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`).
+- **P05 y siguientes: PENDIENTES.** No incentivo de registro (P05), no QR individual/Code128 (P09B), no lectura POS (P09C), no PIN/QR temporal (P09D).
+- **P22 – Separación Platform Admin / Tenant Admin: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – Platform Admin / Tenant Admin separados, `platform:admin --create`, `LoginController`, `BranchController`).
+- **P23 – Onboarding empresa + sucursales + primer administrador: COMPLETADO en a60425f** (`a60425f684e11fd0629a42ac90fe6f25e5d31a35` – `CompanyProvisioner`, `CompanyController`, `EnsureActiveCompany`, `BranchController`).
+- **Migración P31–P40 y Fidelización pendiente P41–P48:** quedan después del bloque actual sin pisar IDs; Fidelización solo si sigue pendiente según código/tests (F01–F18, F28–F29 ya no se reconstruyen).
 - Evidencia P01–P03: `LoyaltyPortalSelfRegistrationTest` **10 tests, 46 aserciones, 0 fallos** (incl. `test_register_blocks_when_identification_and_phone_match_different_customers` y `test_register_blocks_when_email_matches_different_customer_than_phone`, que verifican que no se crea `customers` ni `loyalty_portal_credentials`).
 
 ## Estado actual de Fidelización

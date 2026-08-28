@@ -28,3 +28,7 @@ Thumbs.db
 # Permitir únicamente cronogramas de producción (evitar habilitar *.xlsx globales)
 !docs/Cronograma_Maestro_Produccion_MVS_Commerce_28-08-2026.xlsx
 !docs/Cronograma_Correcciones_Produccion_MVS_Commerce_29-08-2026.xlsx
+!docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx
+# Ignorar archivos temporales de Excel (bloqueos ~$)
+~$*
+docs/~$*
