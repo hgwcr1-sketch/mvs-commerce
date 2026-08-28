@@ -9,8 +9,11 @@ use App\Models\Company;
 use App\Models\Country;
 use App\Models\Customer;
 use App\Models\District;
+use App\Models\LoyaltyPortalCredential;
 use App\Models\Province;
+use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
@@ -119,12 +122,86 @@ class CustomerController extends Controller
         $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
         $data['is_active'] = $request->boolean('is_active');
         $data['company_id'] = $this->activeCompanyId();
+        $createPortalAccess = $request->boolean('create_portal_access');
+        unset($data['create_portal_access']);
 
-        Customer::create($data);
+        $customer = Customer::create($data);
+
+        $portalResult = null;
+        if ($createPortalAccess) {
+            $portalResult = $this->createPortalAccessForCustomer($customer, $request);
+            if ($portalResult['created']) {
+                return redirect()
+                    ->route('clientes.index')
+                    ->with('success', 'Cliente registrado correctamente. Acceso al Portal creado: usuario ' . $portalResult['username'] . ' / contraseña temporal ' . $portalResult['password'])
+                    ->with('portal_access', $portalResult);
+            }
+            if ($portalResult['error']) {
+                return redirect()
+                    ->route('clientes.index')
+                    ->with('success', 'Cliente registrado correctamente.')
+                    ->with('warning', $portalResult['error']);
+            }
+        }
 
         return redirect()
             ->route('clientes.index')
             ->with('success', 'Cliente registrado correctamente.');
+    }
+
+    private function createPortalAccessForCustomer(Customer $customer, Request $request): array
+    {
+        $companyId = (int) $customer->company_id;
+        // No duplicar si ya existe
+        if (LoyaltyPortalCredential::query()->where('customer_id', $customer->id)->exists()) {
+            return ['created' => false, 'error' => 'Este cliente ya tiene acceso al Portal.'];
+        }
+
+        $phones = app(PhoneNumberService::class);
+        $phoneNormalized = $phones->normalizePhone($customer->phone ?? $customer->mobile);
+        $emailNormalized = $customer->email ? mb_strtolower(trim($customer->email)) : null;
+
+        $username = null;
+        if ($phoneNormalized) {
+            $username = $phoneNormalized;
+        } elseif ($emailNormalized && filter_var($emailNormalized, FILTER_VALIDATE_EMAIL)) {
+            $username = $emailNormalized;
+        }
+
+        if (!$username) {
+            return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
+        }
+
+        // Validar unicidad dentro de la empresa
+        $exists = LoyaltyPortalCredential::query()
+            ->where('company_id', $companyId)
+            ->where(function ($q) use ($username, $emailNormalized) {
+                $q->where('username', $username);
+                if ($emailNormalized) {
+                    $q->orWhere('email', $emailNormalized);
+                }
+            })->exists();
+
+        if ($exists) {
+            return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
+        }
+
+        $plainPassword = Str::password(12, true, true, false, false);
+        // Asegurar que cumple reglas: si no, generar uno que cumpla
+        if (!preg_match('/[a-z]/', $plainPassword) || !preg_match('/[A-Z]/', $plainPassword) || !preg_match('/[0-9]/', $plainPassword)) {
+            $plainPassword = 'Aa1' . Str::random(9);
+        }
+
+        $credential = LoyaltyPortalCredential::create([
+            'company_id' => $companyId,
+            'customer_id' => $customer->id,
+            'username' => $username,
+            'email' => $emailNormalized ?? $username . '@portal.local',
+            'password' => $plainPassword,
+            'is_active' => true,
+        ]);
+
+        return ['created' => true, 'username' => $username, 'password' => $plainPassword, 'email' => $credential->email];
     }
 
     /**

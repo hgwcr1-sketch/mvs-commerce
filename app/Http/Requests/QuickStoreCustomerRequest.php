@@ -50,6 +50,7 @@ class QuickStoreCustomerRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'],
             'mobile' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:150'],
+            'create_portal_access' => ['nullable', 'boolean'],
             'company_id' => ['prohibited'],
             'is_active' => ['prohibited'],
             'points' => ['prohibited'],

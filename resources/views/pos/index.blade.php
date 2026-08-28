@@ -658,6 +658,15 @@
                         <input type="email" x-model="quickCustomer.form.email" maxlength="150" class="w-full rounded-xl border border-slate-300 px-4 py-3">
                         <p x-show="quickCustomer.errors.email" x-text="quickCustomer.errors.email?.[0]" class="mt-1 text-xs text-red-600"></p>
                     </div>
+
+                    <div class="md:col-span-2">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" x-model="quickCustomer.form.create_portal_access" class="rounded border-slate-300">
+                            <span class="text-sm font-semibold text-slate-700">Crear acceso al Portal de Cliente</span>
+                        </label>
+                        <p class="mt-1 text-xs text-slate-500">Se usará teléfono normalizado o email como usuario. Si no hay teléfono ni email válido, no se creará acceso.</p>
+                        <p x-show="quickCustomer.errors.create_portal_access" x-text="quickCustomer.errors.create_portal_access?.[0]" class="mt-1 text-xs text-red-600"></p>
+                    </div>
                 </div>
 
                 <div class="mt-6 flex justify-end gap-3">
@@ -723,7 +732,7 @@ document.addEventListener('alpine:init', () => {
             saving: false,
             errors: {},
             message: '',
-            form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' },
+            form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
         loyaltyRequestNumber: 0,
@@ -1422,7 +1431,7 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.message = '';
         },
         resetQuickCustomer() {
-            this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '' };
+            this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false };
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
         },
@@ -1449,7 +1458,11 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (!response.ok) throw new Error('No fue posible crear el cliente.');
                 this.selectCustomer(payload.customer);
-                this.successMessage = payload.message;
+                if (payload.portal_access && payload.portal_access.created) {
+                    this.successMessage = `Cliente creado. Acceso Portal: ${payload.portal_access.username} / ${payload.portal_access.password} (mostrado una sola vez)`;
+                } else {
+                    this.successMessage = payload.message;
+                }
                 this.quickCustomer.open = false;
                 this.resetQuickCustomer();
             } catch (error) {

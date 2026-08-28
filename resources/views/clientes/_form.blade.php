@@ -341,6 +341,25 @@
     </div>
 
 </x-card>
+
+<x-card class="mt-6">
+
+    <x-slot:header>
+        <h3 class="text-lg font-semibold">
+            Acceso al Portal de Cliente
+        </h3>
+    </x-slot:header>
+
+    <div>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" name="create_portal_access" value="1" {{ old('create_portal_access') ? 'checked' : '' }} class="rounded border-slate-300">
+            <span class="text-sm font-semibold">Crear acceso al Portal de Cliente</span>
+        </label>
+        <p class="mt-1 text-xs text-slate-500">Se usará teléfono normalizado o email como usuario. Si no hay teléfono ni email válido, no se creará acceso.</p>
+        @error('create_portal_access')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+    </div>
+
+</x-card>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('form');

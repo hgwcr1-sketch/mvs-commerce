@@ -105,6 +105,8 @@ class StoreCustomerRequest extends FormRequest
 
             'is_active' => 'nullable|boolean',
 
+            'create_portal_access' => 'nullable|boolean',
+
         ];
     }
 

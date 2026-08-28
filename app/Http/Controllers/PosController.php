@@ -10,6 +10,7 @@ use App\Models\AccountReceivable;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\LoyaltyPortalCredential;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Sale;
@@ -18,6 +19,7 @@ use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
+use App\Services\PhoneNumberService;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
@@ -25,6 +27,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -268,6 +271,8 @@ class PosController extends Controller
     public function storeQuickCustomer(QuickStoreCustomerRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $createPortalAccess = $request->boolean('create_portal_access');
+        unset($data['create_portal_access']);
 
         $customer = Customer::create([
             'company_id' => (int) session('active_company_id'),
@@ -286,9 +291,14 @@ class PosController extends Controller
             'is_active' => true,
         ]);
 
+        $portal = null;
+        if ($createPortalAccess) {
+            $portal = $this->createPortalAccessForQuickCustomer($customer);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Cliente creado correctamente.',
+            'message' => $portal && isset($portal['error']) ? 'Cliente creado correctamente. ' . $portal['error'] : 'Cliente creado correctamente.',
             'customer' => [
                 'id' => $customer->id,
                 'name' => $customer->name,
@@ -299,7 +309,48 @@ class PosController extends Controller
                 'customer_type' => $customer->customer_type,
                 'price_level' => $customer->price_level,
             ],
+            'portal_access' => $portal,
         ], 201);
+    }
+
+    private function createPortalAccessForQuickCustomer(Customer $customer): ?array
+    {
+        $companyId = (int) $customer->company_id;
+        if (LoyaltyPortalCredential::query()->where('customer_id', $customer->id)->exists()) {
+            return ['created' => false, 'error' => 'Este cliente ya tiene acceso al Portal.'];
+        }
+        $phones = app(PhoneNumberService::class);
+        $phoneNormalized = $phones->normalizePhone($customer->phone ?? $customer->mobile);
+        $emailNormalized = $customer->email ? mb_strtolower(trim($customer->email)) : null;
+        $username = $phoneNormalized ?: ($emailNormalized && filter_var($emailNormalized, FILTER_VALIDATE_EMAIL) ? $emailNormalized : null);
+        if (!$username) {
+            return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
+        }
+        $exists = LoyaltyPortalCredential::query()
+            ->where('company_id', $companyId)
+            ->where(function ($q) use ($username, $emailNormalized) {
+                $q->where('username', $username);
+                if ($emailNormalized) {
+                    $q->orWhere('email', $emailNormalized);
+                }
+            })->exists();
+        if ($exists) {
+            return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
+        }
+        $plainPassword = Str::password(12, true, true, false, false);
+        if (!preg_match('/[a-z]/', $plainPassword) || !preg_match('/[A-Z]/', $plainPassword) || !preg_match('/[0-9]/', $plainPassword)) {
+            $plainPassword = 'Aa1' . Str::random(9);
+        }
+        $credential = LoyaltyPortalCredential::create([
+            'company_id' => $companyId,
+            'customer_id' => $customer->id,
+            'username' => $username,
+            'email' => $emailNormalized ?? $username . '@portal.local',
+            'password' => $plainPassword,
+            'is_active' => true,
+        ]);
+
+        return ['created' => true, 'username' => $username, 'password' => $plainPassword, 'email' => $credential->email];
     }
 
     public function loyaltySummary(Request $request, LoyaltyPosSummaryService $service): JsonResponse
