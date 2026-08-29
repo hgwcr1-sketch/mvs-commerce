@@ -34,12 +34,16 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P06** | Crear acceso al Portal al registrar/crear cliente rápido (POS/Clientes) | **COMPLETADO** | `CustomerController::createPortalAccessForCustomer`, `PosController::createPortalAccessForQuickCustomer`, `StoreCustomerRequest`/`QuickStoreCustomerRequest` `create_portal_access`, `clientes/_form.blade.php` + `pos/index.blade.php` checkbox, `LoyaltyPortalClientAccessTest` 11/11 |
 | **P07** | Contraseña temporal única, mostrada una vez, con cambio obligatorio en primer ingreso | **COMPLETADO** | `LoyaltyPortalCredential.must_change_password` (`2026_08_29_000001`), `LoyaltyPortalSessionController::forceChange` + `must_change_password` en `login`/`home`, `force-change.blade.php`, `LoyaltyPortalClientAccessTest::test_temporary_password_requires_change_on_first_login` 11/11, 55 aserciones |
 | **P08** | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **COMPLETADO** | `LoyaltyPortalDeliveryService::build` (`portal_url` `route('loyalty.customer.login', $company)` + `whatsapp_url` `PhoneNumberService::forWhatsApp` + `copy_text`), `CustomerController::store` flash `portal_access` + `PosController::storeQuickCustomer` JSON `portal_access`, `clientes/index.blade.php` + `pos/index.blade.php` `quickCustomer.delivery` responsive (Copiar/WhatsApp), `LoyaltyPortalDeliveryTest` 7/7 |
-| **P09** | Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes) | **COMPLETADO** | `LoyaltyPortalManagementController::index` `portalUrl` `route('loyalty.customer.login', $company)` + `portalQr` `LoyaltyPortalAccessService::qrSvg`, `loyalty/portal-management/index.blade.php` `acceso-general` (URL, Copiar URL, Vista previa, QR + Imprimir), `LoyaltyPortalCentralTest` 4/4 |
+| **P09** | Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes) | **COMPLETADO** | `LoyaltyPortalManagementController::index` `portalUrl` `route('loyalty.customer.login', $company)` + `portalQr` `LoyaltyPortalAccessService::qrSvg`, `loyalty/portal-management/index.blade.php` `acceso-general` (URL, Copiar URL, Vista previa, QR + Imprimir), `LoyaltyPortalCentralTest` 4/4. Ajuste visual QR compacto: commit `58aba11`. |
 | **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **COMPLETADO** | `customers.public_code` (`2026_08_29_000002`, unique `company_id+public_code`), `Customer` `booted` + `CustomerPublicCodeService` (8 chars A-Z0-9, CSPRNG, no leak cédula/teléfono), `CustomerPublicCodeTest` 5/5 |
 | **P09B** | QR individual + Code 128 generados por MVS | **COMPLETADO** | `CustomerPublicCodeService::qrSvg` (chillerlan H) + `barcodeSvg` (picqer Code128 SVG) local, `clientes/show.blade.php` `Identificación pública` (código+QR+Code128+Copia/Imprimir), `CustomerQrBarcodeTest` 4/4 |
 | **P09C** | Escaneo QR/Code128 para seleccionar cliente en POS | **COMPLETADO** | `PosController::searchCustomers` `public_code` (like + exact priority), `pos/index.blade.php` botón escáner cliente + `onMvsScan` (public_code 6-12 → `pos.customers.search` exact → `selectCustomer`), `CustomerPosScanTest` 3/3 |
 | **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **COMPLETADO** | `customer_one_time_tokens` (`2026_08_29_000003`, token_hash SHA256, expires 5min, used_at), `CustomerOneTimeTokenService` (PIN 6 dígitos, QR local, single-use, expiración, `isStaticQrTrustedForRedeem=false`), `clientes/show` PIN+QR+verificar, `CustomerOneTimeTokenTest` 4/4 |
-| P14 | Incentivo de registro configurable | **PENDIENTE** | Habilitar/deshabilitar |
+| **P10** | Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil) | **PENDIENTE** | Componente base reutilizable |
+| **P11** | Portal de Clientes por pestañas y menos scroll | **PENDIENTE** | Reorganización UX con pestañas |
+| **P12** | Clientes + Configuración en pestañas | **PENDIENTE** | Secciones tabuladas |
+| **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **PENDIENTE** | Aplicación transversal |
+| P14 | Incentivo de registro configurable (habilitar/deshabilitar) | **PAUSADO / PARCIAL** | Código parcial en `LoyaltyRegistrationIncentive*`, migraciones, tests; preservado sin commit P14 completo |
 | P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
 | P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
 | P17 | Sucursales, ofertas, descuento máximo y stacking/combinabilidad | **PENDIENTE** | Condiciones por empresa |
@@ -105,10 +109,14 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 ## Estado y próxima fase
 
-- **P01–P09D: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3 + `CustomerOneTimeTokenTest` 4/4; P09D PIN temporal single-use).
-- **P14: SIGUIENTE BLOQUE** – Incentivo de registro configurable.
+- **P01–P09D: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3 + `CustomerOneTimeTokenTest` 4/4; P09D PIN temporal single-use). Ajuste visual QR compacto P09: commit `58aba11`.
+- **P10: SIGUIENTE BLOQUE** – Patrón UI reutilizable de pestañas MVS (responsive obligatorio, móvil primero, tablet/escritorio, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil).
+- **P11** – Portal de Clientes por pestañas y menos scroll.
+- **P12** – Clientes + Configuración en pestañas.
+- **P13** – Extensión patrón pestañas al resto de MVS donde corresponda.
+- **P14: PAUSADO / PARCIAL** – Incentivo de registro configurable; código parcial en `LoyaltyRegistrationIncentive*` preservado sin commit completo.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
-- **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
+- **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.
 - **Fidelización:** solo pendientes reales P41–P48 tras auditoría (no reconstruir F01–F18, F28, F29 ya completados).
 
@@ -146,3 +154,4 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 
 - 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08), marca P22/P23 en a60425f.
 - 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplia a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente. P09A–P09D y P22/P23 se conservan con IDs exactos.
+- 2026-08-29 (noche): **sincronizado P09–P14 con Excel único y estado real del repositorio** – P09 ajuste QR compacto commit `58aba11` documentado; P10–P13 añadidos como bloques siguientes en orden (P10 patrón pestañas, P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal); P14 marcado PAUSADO/PARCIAL con código parcial preservado; regla de producción añadida (desarrollo → validación local → APROBADO PARA PRODUCCIÓN → despliegue controlado); regla P10–P13 responsive/touch/overflow añadida.

@@ -17,7 +17,7 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 ## Estado actual de Portal de Clientes (P01–P09D) — reconciliado con Excel único
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P14 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs.
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P10 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 - **P01 — Registrarme: COMPLETADO.** Enlace “Registrarme / Crear mi cuenta” en `loyalty.portal.login` (`resources/views/loyalty/portal/login.blade.php:14`) hacia `portal-clientes/{company}/registro`.
 - **P02 — Autorregistro: COMPLETADO.** `LoyaltyPortalSessionController::register` crea cliente activo (`is_active=true`) disponible en `clientes`, `pos.customers.search` y Fidelización, dentro de la empresa de la URL (`portal-clientes/{company}`), vía `Customer` + `LoyaltyPortalCredential`; sin factura/incentivo/QR individual. Rutas `loyalty.customer.register` / `register.store` (`routes/web.php:139`, `throttle:10,1`).
@@ -131,7 +131,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P00–P07B, P08L, P08C, P11 y P12 COMPLETADOS; P08S VALIDADO ESTÁTICAMENTE / POSTGRESQL REAL PENDIENTE**. P08C exige sesión de caja aplicable tras login, en `/pos` y al cobrar; revalida cierre y cambio de sucursal sin bypass administrativo ni integración RRHH. Licencias SaaS, auditoría, bloqueo/reactivación, límites y separación de módulos implementados. Evidencia P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global tras P08C: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos históricos ajenos. No hay PostgreSQL local y no se instaló nada. **PAUSA: P09 NO INICIADA; requiere autorización explícita. Siguiente paso exacto: activación externa P08 en cloud.**
+- Puesta en Producción: **P01–P09D COMPLETADOS** (evidencia tests + código); **P09 ajuste QR compacto commit `58aba11`**; **P10 SIGUIENTE BLOQUE** – Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, tablet/escritorio, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil); P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal; **P14 PAUSADO / PARCIAL** – Incentivo registro configurable, código parcial `LoyaltyRegistrationIncentive*` preservado sin commit; **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.** P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos históricos ajenos. No hay PostgreSQL local.
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -148,6 +148,8 @@ Antes de programar cualquier tarea nueva:
 2. verificar `git status`, rama y último commit;
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
+
+**Prioridad inmediata: P10 — Patrón UI reutilizable de pestañas MVS** (responsive obligatorio, móvil primero, tablet y escritorio, mínimo táctil 44px, sin overflow horizontal a nivel página, pestañas con scroll horizontal controlado en móvil, no eliminar funciones ni cambiar lógica).
 
 No asumir que el último estado conocido sigue vigente.
 

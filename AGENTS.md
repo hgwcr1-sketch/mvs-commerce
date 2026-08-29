@@ -234,11 +234,13 @@ Regla específica de Fidelización:
 
 Fuente oficial del orden P01–P50 de Portal de Clientes + Correcciones + Migración + Fidelización pendiente (refleja el Excel único `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`). Reemplaza los cronogramas anteriores (`docs/produccion/Cronograma_Maestro_Puesta_Produccion_MVS_Commerce_v7.xlsx`, `docs/Cronograma_Correcciones_Produccion_MVS_Commerce_29-08-2026.xlsx` y la parte general de `docs/Cronograma_Maestro_Fidelizacion_MVS_Commerce_Actualizado_23-08-2026.xlsx`).
 
-- P01–P04 COMPLETADOS, **P05 es el siguiente bloque**, no reutilizar numeraciones antiguas.
+- P01–P09D COMPLETADOS; **P10 es el siguiente bloque** (Patrón UI reutilizable de pestañas MVS), no reutilizar numeraciones antiguas.
 - P09A, P09B, P09C y P09D conservan esos IDs exactos.
 - P22 = Separación Platform Admin / Tenant Admin, COMPLETADO; P23 = Onboarding empresa + sucursales + primer administrador, COMPLETADO.
 - Migración completa P31–P40 queda después de los bloques existentes, sin reutilizar IDs.
 - Fidelización pendiente solo P41–P48 si sigue pendiente según código/tests (no reconstruir F01–F18, F28–F29 ya completados).
+- **Regla P10–P13:** responsive obligatorio, móvil primero, tablet y escritorio, mínimo táctil 44px, sin overflow horizontal, pestañas con scroll horizontal controlado en móvil, no eliminar funciones ni cambiar lógica.
+- **Regla producción:** desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado. Los agentes no despliegan producción automáticamente.
 
 Regla específica de Producción/Portal:
 
