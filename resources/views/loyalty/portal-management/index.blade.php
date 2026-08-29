@@ -6,9 +6,36 @@
     @if(session('success'))<div class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="rounded-xl bg-red-50 p-4 text-sm text-red-800">{{ $errors->first() }}</div>@endif
 
-    <nav class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="Secciones del portal">
-        @foreach(['resumen' => 'Resumen', 'publicaciones' => 'Publicaciones', 'destacados' => 'Productos destacados', 'enlaces' => 'Enlaces y botones', 'configuracion' => 'Configuración', 'vista-previa' => 'Vista previa'] as $anchor => $label)<a href="#{{ $anchor }}" class="flex min-h-11 items-center justify-center rounded-xl border bg-white px-3 text-center text-sm font-semibold">{{ $label }}</a>@endforeach
+    <nav class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7" aria-label="Secciones del portal">
+        @foreach(['acceso-general' => 'Acceso general', 'resumen' => 'Resumen', 'publicaciones' => 'Publicaciones', 'destacados' => 'Productos destacados', 'enlaces' => 'Enlaces y botones', 'configuracion' => 'Configuración', 'vista-previa' => 'Vista previa'] as $anchor => $label)<a href="#{{ $anchor }}" class="flex min-h-11 items-center justify-center rounded-xl border bg-white px-3 text-center text-sm font-semibold">{{ $label }}</a>@endforeach
     </nav>
+
+    <section id="acceso-general" class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+        <h2 class="text-lg font-semibold">Acceso general al Portal</h2>
+        <p class="mt-1 text-sm text-slate-500">URL única de esta empresa para login y autorregistro. Compártela con el cliente; el acceso es por empresa.</p>
+        <div class="mt-4 grid gap-4 lg:grid-cols-[1.7fr_0.9fr]">
+            <div class="space-y-3">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p class="text-xs font-semibold uppercase text-slate-500">URL del Portal (login)</p>
+                    <a href="{{ $portalUrl }}" target="_blank" rel="noopener" class="mt-1 block break-all text-sm font-semibold text-slate-900 underline">{{ $portalUrl }}</a>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <button type="button" onclick="navigator.clipboard.writeText(@js($portalUrl)).then(()=>{this.textContent='¡Copiado!'; setTimeout(()=>this.textContent='Copiar URL',1500)}).catch(()=>prompt('Copia manualmente:', @js($portalUrl)))" class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Copiar URL</button>
+                    <a href="{{ $portalUrl }}" target="_blank" rel="noopener" class="min-h-11 flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold">Vista previa</a>
+                </div>
+                <p class="text-xs text-slate-500">Incluye enlace a “Registrarme / Crear mi cuenta”. La URL contiene el ID de la empresa para aislamiento.</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <p class="text-xs font-semibold uppercase text-slate-500">QR del Portal</p>
+                @if($portalQr)
+                    <div class="mx-auto mt-2 max-w-[220px] rounded-xl border border-slate-100 bg-white p-2">{!! $portalQr !!}</div>
+                    <button type="button" onclick="const w=window.open('','_blank'); w.document.write('<html><head><title>QR Portal</title></head><body style=\'display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\'><div style=\'max-width:320px\'>'+ @js($portalQr) + '<p style=\'text-align:center;font-family:sans-serif;font-size:12px;margin-top:8px\'>'+ @js($portalUrl) +'</p></div></body></html>'); w.print();" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir QR</button>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">QR no disponible</p>
+                @endif
+            </div>
+        </div>
+    </section>
 
     <section id="resumen" class="grid grid-cols-1 gap-3 sm:grid-cols-3"><div class="rounded-xl border bg-white p-5"><span class="text-sm text-slate-500">Publicaciones</span><strong class="mt-1 block text-2xl">{{ $summary['posts'] }}</strong></div><div class="rounded-xl border bg-white p-5"><span class="text-sm text-slate-500">Enlaces</span><strong class="mt-1 block text-2xl">{{ $summary['links'] }}</strong></div><div class="rounded-xl border bg-white p-5"><span class="text-sm text-slate-500">Accesos activos</span><strong class="mt-1 block text-2xl">{{ $summary['accesses'] }}</strong></div></section>
 

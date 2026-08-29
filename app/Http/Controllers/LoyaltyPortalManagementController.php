@@ -10,6 +10,7 @@ use App\Models\LoyaltyPortalPost;
 use App\Models\LoyaltyPortalSetting;
 use App\Models\Product;
 use App\Services\Loyalty\LoyaltyCustomerPortalService;
+use App\Services\Loyalty\LoyaltyPortalAccessService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -26,6 +27,16 @@ class LoyaltyPortalManagementController extends Controller
         abort_unless($company && collect(self::PERMISSIONS)->contains(fn ($permission) => $request->user()->hasPermission($permission, $company)), 403);
         $companyId = (int) $company->id;
 
+        $portalUrl = route('loyalty.customer.login', $company);
+        $portalQr = null;
+        if (app(LoyaltyPortalAccessService::class)->qrSupported()) {
+            try {
+                $portalQr = app(LoyaltyPortalAccessService::class)->qrSvg($portalUrl);
+            } catch (\Throwable $e) {
+                $portalQr = null;
+            }
+        }
+
         return view('loyalty.portal-management.index', [
             'setting' => LoyaltyPortalSetting::firstOrCreate(['company_id' => $companyId], ['is_active' => true, 'show_active_offers' => true]),
             'posts' => LoyaltyPortalPost::where('company_id', $companyId)->with('product:id,company_id,name,image,sale_price,special_price')->orderBy('sort_order')->latest()->get(),
@@ -33,6 +44,8 @@ class LoyaltyPortalManagementController extends Controller
             'products' => Product::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'image', 'sale_price', 'special_price']),
             'customers' => Customer::where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'summary' => ['posts' => LoyaltyPortalPost::where('company_id', $companyId)->count(), 'links' => LoyaltyPortalLink::where('company_id', $companyId)->count(), 'accesses' => LoyaltyPortalAccess::where('company_id', $companyId)->whereNull('revoked_at')->count()],
+            'portalUrl' => $portalUrl,
+            'portalQr' => $portalQr,
         ]);
     }
 
