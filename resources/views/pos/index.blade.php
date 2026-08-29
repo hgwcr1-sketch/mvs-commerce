@@ -253,18 +253,32 @@
 
                 <div class="mt-2">
                     <label for="pos-customer-search" class="mb-1 block text-xs font-semibold text-slate-700">Buscar cliente</label>
-                    <input id="pos-customer-search"
-                           x-ref="customerSearchInput"
-                           x-model="customerQuery"
-                           @input.debounce.180ms="searchCustomers"
-                           @keydown.down.prevent="moveCustomerSelection(1)"
-                           @keydown.up.prevent="moveCustomerSelection(-1)"
-                           @keydown.enter.prevent="selectMarkedCustomer"
-                           @keydown.escape="closeCustomerResults"
-                           type="search"
-                           autocomplete="off"
-                           placeholder="Nombre, identificación, teléfono o correo…"
-                           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-0">
+                    <div class="flex items-center gap-2">
+                        <input id="pos-customer-search"
+                               x-ref="customerSearchInput"
+                               x-model="customerQuery"
+                               @input.debounce.180ms="searchCustomers"
+                               @keydown.down.prevent="moveCustomerSelection(1)"
+                               @keydown.up.prevent="moveCustomerSelection(-1)"
+                               @keydown.enter.prevent="selectMarkedCustomer"
+                               @keydown.escape="closeCustomerResults"
+                               type="search"
+                               autocomplete="off"
+                               placeholder="Nombre, identificación, teléfono, correo o cód. público…"
+                               class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-0">
+                        <button type="button"
+                                x-show="cameraScannerAvailable"
+                                x-cloak
+                                @click="$dispatch('mvs-scanner-open', { videoId: 'pos-scanner-video' })"
+                                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                                aria-label="Escanear QR del cliente"
+                                title="Escanear QR/Code128 del cliente">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25A2.25 2.25 0 0 1 5.25 6h1.4l1.13-1.69a.75.75 0 0 1 .62-.31h3.2a.75.75 0 0 1 .62.31L13.35 6h5.4A2.25 2.25 0 0 1 21 8.25v9a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 17.25v-9Z"/>
+                                <circle cx="12" cy="12.75" r="3.25"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
 
@@ -979,11 +993,30 @@ document.addEventListener('alpine:init', () => {
                 if (currentRequest === this.requestNumber) this.loading = false;
             }
         },
-        // R02-B: la cámara entrega el código y se reutiliza exactamente el mismo
-        // flujo de búsqueda del POS (searchProducts → matched_barcode → addProduct).
-        onMvsScan(event) {
+        // P09C + R02-B: escáner reutilizable para productos y cliente por código público.
+        // Si el código parece public_code (6-12 alfanum), intenta seleccionar cliente exacto; si no, cae a producto.
+        async onMvsScan(event) {
             const code = String(event?.detail?.code ?? '').trim();
             if (!code) return;
+            if (/^[A-Z0-9]{6,12}$/i.test(code)) {
+                try {
+                    const url = new URL({{ Illuminate\Support\Js::from(route('pos.customers.search', [], false)) }}, window.location.origin);
+                    url.searchParams.set('q', code);
+                    const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+                    if (resp.ok) {
+                        const customers = await resp.json();
+                        const exact = customers.find(c => String(c.public_code || '').toUpperCase() === code.toUpperCase());
+                        if (exact) {
+                            this.selectCustomer(exact);
+                            return;
+                        }
+                        if (customers.length === 1) {
+                            this.selectCustomer(customers[0]);
+                            return;
+                        }
+                    }
+                } catch (e) {}
+            }
             this.query = code;
             this.searchProducts();
         },

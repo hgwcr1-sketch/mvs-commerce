@@ -235,9 +235,10 @@ class PosController extends Controller
                     ->orWhere('identification', 'like', $like)
                     ->orWhere('phone', 'like', $like)
                     ->orWhere('mobile', 'like', $like)
-                    ->orWhere('email', 'like', $like);
+                    ->orWhere('email', 'like', $like)
+                    ->orWhere('public_code', 'like', $like);
             })
-            ->orderByRaw('CASE WHEN identification = ? THEN 0 ELSE 1 END', [$search])
+            ->orderByRaw('CASE WHEN public_code = ? THEN 0 WHEN identification = ? THEN 1 ELSE 2 END', [$search, $search])
             ->orderBy('name')
             ->limit(10)
             ->get([
@@ -251,6 +252,7 @@ class PosController extends Controller
                 'credit_limit',
                 'credit_days',
                 'price_level',
+                'public_code',
             ]);
 
         return response()->json($customers->map(fn (Customer $customer) => [
@@ -260,6 +262,7 @@ class PosController extends Controller
             'phone' => $customer->phone,
             'mobile' => $customer->mobile,
             'email' => $customer->email,
+            'public_code' => $customer->public_code,
             'customer_type' => $customer->customer_type,
             'credit_limit' => (float) $customer->credit_limit,
             'credit_days' => (int) ($customer->credit_days ?? 0),
