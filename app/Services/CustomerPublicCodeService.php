@@ -3,7 +3,12 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Output\QRMarkupSVG;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 use Illuminate\Support\Str;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 class CustomerPublicCodeService
 {
@@ -72,5 +77,49 @@ class CustomerPublicCodeService
         }
 
         return false;
+    }
+
+    public function qrSupported(): bool
+    {
+        return class_exists(QRCode::class);
+    }
+
+    public function barcodeSupported(): bool
+    {
+        return class_exists(BarcodeGeneratorSVG::class);
+    }
+
+    public function qrSvg(Customer $customer): string
+    {
+        $code = $this->ensure($customer);
+        if (!$this->qrSupported()) {
+            throw new \RuntimeException('QR no disponible');
+        }
+
+        $svg = (new QRCode(new QROptions([
+            'outputInterface' => QRMarkupSVG::class,
+            'eccLevel' => EccLevel::H,
+            'scale' => 6,
+            'svgAddXmlHeader' => false,
+            'outputBase64' => false,
+        ])))->render($code);
+
+        if (!is_string($svg)) {
+            throw new \RuntimeException('No fue posible generar QR');
+        }
+
+        return $svg;
+    }
+
+    public function barcodeSvg(Customer $customer): string
+    {
+        $code = $this->ensure($customer);
+        if (!$this->barcodeSupported()) {
+            throw new \RuntimeException('Barcode no disponible');
+        }
+
+        $generator = new BarcodeGeneratorSVG();
+        // Code128, altura 40, factor 2, sin texto humano adicional el SVG ya incluye code
+        return $generator->getBarcode($code, $generator::TYPE_CODE_128, 2, 40);
     }
 }

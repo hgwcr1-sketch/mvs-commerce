@@ -197,6 +197,44 @@
 
         </x-slot:footer>
 
+        </x-card>
+
+    <x-card>
+        <x-slot:header>
+            <h3 class="text-lg font-semibold">Identificación pública del cliente</h3>
+        </x-slot:header>
+        <div class="grid gap-6 md:grid-cols-[1.2fr_1fr_1fr] items-start">
+            <div class="space-y-3">
+                <div>
+                    <label class="text-sm text-slate-500">Código público</label>
+                    <p class="mt-1 font-mono text-xl font-bold tracking-widest text-slate-900">{{ $customer->public_code }}</p>
+                    <p class="mt-1 text-xs text-slate-500">No expone cédula, teléfono ni ID interno. Base para QR y Code128.</p>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <button type="button" onclick="navigator.clipboard.writeText(@js($customer->public_code)).then(()=>{this.textContent='¡Copiado!'; setTimeout(()=>this.textContent='Copiar código',1500)}).catch(()=>prompt('Copia manualmente:', @js($customer->public_code)))" class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Copiar código</button>
+                    <button type="button" onclick="window.print()" class="min-h-11 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir</button>
+                </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <p class="text-xs font-semibold uppercase text-slate-500">QR (código público)</p>
+                @if($qrSvg)
+                    <div class="mx-auto mt-2 max-w-[180px] rounded-lg border border-slate-100 bg-white p-2">{!! $qrSvg !!}</div>
+                    <p class="mt-1 font-mono text-xs">{{ $customer->public_code }}</p>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">QR no disponible</p>
+                @endif
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <p class="text-xs font-semibold uppercase text-slate-500">Code 128</p>
+                @if($barcodeSvg)
+                    <div class="mx-auto mt-2 overflow-x-auto bg-white p-2">{!! $barcodeSvg !!}</div>
+                    <p class="mt-1 font-mono text-xs">{{ $customer->public_code }}</p>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">Barcode no disponible</p>
+                @endif
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">Generados localmente por MVS, sin servicio externo. Úsalos para seleccionar al cliente en POS (P09C).</p>
     </x-card>
 
 </div>

@@ -232,8 +232,26 @@ class CustomerController extends Controller
             'addresses.district',
         ]);
 
+        $publicCodeService = app(\App\Services\CustomerPublicCodeService::class);
+        $publicCodeService->ensure($cliente);
+        $cliente->refresh();
+        $qrSvg = null;
+        $barcodeSvg = null;
+        try {
+            $qrSvg = $publicCodeService->qrSvg($cliente);
+        } catch (\Throwable $e) {
+            $qrSvg = null;
+        }
+        try {
+            $barcodeSvg = $publicCodeService->barcodeSvg($cliente);
+        } catch (\Throwable $e) {
+            $barcodeSvg = null;
+        }
+
         return view('clientes.show', [
             'customer' => $cliente,
+            'qrSvg' => $qrSvg,
+            'barcodeSvg' => $barcodeSvg,
 
             'countries' => Country::where('is_active', true)
                 ->orderBy('name')
