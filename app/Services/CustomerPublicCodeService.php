@@ -122,4 +122,25 @@ class CustomerPublicCodeService
         // Code128, altura 40, factor 2, sin texto humano adicional el SVG ya incluye code
         return $generator->getBarcode($code, $generator::TYPE_CODE_128, 2, 40);
     }
+
+    public function qrForToken(string $token): string
+    {
+        if (!$this->qrSupported()) {
+            throw new \RuntimeException('QR no disponible');
+        }
+
+        $svg = (new QRCode(new QROptions([
+            'outputInterface' => QRMarkupSVG::class,
+            'eccLevel' => EccLevel::H,
+            'scale' => 6,
+            'svgAddXmlHeader' => false,
+            'outputBase64' => false,
+        ])))->render($token);
+
+        if (!is_string($svg)) {
+            throw new \RuntimeException('No fue posible generar QR');
+        }
+
+        return $svg;
+    }
 }

@@ -38,7 +38,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **COMPLETADO** | `customers.public_code` (`2026_08_29_000002`, unique `company_id+public_code`), `Customer` `booted` + `CustomerPublicCodeService` (8 chars A-Z0-9, CSPRNG, no leak cédula/teléfono), `CustomerPublicCodeTest` 5/5 |
 | **P09B** | QR individual + Code 128 generados por MVS | **COMPLETADO** | `CustomerPublicCodeService::qrSvg` (chillerlan H) + `barcodeSvg` (picqer Code128 SVG) local, `clientes/show.blade.php` `Identificación pública` (código+QR+Code128+Copia/Imprimir), `CustomerQrBarcodeTest` 4/4 |
 | **P09C** | Escaneo QR/Code128 para seleccionar cliente en POS | **COMPLETADO** | `PosController::searchCustomers` `public_code` (like + exact priority), `pos/index.blade.php` botón escáner cliente + `onMvsScan` (public_code 6-12 → `pos.customers.search` exact → `selectCustomer`), `CustomerPosScanTest` 3/3 |
-| **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **PENDIENTE** | No confiar solo en QR estático |
+| **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **COMPLETADO** | `customer_one_time_tokens` (`2026_08_29_000003`, token_hash SHA256, expires 5min, used_at), `CustomerOneTimeTokenService` (PIN 6 dígitos, QR local, single-use, expiración, `isStaticQrTrustedForRedeem=false`), `clientes/show` PIN+QR+verificar, `CustomerOneTimeTokenTest` 4/4 |
 | P14 | Incentivo de registro configurable | **PENDIENTE** | Habilitar/deshabilitar |
 | P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
 | P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
@@ -105,8 +105,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 ## Estado y próxima fase
 
-- **P01–P09C: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3; P09C `public_code` en POS).
-- **P09D: SIGUIENTE BLOQUE** – PIN o QR temporal/de un solo uso para canjes.
+- **P01–P09D: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3 + `CustomerOneTimeTokenTest` 4/4; P09D PIN temporal single-use).
+- **P14: SIGUIENTE BLOQUE** – Incentivo de registro configurable.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

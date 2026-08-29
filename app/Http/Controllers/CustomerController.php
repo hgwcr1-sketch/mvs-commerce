@@ -8,9 +8,12 @@ use App\Models\Canton;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Customer;
+use App\Models\CustomerOneTimeToken;
 use App\Models\District;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Province;
+use App\Services\CustomerOneTimeTokenService;
+use App\Services\CustomerPublicCodeService;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
@@ -347,6 +350,45 @@ class CustomerController extends Controller
         return redirect()
             ->route('clientes.index')
             ->with('success', 'Cliente eliminado correctamente.');
+    }
+
+    public function generateOneTimeToken(Request $request, Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $company = Company::query()->findOrFail($this->activeCompanyId());
+        $result = app(CustomerOneTimeTokenService::class)->generate($cliente, $company, 'redeem', 5);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'public_code' => $cliente->public_code,
+                'pin' => $result['plain'],
+                'expires_at' => $result['token']->expires_at->toIso8601String(),
+                'qrSvg' => $result['qrSvg'],
+            ]);
+        }
+
+        return back()->with('success', 'PIN temporal generado. Vence en 5 minutos y es de un solo uso.')->with('one_time_pin', $result['plain'])->with('one_time_qr', $result['qrSvg'])->with('one_time_expires', $result['token']->expires_at);
+    }
+
+    public function verifyOneTimeToken(Request $request, Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $company = Company::query()->findOrFail($this->activeCompanyId());
+        $data = $request->validate(['pin' => ['required', 'string', 'max:20']]);
+        try {
+            app(CustomerOneTimeTokenService::class)->verify($cliente, $company, $data['pin'], 'redeem');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+            }
+            return back()->withErrors($e->errors());
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['verified' => true, 'message' => 'PIN verificado.']);
+        }
+
+        return back()->with('success', 'PIN verificado correctamente. Puede proceder con el canje.');
     }
 
     /**

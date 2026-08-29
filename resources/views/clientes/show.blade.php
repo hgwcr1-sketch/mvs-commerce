@@ -234,7 +234,35 @@
                 @endif
             </div>
         </div>
-        <p class="mt-3 text-xs text-slate-500">Generados localmente por MVS, sin servicio externo. Úsalos para seleccionar al cliente en POS (P09C).</p>
+        <p class="mt-3 text-xs text-slate-500">Generados localmente por MVS, sin servicio externo. Úsalos para seleccionar al cliente en POS (P09C). No confiar solo en QR estático para canjes.</p>
+    </x-card>
+
+    <x-card>
+        <x-slot:header>
+            <h3 class="text-lg font-semibold">PIN temporal para canjes y autorizaciones sensibles</h3>
+        </x-slot:header>
+        <p class="text-sm text-slate-600">El QR estático no basta para canjes. Genera un PIN/QR de un solo uso, válido 5 minutos.</p>
+        <form method="POST" action="{{ route('clientes.pin.generate', $customer) }}" class="mt-3">
+            @csrf
+            <button type="submit" class="min-h-11 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Generar PIN temporal</button>
+        </form>
+        @if(session('one_time_pin'))
+            <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p class="text-xs font-semibold uppercase text-amber-800">PIN de un solo uso (válido 5 min)</p>
+                <p class="mt-1 font-mono text-2xl font-bold tracking-widest text-slate-900">{{ session('one_time_pin') }}</p>
+                @if(session('one_time_qr'))
+                    <div class="mx-auto mt-2 max-w-[180px] rounded-lg border border-white bg-white p-2">{!! session('one_time_qr') !!}</div>
+                @endif
+                <p class="mt-1 text-xs text-amber-700">Vence: {{ session('one_time_expires') ? \Carbon\Carbon::parse(session('one_time_expires'))->format('H:i:s d/m/Y') : '' }} · De un solo uso.</p>
+            </div>
+        @endif
+        <form method="POST" action="{{ route('clientes.pin.verify', $customer) }}" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+            @csrf
+            <input name="pin" placeholder="Ingresa PIN para verificar" maxlength="6" inputmode="numeric" class="min-h-11 rounded-xl border-slate-300 px-3">
+            <button type="submit" class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Verificar PIN</button>
+        </form>
+        @if($errors->has('pin') || $errors->has('token'))<p class="mt-2 text-sm text-red-600">{{ $errors->first('pin') ?: $errors->first('token') }}</p>@endif
+        @if(session('success') && str_contains(session('success'), 'PIN verificado'))<p class="mt-2 text-sm font-semibold text-emerald-700">{{ session('success') }}</p>@endif
     </x-card>
 
 </div>

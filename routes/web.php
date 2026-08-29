@@ -401,6 +401,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::delete('/clientes/{cliente}/contactos/{contacto}', [CustomerContactController::class, 'destroy'])
         ->name('clientes.contactos.destroy');
 
+    Route::post('/clientes/{cliente}/pin', [CustomerController::class, 'generateOneTimeToken'])->name('clientes.pin.generate');
+    Route::post('/clientes/{cliente}/pin/verificar', [CustomerController::class, 'verifyOneTimeToken'])->name('clientes.pin.verify');
     Route::resource('clientes', CustomerController::class);
     Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])
         ->name('ubicaciones.provincias');
