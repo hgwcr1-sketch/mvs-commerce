@@ -9,7 +9,7 @@ class LoyaltyRegistrationIncentiveClaim extends Model
 {
     protected $fillable = ['company_id', 'customer_id', 'loyalty_movement_id', 'benefit_type', 'benefit_value', 'awarded_points', 'discount_amount', 'branch_id', 'sale_id', 'configured_by'];
 
-    protected $casts = ['benefit_value' => 'decimal:4', 'awarded_points' => 'decimal:4', 'discount_amount' => 'decimal:2'];
+    protected $casts = ['benefit_value' => 'decimal:4', 'awarded_points' => 'decimal:4', 'discount_amount' => 'decimal:4'];
 
     public function company(): BelongsTo
     {

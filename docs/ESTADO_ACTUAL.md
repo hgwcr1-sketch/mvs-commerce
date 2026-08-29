@@ -15,9 +15,9 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - Empresas existentes conservan su contexto y no repiten onboarding.
 
 
-## Estado actual de Portal de Clientes (P01–P14) — reconciliado con Excel único
+## Estado actual de Portal de Clientes (P01–P15) — reconciliado con Excel único
 
-**P10–P14 COMPLETADOS.** P11: Portal con siete pestañas según permisos (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente y Configuración tabulados selectivamente (23 tests, 167 aserciones). P13: auditoría transversal y tabs solo en detalle complejo de Roles; POS, transacciones, formularios únicos y detalles simples excluidos (15 tests, 59 aserciones). P14: incentivo habilitable por empresa, concesión base única de 10 puntos vía motor/Kardex existente y claim auditable; regresión Portal/P14 78 tests, 500 aserciones. **P15 es el siguiente bloque.**
+**P10–P15 COMPLETADOS.** P11: Portal con siete pestañas según permisos (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente y Configuración tabulados selectivamente (23 tests, 167 aserciones). P13: auditoría transversal y tabs solo en detalle complejo de Roles; POS, transacciones, formularios únicos y detalles simples excluidos (15 tests, 59 aserciones). P14: incentivo habilitable por empresa y concesión única. P15: tipo puntos/porcentaje/fijo y valor `DECIMAL(19,4)`; puntos al Kardex y descuentos pendientes en claim. Regresión Portal/P14/P15 91 tests, 552 aserciones. **P16 es el siguiente bloque.**
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P10 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -133,7 +133,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P14 COMPLETADOS** (incluidos P09A–P09D); **P09 ajuste QR compacto commit `58aba11`**; P14 retoma y cierra el incentivo de registro por empresa con concesión única y auditoría básica en Kardex. **P15 SIGUIENTE BLOQUE** – tipo y valor del beneficio, sin iniciar todavía. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.** P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global histórica: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos ajenos. No hay PostgreSQL local.
+- Puesta en Producción: **P01–P15 COMPLETADOS** (incluidos P09A–P09D); **P09 ajuste QR compacto commit `58aba11`**; P14/P15 dejan incentivo por empresa habilitable, de concesión única y configurable como puntos, porcentaje o fijo. **P16 SIGUIENTE BLOQUE** – reglas de compra y vencimiento, sin iniciar todavía. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.** P08L/Panel Maestro: 10/10 pruebas, 60 aserciones; regresión cercana 23/23, 102 aserciones. Suite global histórica: 829 pruebas, 819 pasan, 4.779 aserciones y los mismos 10 fallos ajenos. No hay PostgreSQL local.
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -151,7 +151,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P15 — configurar tipo y valor del beneficio; P31 no inicia hasta cerrar P15–P20 en orden.**
+**Prioridad inmediata: P16 — compra mínima, momento de aplicación, excepción del mínimo de canje y vencimiento; P31 no inicia hasta cerrar P16–P20 en orden.**
 
 No asumir que el último estado conocido sigue vigente.
 

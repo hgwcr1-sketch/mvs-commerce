@@ -44,7 +44,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P12** | Clientes + Configuración en pestañas | **COMPLETADO** | Cliente: Información, Identificación/seguridad, Contactos/direcciones. Configuración: Fidelización, WhatsApp, Plantillas según permiso. 23 tests, 167 aserciones + build Vite |
 | **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **COMPLETADO** | Auditoría selectiva: tabs en detalle complejo de Roles (Resumen/Usuarios/Permisos); POS, transacciones, formularios únicos y detalles simples excluidos. 15 tests, 59 aserciones + build Vite |
 | **P14** | Incentivo de registro configurable (habilitar/deshabilitar) | **COMPLETADO** | Configuración única por `company_id`, control en Centro de reglas, concesión base idempotente de 10 puntos vía `LoyaltyAccountService`/`new_customer`, claim enlazado al movimiento de Kardex; `LoyaltyRegistrationIncentiveP14Test` 8/8 |
-| P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
+| **P15** | Beneficio: puntos, % descuento o descuento fijo | **COMPLETADO** | Tipo y valor `DECIMAL(19,4)` por empresa; puntos al Kardex, descuentos como claim pendiente sin adelantar P16; `LoyaltyRegistrationIncentiveP15Test` 13/13 |
 | P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
 | P17 | Sucursales, ofertas, descuento máximo y stacking/combinabilidad | **PENDIENTE** | Condiciones por empresa |
 | P18 | Una vez por cliente + teléfono/correo verificado | **PENDIENTE** | Prevención abuso |
@@ -115,7 +115,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P12: COMPLETADO** – Detalle de Cliente y Configuración tabulados selectivamente; lista simple sin pestañas.
 - **P13: COMPLETADO** – Extensión selectiva al detalle de Roles; POS y pantallas no aptas preservadas.
 - **P14: COMPLETADO** – Habilitar/deshabilitar por empresa, concesión única por cliente y auditoría básica enlazada al Kardex existente. Regresión Portal/P14: 78 pruebas, 500 aserciones.
-- **P15: SIGUIENTE BLOQUE** – Configurar tipo y valor del beneficio: puntos, porcentaje de descuento o descuento fijo.
+- **P15: COMPLETADO** – Tipo y valor estrictamente validados por empresa; puntos inmediatos vía Kardex y descuentos concedidos como claim pendiente. Regresión P14/Portal/P15: 91 pruebas, 552 aserciones.
+- **P16: SIGUIENTE BLOQUE** – Compra mínima, momento de aplicación, excepción del mínimo de canje y vencimiento.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.
@@ -158,3 +159,4 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 - 2026-08-29 (noche): **sincronizado P09–P14 con Excel único y estado real del repositorio** – P09 ajuste QR compacto commit `58aba11` documentado; P10–P13 añadidos como bloques siguientes en orden (P10 patrón pestañas, P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal); P14 marcado PAUSADO/PARCIAL con código parcial preservado; regla de producción añadida (desarrollo → validación local → APROBADO PARA PRODUCCIÓN → despliegue controlado); regla P10–P13 responsive/touch/overflow añadida.
 - 2026-08-29 (noche): **P10 y P11 completados** – P10 publicado en `b383aad`; P11 aplica el patrón al Portal con panel único, permisos existentes, teclado y QR compacto. P12 queda siguiente.
 - 2026-08-29 (noche): **P14 completado retomando el trabajo parcial** – configuración por empresa, activación/desactivación, concesión única, `LoyaltyAccountService`/Kardex y claim auditable; P15 queda siguiente sin implementar sus reglas comerciales.
+- 2026-08-29 (noche): **P15 completado** – beneficio configurable como puntos, porcentaje o descuento fijo con valor decimal, validación doble HTTP/servicio, aislamiento e idempotencia; descuentos quedan pendientes hasta P16.

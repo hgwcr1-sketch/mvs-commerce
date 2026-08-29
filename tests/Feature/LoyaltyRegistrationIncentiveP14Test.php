@@ -109,7 +109,7 @@ class LoyaltyRegistrationIncentiveP14Test extends TestCase
 
         $this->actingAs($userA)
             ->withSession(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id])
-            ->put(route('loyalty.registration-incentive.update'), ['is_enabled' => '1'])
+            ->put(route('loyalty.registration-incentive.update'), ['is_enabled' => '1', 'benefit_type' => 'points', 'benefit_value' => '10'])
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -123,7 +123,7 @@ class LoyaltyRegistrationIncentiveP14Test extends TestCase
 
         $this->actingAs($user)
             ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
-            ->put(route('loyalty.registration-incentive.update'), ['is_enabled' => '1'])
+            ->put(route('loyalty.registration-incentive.update'), ['is_enabled' => '1', 'benefit_type' => 'points', 'benefit_value' => '10'])
             ->assertForbidden();
 
         $this->assertDatabaseMissing('loyalty_registration_incentives', [
