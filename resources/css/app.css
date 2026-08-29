@@ -192,3 +192,31 @@
 [x-cloak] {
     display: none !important;
 }
+
+/* ===========================
+   P10 - TABS REUTILIZABLES
+=========================== */
+
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Focus visible para tabs accesibles */
+[role="tab"]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Animación suave al cambiar de tab */
+[role="tabpanel"] {
+    animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}

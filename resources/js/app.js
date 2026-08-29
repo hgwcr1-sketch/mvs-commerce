@@ -6,6 +6,7 @@ import './modules/clientes';
 import './modules/compras';
 import './navigation';
 import './scanner';
+import './tabs';
 
 window.Alpine = Alpine;
 
