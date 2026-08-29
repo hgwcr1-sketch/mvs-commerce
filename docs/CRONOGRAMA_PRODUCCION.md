@@ -35,7 +35,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P07** | Contraseña temporal única, mostrada una vez, con cambio obligatorio en primer ingreso | **COMPLETADO** | `LoyaltyPortalCredential.must_change_password` (`2026_08_29_000001`), `LoyaltyPortalSessionController::forceChange` + `must_change_password` en `login`/`home`, `force-change.blade.php`, `LoyaltyPortalClientAccessTest::test_temporary_password_requires_change_on_first_login` 11/11, 55 aserciones |
 | **P08** | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **COMPLETADO** | `LoyaltyPortalDeliveryService::build` (`portal_url` `route('loyalty.customer.login', $company)` + `whatsapp_url` `PhoneNumberService::forWhatsApp` + `copy_text`), `CustomerController::store` flash `portal_access` + `PosController::storeQuickCustomer` JSON `portal_access`, `clientes/index.blade.php` + `pos/index.blade.php` `quickCustomer.delivery` responsive (Copiar/WhatsApp), `LoyaltyPortalDeliveryTest` 7/7 |
 | **P09** | Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes) | **COMPLETADO** | `LoyaltyPortalManagementController::index` `portalUrl` `route('loyalty.customer.login', $company)` + `portalQr` `LoyaltyPortalAccessService::qrSvg`, `loyalty/portal-management/index.blade.php` `acceso-general` (URL, Copiar URL, Vista previa, QR + Imprimir), `LoyaltyPortalCentralTest` 4/4 |
-| **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **PENDIENTE** | Base para QR y barcode |
+| **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **COMPLETADO** | `customers.public_code` (`2026_08_29_000002`, unique `company_id+public_code`), `Customer` `booted` + `CustomerPublicCodeService` (8 chars A-Z0-9, CSPRNG, no leak cédula/teléfono), `CustomerPublicCodeTest` 5/5 |
 | **P09B** | QR individual + Code 128 generados por MVS | **PENDIENTE** | Sin servicio externo |
 | **P09C** | Escaneo QR/Code128 para seleccionar cliente en POS | **PENDIENTE** | Mantener búsqueda manual |
 | **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **PENDIENTE** | No confiar solo en QR estático |
@@ -105,8 +105,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 ## Estado y próxima fase
 
-- **P01–P09: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11, 52 aserciones + `LoyaltyPortalClientAccessTest` 11/11, 55 aserciones + `LoyaltyPortalDeliveryTest` 7/7, 51 aserciones + `LoyaltyPortalCentralTest` 4/4; `LoyaltyCustomerPortal` 13/13. P09 `LoyaltyPortalManagementController` `portalUrl`/`portalQr`).
-- **P09A: SIGUIENTE BLOQUE** – Código público único del cliente sin exponer ID interno/cédula/teléfono.
+- **P01–P09A: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11, 52 aserciones + `LoyaltyPortalClientAccessTest` 11/11, 55 aserciones + `LoyaltyPortalDeliveryTest` 7/7, 51 aserciones + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5; P09A `customers.public_code` 8 chars, sin leak).
+- **P09B: SIGUIENTE BLOQUE** – QR individual + Code 128 generados por MVS.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

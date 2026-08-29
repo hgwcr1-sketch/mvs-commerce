@@ -37,6 +37,7 @@ class Customer extends Model
         'points',
         'birth_date',
         'is_active',
+        'public_code',
     ];
 
     protected $casts = [
@@ -45,6 +46,21 @@ class Customer extends Model
         'is_active' => 'boolean',
         'accepts_email_invoice' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Customer $customer) {
+            if (empty($customer->public_code)) {
+                $customer->public_code = app(\App\Services\CustomerPublicCodeService::class)->randomCode();
+                // Reserva: reintentar si colisión dentro del mismo request (único por empresa)
+                $attempts = 0;
+                while ($attempts < 5 && static::query()->where('company_id', $customer->company_id)->where('public_code', $customer->public_code)->exists()) {
+                    $customer->public_code = app(\App\Services\CustomerPublicCodeService::class)->randomCode();
+                    $attempts++;
+                }
+            }
+        });
+    }
 
     /*
     |--------------------------------------------------------------------------
