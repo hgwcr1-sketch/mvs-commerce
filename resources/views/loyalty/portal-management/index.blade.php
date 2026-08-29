@@ -28,8 +28,8 @@
             <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
                 <p class="text-xs font-semibold uppercase text-slate-500">QR del Portal</p>
                 @if($portalQr)
-                    <div class="mx-auto mt-2 max-w-[220px] rounded-xl border border-slate-100 bg-white p-2">{!! $portalQr !!}</div>
-                    <button type="button" onclick="const w=window.open('','_blank'); w.document.write('<html><head><title>QR Portal</title></head><body style=\'display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\'><div style=\'max-width:320px\'>'+ @js($portalQr) + '<p style=\'text-align:center;font-family:sans-serif;font-size:12px;margin-top:8px\'>'+ @js($portalUrl) +'</p></div></body></html>'); w.print();" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir QR</button>
+                    <div class="mx-auto mt-3 w-[148px] max-w-full rounded-xl border border-slate-100 bg-white p-2 sm:w-[168px] lg:w-[180px] xl:w-[190px] [&_svg]:h-auto [&_svg]:w-full [&_svg]:max-w-full">{!! $portalQr !!}</div>
+                    <button type="button" onclick="const w=window.open('','_blank'); w.document.write('<html><head><title>QR Portal</title></head><body style=\'display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\'><div style=\'max-width:360px;width:100%;padding:16px\'>'+ @js($portalQr) + '<p style=\'text-align:center;font-family:sans-serif;font-size:12px;margin-top:12px;word-break:break-all\'>'+ @js($portalUrl) +'</p></div></body></html>'); w.document.close(); w.focus(); setTimeout(()=>w.print(), 250);" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir QR</button>
                 @else
                     <p class="mt-2 text-sm text-slate-500">QR no disponible</p>
                 @endif
