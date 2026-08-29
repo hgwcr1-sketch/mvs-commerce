@@ -994,14 +994,14 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P09D: COMPLETADO (reconciliado con Excel único, P10 siguiente)
+### Portal de Clientes — P01–P11: COMPLETADO (P12 siguiente)
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`). **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 **Próximos bloques en orden (según Excel único):**
-- **P10** — Patrón UI reutilizable de pestañas MVS (responsive obligatorio, móvil primero, tablet/escritorio, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil).
-- **P11** — Portal de Clientes por pestañas y menos scroll.
-- **P12** — Clientes + Configuración en pestañas.
+- **P10 — COMPLETADO (`b383aad`)** — Patrón UI reutilizable `x-tabs`, mobile-first, scroll horizontal controlado y targets ≥44px.
+- **P11 — COMPLETADO** — Portal organizado en siete pestañas según permisos; un panel visible, teclado y QR 160–200px con impresión independiente. Evidencia: `LoyaltyPortalCentralTest` 5/5, 40 aserciones; build Vite.
+- **P12 — SIGUIENTE** — Clientes + Configuración en pestañas donde reduzca scroll.
 - **P13** — Extensión patrón pestañas al resto de MVS donde corresponda.
 - **P14** — PAUSADO / PARCIAL: Incentivo de registro configurable (código parcial `LoyaltyRegistrationIncentive*` preservado sin commit completo).
 

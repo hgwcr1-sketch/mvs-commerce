@@ -27,6 +27,12 @@ class LoyaltyPortalCentralTest extends TestCase
         $response->assertSee('Vista previa');
         $response->assertSee('<svg', false); // QR SVG
         $response->assertSee('QR del Portal');
+        $response->assertSee('role="tablist"', false);
+        $response->assertSee('id="tab-acceso-general"', false);
+        $response->assertSee('id="panel-acceso-general"', false);
+        $response->assertSee("x-show=\"activeTab === 'resumen'\"", false);
+        $response->assertSee('w-[160px]', false);
+        $response->assertSee('lg:w-[200px]', false);
         $response->assertSee('portal-clientes/' . $company->id . '/ingresar', false);
     }
 
@@ -48,6 +54,27 @@ class LoyaltyPortalCentralTest extends TestCase
         $respA->assertDontSee($urlB);
         $respB->assertSee($urlB);
         $respB->assertDontSee($urlA);
+    }
+
+    public function test_authorized_sections_render_as_seven_accessible_tab_panels(): void
+    {
+        [$company, $branch, $user] = $this->context([
+            'fidelidad.portal.ver',
+            'fidelidad.portal.contenido',
+            'fidelidad.portal.enlaces',
+            'fidelidad.portal.configurar',
+            'fidelidad.portal',
+        ]);
+
+        $html = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('loyalty.portal-management.index'))->assertOk()->getContent();
+
+        foreach (['acceso-general', 'resumen', 'publicaciones', 'destacados', 'enlaces', 'configuracion', 'vista-previa'] as $tab) {
+            $this->assertStringContainsString('id="tab-'.$tab.'"', $html);
+            $this->assertStringContainsString('id="panel-'.$tab.'"', $html);
+        }
+        $this->assertStringContainsString('@keydown.right.prevent', $html);
+        $this->assertStringContainsString('overflow-x-auto', $html);
     }
 
     public function test_without_permission_cannot_see_central(): void

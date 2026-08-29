@@ -1,7 +1,7 @@
 /**
  * P10 — Patrón UI reutilizable de pestañas MVS.
  * Componente Alpine para tabs con scroll horizontal en móvil,
- * estado activo sincronizado con hash URL, y accesibilidad completa.
+ * estado activo sincronizado con hash URL, y accesibilidad por teclado.
  */
 
 document.addEventListener('alpine:init', () => {
@@ -45,6 +45,24 @@ document.addEventListener('alpine:init', () => {
             if (currentIndex > 0) {
                 this.activeTab = this.tabs[currentIndex - 1].id;
             }
+        },
+
+        focusAdjacentTab(direction) {
+            const tabElements = Array.from(this.$root.querySelectorAll('[role="tab"]:not([aria-disabled="true"])'));
+            const currentIndex = tabElements.indexOf(document.activeElement);
+            if (currentIndex === -1 || tabElements.length === 0) {
+                return;
+            }
+            const nextIndex = (currentIndex + direction + tabElements.length) % tabElements.length;
+            tabElements[nextIndex].focus();
+            tabElements[nextIndex].click();
+        },
+
+        focusBoundaryTab(boundary) {
+            const tabElements = Array.from(this.$root.querySelectorAll('[role="tab"]:not([aria-disabled="true"])'));
+            const target = boundary === 'last' ? tabElements.at(-1) : tabElements[0];
+            target?.focus();
+            target?.click();
         },
 
     }));

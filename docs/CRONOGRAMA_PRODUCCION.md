@@ -39,8 +39,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P09B** | QR individual + Code 128 generados por MVS | **COMPLETADO** | `CustomerPublicCodeService::qrSvg` (chillerlan H) + `barcodeSvg` (picqer Code128 SVG) local, `clientes/show.blade.php` `Identificación pública` (código+QR+Code128+Copia/Imprimir), `CustomerQrBarcodeTest` 4/4 |
 | **P09C** | Escaneo QR/Code128 para seleccionar cliente en POS | **COMPLETADO** | `PosController::searchCustomers` `public_code` (like + exact priority), `pos/index.blade.php` botón escáner cliente + `onMvsScan` (public_code 6-12 → `pos.customers.search` exact → `selectCustomer`), `CustomerPosScanTest` 3/3 |
 | **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **COMPLETADO** | `customer_one_time_tokens` (`2026_08_29_000003`, token_hash SHA256, expires 5min, used_at), `CustomerOneTimeTokenService` (PIN 6 dígitos, QR local, single-use, expiración, `isStaticQrTrustedForRedeem=false`), `clientes/show` PIN+QR+verificar, `CustomerOneTimeTokenTest` 4/4 |
-| **P10** | Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil) | **PENDIENTE** | Componente base reutilizable |
-| **P11** | Portal de Clientes por pestañas y menos scroll | **PENDIENTE** | Reorganización UX con pestañas |
+| **P10** | Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil) | **COMPLETADO** | `b383aad`; componente `x-tabs`, Alpine, estilos y carga Vite |
+| **P11** | Portal de Clientes por pestañas y menos scroll | **COMPLETADO** | 7 secciones tabuladas según permisos, un panel visible, teclado, QR 160–200px; `LoyaltyPortalCentralTest` 5/5, 40 aserciones + build Vite |
 | **P12** | Clientes + Configuración en pestañas | **PENDIENTE** | Secciones tabuladas |
 | **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **PENDIENTE** | Aplicación transversal |
 | P14 | Incentivo de registro configurable (habilitar/deshabilitar) | **PAUSADO / PARCIAL** | Código parcial en `LoyaltyRegistrationIncentive*`, migraciones, tests; preservado sin commit P14 completo |
@@ -110,9 +110,9 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 ## Estado y próxima fase
 
 - **P01–P09D: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3 + `CustomerOneTimeTokenTest` 4/4; P09D PIN temporal single-use). Ajuste visual QR compacto P09: commit `58aba11`.
-- **P10: SIGUIENTE BLOQUE** – Patrón UI reutilizable de pestañas MVS (responsive obligatorio, móvil primero, tablet/escritorio, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil).
-- **P11** – Portal de Clientes por pestañas y menos scroll.
-- **P12** – Clientes + Configuración en pestañas.
+- **P10: COMPLETADO** – Patrón UI reutilizable `x-tabs` (`b383aad`).
+- **P11: COMPLETADO** – Portal de Clientes organizado en siete pestañas según permisos, accesible por teclado, QR compacto con impresión independiente.
+- **P12: SIGUIENTE BLOQUE** – Clientes + Configuración en pestañas.
 - **P13** – Extensión patrón pestañas al resto de MVS donde corresponda.
 - **P14: PAUSADO / PARCIAL** – Incentivo de registro configurable; código parcial en `LoyaltyRegistrationIncentive*` preservado sin commit completo.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
@@ -155,3 +155,4 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 - 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08), marca P22/P23 en a60425f.
 - 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplia a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente. P09A–P09D y P22/P23 se conservan con IDs exactos.
 - 2026-08-29 (noche): **sincronizado P09–P14 con Excel único y estado real del repositorio** – P09 ajuste QR compacto commit `58aba11` documentado; P10–P13 añadidos como bloques siguientes en orden (P10 patrón pestañas, P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal); P14 marcado PAUSADO/PARCIAL con código parcial preservado; regla de producción añadida (desarrollo → validación local → APROBADO PARA PRODUCCIÓN → despliegue controlado); regla P10–P13 responsive/touch/overflow añadida.
+- 2026-08-29 (noche): **P10 y P11 completados** – P10 publicado en `b383aad`; P11 aplica el patrón al Portal con panel único, permisos existentes, teclado y QR compacto. P12 queda siguiente.

@@ -42,6 +42,10 @@
     class="w-full"
     role="tablist"
     aria-label="{{ $attributes['aria-label'] ?? 'Pestañas' }}"
+    @keydown.right.prevent="focusAdjacentTab(1)"
+    @keydown.left.prevent="focusAdjacentTab(-1)"
+    @keydown.home.prevent="focusBoundaryTab('first')"
+    @keydown.end.prevent="focusBoundaryTab('last')"
 >
     <div
         class="overflow-x-auto overscroll-x-contain -mx-4 px-4 pb-2 scrollbar-hide"
@@ -60,7 +64,7 @@
                     <a
                         href="{{ $tab['href'] ?? route($tab['route'], $tab['params'] ?? []) }}"
                         role="tab"
-                        aria-selected="{{ $isActive ? 'true' : 'false' }}"
+                        :aria-selected="activeTab === '{{ $tab['id'] }}'"
                         aria-controls="panel-{{ $tab['id'] }}"
                         id="tab-{{ $tab['id'] }}"
                         class="{{ $tabClasses }}"
@@ -82,11 +86,13 @@
                     <button
                         type="button"
                         role="tab"
-                        aria-selected="{{ $isActive ? 'true' : 'false' }}"
+                        :aria-selected="activeTab === '{{ $tab['id'] }}'"
                         aria-controls="panel-{{ $tab['id'] }}"
                         id="tab-{{ $tab['id'] }}"
-                        class="{{ $tabClasses }}"
-                        @click="activeTab = '{{ $tab['id'] }}'"
+                        class="{{ $tabBaseClasses }}"
+                        :class="activeTab === '{{ $tab['id'] }}' ? @js($activeClasses[$variant]) : @js($inactiveClasses[$variant])"
+                        :tabindex="activeTab === '{{ $tab['id'] }}' ? 0 : -1"
+                        @click="setTab('{{ $tab['id'] }}')"
                         @if(isset($tab['disabled']) && $tab['disabled']) aria-disabled="true" @endif
                     >
                         @if(isset($tab['icon']))

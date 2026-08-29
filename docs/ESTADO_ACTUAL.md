@@ -15,7 +15,9 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - Empresas existentes conservan su contexto y no repiten onboarding.
 
 
-## Estado actual de Portal de Clientes (P01–P09D) — reconciliado con Excel único
+## Estado actual de Portal de Clientes (P01–P11) — reconciliado con Excel único
+
+**P10 COMPLETADO en `b383aad`; P11 COMPLETADO.** El Portal usa siete pestañas según permisos, muestra un panel principal a la vez, admite teclado y conserva QR compacto 160–200px con impresión independiente. Evidencia P11: `LoyaltyPortalCentralTest` 5/5, 40 aserciones; build Vite correcto. **P12 es el siguiente bloque.**
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P10 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -149,7 +151,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P10 — Patrón UI reutilizable de pestañas MVS** (responsive obligatorio, móvil primero, tablet y escritorio, mínimo táctil 44px, sin overflow horizontal a nivel página, pestañas con scroll horizontal controlado en móvil, no eliminar funciones ni cambiar lógica).
+**Prioridad inmediata: P12 — Clientes + Configuración en pestañas donde reduzca scroll, sin forzar pantallas simples.**
 
 No asumir que el último estado conocido sigue vigente.
 
