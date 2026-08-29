@@ -195,6 +195,26 @@ class UserRoleSecurityTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_role_detail_groups_summary_users_and_permissions_in_accessible_tabs(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa tabs');
+        $viewer = $this->userWithPermissions($company, ['roles.ver']);
+        $role = $this->role($company, 'Supervisor');
+        $role->permissions()->attach($this->permission('clientes.ver'));
+
+        $response = $this->actingAs($viewer)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('roles.show', $role));
+
+        $response->assertOk();
+        foreach (['resumen', 'usuarios', 'permisos'] as $tab) {
+            $response->assertSee('id="tab-'.$tab.'"', false);
+            $response->assertSee('id="panel-'.$tab.'"', false);
+        }
+        $response->assertSee('min-h-11', false);
+        $response->assertSee('overflow-x-auto', false);
+    }
+
     private function companyContext(string $name): array
     {
         $company = Company::create([

@@ -42,7 +42,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P10** | Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil) | **COMPLETADO** | `b383aad`; componente `x-tabs`, Alpine, estilos y carga Vite |
 | **P11** | Portal de Clientes por pestañas y menos scroll | **COMPLETADO** | 7 secciones tabuladas según permisos, un panel visible, teclado, QR 160–200px; `LoyaltyPortalCentralTest` 5/5, 40 aserciones + build Vite |
 | **P12** | Clientes + Configuración en pestañas | **COMPLETADO** | Cliente: Información, Identificación/seguridad, Contactos/direcciones. Configuración: Fidelización, WhatsApp, Plantillas según permiso. 23 tests, 167 aserciones + build Vite |
-| **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **PENDIENTE** | Aplicación transversal |
+| **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **COMPLETADO** | Auditoría selectiva: tabs en detalle complejo de Roles (Resumen/Usuarios/Permisos); POS, transacciones, formularios únicos y detalles simples excluidos. 15 tests, 59 aserciones + build Vite |
 | P14 | Incentivo de registro configurable (habilitar/deshabilitar) | **PAUSADO / PARCIAL** | Código parcial en `LoyaltyRegistrationIncentive*`, migraciones, tests; preservado sin commit P14 completo |
 | P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
 | P16 | Compra mínima, primera compra/después, excepción mínimo de canje, vencimiento | **PENDIENTE** | Reglas comerciales |
@@ -113,8 +113,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P10: COMPLETADO** – Patrón UI reutilizable `x-tabs` (`b383aad`).
 - **P11: COMPLETADO** – Portal de Clientes organizado en siete pestañas según permisos, accesible por teclado, QR compacto con impresión independiente.
 - **P12: COMPLETADO** – Detalle de Cliente y Configuración tabulados selectivamente; lista simple sin pestañas.
-- **P13: SIGUIENTE BLOQUE** – Extensión selectiva del patrón al resto de MVS donde corresponda.
-- **P14: PAUSADO / PARCIAL** – Incentivo de registro configurable; código parcial en `LoyaltyRegistrationIncentive*` preservado sin commit completo.
+- **P13: COMPLETADO** – Extensión selectiva al detalle de Roles; POS y pantallas no aptas preservadas.
+- **P14: SIGUIENTE BLOQUE / PARCIAL PRESERVADO** – Incentivo de registro configurable; continuar el código parcial sin reconstruirlo.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

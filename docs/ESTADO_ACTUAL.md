@@ -17,7 +17,7 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 ## Estado actual de Portal de Clientes (P01–P11) — reconciliado con Excel único
 
-**P10 COMPLETADO en `b383aad`; P11 y P12 COMPLETADOS.** P11: Portal con siete pestañas según permisos, panel único, teclado y QR 160–200px (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente en tres pestañas y Configuración en tres pestañas según permiso; lista simple de clientes preservada sin tabs. Evidencia P12: 23 tests, 167 aserciones; build Vite. **P13 es el siguiente bloque.**
+**P10–P13 COMPLETADOS.** P11: Portal con siete pestañas según permisos (`LoyaltyPortalCentralTest` 5/5, 40 aserciones). P12: detalle de Cliente y Configuración tabulados selectivamente (23 tests, 167 aserciones). P13: auditoría transversal y tabs solo en detalle complejo de Roles; POS, transacciones, formularios únicos y detalles simples excluidos (15 tests, 59 aserciones). Build Vite correcto. **P14 parcial preservado es el siguiente bloque.**
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; **P01–P09D COMPLETADOS**, P10 es el siguiente bloque, P09A–P09D conservan sus IDs, migración P31–P40 después de los bloques existentes sin reutilizar IDs. **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -151,7 +151,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P13 — auditar y extender pestañas solo a pantallas complejas; POS conserva su diseño especializado.**
+**Prioridad inmediata: P14 — continuar el incentivo de registro parcial preservado; P31 no inicia hasta cerrar P14–P20 en orden.**
 
 No asumir que el último estado conocido sigue vigente.
 
