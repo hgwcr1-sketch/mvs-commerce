@@ -20,6 +20,43 @@
 
     </div>
 
+    @if(session('portal_access') && (session('portal_access')['created'] ?? false))
+        @php $pa = session('portal_access'); @endphp
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm sm:p-6" id="portal-delivery">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-emerald-900">Acceso al Portal creado — entrégalo al cliente</h2>
+                    <p class="mt-1 text-xs text-emerald-700">La contraseña temporal se muestra <strong>solo una vez</strong>. No se guarda en texto plano.</p>
+                </div>
+                <button type="button" onclick="document.getElementById('portal-delivery').remove()" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-xl leading-none text-slate-600 shadow hover:bg-slate-100" aria-label="Cerrar">×</button>
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl bg-white p-3">
+                    <p class="text-xs font-semibold uppercase text-slate-500">URL del Portal</p>
+                    <a href="{{ $pa['portal_url'] }}" target="_blank" rel="noopener" class="mt-1 break-all text-sm font-semibold text-emerald-700 underline">{{ $pa['portal_url'] }}</a>
+                </div>
+                <div class="rounded-xl bg-white p-3">
+                    <p class="text-xs font-semibold uppercase text-slate-500">Usuario</p>
+                    <p class="mt-1 text-sm font-bold text-slate-900">{{ $pa['username'] }}</p>
+                </div>
+                <div class="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200 sm:col-span-2">
+                    <p class="text-xs font-semibold uppercase text-amber-800">Contraseña temporal (solo esta vez)</p>
+                    <p class="mt-1 font-mono text-sm font-bold text-slate-900">{{ $pa['password'] }}</p>
+                    <p class="mt-1 text-xs text-amber-700">El cliente deberá cambiarla al ingresar.</p>
+                </div>
+            </div>
+            <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button type="button" onclick="navigator.clipboard.writeText(@js($pa['copy_text'])).then(()=>{this.textContent='¡Copiado!'; setTimeout(()=>this.textContent='Copiar acceso',1500)}).catch(()=>prompt('Copia manualmente:', @js($pa['copy_text'])))" class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">Copiar acceso</button>
+                @if(!empty($pa['whatsapp_url']))
+                    <a href="{{ $pa['whatsapp_url'] }}" target="_blank" rel="noopener" class="min-h-11 flex flex-1 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700">WhatsApp</a>
+                @else
+                    <span class="flex flex-1 items-center justify-center rounded-xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500">WhatsApp no disponible (sin teléfono)</span>
+                @endif
+            </div>
+            <p class="mt-3 text-xs text-slate-500">Empresa aislada · QR pendiente P09B (no adelantado)</p>
+        </div>
+    @endif
+
     {{-- Estadísticas --}}
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">

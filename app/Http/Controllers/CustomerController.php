@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\District;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Province;
+use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -131,6 +132,13 @@ class CustomerController extends Controller
         if ($createPortalAccess) {
             $portalResult = $this->createPortalAccessForCustomer($customer, $request);
             if ($portalResult['created']) {
+                $delivery = app(LoyaltyPortalDeliveryService::class)->build(
+                    Company::query()->findOrFail($this->activeCompanyId()),
+                    $customer,
+                    $portalResult['username'],
+                    $portalResult['password']
+                );
+                $portalResult = array_merge($portalResult, $delivery);
                 return redirect()
                     ->route('clientes.index')
                     ->with('success', 'Cliente registrado correctamente. Acceso al Portal creado: usuario ' . $portalResult['username'] . ' / contraseña temporal ' . $portalResult['password'])

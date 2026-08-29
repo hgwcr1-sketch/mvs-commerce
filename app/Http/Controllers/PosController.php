@@ -17,6 +17,7 @@ use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
+use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
@@ -294,6 +295,11 @@ class PosController extends Controller
         $portal = null;
         if ($createPortalAccess) {
             $portal = $this->createPortalAccessForQuickCustomer($customer);
+            if ($portal && ($portal['created'] ?? false)) {
+                $company = Company::query()->findOrFail($customer->company_id);
+                $delivery = app(LoyaltyPortalDeliveryService::class)->build($company, $customer, $portal['username'], $portal['password']);
+                $portal = array_merge($portal, $delivery);
+            }
         }
 
         return response()->json([

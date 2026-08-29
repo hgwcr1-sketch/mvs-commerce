@@ -33,7 +33,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P05** | Crear/activar automáticamente cuenta de fidelización al autorregistrarse | **COMPLETADO** | `LoyaltyPortalSessionController::register` `LoyaltyAccountService::getOrCreateAccount`, `LoyaltyPortalSelfRegistrationTest::test_register_creates_loyalty_account_automatically` 11/11, 52 aserciones |
 | **P06** | Crear acceso al Portal al registrar/crear cliente rápido (POS/Clientes) | **COMPLETADO** | `CustomerController::createPortalAccessForCustomer`, `PosController::createPortalAccessForQuickCustomer`, `StoreCustomerRequest`/`QuickStoreCustomerRequest` `create_portal_access`, `clientes/_form.blade.php` + `pos/index.blade.php` checkbox, `LoyaltyPortalClientAccessTest` 11/11 |
 | **P07** | Contraseña temporal única, mostrada una vez, con cambio obligatorio en primer ingreso | **COMPLETADO** | `LoyaltyPortalCredential.must_change_password` (`2026_08_29_000001`), `LoyaltyPortalSessionController::forceChange` + `must_change_password` en `login`/`home`, `force-change.blade.php`, `LoyaltyPortalClientAccessTest::test_temporary_password_requires_change_on_first_login` 11/11, 55 aserciones |
-| P08 | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **PENDIENTE** | Cajero no memoriza URL |
+| **P08** | Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero | **COMPLETADO** | `LoyaltyPortalDeliveryService::build` (`portal_url` `route('loyalty.customer.login', $company)` + `whatsapp_url` `PhoneNumberService::forWhatsApp` + `copy_text`), `CustomerController::store` flash `portal_access` + `PosController::storeQuickCustomer` JSON `portal_access`, `clientes/index.blade.php` + `pos/index.blade.php` `quickCustomer.delivery` responsive (Copiar/WhatsApp), `LoyaltyPortalDeliveryTest` 7/7 |
 | P09 | Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes) | **PENDIENTE** | — |
 | **P09A** | Código público único del cliente sin exponer ID interno/cédula/teléfono | **PENDIENTE** | Base para QR y barcode |
 | **P09B** | QR individual + Code 128 generados por MVS | **PENDIENTE** | Sin servicio externo |
@@ -105,8 +105,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 
 ## Estado y próxima fase
 
-- **P01–P07: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11, 52 aserciones + `LoyaltyPortalClientAccessTest` 11/11, 55 aserciones; `LoyaltyCustomerPortal` 13/13. P06 `CustomerController`/`PosController` `create_portal_access`, P07 `must_change_password` con `forceChange` y `force-change.blade.php`).
-- **P08: SIGUIENTE BLOQUE** – Mostrar URL, usuario, Copiar acceso, WhatsApp y QR al cajero.
+- **P01–P08: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11, 52 aserciones + `LoyaltyPortalClientAccessTest` 11/11, 55 aserciones + `LoyaltyPortalDeliveryTest` 7/7, 51 aserciones; `LoyaltyCustomerPortal` 13/13. P06 `CustomerController`/`PosController` `create_portal_access`, P07 `must_change_password` con `forceChange`, P08 `LoyaltyPortalDeliveryService` `portal_url`/`whatsapp`/`copy_text`).
+- **P09: SIGUIENTE BLOQUE** – Pantalla central con URL general, QR, copiar y vista previa (Fidelización → Portal de Clientes).
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: PENDIENTES** – conservan esos IDs exactos.
 - **Migración P31–P40:** después de los bloques existentes, sin reutilizar IDs.

@@ -669,12 +669,45 @@
                     </div>
                 </div>
 
+                <!-- P08 Entrega: solo tras creación con portal_access.created -->
+                <div x-show="quickCustomer.delivery" x-cloak class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-emerald-900">Acceso al Portal creado — entrégalo al cliente</h3>
+                            <p class="mt-1 text-xs text-emerald-700">Contraseña temporal visible <strong>solo una vez</strong>.</p>
+                        </div>
+                        <button type="button" @click="quickCustomer.delivery = null" class="flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg leading-none text-slate-600">×</button>
+                    </div>
+                    <div class="mt-3 grid gap-2">
+                        <div class="rounded-xl bg-white p-3">
+                            <p class="text-xs font-semibold uppercase text-slate-500">URL del Portal</p>
+                            <a :href="quickCustomer.delivery?.portal_url" target="_blank" rel="noopener" class="break-all text-sm font-semibold text-emerald-700 underline" x-text="quickCustomer.delivery?.portal_url"></a>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <div class="rounded-xl bg-white p-3">
+                                <p class="text-xs font-semibold uppercase text-slate-500">Usuario</p>
+                                <p class="mt-1 text-sm font-bold text-slate-900" x-text="quickCustomer.delivery?.username"></p>
+                            </div>
+                            <div class="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+                                <p class="text-xs font-semibold uppercase text-amber-800">Contraseña temporal</p>
+                                <p class="mt-1 font-mono text-sm font-bold text-slate-900" x-text="quickCustomer.delivery?.password"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <button type="button" @click="copyPortalAccess()" class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">Copiar acceso</button>
+                        <a :href="quickCustomer.delivery?.whatsapp_url" x-show="quickCustomer.delivery?.whatsapp_url" target="_blank" rel="noopener" class="min-h-11 flex flex-1 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700">WhatsApp</a>
+                        <span x-show="!quickCustomer.delivery?.whatsapp_url" class="flex flex-1 items-center justify-center rounded-xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500">WhatsApp no disponible</span>
+                    </div>
+                </div>
+
                 <div class="mt-6 flex justify-end gap-3">
                     <button type="button" @click="closeQuickCustomer" class="rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700">Cancelar</button>
-                    <button type="submit" :disabled="quickCustomer.saving || !quickCustomer.form.name.trim()"
+                    <button type="submit" x-show="!quickCustomer.delivery" :disabled="quickCustomer.saving || !quickCustomer.form.name.trim()"
                             class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50">
                         <span x-text="quickCustomer.saving ? 'Guardando…' : 'Guardar cliente'"></span>
                     </button>
+                    <button type="button" x-show="quickCustomer.delivery" @click="confirmPortalDelivery()" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Continuar</button>
                 </div>
             </form>
         </div>
@@ -732,6 +765,7 @@ document.addEventListener('alpine:init', () => {
             saving: false,
             errors: {},
             message: '',
+            delivery: null,
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
@@ -1420,6 +1454,7 @@ document.addEventListener('alpine:init', () => {
         },
         openQuickCustomer() {
             this.quickCustomer.open = true;
+            this.quickCustomer.delivery = null;
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
             this.$nextTick(() => this.$refs.quickCustomerName?.focus());
@@ -1427,6 +1462,7 @@ document.addEventListener('alpine:init', () => {
         closeQuickCustomer() {
             if (this.quickCustomer.saving) return;
             this.quickCustomer.open = false;
+            this.quickCustomer.delivery = null;
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
         },
@@ -1434,6 +1470,26 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false };
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
+            this.quickCustomer.delivery = null;
+        },
+        copyPortalAccess() {
+            const text = this.quickCustomer.delivery?.copy_text || '';
+            if (!text) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this.successMessage = 'Acceso copiado al portapapeles.';
+                }).catch(() => {
+                    window.prompt('Copia manualmente:', text);
+                });
+            } else {
+                window.prompt('Copia manualmente:', text);
+            }
+        },
+        confirmPortalDelivery() {
+            this.successMessage = this.quickCustomer.delivery ? `Cliente creado. Acceso Portal: ${this.quickCustomer.delivery.username} (contraseña mostrada una sola vez)` : this.successMessage;
+            this.quickCustomer.open = false;
+            this.quickCustomer.delivery = null;
+            this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false };
         },
         async storeQuickCustomer() {
             if (this.quickCustomer.saving || !this.quickCustomer.form.name.trim()) return;
@@ -1459,10 +1515,11 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) throw new Error('No fue posible crear el cliente.');
                 this.selectCustomer(payload.customer);
                 if (payload.portal_access && payload.portal_access.created) {
-                    this.successMessage = `Cliente creado. Acceso Portal: ${payload.portal_access.username} / ${payload.portal_access.password} (mostrado una sola vez)`;
-                } else {
-                    this.successMessage = payload.message;
+                    this.quickCustomer.delivery = payload.portal_access;
+                    this.successMessage = '';
+                    return;
                 }
+                this.successMessage = payload.message;
                 this.quickCustomer.open = false;
                 this.resetQuickCustomer();
             } catch (error) {
