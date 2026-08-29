@@ -131,6 +131,28 @@
     <x-card>
         <x-slot:header>
             <div>
+                <h2 class="text-lg font-semibold text-slate-800">Incentivo de registro (P14)</h2>
+                <p class="text-sm text-slate-500">Activa un incentivo base al registrarse; se concede una sola vez por cliente.</p>
+            </div>
+        </x-slot:header>
+        <form method="POST" action="{{ route('loyalty.registration-incentive.update') }}" class="space-y-3">
+            @csrf @method('PUT')
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <input type="hidden" name="is_enabled" value="0">
+                <label class="flex items-start gap-3">
+                    <input type="checkbox" name="is_enabled" value="1" @checked(old('is_enabled', $registrationIncentive->is_enabled)) class="mt-1 h-5 w-5 rounded border border-slate-300 accent-amber-500">
+                    <span><span class="block font-semibold text-slate-800">Incentivo de registro habilitado</span><span class="block text-sm text-slate-500">Cuando está activo, acredita 10 puntos mediante el Kardex de Fidelización. Los reintentos no duplican la concesión.</span></span>
+                </label>
+                @error('is_enabled')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <button type="submit" class="min-h-11 rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar incentivo</button>
+        </form>
+        <p class="mt-3 text-xs text-slate-500">P15 definirá el tipo y valor configurables del beneficio sin cambiar este control ni su auditoría.</p>
+    </x-card>
+
+    <x-card>
+        <x-slot:header>
+            <div>
                 <h2 class="text-lg font-semibold text-slate-800">Reglas complementarias</h2>
                 <p class="text-sm text-slate-500">Accesos directos a las demás configuraciones de Fidelización, cada una con su permiso correspondiente.</p>
             </div>

@@ -50,6 +50,7 @@ use App\Http\Controllers\LoyaltyPortalAccessController;
 use App\Http\Controllers\LoyaltyPortalManagementController;
 use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPromotionController;
+use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
@@ -481,6 +482,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('/configuracion', [SettingController::class, 'loyaltySettings'])->middleware('permission:fidelidad.configuracion')->name('settings');
         Route::get('/reglas', [LoyaltyRuleCenterController::class, 'index'])->middleware('permission:fidelidad.configuracion')->name('rules.index');
         Route::put('/reglas', [LoyaltyRuleCenterController::class, 'update'])->middleware('permission:fidelidad.configuracion')->name('rules.update');
+        Route::put('/incentivo-registro', [LoyaltyRegistrationIncentiveController::class, 'update'])->middleware('permission:fidelidad.configuracion')->name('registration-incentive.update');
         Route::middleware('permission:fidelidad.ajustes')->prefix('ajustes')->name('adjustments.')->group(function () {
             Route::get('/', [LoyaltyAdjustmentController::class, 'index'])->name('index');
             Route::post('/', [LoyaltyAdjustmentController::class, 'store'])->name('store');

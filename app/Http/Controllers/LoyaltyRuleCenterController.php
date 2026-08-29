@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateLoyaltySettingRequest;
 use App\Models\LoyaltySetting;
+use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -20,14 +21,16 @@ class LoyaltyRuleCenterController extends Controller
         'returning_customer_points' => '0.0000',
     ];
 
-    public function index(): View
+    public function index(LoyaltyRegistrationIncentiveService $incentives): View
     {
         $companyId = (int) session('active_company_id');
 
         $loyaltySetting = LoyaltySetting::query()->where('company_id', $companyId)->first()
             ?? new LoyaltySetting(['company_id' => $companyId] + self::DEFAULTS);
 
-        return view('loyalty.rules.index', ['loyaltySetting' => $loyaltySetting]);
+        $registrationIncentive = $incentives->settingForCompanyId($companyId);
+
+        return view('loyalty.rules.index', ['loyaltySetting' => $loyaltySetting, 'registrationIncentive' => $registrationIncentive]);
     }
 
     public function update(UpdateLoyaltySettingRequest $request): RedirectResponse

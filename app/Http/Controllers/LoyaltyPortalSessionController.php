@@ -10,6 +10,7 @@ use App\Models\LoyaltyPortalCredential;
 use App\Models\Sale;
 use App\Services\Loyalty\LoyaltyAccountService;
 use App\Services\Loyalty\LoyaltyCustomerPortalService;
+use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use App\Services\PhoneNumberService;
 use App\Services\Sales\SaleReceiptService;
 use Illuminate\Http\RedirectResponse;
@@ -141,6 +142,9 @@ class LoyaltyPortalSessionController extends Controller
 
             // P05 – Crear/activar cuenta de fidelización al autorregistrarse (sin duplicar, sin bono)
             app(LoyaltyAccountService::class)->getOrCreateAccount($customer, $company);
+
+            // P14 – Incentivo de registro (una sola vez, nunca duplicar, reutiliza F09)
+            app(LoyaltyRegistrationIncentiveService::class)->tryAwardForRegistration($customer, $company);
 
             $credential = LoyaltyPortalCredential::create([
                 'company_id' => $company->id,

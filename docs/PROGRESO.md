@@ -994,7 +994,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 **P09 NO INICIADA.** Siguiente paso exacto del cronograma: activación P08 en cloud (infraestructura externa); requiere autorización y entorno correspondiente.
 
-### Portal de Clientes — P01–P13: COMPLETADO (P14 siguiente)
+### Portal de Clientes — P01–P14: COMPLETADO (P15 siguiente)
 
 Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos, migración P31–P40 después de los bloques existentes sin reutilizar IDs, Fidelización pendiente solo P41–P48 si sigue pendiente. **P22 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P23 – Onboarding empresa + sucursales + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`). **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
@@ -1003,9 +1003,8 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P11 — COMPLETADO** — Portal organizado en siete pestañas según permisos; un panel visible, teclado y QR 160–200px con impresión independiente. Evidencia: `LoyaltyPortalCentralTest` 5/5, 40 aserciones; build Vite.
 - **P12 — COMPLETADO** — Detalle de Cliente agrupado en Información, Identificación/seguridad y Contactos/direcciones; Configuración agrupada en Fidelización, WhatsApp y Plantillas según permiso. La lista simple de clientes no se forzó a tabs. Evidencia: 23 tests, 167 aserciones; build Vite.
 - **P13 — COMPLETADO** — Auditoría transversal: patrón aplicado al detalle complejo de Roles (Resumen, Usuarios, Permisos; acciones ≥44px). Se excluyeron POS, flujos transaccionales de Compras/Ventas/Caja, formularios únicos y detalles simples de Empresa/Proveedor para no ocultar contexto ni forzar tabs. Evidencia: `UserRoleSecurityTest` + `ResponsiveNavigationTest`, 15 tests, 59 aserciones; build Vite.
-- **P14 — SIGUIENTE / PARCIAL PRESERVADO** — continuar incentivo de registro sin reconstruir ni perder el trabajo local existente. P31 queda después de P14–P20.
-- **P13** — Extensión patrón pestañas al resto de MVS donde corresponda.
-- **P14** — PAUSADO / PARCIAL: Incentivo de registro configurable (código parcial `LoyaltyRegistrationIncentive*` preservado sin commit completo).
+- **P14 — COMPLETADO** — trabajo parcial retomado y cerrado: configuración habilitar/deshabilitar única por empresa, control protegido por `fidelidad.configuracion`, concesión base de 10 puntos una sola vez por cliente, reutilización de `LoyaltyAccountService` con movimiento `new_customer`, aislamiento explícito y claim enlazado al movimiento de Kardex. `LoyaltyRegistrationIncentiveP14Test` 8/8; regresión Portal/P14 78 pruebas, 500 aserciones; Pint focalizado y `git diff --check` correctos.
+- **P15 — SIGUIENTE** — tipo y valor configurables del beneficio (puntos, porcentaje o fijo); no implementado en P14. P31 queda después de P15–P20.
 
 **Regla producción:** desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado. Los agentes no despliegan producción automáticamente.
 
@@ -1023,7 +1022,7 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P09C — Escaneo QR/Code128 en POS: COMPLETADO.** `PosController::searchCustomers` expone `public_code` + like, `pos/index` botón escáner cliente + `onMvsScan` (public_code exact → `selectCustomer`).
 - **P09D — PIN/QR temporal de un solo uso: COMPLETADO.** `customer_one_time_tokens` (`token_hash` SHA256, 5min, `used_at`), `CustomerOneTimeTokenService` genera PIN 6 dígitos + QR local y verifica single-use/expiración/aislamiento, `clientes/show` genera/muestra/verifica.
 - **Evidencia P01–P09D:** `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos**. `LoyaltyCustomerPortal` 13/13, 89 aserciones.
-- **P14 y siguientes: PENDIENTES.** Siguiente **P14** – Incentivo de registro configurable (habilitar/deshabilitar).
+- **P14 — COMPLETADO.** Siguiente **P15** – Beneficio configurable: puntos, porcentaje de descuento o descuento fijo.
 
 ---
 
