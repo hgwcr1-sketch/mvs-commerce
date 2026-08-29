@@ -8,6 +8,17 @@
 
 <div class="space-y-6">
 
+    @php
+        $customerTabs = [
+            ['id' => 'informacion', 'label' => 'Información'],
+            ['id' => 'identificacion-seguridad', 'label' => 'Identificación y seguridad'],
+            ['id' => 'contactos-direcciones', 'label' => 'Contactos y direcciones'],
+        ];
+    @endphp
+    <x-tabs :tabs="$customerTabs" active-tab="informacion" variant="pills" aria-label="Secciones del cliente">
+
+    <div id="panel-informacion" role="tabpanel" aria-labelledby="tab-informacion" x-show="activeTab === 'informacion'">
+
     <x-card>
 
         <x-slot:header>
@@ -198,6 +209,9 @@
         </x-slot:footer>
 
         </x-card>
+    </div>
+
+    <div id="panel-identificacion-seguridad" role="tabpanel" aria-labelledby="tab-identificacion-seguridad" x-show="activeTab === 'identificacion-seguridad'" x-cloak class="space-y-6">
 
     <x-card>
         <x-slot:header>
@@ -264,8 +278,9 @@
         @if($errors->has('pin') || $errors->has('token'))<p class="mt-2 text-sm text-red-600">{{ $errors->first('pin') ?: $errors->first('token') }}</p>@endif
         @if(session('success') && str_contains(session('success'), 'PIN verificado'))<p class="mt-2 text-sm font-semibold text-emerald-700">{{ session('success') }}</p>@endif
     </x-card>
+    </div>
 
-</div>
+    <div id="panel-contactos-direcciones" role="tabpanel" aria-labelledby="tab-contactos-direcciones" x-show="activeTab === 'contactos-direcciones'" x-cloak class="space-y-6">
 
 <x-card>
 
@@ -657,6 +672,9 @@
 
 @endif
 
-</x-card>   
+</x-card>
+    </div>
+    </x-tabs>
+</div>
 
 @endsection

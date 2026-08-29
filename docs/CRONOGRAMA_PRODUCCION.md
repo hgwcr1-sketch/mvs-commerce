@@ -41,7 +41,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | **P09D** | PIN o QR temporal/de un solo uso para canjes y autorizaciones sensibles | **COMPLETADO** | `customer_one_time_tokens` (`2026_08_29_000003`, token_hash SHA256, expires 5min, used_at), `CustomerOneTimeTokenService` (PIN 6 dígitos, QR local, single-use, expiración, `isStaticQrTrustedForRedeem=false`), `clientes/show` PIN+QR+verificar, `CustomerOneTimeTokenTest` 4/4 |
 | **P10** | Patrón UI reutilizable de pestañas MVS (responsive, mobile-first, touch ≥44px, sin overflow horizontal, scroll horizontal controlado en móvil) | **COMPLETADO** | `b383aad`; componente `x-tabs`, Alpine, estilos y carga Vite |
 | **P11** | Portal de Clientes por pestañas y menos scroll | **COMPLETADO** | 7 secciones tabuladas según permisos, un panel visible, teclado, QR 160–200px; `LoyaltyPortalCentralTest` 5/5, 40 aserciones + build Vite |
-| **P12** | Clientes + Configuración en pestañas | **PENDIENTE** | Secciones tabuladas |
+| **P12** | Clientes + Configuración en pestañas | **COMPLETADO** | Cliente: Información, Identificación/seguridad, Contactos/direcciones. Configuración: Fidelización, WhatsApp, Plantillas según permiso. 23 tests, 167 aserciones + build Vite |
 | **P13** | Extensión patrón pestañas al resto de MVS donde corresponda | **PENDIENTE** | Aplicación transversal |
 | P14 | Incentivo de registro configurable (habilitar/deshabilitar) | **PAUSADO / PARCIAL** | Código parcial en `LoyaltyRegistrationIncentive*`, migraciones, tests; preservado sin commit P14 completo |
 | P15 | Beneficio: puntos, % descuento o descuento fijo | **PENDIENTE** | Valor configurable |
@@ -112,8 +112,8 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P01–P09D: COMPLETADOS** (evidencia `LoyaltyPortalSelfRegistrationTest` 11/11 + `LoyaltyPortalClientAccessTest` 11/11 + `LoyaltyPortalDeliveryTest` 7/7 + `LoyaltyPortalCentralTest` 4/4 + `CustomerPublicCodeTest` 5/5 + `CustomerQrBarcodeTest` 4/4 + `CustomerPosScanTest` 3/3 + `CustomerOneTimeTokenTest` 4/4; P09D PIN temporal single-use). Ajuste visual QR compacto P09: commit `58aba11`.
 - **P10: COMPLETADO** – Patrón UI reutilizable `x-tabs` (`b383aad`).
 - **P11: COMPLETADO** – Portal de Clientes organizado en siete pestañas según permisos, accesible por teclado, QR compacto con impresión independiente.
-- **P12: SIGUIENTE BLOQUE** – Clientes + Configuración en pestañas.
-- **P13** – Extensión patrón pestañas al resto de MVS donde corresponda.
+- **P12: COMPLETADO** – Detalle de Cliente y Configuración tabulados selectivamente; lista simple sin pestañas.
+- **P13: SIGUIENTE BLOQUE** – Extensión selectiva del patrón al resto de MVS donde corresponda.
 - **P14: PAUSADO / PARCIAL** – Incentivo de registro configurable; código parcial en `LoyaltyRegistrationIncentive*` preservado sin commit completo.
 - **P22 y P23: COMPLETADOS en a60425f** – P22 Separación Platform/Tenant y P23 Onboarding empresa + sucursales + primer administrador.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.

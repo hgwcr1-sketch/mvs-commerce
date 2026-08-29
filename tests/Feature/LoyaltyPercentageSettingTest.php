@@ -29,6 +29,10 @@ class LoyaltyPercentageSettingTest extends TestCase
             ->get(route('configuracion.index'))
             ->assertOk()
             ->assertSee('Porcentaje de acumulación')
+            ->assertSee('id="tab-fidelizacion"', false)
+            ->assertSee('id="panel-fidelizacion"', false)
+            ->assertSee('id="tab-whatsapp"', false)
+            ->assertSee('id="panel-whatsapp"', false)
             ->assertSee('value="5.00"', false);
 
         $this->actingAs($user)

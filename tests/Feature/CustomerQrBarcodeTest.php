@@ -43,6 +43,10 @@ class CustomerQrBarcodeTest extends TestCase
         $response->assertSee('QR (código público)');
         $response->assertSee('Code 128');
         $response->assertSee('<svg', false);
+        foreach (['informacion', 'identificacion-seguridad', 'contactos-direcciones'] as $tab) {
+            $response->assertSee('id="tab-'.$tab.'"', false);
+            $response->assertSee('id="panel-'.$tab.'"', false);
+        }
         // No sensitive leak
         $this->assertNotSame($customer->identification, $customer->public_code);
     }

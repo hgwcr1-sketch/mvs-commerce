@@ -16,7 +16,17 @@
 
     @php
         $dec = fn ($v) => is_numeric($v) ? number_format((float) $v, 2, '.', '') : $v;
+        $settingsTabs = [
+            ['id' => 'fidelizacion', 'label' => 'Fidelización'],
+            ['id' => 'whatsapp', 'label' => 'WhatsApp'],
+        ];
     @endphp
+    @can('fidelidad.configuracion')
+        @php $settingsTabs[] = ['id' => 'plantillas', 'label' => 'Plantillas']; @endphp
+    @endcan
+
+    <x-tabs :tabs="$settingsTabs" active-tab="fidelizacion" variant="pills" aria-label="Secciones de configuración">
+    <div id="panel-fidelizacion" role="tabpanel" aria-labelledby="tab-fidelizacion" x-show="activeTab === 'fidelizacion'">
 
     <x-card>
         <x-slot:header>
@@ -143,6 +153,9 @@
             @endcan
         </form>
     </x-card>
+    </div>
+
+    <div id="panel-whatsapp" role="tabpanel" aria-labelledby="tab-whatsapp" x-show="activeTab === 'whatsapp'" x-cloak>
 
     <x-card>
         <x-slot:header>
@@ -183,8 +196,10 @@
             @endcan
         </form>
     </x-card>
+    </div>
 
     @can('fidelidad.configuracion')
+        <div id="panel-plantillas" role="tabpanel" aria-labelledby="tab-plantillas" x-show="activeTab === 'plantillas'" x-cloak>
         <x-card>
             <x-slot:header><div><h2 class="text-lg font-semibold text-slate-800">Plantillas de Fidelización</h2><p class="text-sm text-slate-500">Variables permitidas: {nombre}, {dias_sin_comprar}, {puntos}, {sucursal}.</p></div></x-slot:header>
             <form method="POST" action="{{ route('configuracion.loyalty-templates.update') }}" class="max-w-2xl space-y-4">@csrf @method('PUT')
@@ -194,6 +209,8 @@
                 <button class="rounded-lg bg-amber-500 px-5 py-2.5 font-semibold text-black">Guardar plantillas</button>
             </form>
         </x-card>
+        </div>
     @endcan
+    </x-tabs>
 </div>
 @endsection
