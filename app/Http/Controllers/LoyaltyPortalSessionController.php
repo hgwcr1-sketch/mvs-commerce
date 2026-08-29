@@ -182,12 +182,44 @@ class LoyaltyPortalSessionController extends Controller
         $this->putPortalSession($request, $credential->company_id, $credential->customer_id);
         $credential->update(['last_login_at' => now()]);
 
+        if ($credential->must_change_password) {
+            return redirect()->route('loyalty.customer.password.force', $company);
+        }
+
         return redirect()->route('loyalty.customer.home', $company);
     }
 
-    public function home(Request $request, Company $company, LoyaltyCustomerPortalService $portal): View
+    public function forceChangeForm(Request $request, Company $company): View
     {
         $customer = $this->sessionCustomer($request, $company);
+        $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->firstOrFail();
+        abort_unless($credential->must_change_password, 404);
+
+        return view('loyalty.portal.force-change', compact('company'));
+    }
+
+    public function forceChange(Request $request, Company $company): RedirectResponse
+    {
+        $customer = $this->sessionCustomer($request, $company);
+        $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->firstOrFail();
+        abort_unless($credential->must_change_password, 404);
+
+        $data = $request->validate([
+            'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()],
+        ]);
+
+        $credential->update(['password' => $data['password'], 'must_change_password' => false]);
+
+        return redirect()->route('loyalty.customer.home', $company)->with('success', 'Contraseña actualizada correctamente.');
+    }
+
+    public function home(Request $request, Company $company, LoyaltyCustomerPortalService $portal): View|RedirectResponse
+    {
+        $customer = $this->sessionCustomer($request, $company);
+        $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->first();
+        if ($credential && $credential->must_change_password) {
+            return redirect()->route('loyalty.customer.password.force', $company);
+        }
 
         return view('loyalty.portal.show', $portal->data($company, $customer) + ['customerAuthenticated' => true]);
     }

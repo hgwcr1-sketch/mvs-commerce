@@ -135,15 +135,36 @@ class LoyaltyPortalClientAccessTest extends TestCase
             ->assertRedirect();
         $customer = Customer::where('company_id', $company->id)->where('phone', '55555555')->firstOrFail();
         $cred = LoyaltyPortalCredential::where('customer_id', $customer->id)->firstOrFail();
+        $this->assertTrue($cred->must_change_password);
         $this->assertNotSame('password123', $cred->password);
         $this->assertNotSame('12345678', $cred->password);
-        // Password is hashed, we cannot compare plain, but we can check that two credentials have different passwords
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
             ->post(route('clientes.store'), $this->clientePayload(['phone' => '66666666', 'create_portal_access' => '1']))
             ->assertRedirect();
         $customer2 = Customer::where('company_id', $company->id)->where('phone', '66666666')->firstOrFail();
         $cred2 = LoyaltyPortalCredential::where('customer_id', $customer2->id)->firstOrFail();
+        $this->assertTrue($cred2->must_change_password);
         $this->assertNotSame($cred->password, $cred2->password);
+    }
+
+    public function test_temporary_password_requires_change_on_first_login(): void
+    {
+        [$company, $branch, $user] = $this->staffContext(true);
+        $response = $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->postJson(route('pos.customers.quick-store'), ['name' => 'Temporal Pass', 'phone' => '70000001', 'create_portal_access' => true]);
+        $response->assertCreated()->assertJsonPath('portal_access.created', true);
+        $plain = $response->json('portal_access.password');
+        $username = $response->json('portal_access.username');
+        $this->assertNotEmpty($plain);
+        $this->post(route('loyalty.customer.login.store', $company), ['username' => $username, 'password' => $plain])
+            ->assertRedirect(route('loyalty.customer.password.force', $company));
+        $this->get(route('loyalty.customer.home', $company))->assertRedirect(route('loyalty.customer.password.force', $company));
+        $this->post(route('loyalty.customer.password.force.store', $company), ['password' => 'NuevaClave1', 'password_confirmation' => 'NuevaClave1'])
+            ->assertRedirect(route('loyalty.customer.home', $company));
+        $this->assertDatabaseHas('loyalty_portal_credentials', ['company_id' => $company->id, 'username' => $username, 'must_change_password' => false]);
+        $this->post(route('loyalty.customer.login.store', $company), ['username' => $username, 'password' => 'NuevaClave1'])
+            ->assertRedirect(route('loyalty.customer.home', $company));
+        $this->get(route('loyalty.customer.home', $company))->assertOk();
     }
 
     private function clientePayload(array $overrides = []): array

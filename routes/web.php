@@ -149,6 +149,8 @@ Route::prefix('portal-clientes/{company}')->name('loyalty.customer.')->middlewar
     Route::post('/recuperar', [LoyaltyPortalSessionController::class, 'forgot'])->name('password.email');
     Route::get('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'resetForm'])->name('password.reset');
     Route::post('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'reset'])->name('password.update');
+    Route::get('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChangeForm'])->name('password.force');
+    Route::post('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChange'])->name('password.force.store');
 });
 Route::post('/portal-clientes/activar', [LoyaltyPortalSessionController::class, 'activate'])->middleware('throttle:10,1')->name('loyalty.customer.activate');
 

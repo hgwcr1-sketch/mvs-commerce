@@ -348,6 +348,7 @@ class PosController extends Controller
             'email' => $emailNormalized ?? $username . '@portal.local',
             'password' => $plainPassword,
             'is_active' => true,
+            'must_change_password' => true,
         ]);
 
         return ['created' => true, 'username' => $username, 'password' => $plainPassword, 'email' => $credential->email];
