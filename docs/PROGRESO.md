@@ -983,7 +983,15 @@ Evidencia: `M10PlatformAuditSecurityTest` + M01/Platform Admin/módulos (24 prue
 - Dashboard, alta comercial, ficha y onboarding usan grids mobile-first, controles táctiles de 44 px, tablas con scroll interno y acciones diferenciadas por responsabilidad.
 - Verificación conceptual 360/768/1280 y build Vite correctos.
 
-Evidencia: regresión UI Panel/onboarding/navegación (14 pruebas, 66 aserciones) y `npm run build`. **M12 siguiente.**
+Evidencia: regresión UI Panel/onboarding/navegación (14 pruebas, 66 aserciones) y `npm run build`.
+
+### M12 — Regresión y preparación de despliegue: COMPLETADO / DESPLIEGUE PENDIENTE DE APROBACIÓN
+
+- Regresión integrada M01–M11 en verde: 53 pruebas, 273 aserciones; Pint focalizado y `git diff --check` correctos; build Vite correcto en M11.
+- El escenario aislado MYM cubre alta comercial, activación/onboarding, dos sucursales/límite, módulos y ciclo de vida sin crear ni modificar datos reales.
+- No se ejecutó despliegue, no se tocó producción y no se creó el tenant MYM real. Queda listo para validación y aprobación humana de producción.
+
+**Cronograma M02–M12 cerrado técnicamente. PAUSA antes del despliegue.**
 
 ---
 

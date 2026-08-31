@@ -865,3 +865,5 @@ Los artefactos operativos versionables viven en `scripts/production/`; la guía 
 
 Roles y permisos empresariales no conceden `is_platform_admin`. El tenant consume los módulos habilitados y los límites existentes, pero no puede modificarlos. La experiencia expandida del panel, la aplicación adicional de límites y la auditoría transversal corresponden a fases M posteriores.
 
+El flujo completo M02–M12 separa alta comercial y onboarding operativo: MVS crea propietario/contrato e invitación segura; el propietario activa su cuenta y completa la misma empresa y primera sucursal. El Panel Maestro concentra supervisión, ciclo de vida, capacidad y trazabilidad, mientras el tenant queda limitado por licencia, módulos y `company_id`. Ningún cierre del cronograma autoriza despliegue automático.
+
