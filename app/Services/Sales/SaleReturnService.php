@@ -22,8 +22,7 @@ class SaleReturnService
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly LoyaltySaleReturnAdjustmentService $loyaltyAdjustments,
-    ) {
-    }
+    ) {}
 
     /**
      * Registra una devolución de mercancía sobre una venta completada
@@ -38,6 +37,12 @@ class SaleReturnService
                 ->whereKey($sale->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($sale->is_historical) {
+                throw ValidationException::withMessages([
+                    'sale' => 'Las ventas históricas importadas no admiten devoluciones operativas.',
+                ]);
+            }
 
             if ((int) $sale->company_id !== (int) session('active_company_id')) {
                 abort(404);
@@ -113,7 +118,7 @@ class SaleReturnService
                 'status' => SaleReturn::STATUS_COMPLETED,
                 'returned_at' => now(),
             ]);
-foreach ($sale->items as $item) {
+            foreach ($sale->items as $item) {
                 if (! isset($requested[$item->id])) {
                     continue;
                 }

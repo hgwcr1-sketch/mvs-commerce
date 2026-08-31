@@ -7,6 +7,7 @@ use App\Models\AccountReceivable;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
 use App\Models\Product;
+use App\Models\Sale;
 use App\Models\Supplier;
 
 class DataExportService
@@ -14,6 +15,7 @@ class DataExportService
     public const DATASETS = [
         'products' => ['label' => 'Productos', 'permission' => 'productos.ver', 'branch' => false],
         'customers' => ['label' => 'Clientes', 'permission' => 'clientes.ver', 'branch' => false],
+        'sales' => ['label' => 'Ventas históricas', 'permission' => 'ventas.ver', 'branch' => true],
         'suppliers' => ['label' => 'Proveedores', 'permission' => 'proveedores.ver', 'branch' => false],
         'inventory' => ['label' => 'Inventario', 'permission' => 'inventario.ver', 'branch' => true],
         'receivables' => ['label' => 'Cuentas por cobrar', 'permission' => 'cuentas_cobrar.ver', 'branch' => true],
@@ -26,6 +28,7 @@ class DataExportService
         return match ($dataset) {
             'products' => $this->products($companyId),
             'customers' => $this->customers($companyId),
+            'sales' => $this->sales($companyId, $branchId),
             'suppliers' => $this->suppliers($companyId),
             'inventory' => $this->inventory($companyId, $branchId),
             'receivables' => $this->receivables($companyId, $branchId),
@@ -61,6 +64,26 @@ class DataExportService
 
         return [['Tipo identificación', 'Identificación', 'Nombre', 'Nombre comercial', 'Teléfono', 'Móvil',
             'Correo', 'Dirección', 'Límite de crédito', 'Días de crédito', 'Nivel de precio', 'Fecha de nacimiento', 'Activo'], $rows];
+    }
+
+    private function sales(int $companyId, ?int $branchId): array
+    {
+        $rows = Sale::query()->where('company_id', $companyId)->where('branch_id', $branchId)
+            ->with(['branch', 'customer', 'items.product'])->orderBy('completed_at')->orderBy('sale_number')->get()
+            ->flatMap(fn (Sale $sale) => $sale->items->values()->map(fn ($item, $index) => [
+                $sale->sale_number, $sale->completed_at?->format('Y-m-d H:i:s'), $sale->branch?->code,
+                $sale->document_type, $sale->sale_condition, $sale->currency_code, $sale->exchange_rate,
+                $sale->customer?->identification, $sale->subtotal, $sale->discount_total, $sale->tax_total, $sale->total,
+                $index + 1, $item->product_code ?? $item->product?->internal_code, $item->barcode,
+                $item->description, $item->quantity, $item->unit_price, $item->discount_total, $item->tax_rate, $item->unit_cost,
+            ]))->all();
+
+        return [[
+            'numero_documento*', 'fecha*', 'codigo_sucursal*', 'tipo_documento*', 'condicion_venta*',
+            'moneda*', 'tipo_cambio*', 'identificacion_cliente', 'subtotal_documento*', 'descuento_documento*',
+            'impuesto_documento*', 'total_documento*', 'numero_linea*', 'codigo_producto', 'codigo_barras',
+            'descripcion*', 'cantidad*', 'precio_unitario*', 'descuento_linea*', 'tasa_impuesto*', 'costo_unitario',
+        ], $rows];
     }
 
     private function suppliers(int $companyId): array

@@ -811,6 +811,15 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:productos.crear')
         ->name('importaciones.productos.import');
 
+    Route::get('/importar-datos/ventas-historicas', [DataImportController::class, 'historicalSales'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas');
+    Route::get('/importar-datos/ventas-historicas/plantilla', [DataImportController::class, 'historicalSaleTemplate'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.template');
+    Route::post('/importar-datos/ventas-historicas/revisar', [DataImportController::class, 'historicalSalePreview'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.preview');
+    Route::post('/importar-datos/ventas-historicas/confirmar', [DataImportController::class, 'historicalSaleImport'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.import');
+
     Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
         ->middleware('permission:inventario.ver')
         ->name('importaciones.inventario');

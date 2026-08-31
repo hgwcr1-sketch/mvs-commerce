@@ -14,6 +14,7 @@ class DataCenterController extends Controller
         'compras.crear',
         'clientes.crear',
         'productos.crear',
+        'ventas.crear',
         'inventario.ver',
         'reportes.exportar',
         'reportes.ver',
@@ -30,7 +31,7 @@ class DataCenterController extends Controller
     public function imports(Request $request): View
     {
         $company = $this->company();
-        $this->authorizeAny($request, $company, ['compras.crear', 'clientes.crear', 'productos.crear', 'inventario.ver']);
+        $this->authorizeAny($request, $company, ['compras.crear', 'clientes.crear', 'productos.crear', 'ventas.crear', 'inventario.ver']);
 
         return view('data-center.imports');
     }

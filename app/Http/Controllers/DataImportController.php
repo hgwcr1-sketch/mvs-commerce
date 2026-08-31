@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Services\Imports\CustomerImportService;
+use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
 use App\Services\Imports\ProductImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -14,6 +15,38 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataImportController extends Controller
 {
+    public function historicalSales()
+    {
+        return view('importaciones.ventas-historicas');
+    }
+
+    public function historicalSaleTemplate()
+    {
+        return $this->spreadsheetDownload(HistoricalSaleImportService::HEADERS, 'plantilla_ventas_historicas.xlsx', true, 'Ventas historicas');
+    }
+
+    public function historicalSalePreview(Request $request, HistoricalSaleImportService $import)
+    {
+        $request->validate(['sales_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $rows = $import->preview($request->file('sales_file')->getRealPath(), $companyId);
+        session(['historical_sale_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
+
+        return view('importaciones.ventas-historicas-preview', compact('rows'));
+    }
+
+    public function historicalSaleImport(Request $request, HistoricalSaleImportService $import)
+    {
+        $preview = session('historical_sale_import_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.ventas-historicas')->withErrors(['sales_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+        $count = $import->confirm($preview, (int) session('active_company_id'), (int) $request->user()->id);
+        session()->forget('historical_sale_import_preview');
+
+        return redirect()->route('ventas.index')->with('success', "Se importaron {$count} ventas históricas correctamente.");
+    }
+
     public function products()
     {
         return view('importaciones.productos');

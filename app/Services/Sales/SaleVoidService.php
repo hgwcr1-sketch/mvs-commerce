@@ -2,10 +2,10 @@
 
 namespace App\Services\Sales;
 
+use App\Models\AccountReceivable;
 use App\Models\LoyaltyMovement;
 use App\Models\Sale;
 use App\Models\SalePayment;
-use App\Models\AccountReceivable;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyAccountService;
@@ -17,8 +17,7 @@ class SaleVoidService
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly LoyaltyAccountService $loyaltyAccountService,
-    ) {
-    }
+    ) {}
 
     public function void(Sale $sale, User $user, string $reason): Sale
     {
@@ -31,6 +30,12 @@ class SaleVoidService
             if ($sale->status !== Sale::STATUS_COMPLETED) {
                 throw ValidationException::withMessages([
                     'sale' => 'Solo se puede anular una venta completada.',
+                ]);
+            }
+
+            if ($sale->is_historical) {
+                throw ValidationException::withMessages([
+                    'sale' => 'Las ventas históricas importadas no admiten anulaciones operativas.',
                 ]);
             }
 

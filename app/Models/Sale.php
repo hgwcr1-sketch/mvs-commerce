@@ -11,16 +11,23 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Sale extends Model
 {
     public const DOCUMENT_ELECTRONIC_TICKET = 'electronic_ticket';
+
     public const DOCUMENT_ELECTRONIC_INVOICE = 'electronic_invoice';
 
     public const CONDITION_CASH = 'cash';
+
     public const CONDITION_CREDIT = 'credit';
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SUSPENDED = 'suspended';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_VOIDED = 'voided';
+
     public const STATUS_PARTIALLY_RETURNED = 'partially_returned';
+
     public const STATUS_RETURNED = 'returned';
 
     protected $fillable = [
@@ -35,6 +42,7 @@ class Sale extends Model
         'document_type',
         'sale_condition',
         'status',
+        'is_historical',
         'currency_code',
         'exchange_rate',
         'subtotal',
@@ -57,6 +65,7 @@ class Sale extends Model
     {
         return [
             'exchange_rate' => 'decimal:4',
+            'is_historical' => 'boolean',
             'subtotal' => 'decimal:4',
             'discount_total' => 'decimal:4',
             'tax_total' => 'decimal:4',

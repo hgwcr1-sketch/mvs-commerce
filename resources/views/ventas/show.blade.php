@@ -49,8 +49,10 @@
 
             @can('devoluciones.crear')
             @if(
-                $sale->status === \App\Models\Sale::STATUS_COMPLETED
-                || $sale->status === \App\Models\Sale::STATUS_PARTIALLY_RETURNED
+                !$sale->is_historical && (
+                    $sale->status === \App\Models\Sale::STATUS_COMPLETED
+                    || $sale->status === \App\Models\Sale::STATUS_PARTIALLY_RETURNED
+                )
             )
                 <a
                     href="{{ route('ventas.return.create', $sale) }}"
@@ -76,7 +78,7 @@
     <x-card>
 
     @can('ventas.anular')
-    @if($sale->status === \App\Models\Sale::STATUS_COMPLETED)
+    @if($sale->status === \App\Models\Sale::STATUS_COMPLETED && !$sale->is_historical)
 
         <form
             method="POST"
