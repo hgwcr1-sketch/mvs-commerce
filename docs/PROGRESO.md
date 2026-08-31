@@ -957,6 +957,13 @@ Evidencia: `CustomerOnboardingAndBranchesTest` + regresión de licencia/Platform
 
 Evidencia: `CompanyModuleAccessTest` + regresión M01/roles/navegación (27 pruebas, 105 aserciones). **M08 siguiente.**
 
+### M08 — Ciclo de vida del tenant: COMPLETADO
+
+- Platform Admin cambia estados mediante la licencia auditada; `company.licensed` bloquea operación en suspendido, vencido o cancelado.
+- Reactivar restaura acceso y conserva empresa, sucursales y datos; ninguna transición ejecuta borrados.
+
+Evidencia: `CompanyLicenseTest` + M01 + `PlatformAdminTest` (21 pruebas, 116 aserciones). **M09 siguiente.**
+
 ---
 
 ## Puesta en Producción
