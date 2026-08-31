@@ -20,7 +20,7 @@
 @endphp
 
 <nav id="bottom-nav"
-     class="fixed inset-x-0 bottom-0 z-40 grid border-t border-slate-200 bg-white transition-transform duration-200 lg:hidden"
+     class="fixed inset-x-0 bottom-0 z-40 grid border-t border-slate-200 bg-white shadow-[0_-4px_16px_rgba(15,23,42,0.08)] transition-transform duration-200"
      style="grid-template-columns: repeat({{ count($bottomNavItems) + 1 }}, minmax(0, 1fr)); padding-bottom: env(safe-area-inset-bottom);"
      aria-label="Navegación principal">
 

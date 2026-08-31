@@ -128,7 +128,7 @@
 
                         <option
                             value="{{ $country->id }}"
-                            @selected(old('country_id') == $country->id)>
+                            @selected(old('country_id', $countries->firstWhere('is_default', true)?->id) == $country->id)>
 
                             {{ $country->name }}
 
@@ -300,88 +300,5 @@
     </form>
 
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-
-    const country = document.querySelector('[name="country_id"]');
-    const province = document.querySelector('[name="province_id"]');
-    const canton = document.querySelector('[name="canton_id"]');
-    const district = document.querySelector('[name="district_id"]');
-
-    if (!country || !province || !canton || !district) {
-        return;
-    }
-
-    function resetSelect(select, text = 'Seleccione...') {
-        select.innerHTML = `<option value="">${text}</option>`;
-    }
-
-    function loadOptions(url, select, selectedValue = null) {
-
-        fetch(url)
-            .then(response => response.json())
-            .then(items => {
-
-                resetSelect(select);
-
-                items.forEach(item => {
-
-                    const option = document.createElement('option');
-
-                    option.value = item.id;
-                    option.textContent = item.name;
-
-                    if (selectedValue && String(item.id) === String(selectedValue)) {
-                        option.selected = true;
-                    }
-
-                    select.appendChild(option);
-                });
-
-            });
-    }
-
-    country.addEventListener('change', function () {
-
-        resetSelect(province);
-        resetSelect(canton);
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/provincias/${this.value}`,
-            province
-        );
-    });
-
-    province.addEventListener('change', function () {
-
-        resetSelect(canton);
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/cantones/${this.value}`,
-            canton
-        );
-    });
-
-    canton.addEventListener('change', function () {
-
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/distritos/${this.value}`,
-            district
-        );
-    });
-
-});
-</script>
 
 @endsection

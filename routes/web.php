@@ -120,6 +120,9 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::middleware('auth')->group(function () {
     Route::get('/empresa/create', [CompanyController::class, 'create'])->name('empresa.create');
     Route::post('/empresa', [CompanyController::class, 'store'])->name('empresa.store');
+    Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])->name('ubicaciones.provincias');
+    Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])->name('ubicaciones.cantones');
+    Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])->name('ubicaciones.distritos');
 });
 
 /*
@@ -403,14 +406,6 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::post('/clientes/{cliente}/pin', [CustomerController::class, 'generateOneTimeToken'])->name('clientes.pin.generate');
     Route::post('/clientes/{cliente}/pin/verificar', [CustomerController::class, 'verifyOneTimeToken'])->name('clientes.pin.verify');
     Route::resource('clientes', CustomerController::class);
-    Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])
-        ->name('ubicaciones.provincias');
-
-    Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])
-        ->name('ubicaciones.cantones');
-
-    Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])
-        ->name('ubicaciones.distritos');
     Route::get('/clientes/provincias/{country}', [CustomerController::class, 'provinces'])
         ->name('clientes.provincias');
 

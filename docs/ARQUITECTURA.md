@@ -170,14 +170,13 @@ Agregar enlaces al sidebar debe realizarse normalmente al final de una implement
 
 La navegación se adapta al dispositivo sin duplicar menús ni permisos:
 
-* **Celular (<768px):** barra inferior fija (`components/navigation/bottom-bar.blade.php`) con accesos P0 condicionados por permiso y botón "Más". El sidebar está oculto.
-* **Tablet (768–1023px):** sidebar en modo rail compacto; los grupos desplegables se ocultan por CSS (`.nav-desktop-group`) y se muestra el disparador "Más" (`.nav-more-trigger`).
-* **Escritorio (≥1024px):** sidebar compacto expandible por hover/foco o fijado (preferencia `localStorage` `mvs.sidebar.pinned`, componente Alpine `sidebarShell` en `resources/js/navigation.js`).
+* **Celular, tablet y escritorio:** barra inferior fija (`components/navigation/bottom-bar.blade.php`) con accesos P0 condicionados por permiso: Inicio, POS, Productos, Caja y botón "Más".
+* El shell tenant no renderiza un sidebar izquierdo. "Más" abre el menú operativo completo como sheet lateral en cualquier tamaño.
 
 Reglas permanentes:
 
-* El botón "Más" abre un sheet lateral (`layouts/app.blade.php`) que reutiliza el sidebar real con `context = 'sheet'`: un solo origen de rutas y permisos.
-* En rutas POS (`pos.*`) no se renderizan la barra inferior ni el sheet: el POS gestiona su propio espacio de trabajo.
+* El botón "Más" abre un sheet lateral (`layouts/app.blade.php`) que reutiliza el menú real con `context = 'sheet'`: un solo origen de rutas y permisos.
+* La barra inferior y el sheet también están disponibles en rutas POS; la acción móvil Total/Cobrar se ubica encima de la navegación.
 * La barra inferior se oculta temporalmente mientras un campo de texto recibe foco (teclado móvil).
 * Al agregar módulos o permisos, actualizar únicamente `sidebar.blade.php`; la barra inferior solo lleva los accesos P0 definidos en `AGENTS.md`.
 

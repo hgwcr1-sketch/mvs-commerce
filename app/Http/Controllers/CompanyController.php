@@ -49,23 +49,34 @@ class CompanyController extends Controller
             return redirect()->route('platform.index');
         }
 
+        $countries = Country::where('is_active', true)
+            ->orderBy('name')
+            ->get();
+        $countryId = old('country_id', $countries->firstWhere('is_default', true)?->id);
+        $provinceId = old('province_id');
+        $cantonId = old('canton_id');
+
         return view('empresa.create', [
 
             'company' => new Company,
 
-            'countries' => Country::where('is_active', true)
-                ->orderBy('name')
-                ->get(),
+            'countries' => $countries,
 
             'provinces' => Province::where('is_active', true)
+                ->when($countryId, fn ($query) => $query->where('country_id', $countryId))
+                ->when(! $countryId, fn ($query) => $query->whereRaw('1 = 0'))
                 ->orderBy('name')
                 ->get(),
 
             'cantons' => Canton::where('is_active', true)
+                ->when($provinceId, fn ($query) => $query->where('province_id', $provinceId))
+                ->when(! $provinceId, fn ($query) => $query->whereRaw('1 = 0'))
                 ->orderBy('name')
                 ->get(),
 
             'districts' => District::where('is_active', true)
+                ->when($cantonId, fn ($query) => $query->where('canton_id', $cantonId))
+                ->when(! $cantonId, fn ($query) => $query->whereRaw('1 = 0'))
                 ->orderBy('name')
                 ->get(),
 

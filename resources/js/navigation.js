@@ -58,17 +58,17 @@ const bottomNavInputSelector = 'input, textarea, select';
 
 const fixedBarsSelector = '#bottom-nav, #pos-sticky-bar';
 
-function getFixedBar() {
+function getFixedBars() {
 
-    return document.querySelector(fixedBarsSelector);
+    return document.querySelectorAll(fixedBarsSelector);
 
 }
 
 function hideBottomNavForFocus(event) {
 
-    const bar = getFixedBar();
+    const bars = getFixedBars();
 
-    if (! bar || ! (event.target instanceof Element)) {
+    if (! bars.length || ! (event.target instanceof Element)) {
 
         return;
 
@@ -76,7 +76,7 @@ function hideBottomNavForFocus(event) {
 
     if (event.target.matches(bottomNavInputSelector)) {
 
-        bar.classList.add('nav-bar-hidden');
+        bars.forEach(bar => bar.classList.add('nav-bar-hidden'));
 
     }
 
@@ -84,9 +84,9 @@ function hideBottomNavForFocus(event) {
 
 function showBottomNavAfterBlur() {
 
-    const bar = getFixedBar();
+    const bars = getFixedBars();
 
-    if (! bar) {
+    if (! bars.length) {
 
         return;
 
@@ -98,7 +98,7 @@ function showBottomNavAfterBlur() {
 
         if (! active || ! (active.matches && active.matches(bottomNavInputSelector))) {
 
-            bar.classList.remove('nav-bar-hidden');
+            bars.forEach(bar => bar.classList.remove('nav-bar-hidden'));
 
         }
 

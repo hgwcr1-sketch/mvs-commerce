@@ -18,9 +18,6 @@
 
 <div class="flex h-screen overflow-hidden">
 
-    {{-- SIDEBAR (shell): colapsable en desktop, rail en tablet, oculto en celular --}}
-    @include('components.navigation.sidebar', ['context' => 'shell'])
-
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {{-- HEADER --}}
@@ -30,7 +27,7 @@
         <main
             class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100">
 
-            <div class="{{ request()->routeIs('pos.*') ? 'p-4 pb-24 lg:p-6' : 'p-4 pb-28 md:p-6 md:pb-6' }}">
+            <div class="p-4 pb-28 md:p-6 md:pb-28">
 
                 @yield('content')
 
@@ -42,8 +39,7 @@
 
 </div>
 
-@unless(request()->routeIs('pos.*'))
-    {{-- BARRA INFERIOR MÓVIL (R01) --}}
+    {{-- Navegación operativa tenant compartida por escritorio, tablet y móvil --}}
     @include('components.navigation.bottom-bar')
 
     {{-- SHEET "MÁS": reutiliza el sidebar real como fuente única de menú y permisos --}}
@@ -54,7 +50,7 @@
         <div x-cloak x-show="open"
              x-transition.opacity.duration.150ms
              @click="open = false"
-             class="fixed inset-0 z-[45] bg-slate-950/60 lg:hidden"
+             class="fixed inset-0 z-[45] bg-slate-950/60"
              aria-hidden="true"></div>
 
         <aside x-cloak x-show="open"
@@ -64,7 +60,7 @@
             x-transition:leave="transition-transform duration-150 ease-in"
             x-transition:leave-start="translate-x-0"
             x-transition:leave-end="translate-x-full"
-            class="fixed inset-y-0 right-0 z-50 flex w-[310px] max-w-[86vw] flex-col bg-slate-900 shadow-2xl lg:hidden"
+            class="fixed inset-y-0 right-0 z-50 flex w-[360px] max-w-[90vw] flex-col bg-slate-900 shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label="Menú de navegación">
@@ -81,8 +77,6 @@
             </div>
         </aside>
     </div>
-@endunless
-
 @stack('scripts')
 
 </body>

@@ -3,13 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Canton;
 use App\Models\Company;
+use App\Models\Country;
+use App\Models\District;
 use App\Models\Permission;
+use App\Models\Province;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class CustomerOnboardingAndBranchesTest extends TestCase
@@ -39,6 +45,65 @@ class CustomerOnboardingAndBranchesTest extends TestCase
         $this->assertSame($branch->id, session('active_branch_id'));
         $this->assertTrue($user->fresh()->companies()->whereKey($company->id)->exists());
         $this->assertTrue($user->fresh()->branches()->whereKey($branch->id)->exists());
+    }
+
+    public function test_onboarding_loads_costa_rica_and_its_seven_provinces_before_company_exists(): void
+    {
+        $country = Country::create([
+            'name' => 'Costa Rica', 'iso2' => 'CR', 'iso3' => 'CRI', 'phone_code' => '+506',
+            'currency' => 'CRC', 'currency_symbol' => '₡', 'is_default' => true, 'is_active' => true,
+        ]);
+
+        foreach (['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'] as $index => $name) {
+            Province::create(['country_id' => $country->id, 'code' => (string) ($index + 1), 'name' => $name, 'is_active' => true]);
+        }
+
+        $user = User::factory()->create(['is_active' => true]);
+        $response = $this->actingAs($user)->get(route('empresa.create'));
+
+        $response->assertOk()->assertSee('Costa Rica')->assertSee('San José')->assertSee('Limón');
+        $this->assertSame(7, $response->viewData('provinces')->count());
+        $this->assertSame($country->id, $response->viewData('provinces')->first()->country_id);
+    }
+
+    public function test_onboarding_stores_the_company_logo_on_the_public_disk(): void
+    {
+        Storage::fake('public');
+        Permission::create(['name' => 'dashboard.ver', 'label' => 'Dashboard', 'module' => 'Dashboard', 'is_active' => true]);
+        $user = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($user)->post(route('empresa.store'), [
+            'trade_name' => 'Empresa con Logo',
+            'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica',
+            'branch_name' => 'Principal',
+            'branch_code' => 'PRINCIPAL',
+            'logo' => UploadedFile::fake()->image('logo.png', 120, 120),
+        ])->assertRedirect(route('dashboard'));
+
+        $company = Company::where('trade_name', 'Empresa con Logo')->firstOrFail();
+        $this->assertNotEmpty($company->logo);
+        $this->assertStringStartsWith('companies/', $company->logo);
+        Storage::disk('public')->assertExists($company->logo);
+    }
+
+    public function test_authenticated_onboarding_can_use_the_complete_geographic_cascade(): void
+    {
+        $country = Country::create([
+            'name' => 'Costa Rica', 'iso2' => 'CR', 'iso3' => 'CRI', 'phone_code' => '+506',
+            'currency' => 'CRC', 'currency_symbol' => '₡', 'is_default' => true, 'is_active' => true,
+        ]);
+        $province = Province::create(['country_id' => $country->id, 'code' => '1', 'name' => 'San José', 'is_active' => true]);
+        $canton = Canton::create(['province_id' => $province->id, 'code' => '101', 'name' => 'San José', 'is_active' => true]);
+        $district = District::create(['province_id' => $province->id, 'canton_id' => $canton->id, 'code' => '10101', 'name' => 'Carmen', 'is_active' => true]);
+        $user = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($user)->getJson(route('ubicaciones.provincias', $country))
+            ->assertOk()->assertExactJson([['id' => $province->id, 'name' => 'San José']]);
+        $this->getJson(route('ubicaciones.cantones', $province))
+            ->assertOk()->assertExactJson([['id' => $canton->id, 'name' => 'San José']]);
+        $this->getJson(route('ubicaciones.distritos', $canton))
+            ->assertOk()->assertExactJson([['id' => $district->id, 'name' => 'Carmen']]);
     }
 
     public function test_login_routes_platform_admin_to_master_panel_and_customer_to_onboarding(): void

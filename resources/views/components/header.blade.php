@@ -1,5 +1,18 @@
 @php
     $headerCompany = \App\Models\Company::find(session('active_company_id'));
+    $headerLogoPath = ltrim(str_replace('\\', '/', trim((string) ($headerCompany?->logo ?? ''))), '/');
+    $headerLogoSegments = array_values(array_filter(explode('/', $headerLogoPath), fn ($segment) => $segment !== ''));
+    $headerLogoPathIsSafe = $headerLogoSegments !== [] && ! in_array('..', $headerLogoSegments, true);
+    $headerPublicLogoPath = $headerLogoPathIsSafe
+        ? public_path('storage/'.$headerLogoPath)
+        : null;
+    $headerHasLogo = $headerLogoPath !== ''
+        && $headerLogoPathIsSafe
+        && \Illuminate\Support\Facades\Storage::disk('public')->exists($headerLogoPath)
+        && is_file($headerPublicLogoPath);
+    $headerLogoUrl = $headerHasLogo
+        ? request()->getBaseUrl().'/storage/'.implode('/', array_map('rawurlencode', $headerLogoSegments))
+        : null;
     $headerBranches = auth()->user()
         ->branches()
         ->where('branches.company_id', session('active_company_id'))
@@ -22,10 +35,25 @@
     {{-- IDENTIDAD --}}
     <div class="flex min-w-0 items-center gap-2.5">
 
-        <img
-            src="{{ asset('images/logo-mvs-corto.png') }}"
-            alt="MVS Commerce"
-            class="h-8 w-8 shrink-0 rounded-lg object-contain">
+        @if($headerHasLogo)
+            <img
+                src="{{ $headerLogoUrl }}"
+                alt="Logo de {{ $headerCompany->trade_name }}"
+                onerror="this.hidden=true; this.nextElementSibling.hidden=false"
+                class="h-9 w-9 shrink-0 rounded-lg border border-slate-200 bg-white object-contain">
+            <span
+                hidden
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-sm font-bold text-slate-700"
+                aria-label="Empresa {{ $headerCompany->trade_name }}">
+                {{ mb_strtoupper(mb_substr(trim($headerCompany->trade_name), 0, 1)) }}
+            </span>
+        @else
+            <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-sm font-bold text-slate-700"
+                aria-label="Empresa {{ $headerCompany?->trade_name ?? 'sin seleccionar' }}">
+                {{ mb_strtoupper(mb_substr(trim($headerCompany?->trade_name ?? 'E'), 0, 1)) }}
+            </span>
+        @endif
 
         <div class="min-w-0 leading-tight">
 
@@ -43,6 +71,10 @@
 
     {{-- ACCIONES --}}
     <div class="flex shrink-0 items-center gap-2">
+
+        <span class="hidden border-r border-slate-200 pr-3 text-xs font-semibold text-slate-500 lg:inline">
+            MVS Commerce
+        </span>
 
         @can('compras.recepcion.verificar')
             <a href="{{ route('purchase-verifications.index') }}" class="relative flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100" title="Verificaciones de mercadería" aria-label="Verificaciones pendientes: {{ $pendingReceptionCount }}">

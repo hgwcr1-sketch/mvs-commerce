@@ -357,7 +357,7 @@
     <div id="pos-sticky-bar"
          x-cloak
          x-show="cart.length > 0 && !checkout.open && !orderRequest.open && !suspended.open && !imageModal.open && !quickCustomer.open && !cameraScannerOpen"
-         class="fixed inset-x-0 bottom-0 z-[90] border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.18)] transition-transform duration-200 lg:hidden"
+         class="fixed inset-x-0 bottom-14 z-[39] border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.18)] transition-transform duration-200 lg:hidden"
          style="padding-bottom: env(safe-area-inset-bottom);">
 
         <div class="flex items-center justify-between gap-3 px-4 py-3">

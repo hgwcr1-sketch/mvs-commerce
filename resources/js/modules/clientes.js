@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canton = document.getElementById('canton_id');
     const district = document.getElementById('district_id');
 
-    if (!country) return;
+    if (!country || !province || !canton || !district) return;
 
     function fillSelect(select, items, placeholder = 'Seleccione...') {
 
@@ -31,7 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!this.value) return;
 
-        const response = await fetch(`/ubicaciones/provincias/${this.value}`);
+        const response = await fetch(`/ubicaciones/provincias/${this.value}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) return;
 
         const data = await response.json();
 
@@ -46,7 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!this.value) return;
 
-        const response = await fetch(`/ubicaciones/cantones/${this.value}`);
+        const response = await fetch(`/ubicaciones/cantones/${this.value}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) return;
 
         const data = await response.json();
 
@@ -60,7 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!this.value) return;
 
-        const response = await fetch(`/ubicaciones/distritos/${this.value}`);
+        const response = await fetch(`/ubicaciones/distritos/${this.value}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) return;
 
         const data = await response.json();
 
