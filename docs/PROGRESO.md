@@ -978,6 +978,13 @@ Evidencia: `PlatformAdminTest`, `CompanyLicenseTest` y `M02PlatformTenantListTes
 
 Evidencia: `M10PlatformAuditSecurityTest` + M01/Platform Admin/módulos (24 pruebas, 122 aserciones). **M11 siguiente.**
 
+### M11 — UX responsive: COMPLETADO
+
+- Dashboard, alta comercial, ficha y onboarding usan grids mobile-first, controles táctiles de 44 px, tablas con scroll interno y acciones diferenciadas por responsabilidad.
+- Verificación conceptual 360/768/1280 y build Vite correctos.
+
+Evidencia: regresión UI Panel/onboarding/navegación (14 pruebas, 66 aserciones) y `npm run build`. **M12 siguiente.**
+
 ---
 
 ## Puesta en Producción
