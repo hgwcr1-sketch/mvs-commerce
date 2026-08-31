@@ -964,6 +964,13 @@ Evidencia: `CompanyModuleAccessTest` + regresión M01/roles/navegación (27 prue
 
 Evidencia: `CompanyLicenseTest` + M01 + `PlatformAdminTest` (21 pruebas, 116 aserciones). **M09 siguiente.**
 
+### M09 — Ficha administrativa del tenant: COMPLETADO
+
+- Se auditó y reutilizó la ficha global existente: licencia/fechas/historial, módulos, propietario/usuarios, sucursales y consumo de límites.
+- Las acciones contractuales permanecen en una sola vista Platform Admin sin entrar en la operación del tenant.
+
+Evidencia: `PlatformAdminTest`, `CompanyLicenseTest` y `M02PlatformTenantListTest` (17 pruebas, 98 aserciones). **M10 siguiente.**
+
 ---
 
 ## Puesta en Producción
