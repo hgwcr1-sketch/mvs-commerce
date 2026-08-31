@@ -923,7 +923,15 @@ Evidencia: `M02PlatformTenantListTest` + regresión `PlatformAdminTest` y `M01Sa
 - No solicita ni crea identificación fiscal, dirección, sucursal, caja u otros datos operativos; éstos quedan para el onboarding del propietario.
 - Reutiliza roles/permisos, licencia y módulos existentes dentro de una sola transacción.
 
-Evidencia: `M03CommercialTenantOnboardingTest` + regresión M01/Platform Admin (19 pruebas, 113 aserciones). **M04 siguiente.**
+Evidencia: `M03CommercialTenantOnboardingTest` + regresión M01/Platform Admin (19 pruebas, 113 aserciones).
+
+### M04 — Invitación y activación del propietario: COMPLETADO
+
+- El alta comercial envía una invitación personal mediante el broker de contraseñas: token almacenado como hash, expirable y de un uso.
+- Al definir su clave se activa únicamente la cuenta tenant invitada; nunca obtiene `is_platform_admin` y el Panel Maestro continúa prohibido.
+- Tokens inválidos no activan la cuenta.
+
+Evidencia: `M04TenantOwnerInvitationTest` + regresión M03/onboarding (9 pruebas, 62 aserciones). **M05 siguiente.**
 
 ---
 

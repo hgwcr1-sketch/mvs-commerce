@@ -53,6 +53,8 @@ class ResetPasswordController extends Controller
                 $user->forceFill([
                     'password' => Hash::make($password),
                     'remember_token' => Str::random(60),
+                    'is_active' => $user->tenant_invited_at && ! $user->tenant_activated_at ? true : $user->is_active,
+                    'tenant_activated_at' => $user->tenant_invited_at && ! $user->tenant_activated_at ? now() : $user->tenant_activated_at,
                 ])->save();
 
                 event(new PasswordReset($user));

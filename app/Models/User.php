@@ -18,6 +18,8 @@ use Illuminate\Notifications\Notifiable;
     'password',
     'is_active',
     'is_platform_admin',
+    'tenant_invited_at',
+    'tenant_activated_at',
     'last_login_at',
 ])]
 
@@ -37,6 +39,8 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
             'is_platform_admin' => 'boolean',
+            'tenant_invited_at' => 'datetime',
+            'tenant_activated_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

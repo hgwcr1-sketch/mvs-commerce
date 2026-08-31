@@ -8,9 +8,11 @@ use App\Models\CompanyAllowance;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\TenantOwnerInvitation;
 use App\Services\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -215,6 +217,8 @@ class CompanyProvisioner
                 'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'], 'created_by' => $actor->id,
             ]);
             $this->companyLicenseService->updateModules($company, $actor, $moduleKeys);
+            $owner->update(['tenant_invited_at' => now()]);
+            $owner->notify(new TenantOwnerInvitation(Password::broker()->createToken($owner)));
 
             return $company->fresh();
         });
