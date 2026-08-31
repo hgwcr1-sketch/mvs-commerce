@@ -45,7 +45,16 @@ Incluye:
 - Duplicados: identificación exacta, teléfono/móvil normalizados y correo case-insensitive, tanto contra clientes activos/eliminados de la empresa como dentro del archivo. La misma identidad puede existir en otra empresa.
 - Clientes es empresarial en el modelo real y no tiene `branch_id`; no se inventó asociación por sucursal.
 - Evidencia: `CustomerImportP32Test` 6/6, 42 aserciones; regresión con `DataExportTest`, `DataCenterShellTest` y `CustomerCompanyIsolationTest`: 23/23, 139 aserciones.
-- Pendiente sin implementar: P33 reutilizará catálogo/códigos/precios e inventario opcional; P34/P35 deben definir histórico de ventas sin afectar caja/stock; P36 debe distinguir inventario inicial de Kardex histórico sin alterar stock actual.
+- Pendiente sin implementar: P34/P35 deben definir histórico de ventas sin afectar caja/stock; P36 debe distinguir inventario inicial de Kardex histórico sin alterar stock actual.
+
+#### P33 — Migración de Productos: COMPLETADO ADELANTADAMENTE
+
+- Reutiliza Centro de Datos, PhpSpreadsheet y `DataExportService`; añade plantilla XLSX e importación XLSX/XLS/CSV con preview y confirmación explícita.
+- Valida por fila/campo, resuelve categorías, marcas y unidades dentro de `company_id`, y revalida antes de confirmar. Códigos internos y códigos de barras respetan las restricciones únicas reales de la base de datos, incluso ante concurrencia.
+- Costos, precios e impuesto se validan como cadenas decimales de máximo dos decimales; no se calculan ni persisten con aritmética `float`.
+- La confirmación usa una transacción única y solo crea catálogo/productos/códigos. No crea `branch_product`, no modifica existencias y no genera Kardex: stock inicial e histórico pertenecen a P36.
+- Evidencia: `ProductImportP33Test` 6/6, 62 aserciones; regresión con exportación, Centro de Datos, Inventario, Compras y navegación responsive: 38/38, 240 aserciones.
+- Preparación sin implementar: P34/P35 podrán resolver los productos importados por código/barcode; P36 conserva la responsabilidad exclusiva de stock inicial y Kardex histórico por sucursal.
 
 ---
 
@@ -1017,7 +1026,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 ### Portal de Clientes — P01–P20: COMPLETADO
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos. P31/P32 quedaron completados adelantadamente por autorización expresa; P33–P40 conservan sus IDs y posición posterior a P25–P30. Fidelización pendiente solo P41–P48 si sigue pendiente. Reconciliación documental aprobada: **P21 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P22 – Onboarding empresa + primera sucursal + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`); **P23 – Auditoría de transferencias existentes, COMPLETADO** y **P24 – pruebas/decisión de transferencias, COMPLETADO**. **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos. P31–P33 quedaron completados adelantadamente por autorización expresa; P34–P40 conservan sus IDs y posición posterior a P25–P30. Fidelización pendiente solo P41–P48 si sigue pendiente. Reconciliación documental aprobada: **P21 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P22 – Onboarding empresa + primera sucursal + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`); **P23 – Auditoría de transferencias existentes, COMPLETADO** y **P24 – pruebas/decisión de transferencias, COMPLETADO**. **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 **Próximos bloques en orden (según Excel único):**
 - **P10 — COMPLETADO (`b383aad`)** — Patrón UI reutilizable `x-tabs`, mobile-first, scroll horizontal controlado y targets ≥44px.

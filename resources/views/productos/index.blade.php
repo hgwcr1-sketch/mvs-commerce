@@ -9,12 +9,19 @@
 <div class="space-y-6" x-data="productosPage()" x-init="init()">
 
     {{-- ENCABEZADO --}}
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 class="text-xl font-bold text-slate-800 sm:text-2xl">Productos</h1>
-        <a href="{{ route('productos.create') }}"
-           class="shrink-0 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
-            + Nuevo
-        </a>
+        <div class="grid grid-cols-1 gap-2 sm:flex">
+            @can('productos.crear')
+                <a href="{{ route('importaciones.productos') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-600 bg-white px-4 py-2 text-sm font-semibold text-blue-700">Importar</a>
+            @endcan
+            @can('reportes.exportar')
+                @can('productos.ver')
+                    <a href="{{ route('data-center.exports.download', ['products', 'xlsx']) }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Exportar Excel</a>
+                @endcan
+            @endcan
+            <a href="{{ route('productos.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">+ Nuevo</a>
+        </div>
     </div>
 
     {{-- TARJETAS ESTADÍSTICAS --}}

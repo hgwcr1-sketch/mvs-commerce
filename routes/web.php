@@ -798,6 +798,19 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:clientes.crear')
         ->name('importaciones.clientes.import');
 
+    Route::get('/importar-datos/productos', [DataImportController::class, 'products'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos');
+    Route::get('/importar-datos/productos/plantilla', [DataImportController::class, 'productTemplate'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.template');
+    Route::post('/importar-datos/productos/revisar', [DataImportController::class, 'productPreview'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.preview');
+    Route::post('/importar-datos/productos/confirmar', [DataImportController::class, 'productImport'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.import');
+
     Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
         ->middleware('permission:inventario.ver')
         ->name('importaciones.inventario');

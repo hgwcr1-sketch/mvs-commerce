@@ -77,7 +77,7 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 |---|---|---|---|
 | P31 | Auditar importadores/exportadores/plantillas existentes | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Reutilizados Centro de Datos, PhpSpreadsheet, exportador D09, patrón preview/confirmación de Inventario, importadores de Compras y `PhoneNumberService`; no se duplicó exportación. |
 | P32 | Importar clientes desde Excel con deduplicación | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Plantilla XLSX, importación XLSX/XLS/CSV, preview, errores fila/campo, deduplicación por identificación/teléfono/correo, aislamiento empresarial y rollback transaccional. `CustomerImportP32Test` 6/6, 42 aserciones; regresión relacionada 23/23, 139 aserciones. |
-| P33 | Importar productos, códigos, precios y catálogo; inventario opcional | **PENDIENTE** | Errores por fila y plantilla |
+| P33 | Importar productos, códigos, precios y catálogo; inventario opcional | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Plantilla e importación XLSX/XLS/CSV con preview, errores fila/campo, catálogo empresarial, códigos seguros, precios decimales y rollback; no modifica existencias. |
 | P34 | Importar encabezados de facturas: fecha, cliente, sucursal, totales y origen | **PENDIENTE** | Histórico sin afectar caja |
 | P35 | Importar detalle por artículo + cliente + sucursal + fecha | **PENDIENTE** | Última compra por cliente |
 | P36 | Importar inventario inicial y Kardex histórico por sucursal | **PENDIENTE** | Modo histórico no altera stock actual |
@@ -124,9 +124,9 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 - **P21 y P22: COMPLETADOS en a60425f** – P21 Separación Platform/Tenant y P22 Onboarding empresa + primera sucursal + primer administrador.
 - **P23: COMPLETADO** – Auditoría de transferencias existentes: implementación preservada, stock/kardex centralizados en `InventoryPostingService::postTransfer`; sin reconstruir.
 - **P24: COMPLETADO** – Prueba origen/destino, stock (4 decimales), Kardex y permisos; decisión: transferencia instantánea (no envío/recepción). `InventoryTransferP24Test` 7/7, 54 aserciones; `git diff --check` limpio; Pint focalizado limpio.
-- **P31 y P32: COMPLETADOS ADELANTADAMENTE por autorización expresa** – infraestructura común identificada/reutilizada y Clientes completo con plantilla, importación, preview, validación, deduplicación, exportación y pruebas. Esto no cambia el orden pendiente: P25 sigue siendo el siguiente bloque oficial; P33–P36 no se implementaron.
+- **P31–P33: COMPLETADOS ADELANTADAMENTE por autorización expresa** – infraestructura común identificada/reutilizada; Clientes y Productos quedan con plantilla, importación, preview, validación, deduplicación y exportación. P33 es estrictamente catálogo: no crea `branch_product`, no cambia stock ni genera Kardex. Esto no cambia el orden pendiente: P25 sigue siendo el siguiente bloque oficial; P34–P36 no se implementaron.
 - **P09A–P09D: COMPLETADOS** – conservan esos IDs exactos.
-- **Migración:** P31/P32 quedaron completados adelantadamente por autorización expresa; P33–P40 conservan sus IDs y su posición posterior a P25–P30.
+- **Migración:** P31–P33 quedaron completados adelantadamente por autorización expresa; P34–P40 conservan sus IDs y su posición posterior a P25–P30.
 - **Fidelización:** solo pendientes reales P41–P48 tras auditoría (no reconstruir F01–F18, F28, F29 ya completados).
 
 ---
@@ -169,4 +169,5 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 - 2026-08-29 (noche): **P15 completado** – beneficio configurable como puntos, porcentaje o descuento fijo con valor decimal, validación doble HTTP/servicio, aislamiento e idempotencia; descuentos quedan pendientes hasta P16.
 - 2026-08-29 (noche): **P20 completado** – identidad visual de empresa aplicada al Portal y tarjeta QR, manteniendo marca MVS; se detecta una inconsistencia documental posterior a P20.
 - 2026-08-27: **P31/P32 completados adelantadamente por instrucción expresa** – auditoría breve y reutilización de infraestructura existente; Clientes queda con plantilla/importación/exportación, preview, errores por fila/campo, deduplicación empresarial y confirmación atómica. P25 conserva el siguiente lugar oficial; P33–P36 siguen pendientes.
+- 2026-08-30: **P33 completado adelantadamente por instrucción expresa** – Productos queda con plantilla/importación XLSX/XLS/CSV/exportación, preview, errores fila/campo, resolución empresarial de categorías/marcas/unidades, códigos de barras seguros, decimales exactos y confirmación transaccional. No toca inventario; P34–P36 siguen pendientes y P25 conserva el siguiente lugar oficial.
 - 2026-08-29 (noche): **reconciliación documental P21–P23 aprobada** – se alinea el Markdown con el Excel único: P21 Separación Platform/Tenant y P22 Onboarding permanecen completados con evidencia `a60425f`; P23 Auditoría de transferencias queda como siguiente bloque pendiente. No cambia código, estados ni historial Git.

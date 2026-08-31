@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\InventoryImportService;
+use App\Services\Imports\ProductImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -13,6 +14,40 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataImportController extends Controller
 {
+    public function products()
+    {
+        return view('importaciones.productos');
+    }
+
+    public function productTemplate()
+    {
+        return $this->spreadsheetDownload(ProductImportService::HEADERS, 'plantilla_importacion_productos.xlsx', true, 'Productos');
+    }
+
+    public function productPreview(Request $request, ProductImportService $import)
+    {
+        $request->validate(['product_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $rows = $import->preview($request->file('product_file')->getRealPath(), $companyId);
+        session(['product_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
+
+        return view('importaciones.productos-preview', compact('rows'));
+    }
+
+    public function productImport(ProductImportService $import)
+    {
+        $preview = session('product_import_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.productos')->withErrors([
+                'product_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
+            ]);
+        }
+        $count = $import->confirm($preview, (int) session('active_company_id'));
+        session()->forget('product_import_preview');
+
+        return redirect()->route('productos.index')->with('success', "Se importaron {$count} productos correctamente.");
+    }
+
     public function customers()
     {
         return view('importaciones.clientes');

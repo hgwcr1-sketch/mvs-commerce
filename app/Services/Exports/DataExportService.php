@@ -41,13 +41,13 @@ class DataExportService
                 $product->internal_code, $product->name, $product->category?->name, $product->brand?->name,
                 $product->unit?->name, $product->barcode, $product->barcodes->where('is_active', true)->pluck('barcode')->join(' | '),
                 $product->cabys_code, $product->product_type, $product->cost, $product->sale_price,
-                $product->wholesale_price, $product->special_price, $product->tax_rate,
+                $product->wholesale_price, $product->special_price, $product->price_a, $product->price_b, $product->price_c, $product->tax_rate,
                 $product->minimum_stock, $product->maximum_stock, $product->is_active ? 'Sí' : 'No',
             ])->all();
 
         return [['Código', 'Nombre', 'Categoría', 'Marca', 'Unidad', 'Código de barras principal',
             'Códigos de barras adicionales', 'CABYS', 'Tipo', 'Costo', 'Precio de venta', 'Precio mayorista',
-            'Precio especial', 'Impuesto %', 'Stock mínimo', 'Stock máximo', 'Activo'], $rows];
+            'Precio especial', 'Precio A', 'Precio B', 'Precio C', 'Impuesto %', 'Stock mínimo', 'Stock máximo', 'Activo'], $rows];
     }
 
     private function customers(int $companyId): array
