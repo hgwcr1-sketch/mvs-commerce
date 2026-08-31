@@ -93,6 +93,7 @@ class PlatformAdminTest extends TestCase
         $this->assertFalse($tenantAdmin->fresh()->is_platform_admin);
         $this->assertTrue($tenantAdmin->companies()->whereKey($company->id)->exists());
     }
+
     public function test_platform_access_can_be_revoked_even_from_a_tenant_account(): void
     {
         [$company, , $tenantAdmin] = $this->tenant('Empresa Tenant');
@@ -120,7 +121,7 @@ class PlatformAdminTest extends TestCase
         $this->assertFalse($firstUser->companies()->whereKey($second->id)->exists());
     }
 
-    public function test_company_detail_is_scoped_and_rejects_cross_company_branch_or_user_updates(): void
+    public function test_company_detail_is_scoped_and_operational_data_is_read_only(): void
     {
         $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
         [$first, $firstBranch, $firstUser] = $this->tenant('Empresa Uno');
@@ -129,28 +130,23 @@ class PlatformAdminTest extends TestCase
         $this->actingAs($admin)->get(route('platform.companies.show', $first))
             ->assertOk()->assertSee($firstBranch->name)->assertSee($firstUser->email)
             ->assertDontSee($secondBranch->name)->assertDontSee($secondUser->email);
-        $this->patch(route('platform.branches.update', [$first, $secondBranch]), ['is_active' => 0])->assertNotFound();
-        $this->patch(route('platform.users.update', [$first, $secondUser]), ['is_active' => 0])->assertNotFound();
+        $this->assertFalse(app('router')->has('platform.branches.update'));
+        $this->assertFalse(app('router')->has('platform.users.update'));
         $this->assertTrue($secondBranch->fresh()->is_active);
         $this->assertTrue($secondUser->fresh()->is_active);
     }
 
-    public function test_platform_admin_can_update_basic_company_branch_and_user_status(): void
+    public function test_platform_admin_cannot_update_operational_company_branch_or_user_data(): void
     {
         $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
         [$company, $branch, $user] = $this->tenant('Empresa Uno');
 
-        $this->actingAs($admin)->patch(route('platform.companies.update', $company), [
-            'trade_name' => 'Empresa Renovada', 'legal_name' => 'Empresa Renovada S.A.', 'email' => 'tenant@example.test',
-            'phone' => '2222-2222', 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => 0,
-        ])->assertRedirect();
-        $this->patch(route('platform.branches.update', [$company, $branch]), ['is_active' => 0])->assertRedirect();
-        $this->patch(route('platform.users.update', [$company, $user]), ['is_active' => 0])->assertRedirect();
-
-        $this->assertSame('Empresa Renovada', $company->fresh()->trade_name);
-        $this->assertFalse($company->fresh()->is_active);
-        $this->assertFalse($branch->fresh()->is_active);
-        $this->assertFalse($user->fresh()->is_active);
+        $this->actingAs($admin)->get(route('platform.companies.show', $company))->assertOk()
+            ->assertSee('solo lectura')->assertDontSee('Guardar configuración');
+        $this->assertFalse(app('router')->has('platform.companies.update'));
+        $this->assertTrue($company->fresh()->is_active);
+        $this->assertTrue($branch->fresh()->is_active);
+        $this->assertTrue($user->fresh()->is_active);
     }
 
     public function test_master_panel_is_mobile_first_and_explains_module_permission_separation(): void
@@ -163,7 +159,7 @@ class PlatformAdminTest extends TestCase
             ->assertSee('grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3', false)
             ->assertSee('min-h-11', false);
         $this->get(route('platform.companies.show', $company))->assertOk()
-            ->assertSee('overflow-x-auto', false)->assertSee('Habilitar un módulo no concede permisos');
+            ->assertSee('overflow-x-auto', false)->assertSee('Módulos del contrato efectivo');
     }
 
     private function tenant(string $name): array

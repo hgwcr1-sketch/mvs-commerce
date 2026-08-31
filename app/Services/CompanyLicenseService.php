@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyLicense;
+use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +99,44 @@ class CompanyLicenseService
                 ],
                 'notes' => 'Contrato de módulos actualizado.',
             ]);
+        });
+    }
+
+    public function savePlan(?LicensePlan $plan, User $actor, array $attributes): LicensePlan
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+
+        $attributes['modules'] = array_values(array_unique($attributes['modules']));
+        $attributes[$plan ? 'updated_by' : 'created_by'] = $actor->id;
+
+        if ($plan) {
+            $plan->update($attributes);
+
+            return $plan->fresh();
+        }
+
+        return LicensePlan::create($attributes);
+    }
+
+    public function applyPlan(Company $company, LicensePlan $plan, User $actor, array $overrides = []): CompanyLicense
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+        abort_unless($plan->is_active, 422);
+
+        $contract = array_merge([
+            'license_plan_id' => $plan->id,
+            'plan' => $plan->name,
+            'branch_limit' => $plan->branch_limit,
+            'user_limit' => $plan->user_limit,
+        ], $overrides);
+        $status = $contract['status'] ?? $this->ensure($company)->status;
+        unset($contract['status'], $contract['modules']);
+
+        return DB::transaction(function () use ($company, $plan, $actor, $contract, $status, $overrides) {
+            $license = $this->transition($this->ensure($company), $status, $actor, $overrides['notes'] ?? null, 'plan_applied', $contract);
+            $this->updateModules($company, $actor, $overrides['modules'] ?? $plan->modules);
+
+            return $license->fresh();
         });
     }
 

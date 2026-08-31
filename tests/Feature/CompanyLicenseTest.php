@@ -67,7 +67,7 @@ class CompanyLicenseTest extends TestCase
     {
         [$company] = $this->tenant();
         $admin = User::factory()->create(['is_active' => true, 'is_platform_admin' => true]);
-        $this->actingAs($admin)->get(route('platform.companies.show', $company))->assertOk()->assertSee('Licencia SaaS')->assertSee('Módulos contratados')->assertSee('grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3', false)->assertSee('overflow-x-auto', false);
+        $this->actingAs($admin)->get(route('platform.companies.show', $company))->assertOk()->assertSee('Contrato efectivo')->assertSee('Módulos del contrato efectivo')->assertSee('grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3', false)->assertSee('overflow-x-auto', false);
     }
 
     private function tenant(string $name = 'Empresa'): array

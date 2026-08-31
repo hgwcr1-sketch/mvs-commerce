@@ -164,9 +164,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::get('/empresas-nueva', [PlatformAdminController::class, 'createCompany'])->name('companies.create');
     Route::post('/empresas', [PlatformAdminController::class, 'storeCompany'])->name('companies.store');
     Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
-    Route::patch('/empresas/{company}', [PlatformAdminController::class, 'updateCompany'])->name('companies.update');
-    Route::patch('/empresas/{company}/sucursales/{branch}', [PlatformAdminController::class, 'updateBranch'])->name('branches.update');
-    Route::patch('/empresas/{company}/usuarios/{user}', [PlatformAdminController::class, 'updateUser'])->name('users.update');
+    Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
 });

@@ -993,6 +993,15 @@ Evidencia: regresión UI Panel/onboarding/navegación (14 pruebas, 66 aserciones
 
 **Cronograma M02–M12 cerrado técnicamente. PAUSA antes del despliegue.**
 
+### M13 — Licenciamiento comercial y planes: COMPLETADO
+
+- `license_plans` modela plantillas comerciales con límites y módulos; `company_licenses` conserva el contrato efectivo y referencia opcional a la plantilla.
+- Aplicar un plan copia valores. Overrides por tenant (`branch_limit`, `user_limit`, módulos y referencia contractual) no cambian la plantilla ni otros contratos.
+- Platform Admin administra plantillas/contratos; tenant bloqueado en HTTP y servicio.
+- Corrección M12: datos fiscales y operativos, sucursales y usuarios son solo lectura en Panel Maestro; se retiraron sus rutas de mutación. El alta exige un propietario tenant distinto y ese propietario completa onboarding.
+
+Evidencia focal/regresión: 43 pruebas, 245 aserciones. **M14 siguiente.**
+
 ---
 
 ## Puesta en Producción

@@ -867,3 +867,5 @@ Roles y permisos empresariales no conceden `is_platform_admin`. El tenant consum
 
 El flujo completo M02–M12 separa alta comercial y onboarding operativo: MVS crea propietario/contrato e invitación segura; el propietario activa su cuenta y completa la misma empresa y primera sucursal. El Panel Maestro concentra supervisión, ciclo de vida, capacidad y trazabilidad, mientras el tenant queda limitado por licencia, módulos y `company_id`. Ningún cierre del cronograma autoriza despliegue automático.
 
+M13 añade `license_plans` como catálogo de plantillas. `CompanyLicense.license_plan_id` conserva la referencia opcional y los campos de `company_licenses` siguen siendo el contrato efectivo/snapshot. `CompanyLicenseService::applyPlan()` copia valores y módulos; los overrides posteriores pertenecen solo a esa empresa. La ficha maestra presenta datos operativos en solo lectura y ya no expone mutaciones de empresa, sucursales o usuarios.
+

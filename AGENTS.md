@@ -248,7 +248,7 @@ Regla específica de Producción/Portal:
 
 ### `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`
 
-Fuente oficial del orden M00–M12 del Panel Maestro. El contrato SaaS (estado, límites y módulos) pertenece a Platform Admin; el tenant solo opera dentro de las capacidades contratadas y nunca administra privilegios de plataforma.
+Fuente oficial del orden M00–M14 del Panel Maestro. El contrato SaaS (estado, límites, vigencias y módulos) pertenece a Platform Admin; el tenant solo opera dentro de las capacidades contratadas y nunca administra privilegios de plataforma. Un plan es una plantilla comercial y la licencia de cada tenant es su contrato efectivo independiente.
 
 Regla específica del Panel Maestro:
 

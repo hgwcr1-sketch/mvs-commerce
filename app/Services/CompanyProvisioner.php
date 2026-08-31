@@ -214,7 +214,9 @@ class CompanyProvisioner
             $company->users()->attach($owner->id, ['role_id' => $role->id]);
             CompanyAllowance::create(['user_id' => $owner->id, 'allowed_companies' => 1]);
             $this->companyLicenseService->updateContract($company, $actor, $contract['status'], $contract['notes'] ?? null, [
-                'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'], 'created_by' => $actor->id,
+                'license_plan_id' => $contract['license_plan_id'] ?? null,
+                'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'],
+                'user_limit' => $contract['user_limit'] ?? null, 'created_by' => $actor->id,
             ]);
             $this->companyLicenseService->updateModules($company, $actor, $moduleKeys);
             $owner->update(['tenant_invited_at' => now()]);

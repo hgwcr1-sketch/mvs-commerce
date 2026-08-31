@@ -10,7 +10,7 @@ class CompanyLicense extends Model
 
     public const OPERABLE = ['trial', 'active', 'grace'];
 
-    protected $fillable = ['company_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'notes', 'created_by', 'updated_by'];
+    protected $fillable = ['company_id', 'license_plan_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'notes', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
@@ -20,6 +20,11 @@ class CompanyLicense extends Model
     public function company()
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function planTemplate()
+    {
+        return $this->belongsTo(LicensePlan::class, 'license_plan_id');
     }
 
     public function events()

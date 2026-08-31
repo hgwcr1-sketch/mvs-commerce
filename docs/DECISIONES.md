@@ -308,6 +308,12 @@ Existe una licencia única por empresa. Su estado y vigencia gobiernan el acceso
 
 ---
 
+## D024 — Plan comercial como plantilla, licencia como contrato efectivo
+
+`license_plans` define valores comerciales reutilizables. Aplicar una plantilla copia referencia, límites y módulos a la licencia de una empresa; desde ese momento el contrato puede tener overrides sin mutar la plantilla ni contratos de otros tenants. Solo Platform Admin administra ambos niveles. Los datos fiscales, sucursales y usuarios son operación del propietario tenant y permanecen visibles pero no editables desde el Panel Maestro.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

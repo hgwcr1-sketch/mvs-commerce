@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanyLicense;
+use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
@@ -18,7 +19,10 @@ class PlatformAdminController extends Controller
 {
     public function createCompany(): View
     {
-        return view('platform.onboarding', ['moduleCatalog' => ModuleRegistry::MODULES]);
+        return view('platform.onboarding', [
+            'moduleCatalog' => ModuleRegistry::MODULES,
+            'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+        ]);
     }
 
     public function storeCompany(Request $request, CompanyProvisioner $provisioner): RedirectResponse
@@ -28,15 +32,22 @@ class PlatformAdminController extends Controller
             'owner.name' => ['required', 'string', 'max:255'],
             'owner.email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'owner.phone' => ['nullable', 'string', 'max:50'],
-            'plan' => ['required', 'string', 'max:80'], 'branch_limit' => ['required', 'integer', 'min:1'],
+            'license_plan_id' => ['nullable', Rule::exists('license_plans', 'id')->where('is_active', true)],
+            'plan' => ['required_without:license_plan_id', 'nullable', 'string', 'max:80'],
+            'branch_limit' => ['nullable', 'integer', 'min:1'], 'user_limit' => ['nullable', 'integer', 'min:1'],
             'status' => ['required', Rule::in(CompanyLicense::STATUSES)], 'notes' => ['nullable', 'string', 'max:2000'],
-            'modules' => ['required', 'array', 'min:1'], 'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))],
+            'modules' => ['nullable', 'array'], 'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))],
         ]);
 
-        $company = $provisioner->commercialOnboard(
-            $data['owner'], collect($data)->only(['trade_name', 'plan', 'branch_limit', 'status', 'notes'])->all(),
-            $data['modules'], $request->user(),
-        );
+        $plan = isset($data['license_plan_id']) ? LicensePlan::findOrFail($data['license_plan_id']) : null;
+        $contract = collect($data)->only(['trade_name', 'plan', 'branch_limit', 'user_limit', 'status', 'notes'])->all();
+        if ($plan) {
+            $contract = array_merge([
+                'license_plan_id' => $plan->id, 'plan' => $plan->name,
+                'branch_limit' => $plan->branch_limit, 'user_limit' => $plan->user_limit,
+            ], array_filter($contract, fn ($value) => $value !== null));
+        }
+        $company = $provisioner->commercialOnboard($data['owner'], $contract, $data['modules'] ?? $plan?->modules ?? [], $request->user());
 
         return redirect()->route('platform.companies.show', $company)->with('success', 'Tenant y contrato creados. El propietario debe completar su activación y onboarding.');
     }
@@ -71,6 +82,7 @@ class PlatformAdminController extends Controller
                 'users' => User::query()->count(),
             ],
             'moduleCatalog' => ModuleRegistry::MODULES,
+            'licensePlans' => LicensePlan::query()->orderBy('name')->get(),
         ]);
     }
 
@@ -81,12 +93,17 @@ class PlatformAdminController extends Controller
             'users' => fn ($query) => $query->orderBy('name')->withPivot('role_id'),
             'roles:id,company_id,name,is_active',
             'modules',
+            'owner',
         ]);
 
         $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
         $company->license->load(['events.actor']);
 
-        return view('platform.show', ['company' => $company, 'moduleCatalog' => ModuleRegistry::MODULES]);
+        return view('platform.show', [
+            'company' => $company,
+            'moduleCatalog' => ModuleRegistry::MODULES,
+            'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+        ]);
     }
 
     public function updateLicense(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
@@ -97,46 +114,36 @@ class PlatformAdminController extends Controller
             'next_renewal_at' => ['nullable', 'date'], 'grace_until' => ['nullable', 'date', 'after_or_equal:expires_at'],
             'user_limit' => ['nullable', 'integer', 'min:1'], 'branch_limit' => ['nullable', 'integer', 'min:1'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'license_plan_id' => ['nullable', Rule::exists('license_plans', 'id')->where('is_active', true)],
+            'apply_plan' => ['nullable', 'boolean'],
         ]);
         $status = $data['status'];
-        unset($data['status']);
-        $licenses->updateContract($company, $request->user(), $status, $data['notes'] ?? null, $data);
+        $planId = $data['license_plan_id'] ?? null;
+        unset($data['status'], $data['apply_plan'], $data['license_plan_id']);
+        if ($planId && $request->boolean('apply_plan')) {
+            $licenses->applyPlan($company, LicensePlan::findOrFail($planId), $request->user(), [...$data, 'status' => $status]);
+        } else {
+            $licenses->updateContract($company, $request->user(), $status, $data['notes'] ?? null, [...$data, 'license_plan_id' => $planId]);
+        }
 
         return back()->with('success', 'Licencia actualizada y registrada en el historial.');
     }
 
-    public function updateCompany(Request $request, Company $company): RedirectResponse
+    public function storePlan(Request $request, CompanyLicenseService $licenses): RedirectResponse
     {
         $data = $request->validate([
-            'trade_name' => ['required', 'string', 'max:150'],
-            'legal_name' => ['nullable', 'string', 'max:200'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'currency' => ['required', Rule::in(['CRC', 'USD'])],
-            'timezone' => ['required', 'timezone'],
+            'code' => ['required', 'alpha_dash', 'max:50', Rule::unique('license_plans', 'code')],
+            'name' => ['required', 'string', 'max:80'],
+            'branch_limit' => ['nullable', 'integer', 'min:1'],
+            'user_limit' => ['nullable', 'integer', 'min:1'],
+            'modules' => ['required', 'array', 'min:1'],
+            'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))],
             'is_active' => ['nullable', 'boolean'],
         ]);
         $data['is_active'] = $request->boolean('is_active');
-        $company->update($data);
+        $licenses->savePlan(null, $request->user(), $data);
 
-        return back()->with('success', 'Configuración de empresa actualizada.');
-    }
-
-    public function updateBranch(Request $request, Company $company, Branch $branch): RedirectResponse
-    {
-        abort_unless($branch->company_id === $company->id, 404);
-        $branch->update($request->validate(['is_active' => ['required', 'boolean']]));
-
-        return back()->with('success', 'Estado de sucursal actualizado.');
-    }
-
-    public function updateUser(Request $request, Company $company, User $user): RedirectResponse
-    {
-        abort_unless($user->companies()->whereKey($company->id)->exists(), 404);
-        abort_if($user->is($request->user()) && ! $request->boolean('is_active'), 422, 'No puede desactivar su propia cuenta maestra.');
-        $user->update($request->validate(['is_active' => ['required', 'boolean']]));
-
-        return back()->with('success', 'Estado de usuario actualizado.');
+        return back()->with('success', 'Plantilla comercial creada.');
     }
 
     public function updateModules(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
