@@ -223,4 +223,27 @@ class CompanyProvisioner
             return $company->fresh();
         });
     }
+
+    public function completeTenantOnboarding(User $owner, Company $company, array $companyData, string $branchName, string $branchCode): Company
+    {
+        abort_unless($company->owner_user_id === $owner->id && ! $company->branches()->exists(), 403);
+
+        return DB::transaction(function () use ($owner, $company, $companyData, $branchName, $branchCode) {
+            $company = Company::query()->lockForUpdate()->findOrFail($company->id);
+            if ($company->branches()->exists()) {
+                throw ValidationException::withMessages(['company' => 'El onboarding de esta empresa ya fue completado.']);
+            }
+
+            $company->update($companyData);
+            $this->paymentMethodProvisioner->provision($company);
+            $this->companyCashSettingsProvisioner->provision($company);
+            $this->cashDenominationProvisioner->provision($company);
+            $branch = Branch::create([
+                'company_id' => $company->id, 'name' => $branchName, 'code' => $branchCode, 'is_active' => true,
+            ]);
+            $owner->branches()->attach($branch->id);
+
+            return $company->fresh();
+        });
+    }
 }

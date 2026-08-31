@@ -16,7 +16,7 @@ class EnsureActiveCompany
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return $next($request);
         }
 
@@ -35,7 +35,7 @@ class EnsureActiveCompany
                 ->where('companies.id', $activeCompanyId)
                 ->exists();
 
-            if (!$hasAccess) {
+            if (! $hasAccess) {
                 session()->forget([
                     'active_company_id',
                     'active_branch_id',
@@ -49,14 +49,14 @@ class EnsureActiveCompany
          * Seleccionar automáticamente una empresa
          * si todavía no existe una válida.
          */
-        if (!$activeCompanyId) {
+        if (! $activeCompanyId) {
 
             $company = $user->companies()
                 ->where('companies.is_active', true)
                 ->orderBy('companies.id')
                 ->first();
 
-            if (!$company) {
+            if (! $company) {
                 session()->forget([
                     'active_company_id',
                     'active_branch_id',
@@ -85,7 +85,7 @@ class EnsureActiveCompany
                 ->where('branches.is_active', true)
                 ->exists();
 
-            if (!$hasBranchAccess) {
+            if (! $hasBranchAccess) {
                 session()->forget('active_branch_id');
                 $activeBranchId = null;
             }
@@ -95,7 +95,7 @@ class EnsureActiveCompany
          * Seleccionar automáticamente la primera
          * sucursal disponible del usuario.
          */
-        if (!$activeBranchId) {
+        if (! $activeBranchId) {
 
             $branch = $user->branches()
                 ->where('branches.company_id', $activeCompanyId)
@@ -107,6 +107,8 @@ class EnsureActiveCompany
                 session([
                     'active_branch_id' => $branch->id,
                 ]);
+            } elseif ($company = $user->ownedCompanies()->whereKey($activeCompanyId)->first()) {
+                return redirect()->route('empresa.create');
             }
         }
 

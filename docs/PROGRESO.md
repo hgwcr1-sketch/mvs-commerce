@@ -931,7 +931,15 @@ Evidencia: `M03CommercialTenantOnboardingTest` + regresión M01/Platform Admin (
 - Al definir su clave se activa únicamente la cuenta tenant invitada; nunca obtiene `is_platform_admin` y el Panel Maestro continúa prohibido.
 - Tokens inválidos no activan la cuenta.
 
-Evidencia: `M04TenantOwnerInvitationTest` + regresión M03/onboarding (9 pruebas, 62 aserciones). **M05 siguiente.**
+Evidencia: `M04TenantOwnerInvitationTest` + regresión M03/onboarding (9 pruebas, 62 aserciones).
+
+### M05 — Onboarding por el tenant: COMPLETADO
+
+- El propietario activado de un tenant comercial sin sucursal es dirigido obligatoriamente al formulario existente de empresa/primera sucursal.
+- Completa datos legales y operativos sobre el mismo tenant; no crea una segunda empresa ni altera plan, límite o módulos.
+- Se reutilizan aprovisionadores de métodos de pago, caja y denominaciones al finalizar.
+
+Evidencia: `M05TenantOnboardingTest` + regresión M04/onboarding/aprovisionamiento (14 pruebas, 78 aserciones). **M06 siguiente.**
 
 ---
 
