@@ -35,4 +35,8 @@ El repositorio prueba el resumen de conciliación mediante `MigrationP38P40Test`
 
 ### Corrección de instalación vacía PostgreSQL
 
-La FK nullable `products.brand_id → brands.id` se crea ahora en `2026_07_30_000006_create_brands_table.php`, inmediatamente después de crear `brands`; `2026_07_28_190132_create_products_table.php` conserva la columna sin intentar referenciar una tabla futura. Esto no altera datos ni lógica y mantiene las instalaciones existentes porque una migración ya registrada no vuelve a ejecutarse. `PostgreSqlFreshMigrationOrderTest` protege el orden y una migración completa debe validarse con `php artisan migrate --force` contra una base PostgreSQL nueva, aislada y desechable antes del despliegue.
+La FK nullable `products.brand_id → brands.id` se crea ahora en `2026_07_30_000006_create_brands_table.php`, inmediatamente después de crear `brands`; `2026_07_28_190132_create_products_table.php` conserva la columna sin intentar referenciar una tabla futura.
+
+La auditoría cronológica completa detectó además las cuatro FKs geográficas de `customers` hacia tablas posteriores. `2026_07_30_000001_create_customers_table.php` crea las columnas nullable y `2026_07_30_000005_create_districts_table.php`, una vez existentes `countries`, `provinces`, `cantons` y `districts`, agrega `country_id`, `province_id`, `canton_id` y `district_id` con las mismas reglas de actualización/eliminación. Su `down()` elimina primero esas FKs.
+
+Esto no altera datos ni lógica y mantiene las instalaciones existentes porque una migración ya registrada no vuelve a ejecutarse. `PostgreSqlFreshMigrationOrderTest` audita automáticamente todas las declaraciones `constrained()` y `references()->on()` contra el orden de creación, además de comprobar las relaciones diferidas. Una migración completa debe validarse con `php artisan migrate --force` contra una base PostgreSQL nueva, aislada y desechable antes del despliegue.

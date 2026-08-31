@@ -23,7 +23,7 @@ return new class extends Migration
 
             $table->enum('customer_type', [
                 'individual',
-                'company'
+                'company',
             ])->default('individual');
 
             /*
@@ -32,9 +32,9 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->string('identification',50)->nullable()->unique();
-            $table->string('name',150);
-            $table->string('commercial_name',150)->nullable();
+            $table->string('identification', 50)->nullable()->unique();
+            $table->string('name', 150);
+            $table->string('commercial_name', 150)->nullable();
 
             /*
             |--------------------------------------------------------------------------
@@ -42,26 +42,26 @@ return new class extends Migration
             |--------------------------------------------------------------------------
             */
 
-            $table->string('phone',30)->nullable();
-            $table->string('mobile',30)->nullable();
-            $table->string('email',150)->nullable();
+            $table->string('phone', 30)->nullable();
+            $table->string('mobile', 30)->nullable();
+            $table->string('email', 150)->nullable();
             /*
 |--------------------------------------------------------------------------
 | Facturación Electrónica Costa Rica
 |--------------------------------------------------------------------------
 */
 
-$table->enum('identification_type', [
-    '01', // Cédula Física
-    '02', // Cédula Jurídica
-    '03', // DIMEX
-    '04', // NITE
-    '05'  // Extranjero no domiciliado
-])->nullable();
+            $table->enum('identification_type', [
+                '01', // Cédula Física
+                '02', // Cédula Jurídica
+                '03', // DIMEX
+                '04', // NITE
+                '05',  // Extranjero no domiciliado
+            ])->nullable();
 
-$table->string('taxpayer_name', 255)->nullable();
+            $table->string('taxpayer_name', 255)->nullable();
 
-$table->boolean('accepts_email_invoice')->default(true);
+            $table->boolean('accepts_email_invoice')->default(true);
 
             /*
             |--------------------------------------------------------------------------
@@ -70,28 +70,16 @@ $table->boolean('accepts_email_invoice')->default(true);
             */
 
             $table->foreignId('country_id')
-                ->nullable()
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->nullable();
 
             $table->foreignId('province_id')
-                ->nullable()
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->nullable();
 
             $table->foreignId('canton_id')
-                ->nullable()
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->nullable();
 
             $table->foreignId('district_id')
-                ->nullable()
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->restrictOnDelete();
+                ->nullable();
 
             $table->text('address')->nullable();
 
@@ -101,7 +89,7 @@ $table->boolean('accepts_email_invoice')->default(true);
             |--------------------------------------------------------------------------
             */
 
-            $table->decimal('credit_limit',15,2)->default(0);
+            $table->decimal('credit_limit', 15, 2)->default(0);
 
             $table->unsignedInteger('credit_days')->default(0);
 
