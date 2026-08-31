@@ -947,7 +947,15 @@ Evidencia: `M05TenantOnboardingTest` + regresión M04/onboarding/aprovisionamien
 - Con límite 2 se permite la segunda sucursal y se bloquea la tercera; al aumentar a 3 desde Panel Maestro, el tenant puede crearla.
 - Reducir el límite no elimina ni desactiva sucursales existentes; solamente bloquea nuevas altas mientras el uso alcance el contrato.
 
-Evidencia: `CustomerOnboardingAndBranchesTest` + regresión de licencia/Platform Admin (16 pruebas, 85 aserciones). **M07 siguiente.**
+Evidencia: `CustomerOnboardingAndBranchesTest` + regresión de licencia/Platform Admin (16 pruebas, 85 aserciones).
+
+### M07 — Módulos licenciados: COMPLETADO
+
+- Se auditó y reutilizó el contrato `company_modules` integrado en `User::hasPermission()`, middleware y navegación.
+- Un módulo desactivado por Platform Admin desaparece y bloquea URL/capacidad aunque el rol conserve permisos; al reactivarlo vuelve a operar según esos mismos permisos.
+- El tenant no dispone de rutas para modificar su contrato.
+
+Evidencia: `CompanyModuleAccessTest` + regresión M01/roles/navegación (27 pruebas, 105 aserciones). **M08 siguiente.**
 
 ---
 

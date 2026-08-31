@@ -71,6 +71,19 @@ class CompanyModuleAccessTest extends TestCase
         $this->assertTrue($user->hasPermission('fidelidad.ver', $company));
     }
 
+    public function test_platform_can_disable_and_reenable_module_without_changing_tenant_permissions(): void
+    {
+        [$company, , $tenant] = $this->context(['pos.acceder']);
+        $platform = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
+
+        $this->actingAs($platform)->patch(route('platform.modules.update', $company), ['modules' => ['inventory']])->assertRedirect();
+        $this->assertFalse($tenant->hasPermission('pos.acceder', $company));
+
+        $this->patch(route('platform.modules.update', $company), ['modules' => ['sales', 'inventory']])->assertRedirect();
+        $this->assertTrue($tenant->hasPermission('pos.acceder', $company));
+        $this->assertTrue($tenant->roleInCompany($company)->permissions()->where('name', 'pos.acceder')->exists());
+    }
+
     private function context(array $permissions): array
     {
         $company = Company::create(['trade_name' => 'Module '.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
