@@ -45,7 +45,7 @@ Incluye:
 - Duplicados: identificación exacta, teléfono/móvil normalizados y correo case-insensitive, tanto contra clientes activos/eliminados de la empresa como dentro del archivo. La misma identidad puede existir en otra empresa.
 - Clientes es empresarial en el modelo real y no tiene `branch_id`; no se inventó asociación por sucursal.
 - Evidencia: `CustomerImportP32Test` 6/6, 42 aserciones; regresión con `DataExportTest`, `DataCenterShellTest` y `CustomerCompanyIsolationTest`: 23/23, 139 aserciones.
-- Pendiente sin implementar: P36 debe distinguir inventario inicial de Kardex histórico sin alterar stock actual.
+- Pendiente sin implementar: P37 mantiene saldos y movimientos históricos de Fidelización separados de inventario.
 
 #### P33 — Migración de Productos: COMPLETADO ADELANTADAMENTE
 
@@ -63,7 +63,16 @@ Incluye:
 - La confirmación transaccional escribe directamente `sales` y `sale_items` con `is_historical=true`, `cash_session_id=null`, saldo cero y sin invocar `PosSaleProcessor` ni servicios de caja, inventario, pagos, CxC, fidelización o comunicaciones.
 - Las anulaciones y devoluciones operativas rechazan ventas históricas, evitando efectos posteriores sobre inventario o puntos; sus acciones también se ocultan en el detalle.
 - Evidencia: `HistoricalSaleImportP34P35Test` 6/6, 64 aserciones; regresión de Ventas, anulaciones, devoluciones, reportes, exportación, Centro de Datos y P33: 55/55, 377 aserciones.
-- P36 permanece pendiente y es el único responsable de inventario inicial y Kardex histórico por sucursal.
+- P36 conserva la responsabilidad exclusiva de inventario inicial y Kardex histórico por sucursal; ver cierre siguiente.
+
+#### P36 — Migración de Inventario inicial y Kardex: COMPLETADO ADELANTADAMENTE
+
+- Plantilla única y exportación equivalente distinguen `saldo_inicial` de `movimiento_historico`; admite XLSX/XLS/CSV con preview, errores fila/campo y permisos de sucursal existentes.
+- Todas las cantidades usan cadenas decimales de cuatro posiciones. El historial valida entrada/salida, anterior+naturaleza+cantidad=nuevo y continuidad por producto+sucursal.
+- `inventory_migration_batches` registra empresa, usuario, clave de origen, filas y fecha; la clave única `company_id+source_key` impide duplicar un lote al reintentar.
+- La confirmación es transaccional. Saldo inicial usa locking en `InventoryPostingService`, fija `branch_product` y deja Kardex `initial_balance`; `historical_entry/exit` preserva fecha y trazabilidad sin alterar el stock actual.
+- No crea ventas, compras, caja, pagos, CxC ni fidelización. Evidencia: `InventoryMigrationP36Test` 6/6, 62 aserciones; regresión Inventario/Transferencias/Compras/Exportación/Centro de Datos/P33–P35: 51/51, 401 aserciones.
+- P37 queda pendiente y separado.
 
 ---
 

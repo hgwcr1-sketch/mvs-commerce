@@ -824,6 +824,15 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:inventario.ver')
         ->name('importaciones.inventario');
 
+    Route::get('/importar-datos/inventario-migracion', [DataImportController::class, 'inventoryMigration'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion');
+    Route::get('/importar-datos/inventario-migracion/plantilla', [DataImportController::class, 'inventoryMigrationTemplate'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.template');
+    Route::post('/importar-datos/inventario-migracion/revisar', [DataImportController::class, 'inventoryMigrationPreview'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.preview');
+    Route::post('/importar-datos/inventario-migracion/confirmar', [DataImportController::class, 'inventoryMigrationImport'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.import');
+
     Route::get('/importar-datos/inventario/plantilla', [DataImportController::class, 'inventoryTemplate'])
         ->middleware('permission:inventario.ver')
         ->name('importaciones.inventario.template');

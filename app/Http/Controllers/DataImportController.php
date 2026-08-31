@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
+use App\Services\Imports\InventoryMigrationImportService;
 use App\Services\Imports\ProductImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -15,6 +16,41 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataImportController extends Controller
 {
+    public function inventoryMigration()
+    {
+        return view('importaciones.inventario-migracion');
+    }
+
+    public function inventoryMigrationTemplate()
+    {
+        return $this->spreadsheetDownload(InventoryMigrationImportService::HEADERS, 'plantilla_migracion_inventario_p36.xlsx', true, 'Inventario P36');
+    }
+
+    public function inventoryMigrationPreview(Request $request, InventoryMigrationImportService $import)
+    {
+        $request->validate(['migration_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $allowedBranchIds = $this->allowedBranches($request, $companyId)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $rows = $import->preview($request->file('migration_file')->getRealPath(), $companyId, $allowedBranchIds);
+        session(['inventory_migration_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
+
+        return view('importaciones.inventario-migracion-preview', compact('rows'));
+    }
+
+    public function inventoryMigrationImport(Request $request, InventoryMigrationImportService $import)
+    {
+        $preview = session('inventory_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.inventario-migracion')->withErrors(['migration_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+        $companyId = (int) session('active_company_id');
+        $allowedBranchIds = $this->allowedBranches($request, $companyId)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $count = $import->confirm($preview, $companyId, (int) $request->user()->id, $allowedBranchIds);
+        session()->forget('inventory_migration_preview');
+
+        return redirect()->route('inventario.index')->with('success', "Se migraron {$count} filas de inventario correctamente.");
+    }
+
     public function historicalSales()
     {
         return view('importaciones.ventas-historicas');

@@ -21,6 +21,82 @@ class InventoryPostingService
 {
     private const QUANTITY_SCALE = 4;
 
+    public function postInitialMigration(
+        Branch $branch,
+        Product $product,
+        int $userId,
+        int $batchId,
+        string $quantity,
+        ?string $minimumStock,
+        ?string $maximumStock,
+        string $occurredAt,
+        ?string $notes,
+    ): InventoryMovement {
+        $this->assertMigrationContext($branch, $product, $quantity);
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $branch->id, 'product_id' => $product->id, 'stock' => '0.0000',
+            'minimum_stock' => $minimumStock, 'maximum_stock' => $maximumStock,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $inventory = DB::table('branch_product')->where('branch_id', $branch->id)
+            ->where('product_id', $product->id)->lockForUpdate()->first();
+        if ($inventory === null) {
+            throw ValidationException::withMessages(['inventario' => 'No se pudo bloquear el inventario de la sucursal.']);
+        }
+        $previous = $this->inventoryDecimal($inventory->stock);
+        DB::table('branch_product')->where('id', $inventory->id)->update([
+            'stock' => $quantity, 'minimum_stock' => $minimumStock, 'maximum_stock' => $maximumStock, 'updated_at' => now(),
+        ]);
+
+        return $this->historicalMovement($branch, $product, $userId, $batchId, 'initial_balance', $quantity, $previous, $quantity, $occurredAt, $notes);
+    }
+
+    public function postHistoricalMigration(
+        Branch $branch,
+        Product $product,
+        int $userId,
+        int $batchId,
+        string $movementType,
+        string $quantity,
+        string $previousStock,
+        string $newStock,
+        string $occurredAt,
+        ?string $notes,
+    ): InventoryMovement {
+        $this->assertMigrationContext($branch, $product, $quantity);
+        if (! in_array($movementType, ['entry', 'exit'], true)) {
+            throw ValidationException::withMessages(['tipo_movimiento' => 'El movimiento histórico debe ser entrada o salida.']);
+        }
+
+        return $this->historicalMovement($branch, $product, $userId, $batchId, 'historical_'.$movementType, $quantity, $previousStock, $newStock, $occurredAt, $notes);
+    }
+
+    private function historicalMovement(Branch $branch, Product $product, int $userId, int $batchId, string $type, string $quantity, string $previousStock, string $newStock, string $occurredAt, ?string $notes): InventoryMovement
+    {
+        $movement = InventoryMovement::create([
+            'company_id' => $branch->company_id, 'branch_id' => $branch->id, 'product_id' => $product->id,
+            'user_id' => $userId, 'type' => $type, 'quantity' => $quantity,
+            'previous_stock' => $previousStock, 'new_stock' => $newStock,
+            'reason' => $type === 'initial_balance' ? 'Saldo inicial migrado' : 'Movimiento histórico migrado',
+            'reference_type' => 'inventory_migration', 'reference_id' => $batchId,
+            'notes' => $notes,
+        ]);
+        $movement->timestamps = false;
+        $movement->forceFill(['created_at' => $occurredAt, 'updated_at' => $occurredAt])->save();
+
+        return $movement;
+    }
+
+    private function assertMigrationContext(Branch $branch, Product $product, string $quantity): void
+    {
+        if ((int) $branch->company_id !== (int) $product->company_id || ! $branch->is_active || ! $product->track_inventory || bccomp($quantity, '0', self::QUANTITY_SCALE) < 0) {
+            throw ValidationException::withMessages(['inventario' => 'La sucursal, producto o cantidad de migración no es válida.']);
+        }
+        if (! $product->unit?->allows_decimals && rtrim(substr($quantity.'.', strpos($quantity.'.', '.') + 1), '0.') !== '') {
+            throw ValidationException::withMessages(['cantidad' => 'Este producto solo admite cantidades enteras.']);
+        }
+    }
+
     public function postTransfer(
         Branch $fromBranch,
         Branch $toBranch,

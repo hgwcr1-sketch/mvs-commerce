@@ -4,7 +4,9 @@ namespace App\Services\Exports;
 
 use App\Models\AccountPayable;
 use App\Models\AccountReceivable;
+use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\InventoryMovement;
 use App\Models\LoyaltyAccount;
 use App\Models\Product;
 use App\Models\Sale;
@@ -18,6 +20,7 @@ class DataExportService
         'sales' => ['label' => 'Ventas históricas', 'permission' => 'ventas.ver', 'branch' => true],
         'suppliers' => ['label' => 'Proveedores', 'permission' => 'proveedores.ver', 'branch' => false],
         'inventory' => ['label' => 'Inventario', 'permission' => 'inventario.ver', 'branch' => true],
+        'inventory-migration' => ['label' => 'Migración inventario P36', 'permission' => 'inventario.ver', 'branch' => true],
         'receivables' => ['label' => 'Cuentas por cobrar', 'permission' => 'cuentas_cobrar.ver', 'branch' => true],
         'payables' => ['label' => 'Cuentas por pagar', 'permission' => 'cuentas_pagar.ver', 'branch' => true],
         'loyalty' => ['label' => 'Fidelización', 'permission' => 'fidelidad.ver', 'branch' => false],
@@ -31,6 +34,7 @@ class DataExportService
             'sales' => $this->sales($companyId, $branchId),
             'suppliers' => $this->suppliers($companyId),
             'inventory' => $this->inventory($companyId, $branchId),
+            'inventory-migration' => $this->inventoryMigration($companyId, $branchId),
             'receivables' => $this->receivables($companyId, $branchId),
             'payables' => $this->payables($companyId, $branchId),
             'loyalty' => $this->loyalty($companyId),
@@ -113,6 +117,31 @@ class DataExportService
                 $row->stock ?? 0, $row->minimum_stock ?? 0, $row->maximum_stock ?? 0])->all();
 
         return [['Código', 'Producto', 'Categoría', 'Unidad', 'Stock', 'Stock mínimo', 'Stock máximo'], $rows];
+    }
+
+    private function inventoryMigration(int $companyId, ?int $branchId): array
+    {
+        $branch = Branch::query()->where('company_id', $companyId)->findOrFail($branchId);
+        $source = 'P36-EXPORT-'.$companyId.'-'.$branchId.'-'.now()->format('YmdHis');
+        $initial = Product::query()->where('products.company_id', $companyId)->where('products.track_inventory', true)
+            ->join('branch_product', fn ($join) => $join->on('branch_product.product_id', '=', 'products.id')->where('branch_product.branch_id', $branchId))
+            ->orderBy('products.internal_code')->get(['products.internal_code', 'products.barcode', 'branch_product.stock as migration_stock', 'branch_product.minimum_stock as migration_minimum', 'branch_product.maximum_stock as migration_maximum'])
+            ->map(fn ($row, $index) => [$source, 'INI-'.($index + 1), 'saldo_inicial', now()->format('Y-m-d H:i:s'), $branch->code,
+                $row->internal_code, $row->barcode, null, $row->migration_stock, null, null, $row->migration_minimum, $row->migration_maximum, 'Snapshot exportado', null]);
+        $history = InventoryMovement::query()->where('company_id', $companyId)->where('branch_id', $branchId)
+            ->where('reference_type', 'inventory_migration')->whereIn('type', ['historical_entry', 'historical_exit'])
+            ->with('product')->orderBy('created_at')->orderBy('id')->get()->map(fn ($movement, $index) => [
+                $source, 'HIS-'.($index + 1), 'movimiento_historico', $movement->created_at?->format('Y-m-d H:i:s'), $branch->code,
+                $movement->product?->internal_code, null, $movement->type === 'historical_entry' ? 'entrada' : 'salida',
+                $movement->quantity, $movement->previous_stock, $movement->new_stock, null, null,
+                'Lote P36 #'.$movement->reference_id, $movement->notes,
+            ]);
+
+        return [[
+            'origen_migracion*', 'clave_fila*', 'tipo_registro*', 'fecha*', 'codigo_sucursal*',
+            'codigo_producto', 'codigo_barras', 'tipo_movimiento', 'cantidad*', 'stock_anterior',
+            'stock_nuevo', 'stock_minimo', 'stock_maximo', 'referencia', 'notas',
+        ], $initial->concat($history)->values()->all()];
     }
 
     private function receivables(int $companyId, ?int $branchId): array

@@ -41,7 +41,7 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P31/P32 — COMPLETADOS ADELANTADAMENTE por autorización expresa.** P31 reutiliza Centro de Datos, PhpSpreadsheet, exportación D09, patrones de Compras/Inventario y `PhoneNumberService`. P32 deja Clientes con plantilla XLSX, importación XLSX/XLS/CSV, preview, validación fila/campo, deduplicación por identificación/teléfono/correo dentro de `company_id`, confirmación atómica y exportación existente. `CustomerImportP32Test` 6/6, 42 aserciones; regresión relacionada 23/23, 139 aserciones. Clientes no tiene `branch_id`: su ámbito real es empresa.
 - **P33 — COMPLETADO ADELANTADAMENTE por autorización expresa.** Productos reutiliza Centro de Datos, PhpSpreadsheet y `DataExportService`: plantilla XLSX, importación XLSX/XLS/CSV, preview, errores fila/campo, resolución de categorías/marcas/unidades por `company_id`, códigos únicos según restricciones reales, precios decimales y confirmación transaccional. Es catálogo puro: no crea `branch_product`, no cambia stock ni genera movimientos. `ProductImportP33Test` 6/6, 62 aserciones; regresión relacionada 38/38, 240 aserciones.
 - **P34/P35 — COMPLETADOS ADELANTADAMENTE por autorización expresa.** `HistoricalSaleImportService` aporta plantilla/importación XLSX/XLS/CSV, preview, errores por fila/campo/documento, conciliación de encabezado+líneas, resolución empresarial de sucursal/cliente/producto, idempotencia por `company_id+sale_number` y confirmación transaccional. `sales.is_historical` distingue el historial y bloquea anulaciones/devoluciones operativas. No crea caja, pagos, CxC, stock, Kardex, puntos ni comunicaciones. Exportación equivalente disponible en D09. `HistoricalSaleImportP34P35Test` 6/6, 64 aserciones; regresión relacionada 55/55, 377 aserciones.
-- **P36 — PENDIENTE, no implementado:** debe importar inventario inicial/Kardex por sucursal sin alterar accidentalmente el stock actual y permanece separado de P34/P35.
+- **P36 — COMPLETADO ADELANTADAMENTE por autorización expresa.** `InventoryMigrationImportService` aporta plantilla/importación XLSX/XLS/CSV, preview, errores fila/campo, resolución producto+sucursal, conciliación decimal y exportación equivalente. `inventory_migration_batches` conserva origen/usuario/fecha con unicidad por empresa para idempotencia. `InventoryPostingService` fija el saldo inicial con locking y registra Kardex `initial_balance`; `historical_entry/exit` conserva fecha/cadena anterior→nuevo sin cambiar `branch_product`. Sin ventas, compras, caja, pagos, CxC ni fidelización. `InventoryMigrationP36Test` 6/6, 62 aserciones; regresión relacionada 51/51, 401 aserciones.
 - **Migración P37–P40 y Fidelización pendiente P41–P48:** quedan sin pisar IDs; Fidelización solo si sigue pendiente según código/tests (F01–F18, F28–F29 ya no se reconstruyen).
 - Evidencia P01–P09D: `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos** (PIN 6 dígitos, single-use, expiración, aislamiento, static QR no confiable). `LoyaltyCustomerPortal` 13/13.
 
@@ -136,12 +136,12 @@ Según historial reciente de commits en esta rama:
 - pedidos internos (`Order`) y órdenes de compra con conversión a compras;
 - integración de caja con POS;
 - P23/P24 transferencias: auditoría de la implementación existente + pruebas en `InventoryTransferP24Test` (7/7, 54 aserciones), centralización del movimiento de stock/Kardex en `InventoryPostingService::postTransfer` (4 decimales, locking, rollback atómico) y scoping/permiso por sucursal; decisión: transferencia instantánea (no envío/recepción);
-- P31–P35 adelantados por autorización: infraestructura reutilizada y flujos completos de Clientes, Productos y Ventas históricas; P33 importa catálogo y P34/P35 historial sin efectos operativos;
+- P31–P36 adelantados por autorización: infraestructura reutilizada y flujos completos de Clientes, Productos, Ventas históricas e Inventario/Kardex; P36 separa saldo inicial de historia sin impacto actual;
 - documentación: `INTEGRACIONES.md` completado, módulos nuevos registrados en arquitectura/progreso y este archivo creado.
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P24 y P31–P35 COMPLETADOS** (P31–P35 adelantados por autorización expresa, sin iniciar P36). **P25 SIGUIENTE BLOQUE OFICIAL** – Reparar/terminar sidebar responsive. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
+- Puesta en Producción: **P01–P24 y P31–P36 COMPLETADOS** (P31–P36 adelantados por autorización expresa, sin iniciar P37). **P25 SIGUIENTE BLOQUE OFICIAL** – Reparar/terminar sidebar responsive. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -159,7 +159,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31–P35 quedaron completados adelantadamente; P36 permanece pendiente y no desplaza P25–P30.**
+**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31–P36 quedaron completados adelantadamente; P37 permanece pendiente y no desplaza P25–P30.**
 
 No asumir que el último estado conocido sigue vigente.
 

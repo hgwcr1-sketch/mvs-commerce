@@ -38,7 +38,7 @@ class DataExportController extends Controller
         $isAssigned = $request->user()->branches()->whereKey($branch->id)->exists();
         abort_unless($isAssigned, 403);
 
-        if ($dataset === 'inventory' && $branch->id !== (int) session('active_branch_id')) {
+        if (in_array($dataset, ['inventory', 'inventory-migration'], true) && $branch->id !== (int) session('active_branch_id')) {
             abort_unless($request->user()->hasPermission('inventario.ver_otras_sucursales', $company), 403);
         }
 
