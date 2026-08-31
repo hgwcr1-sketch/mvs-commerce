@@ -32,3 +32,7 @@ Este documento define el ensayo y la ejecución futura. **No autoriza ni ejecuta
 ## Evidencia de cierre P40
 
 El repositorio prueba el resumen de conciliación mediante `MigrationP38P40Test`; este procedimiento se revisa como artefacto, pero ningún comando contra producción forma parte de la prueba automatizada.
+
+### Corrección de instalación vacía PostgreSQL
+
+La FK nullable `products.brand_id → brands.id` se crea ahora en `2026_07_30_000006_create_brands_table.php`, inmediatamente después de crear `brands`; `2026_07_28_190132_create_products_table.php` conserva la columna sin intentar referenciar una tabla futura. Esto no altera datos ni lógica y mantiene las instalaciones existentes porque una migración ya registrada no vuelve a ejecutarse. `PostgreSqlFreshMigrationOrderTest` protege el orden y una migración completa debe validarse con `php artisan migrate --force` contra una base PostgreSQL nueva, aislada y desechable antes del despliegue.
