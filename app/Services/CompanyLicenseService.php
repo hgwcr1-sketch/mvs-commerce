@@ -77,13 +77,27 @@ class CompanyLicenseService
             ]);
         }
 
-        DB::transaction(function () use ($company, $enabledModules) {
+        DB::transaction(function () use ($company, $actor, $enabledModules) {
             foreach (array_keys(ModuleRegistry::MODULES) as $moduleKey) {
                 $company->modules()->updateOrCreate(
                     ['module_key' => $moduleKey],
                     ['is_enabled' => in_array($moduleKey, $enabledModules, true)],
                 );
             }
+
+            $license = $this->ensure($company);
+            $license->events()->create([
+                'company_id' => $company->id,
+                'actor_id' => $actor->id,
+                'action' => 'modules',
+                'from_status' => $license->status,
+                'to_status' => $license->status,
+                'snapshot' => [
+                    ...$license->only(['status', 'plan', 'user_limit', 'branch_limit']),
+                    'modules' => array_values($enabledModules),
+                ],
+                'notes' => 'Contrato de módulos actualizado.',
+            ]);
         });
     }
 

@@ -971,6 +971,13 @@ Evidencia: `CompanyLicenseTest` + M01 + `PlatformAdminTest` (21 pruebas, 116 ase
 
 Evidencia: `PlatformAdminTest`, `CompanyLicenseTest` y `M02PlatformTenantListTest` (17 pruebas, 98 aserciones). **M10 siguiente.**
 
+### M10 — Auditoría y seguridad: COMPLETADO
+
+- Licencia, estado y límites conservan actor/snapshot; cambios de módulos ahora registran actor, empresa y contrato resultante en el mismo historial.
+- Regresión cubre bloqueo tenant, escalada de privilegios Platform y aislamiento cruzado.
+
+Evidencia: `M10PlatformAuditSecurityTest` + M01/Platform Admin/módulos (24 pruebas, 122 aserciones). **M11 siguiente.**
+
 ---
 
 ## Puesta en Producción
