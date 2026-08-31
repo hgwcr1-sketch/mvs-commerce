@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CompanyProvisioner
@@ -184,6 +185,38 @@ class CompanyProvisioner
             ]);
 
             return $company;
+        });
+    }
+
+    public function commercialOnboard(array $ownerData, array $contract, array $moduleKeys, User $actor): Company
+    {
+        return DB::transaction(function () use ($ownerData, $contract, $moduleKeys, $actor) {
+            $permissionIds = Permission::query()->where('is_active', true)->pluck('id');
+            if ($permissionIds->isEmpty()) {
+                throw ValidationException::withMessages(['permissions' => 'No hay permisos globales activos para asignar al propietario.']);
+            }
+
+            $owner = User::create([
+                'name' => $ownerData['name'], 'email' => $ownerData['email'], 'phone' => $ownerData['phone'] ?? null,
+                'password' => Hash::make(Str::random(64)), 'is_active' => false, 'is_platform_admin' => false,
+            ]);
+            $company = Company::create([
+                'owner_user_id' => $owner->id, 'trade_name' => $contract['trade_name'],
+                'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true,
+            ]);
+            $role = Role::create([
+                'company_id' => $company->id, 'name' => 'Administrador',
+                'description' => 'Propietario inicial del tenant.', 'is_active' => true,
+            ]);
+            $role->permissions()->sync($permissionIds);
+            $company->users()->attach($owner->id, ['role_id' => $role->id]);
+            CompanyAllowance::create(['user_id' => $owner->id, 'allowed_companies' => 1]);
+            $this->companyLicenseService->updateContract($company, $actor, $contract['status'], $contract['notes'] ?? null, [
+                'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'], 'created_by' => $actor->id,
+            ]);
+            $this->companyLicenseService->updateModules($company, $actor, $moduleKeys);
+
+            return $company->fresh();
         });
     }
 }

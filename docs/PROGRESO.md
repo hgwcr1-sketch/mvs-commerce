@@ -917,7 +917,13 @@ Evidencia: `M01SaaSLicensingTest` 6/6, 26 aserciones, cubriendo `branch_limit`, 
 
 Evidencia: `M02PlatformTenantListTest` + regresión `PlatformAdminTest` y `M01SaaSLicensingTest`.
 
-**M03 es el siguiente bloque; no iniciado en este corte.**
+### M03 — Alta comercial mínima: COMPLETADO
+
+- Platform Admin crea únicamente referencia del tenant, propietario inactivo, plan, `branch_limit`, estado y módulos.
+- No solicita ni crea identificación fiscal, dirección, sucursal, caja u otros datos operativos; éstos quedan para el onboarding del propietario.
+- Reutiliza roles/permisos, licencia y módulos existentes dentro de una sola transacción.
+
+Evidencia: `M03CommercialTenantOnboardingTest` + regresión M01/Platform Admin (19 pruebas, 113 aserciones). **M04 siguiente.**
 
 ---
 
