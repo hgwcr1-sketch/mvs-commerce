@@ -97,6 +97,25 @@ class CustomerOnboardingAndBranchesTest extends TestCase
         $this->post(route('branches.store'), ['name' => 'No autorizada', 'code' => 'NO'])->assertForbidden();
     }
 
+    public function test_platform_limit_increase_allows_tenant_to_create_the_next_branch(): void
+    {
+        [$company, $branch, $tenantAdmin] = $this->tenant(['configuracion.ver', 'configuracion.editar']);
+        $platformAdmin = User::factory()->create(['is_active' => true, 'is_platform_admin' => true]);
+        app(CompanyLicenseService::class)->ensure($company)->update(['status' => 'active', 'plan' => 'Pro', 'branch_limit' => 2]);
+        $session = ['active_company_id' => $company->id, 'active_branch_id' => $branch->id];
+
+        $this->actingAs($tenantAdmin)->withSession($session)->post(route('branches.store'), ['name' => 'Segunda', 'code' => 'S2'])->assertRedirect();
+        $this->post(route('branches.store'), ['name' => 'Tercera', 'code' => 'S3'])->assertSessionHasErrors('branches');
+        $this->assertSame(2, $company->branches()->count());
+
+        $this->actingAs($platformAdmin)->patch(route('platform.licenses.update', $company), [
+            'status' => 'active', 'plan' => 'Pro', 'branch_limit' => 3,
+        ])->assertRedirect();
+
+        $this->actingAs($tenantAdmin)->withSession($session)->post(route('branches.store'), ['name' => 'Tercera', 'code' => 'S3'])->assertRedirect();
+        $this->assertSame(3, $company->branches()->count());
+    }
+
     private function tenant(array $permissions): array
     {
         $company = Company::create(['trade_name' => 'MYM', 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);

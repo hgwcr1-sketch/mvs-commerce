@@ -939,7 +939,15 @@ Evidencia: `M04TenantOwnerInvitationTest` + regresión M03/onboarding (9 pruebas
 - Completa datos legales y operativos sobre el mismo tenant; no crea una segunda empresa ni altera plan, límite o módulos.
 - Se reutilizan aprovisionadores de métodos de pago, caja y denominaciones al finalizar.
 
-Evidencia: `M05TenantOnboardingTest` + regresión M04/onboarding/aprovisionamiento (14 pruebas, 78 aserciones). **M06 siguiente.**
+Evidencia: `M05TenantOnboardingTest` + regresión M04/onboarding/aprovisionamiento (14 pruebas, 78 aserciones).
+
+### M06 — Límite de sucursales: COMPLETADO
+
+- Se auditó y reutilizó `CompanyLicenseService::assertCapacity()` en `BranchController`; el conteo se realiza por empresa.
+- Con límite 2 se permite la segunda sucursal y se bloquea la tercera; al aumentar a 3 desde Panel Maestro, el tenant puede crearla.
+- Reducir el límite no elimina ni desactiva sucursales existentes; solamente bloquea nuevas altas mientras el uso alcance el contrato.
+
+Evidencia: `CustomerOnboardingAndBranchesTest` + regresión de licencia/Platform Admin (16 pruebas, 85 aserciones). **M07 siguiente.**
 
 ---
 
