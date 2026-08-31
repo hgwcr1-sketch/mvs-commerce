@@ -72,6 +72,14 @@ Incluye:
 - `inventory_migration_batches` registra empresa, usuario, clave de origen, filas y fecha; la clave única `company_id+source_key` impide duplicar un lote al reintentar.
 - La confirmación es transaccional. Saldo inicial usa locking en `InventoryPostingService`, fija `branch_product` y deja Kardex `initial_balance`; `historical_entry/exit` preserva fecha y trazabilidad sin alterar el stock actual.
 - No crea ventas, compras, caja, pagos, CxC ni fidelización. Evidencia: `InventoryMigrationP36Test` 6/6, 62 aserciones; regresión Inventario/Transferencias/Compras/Exportación/Centro de Datos/P33–P35: 51/51, 401 aserciones.
+
+#### P37–P40 — Fidelización, paquete, ensayo y cierre: COMPLETADOS ADELANTADAMENTE
+
+- P37 importa saldos consolidados y Kardex histórico sin reaplicar puntos, bloquea cuentas con actividad operativa y conserva aislamiento, idempotencia y rollback.
+- P38 genera un ZIP portable de clientes, productos, facturas/líneas, Kardex y puntos con manifiesto, conteos y SHA-256.
+- P39 incorpora preview, conciliación, errores CSV, revalidación y reintento sin duplicados.
+- P40 deja el procedimiento SQLite→PostgreSQL y la conciliación read-only documentados/probados; no se ejecutó PostgreSQL ni producción.
+- Evidencia: focal 9 tests/90 aserciones; regresión P31–P40 y Fidelización relacionada 62 tests/488 aserciones.
 - P37 queda pendiente y separado.
 
 ---
@@ -1044,7 +1052,7 @@ P08S queda verde dentro del alcance permitido. Siguiente exacta: **P08L — Lice
 
 ### Portal de Clientes — P01–P20: COMPLETADO
 
-Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos. P31–P35 quedaron completados adelantadamente por autorización expresa; P36–P40 conservan sus IDs y posición posterior a P25–P30. Fidelización pendiente solo P41–P48 si sigue pendiente. Reconciliación documental aprobada: **P21 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P22 – Onboarding empresa + primera sucursal + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`); **P23 – Auditoría de transferencias existentes, COMPLETADO** y **P24 – pruebas/decisión de transferencias, COMPLETADO**. **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
+Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual `docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`. Reemplaza cronogramas anteriores; P09A, P09B, P09C y P09D conservan esos IDs exactos. P31–P40 quedaron completados adelantadamente por autorización expresa y conservan sus IDs/posición posterior a P25–P30. Fidelización pendiente solo P41–P48 si sigue pendiente. Reconciliación documental aprobada: **P21 – Separación Platform Admin / Tenant Admin, COMPLETADO** y **P22 – Onboarding empresa + primera sucursal + primer administrador, COMPLETADO** en `a60425f` (`a60425f684e11fd0629a42ac90fe6f25e5d31a35`); **P23 – Auditoría de transferencias existentes, COMPLETADO** y **P24 – pruebas/decisión de transferencias, COMPLETADO**. **P06 COMPLETADO en 75838ae**, **P07 COMPLETADO en 53c92db**, **P08 COMPLETADO en 2023148**, **P09 COMPLETADO en a4ee549**, **P09A COMPLETADO en 5a0248b**, **P09B COMPLETADO en 0a1bf05**, **P09C COMPLETADO en 46d07ec**, **P09D COMPLETADO** (ver detalle abajo). **P09 ajuste visual QR compacto: commit `58aba11`**.
 
 **Próximos bloques en orden (según Excel único):**
 - **P10 — COMPLETADO (`b383aad`)** — Patrón UI reutilizable `x-tabs`, mobile-first, scroll horizontal controlado y targets ≥44px.

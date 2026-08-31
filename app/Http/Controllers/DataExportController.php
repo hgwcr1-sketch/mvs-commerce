@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Services\Exports\DataExportService;
+use App\Services\Exports\MigrationPackageExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -12,6 +13,18 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataExportController extends Controller
 {
+    public function migrationPackage(Request $request, MigrationPackageExportService $packages)
+    {
+        $company = Company::query()->findOrFail((int) session('active_company_id'));
+        foreach (MigrationPackageExportService::DATASETS as $dataset) {
+            abort_unless($request->user()->hasPermission(DataExportService::DATASETS[$dataset]['permission'], $company), 403);
+        }
+        $branchId = $this->resolveBranchId($request, $company, 'inventory-migration');
+        $path = $packages->build($company->id, $branchId);
+
+        return response()->download($path, 'paquete-migracion-mvs-'.now()->format('Ymd-His').'.zip')->deleteFileAfterSend(true);
+    }
+
     public function download(Request $request, DataExportService $exports, string $dataset, string $format)
     {
         abort_unless(isset(DataExportService::DATASETS[$dataset]), 404);

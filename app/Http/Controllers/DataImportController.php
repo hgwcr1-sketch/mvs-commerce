@@ -8,6 +8,7 @@ use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
 use App\Services\Imports\InventoryMigrationImportService;
+use App\Services\Imports\LoyaltyMigrationImportService;
 use App\Services\Imports\ProductImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -49,6 +50,60 @@ class DataImportController extends Controller
         session()->forget('inventory_migration_preview');
 
         return redirect()->route('inventario.index')->with('success', "Se migraron {$count} filas de inventario correctamente.");
+    }
+
+    public function loyaltyMigration()
+    {
+        return view('importaciones.fidelidad-migracion');
+    }
+
+    public function loyaltyMigrationTemplate()
+    {
+        return $this->spreadsheetDownload(LoyaltyMigrationImportService::HEADERS, 'plantilla_migracion_fidelidad_p37.xlsx', true, 'Fidelidad P37');
+    }
+
+    public function loyaltyMigrationPreview(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $request->validate(['migrar_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $preview = $import->preview($request->file('migrar_file')->getRealPath(), $companyId);
+        session(['loyalty_migration_preview' => $preview]);
+        $rows = $preview['rows'];
+
+        return view('importaciones.fidelidad-migracion-preview', compact('rows'));
+    }
+
+    public function loyaltyMigrationImport(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $preview = session('loyalty_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+        $companyId = (int) session('active_company_id');
+        $count = $import->confirm($preview, $companyId, (int) $request->user()->id);
+        session()->forget('loyalty_migration_preview');
+
+        return redirect()->route('loyalty.dashboard')->with('success', "Se migraron {$count} registros de fidelización correctamente.");
+    }
+
+    public function loyaltyMigrationErrors()
+    {
+        $preview = session('loyalty_migration_preview');
+        abort_unless((int) ($preview['company_id'] ?? 0) === (int) session('active_company_id'), 404);
+        $rows = collect($preview['rows'] ?? [])->where('valid', false);
+        abort_if($rows->isEmpty(), 404);
+
+        return response()->streamDownload(function () use ($rows): void {
+            $stream = fopen('php://output', 'wb');
+            fwrite($stream, "\xEF\xBB\xBF");
+            fputcsv($stream, ['fila', 'campo', 'error']);
+            foreach ($rows as $row) {
+                foreach ($row['errors'] as $error) {
+                    fputcsv($stream, [$row['row_number'], $error['field'], $error['message']]);
+                }
+            }
+            fclose($stream);
+        }, 'errores-migracion-fidelidad.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function historicalSales()

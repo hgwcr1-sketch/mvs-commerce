@@ -265,6 +265,9 @@
             @can('fidelidad.ajustes')
                 <x-navigation.submenu route="loyalty.adjustments.index" label="Ajustes de puntos" />
             @endcan
+            @can('fidelidad.configuracion')
+                <x-navigation.submenu route="importaciones.fidelidad-migracion" label="Migrar fidelización P37" />
+            @endcan
             @canany(['fidelidad.portal.ver', 'fidelidad.portal.configurar', 'fidelidad.portal.contenido', 'fidelidad.portal.enlaces', 'fidelidad.portal', 'fidelidad.promociones'])
                 <x-navigation.submenu route="loyalty.portal-management.index" label="Portal de Clientes" />
             @endcanany

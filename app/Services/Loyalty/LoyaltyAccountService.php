@@ -72,6 +72,35 @@ class LoyaltyAccountService
         return $this->record($account, $points, LoyaltyMovement::TYPE_ADJUSTMENT, $context);
     }
 
+    /** Registra Kardex legado sin volver a aplicar sus puntos al saldo consolidado. */
+    public function recordHistoricalMigrationMovement(LoyaltyAccount $account, string $signedPoints, string $type, array $context = []): LoyaltyMovement
+    {
+        $this->validateType($type);
+        $account = LoyaltyAccount::query()->lockForUpdate()->findOrFail($account->id);
+        $eventKey = $context['event_key'] ?? null;
+
+        if ($eventKey !== null && ($existing = LoyaltyMovement::query()->where('company_id', $account->company_id)->where('event_key', $eventKey)->first())) {
+            return $existing;
+        }
+
+        return LoyaltyMovement::query()->create([
+            'company_id' => $account->company_id,
+            'loyalty_account_id' => $account->id,
+            'customer_id' => $account->customer_id,
+            'user_id' => $context['user_id'] ?? null,
+            'type' => $type,
+            'points' => $this->decimal($signedPoints),
+            'balance_before' => $this->optionalDecimal($context['balance_before'] ?? null) ?? $this->decimal($account->balance),
+            'balance_after' => $this->optionalDecimal($context['balance_after'] ?? null) ?? $this->decimal($account->balance),
+            'description' => $context['description'] ?? $this->description($type),
+            'source_type' => $context['source_type'] ?? 'LoyaltyMigration',
+            'source_id' => $context['source_id'] ?? null,
+            'event_key' => $eventKey,
+            'effective_at' => $context['effective_at'] ?? now(),
+            'metadata' => $context['metadata'] ?? null,
+        ]);
+    }
+
     public function reverseMovement(
         LoyaltyMovement $original,
         string $type,

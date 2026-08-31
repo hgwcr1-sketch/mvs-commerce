@@ -42,7 +42,7 @@ Fuente oficial: `docs/CRONOGRAMA_PRODUCCION.md` (P01–P50) y referencia visual 
 - **P33 — COMPLETADO ADELANTADAMENTE por autorización expresa.** Productos reutiliza Centro de Datos, PhpSpreadsheet y `DataExportService`: plantilla XLSX, importación XLSX/XLS/CSV, preview, errores fila/campo, resolución de categorías/marcas/unidades por `company_id`, códigos únicos según restricciones reales, precios decimales y confirmación transaccional. Es catálogo puro: no crea `branch_product`, no cambia stock ni genera movimientos. `ProductImportP33Test` 6/6, 62 aserciones; regresión relacionada 38/38, 240 aserciones.
 - **P34/P35 — COMPLETADOS ADELANTADAMENTE por autorización expresa.** `HistoricalSaleImportService` aporta plantilla/importación XLSX/XLS/CSV, preview, errores por fila/campo/documento, conciliación de encabezado+líneas, resolución empresarial de sucursal/cliente/producto, idempotencia por `company_id+sale_number` y confirmación transaccional. `sales.is_historical` distingue el historial y bloquea anulaciones/devoluciones operativas. No crea caja, pagos, CxC, stock, Kardex, puntos ni comunicaciones. Exportación equivalente disponible en D09. `HistoricalSaleImportP34P35Test` 6/6, 64 aserciones; regresión relacionada 55/55, 377 aserciones.
 - **P36 — COMPLETADO ADELANTADAMENTE por autorización expresa.** `InventoryMigrationImportService` aporta plantilla/importación XLSX/XLS/CSV, preview, errores fila/campo, resolución producto+sucursal, conciliación decimal y exportación equivalente. `inventory_migration_batches` conserva origen/usuario/fecha con unicidad por empresa para idempotencia. `InventoryPostingService` fija el saldo inicial con locking y registra Kardex `initial_balance`; `historical_entry/exit` conserva fecha/cadena anterior→nuevo sin cambiar `branch_product`. Sin ventas, compras, caja, pagos, CxC ni fidelización. `InventoryMigrationP36Test` 6/6, 62 aserciones; regresión relacionada 51/51, 401 aserciones.
-- **Migración P37–P40 y Fidelización pendiente P41–P48:** quedan sin pisar IDs; Fidelización solo si sigue pendiente según código/tests (F01–F18, F28–F29 ya no se reconstruyen).
+- **P37–P40 — COMPLETADOS ADELANTADAMENTE por autorización expresa.** P37 migra snapshot y Kardex histórico sin reaplicar puntos ni sobrescribir cuentas operativas; P38 exporta ZIP con manifiesto SHA-256; P39 aporta preview, errores CSV, revalidación, idempotencia y rollback; P40 documenta/prueba conciliación SQLite→PostgreSQL sin ejecutarla ni tocar producción. Evidencia focal: 9 tests, 90 aserciones; regresión relacionada: 62 tests, 488 aserciones.
 - Evidencia P01–P09D: `LoyaltyPortalSelfRegistrationTest` **11/11, 52 aserciones** + `LoyaltyPortalClientAccessTest` **11/11, 55 aserciones** + `LoyaltyPortalDeliveryTest` **7/7, 51 aserciones** + `LoyaltyPortalCentralTest` **4/4, 17 aserciones** + `CustomerPublicCodeTest` **5/5, 23 aserciones** + `CustomerQrBarcodeTest` **4/4, 16 aserciones** + `CustomerPosScanTest` **3/3, 13 aserciones** + `CustomerOneTimeTokenTest` **4/4, 17 aserciones, 0 fallos** (PIN 6 dígitos, single-use, expiración, aislamiento, static QR no confiable). `LoyaltyCustomerPortal` 13/13.
 
 ## Estado actual de Fidelización
@@ -141,7 +141,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- Puesta en Producción: **P01–P24 y P31–P36 COMPLETADOS** (P31–P36 adelantados por autorización expresa, sin iniciar P37). **P25 SIGUIENTE BLOQUE OFICIAL** – Reparar/terminar sidebar responsive. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado; los agentes no despliegan producción automáticamente.**
+- Puesta en Producción: **P01–P24 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). **P25 SIGUIENTE BLOQUE OFICIAL** – Reparar/terminar sidebar responsive. P40 solo documentó/probó el procedimiento; no ejecutó PostgreSQL ni producción. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
@@ -159,7 +159,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31–P36 quedaron completados adelantadamente; P37 permanece pendiente y no desplaza P25–P30.**
+**Prioridad inmediata: P25 — Reparar/terminar sidebar responsive. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P25–P30.**
 
 No asumir que el último estado conocido sigue vigente.
 

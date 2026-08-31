@@ -8,9 +8,11 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
 use App\Models\LoyaltyAccount;
+use App\Models\LoyaltyMovement;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Supplier;
+use App\Services\Imports\LoyaltyMigrationImportService;
 
 class DataExportService
 {
@@ -24,6 +26,7 @@ class DataExportService
         'receivables' => ['label' => 'Cuentas por cobrar', 'permission' => 'cuentas_cobrar.ver', 'branch' => true],
         'payables' => ['label' => 'Cuentas por pagar', 'permission' => 'cuentas_pagar.ver', 'branch' => true],
         'loyalty' => ['label' => 'Fidelización', 'permission' => 'fidelidad.ver', 'branch' => false],
+        'loyalty-migration' => ['label' => 'Migración fidelización P37', 'permission' => 'fidelidad.ver', 'branch' => false],
     ];
 
     public function dataset(string $dataset, int $companyId, ?int $branchId): array
@@ -38,6 +41,7 @@ class DataExportService
             'receivables' => $this->receivables($companyId, $branchId),
             'payables' => $this->payables($companyId, $branchId),
             'loyalty' => $this->loyalty($companyId),
+            'loyalty-migration' => $this->loyaltyMigration($companyId, $branchId),
         };
     }
 
@@ -182,5 +186,33 @@ class DataExportService
 
         return [['Identificación cliente', 'Cliente', 'Saldo puntos', 'Total ganado', 'Total canjeado',
             'Total vencido', 'Última actividad', 'Activo'], $rows];
+    }
+
+    private function loyaltyMigration(int $companyId, ?int $branchId): array
+    {
+        $source = 'P37-EXPORT-'.$companyId.'-'.now()->format('YmdHis');
+        $balances = LoyaltyAccount::query()->where('company_id', $companyId)->with('customer')
+            ->orderBy('customer_id')->get()->map(fn (LoyaltyAccount $account, $index) => [
+                $source, $account->customer?->identification, 'saldo_inicial', now()->format('Y-m-d H:i:s'),
+                null, null, null, null, null, $account->balance, $account->total_earned, $account->total_redeemed,
+                $account->total_expired, $account->last_qualifying_purchase_at?->format('Y-m-d H:i:s'),
+                $account->last_activity_at?->format('Y-m-d H:i:s'),
+                $account->is_active ? 'Sí' : 'No', null, null, 'Snapshot exportado', null,
+            ]);
+
+        $movements = LoyaltyMovement::query()->where('company_id', $companyId)
+            ->with('customer')->orderBy('created_at')->orderBy('id')->get()->map(fn (LoyaltyMovement $movement, $index) => [
+                $source, $movement->customer?->identification, 'movimiento_historico', $movement->created_at?->format('Y-m-d H:i:s'),
+                $movement->branch?->code ?? null, null, null, $movement->type, ltrim((string) $movement->points, '-'),
+                null, null, null, null, null, null,
+                $movement->balance_before, $movement->balance_after,
+                LoyaltyMovement::LABELS[$movement->type] ?? $movement->type,
+                $movement->description,
+            ]);
+
+        return [
+            LoyaltyMigrationImportService::HEADERS,
+            $balances->concat($movements)->values()->all(),
+        ];
     }
 }

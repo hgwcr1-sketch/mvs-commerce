@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Services\Exports\DataExportService;
+use App\Services\Exports\MigrationPackageExportService;
 use App\Services\Reports\EssentialReportQuery;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -32,7 +33,7 @@ class DataCenterController extends Controller
     public function imports(Request $request): View
     {
         $company = $this->company();
-        $this->authorizeAny($request, $company, ['compras.crear', 'clientes.crear', 'productos.crear', 'ventas.crear', 'inventario.ver', 'inventario.ajustar']);
+        $this->authorizeAny($request, $company, ['compras.crear', 'clientes.crear', 'productos.crear', 'ventas.crear', 'inventario.ver', 'inventario.ajustar', 'fidelidad.configuracion']);
 
         return view('data-center.imports');
     }
@@ -50,8 +51,11 @@ class DataCenterController extends Controller
         $inventoryBranches = $request->user()->hasPermission('inventario.ver_otras_sucursales', $company)
             ? $branches
             : $branches->where('id', (int) session('active_branch_id'));
+        $canExportMigrationPackage = collect(MigrationPackageExportService::DATASETS)->every(
+            fn (string $dataset) => $request->user()->hasPermission(DataExportService::DATASETS[$dataset]['permission'], $company),
+        );
 
-        return view('data-center.exports', compact('datasets', 'branches', 'inventoryBranches'));
+        return view('data-center.exports', compact('datasets', 'branches', 'inventoryBranches', 'canExportMigrationPackage'));
     }
 
     public function reports(Request $request): View

@@ -16,6 +16,21 @@
 
     @include('data-center._navigation')
 
+    @if($canExportMigrationPackage)
+    <section class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5" data-migration-package>
+        <h2 class="text-lg font-bold text-slate-800">Paquete completo de migración P38</h2>
+        <p class="mt-1 text-sm text-slate-600">ZIP con clientes, productos, facturas y líneas, Kardex, puntos y manifiesto SHA-256.</p>
+        <form class="mt-4 flex flex-col gap-3 sm:flex-row" method="GET" action="{{ route('data-center.exports.migration-package') }}">
+            <select name="branch_id" class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:max-w-xs">
+                @foreach($inventoryBranches as $branch)
+                    <option value="{{ $branch->id }}" @selected($branch->id === (int) session('active_branch_id'))>{{ $branch->name }}</option>
+                @endforeach
+            </select>
+            <button class="min-h-11 rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Descargar paquete ZIP</button>
+        </form>
+    </section>
+    @endif
+
     @if($datasets->isEmpty())
         <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
             Tiene permiso para entrar al área, pero necesita acceso de lectura al módulo que desea exportar.

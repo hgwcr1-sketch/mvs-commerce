@@ -780,6 +780,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
             ->middleware('permission:reportes.exportar')
             ->whereIn('format', ['xlsx', 'csv'])
             ->name('exports.download');
+        Route::get('/paquete-migracion', [DataExportController::class, 'migrationPackage'])
+            ->middleware('permission:reportes.exportar')
+            ->name('exports.migration-package');
     });
 
     Route::redirect('/importar-datos', '/centro-de-datos/importar')
@@ -832,6 +835,17 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.preview');
     Route::post('/importar-datos/inventario-migracion/confirmar', [DataImportController::class, 'inventoryMigrationImport'])
         ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.import');
+
+    Route::get('/importar-datos/fidelidad-migracion', [DataImportController::class, 'loyaltyMigration'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion');
+    Route::get('/importar-datos/fidelidad-migracion/plantilla', [DataImportController::class, 'loyaltyMigrationTemplate'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.template');
+    Route::post('/importar-datos/fidelidad-migracion/revisar', [DataImportController::class, 'loyaltyMigrationPreview'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.preview');
+    Route::post('/importar-datos/fidelidad-migracion/confirmar', [DataImportController::class, 'loyaltyMigrationImport'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.import');
+    Route::get('/importar-datos/fidelidad-migracion/errores', [DataImportController::class, 'loyaltyMigrationErrors'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.errors');
 
     Route::get('/importar-datos/inventario/plantilla', [DataImportController::class, 'inventoryTemplate'])
         ->middleware('permission:inventario.ver')
