@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
 use App\Services\Modules\ModuleRegistry;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -109,6 +110,7 @@ class PlatformAdminController extends Controller
     public function updateLicense(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
     {
         $data = $request->validate([
+            'action' => ['nullable', Rule::in(['update', 'activate', 'renew', 'suspend', 'reactivate', 'cancel'])],
             'status' => ['required', Rule::in(CompanyLicense::STATUSES)], 'plan' => ['required', 'string', 'max:80'],
             'starts_at' => ['nullable', 'date'], 'expires_at' => ['nullable', 'date'],
             'next_renewal_at' => ['nullable', 'date'], 'grace_until' => ['nullable', 'date', 'after_or_equal:expires_at'],
@@ -117,10 +119,23 @@ class PlatformAdminController extends Controller
             'license_plan_id' => ['nullable', Rule::exists('license_plans', 'id')->where('is_active', true)],
             'apply_plan' => ['nullable', 'boolean'],
         ]);
+        $action = $data['action'] ?? 'update';
         $status = $data['status'];
         $planId = $data['license_plan_id'] ?? null;
-        unset($data['status'], $data['apply_plan'], $data['license_plan_id']);
-        if ($planId && $request->boolean('apply_plan')) {
+        unset($data['action'], $data['status'], $data['apply_plan'], $data['license_plan_id']);
+        if ($action === 'renew') {
+            $request->validate(['expires_at' => ['required', 'date']]);
+            $licenses->renew(
+                $company,
+                $request->user(),
+                CarbonImmutable::parse($data['expires_at']),
+                isset($data['next_renewal_at']) ? CarbonImmutable::parse($data['next_renewal_at']) : null,
+                isset($data['grace_until']) ? CarbonImmutable::parse($data['grace_until']) : null,
+                $data['notes'] ?? null,
+            );
+        } elseif (in_array($action, ['activate', 'suspend', 'reactivate', 'cancel'], true)) {
+            $licenses->changeLifecycle($company, $request->user(), $action, $data['notes'] ?? null, $data);
+        } elseif ($planId && $request->boolean('apply_plan')) {
             $licenses->applyPlan($company, LicensePlan::findOrFail($planId), $request->user(), [...$data, 'status' => $status]);
         } else {
             $licenses->updateContract($company, $request->user(), $status, $data['notes'] ?? null, [...$data, 'license_plan_id' => $planId]);

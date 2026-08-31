@@ -312,6 +312,10 @@ Existe una licencia única por empresa. Su estado y vigencia gobiernan el acceso
 
 `license_plans` define valores comerciales reutilizables. Aplicar una plantilla copia referencia, límites y módulos a la licencia de una empresa; desde ese momento el contrato puede tener overrides sin mutar la plantilla ni contratos de otros tenants. Solo Platform Admin administra ambos niveles. Los datos fiscales, sucursales y usuarios son operación del propietario tenant y permanecen visibles pero no editables desde el Panel Maestro.
 
+## D025 — Ciclo contractual no destructivo y auditable
+
+Trial, Active y Grace permiten operación; Expired, Suspended y Cancelled la bloquean sin eliminar empresas, usuarios, sucursales ni información operativa. Activación, renovación, suspensión, reactivación y cancelación pasan por `CompanyLicenseService` y registran estado anterior/nuevo, actor, fecha y cambios contractuales. La futura automatización por pago reutilizará el servicio después de verificar el cobro; M14 no acopla una pasarela.
+
 ---
 
 # Regla para nuevas decisiones

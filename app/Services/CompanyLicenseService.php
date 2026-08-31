@@ -7,6 +7,7 @@ use App\Models\CompanyLicense;
 use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\Modules\ModuleRegistry;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,9 +46,14 @@ class CompanyLicenseService
         }
 
         return DB::transaction(function () use ($license, $status, $actor, $notes, $action, $attributes) {
+            $tracked = ['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit'];
+            $before = $license->only($tracked);
             $from = $license->status;
             $license->update([...$attributes, 'status' => $status, 'notes' => $notes, 'updated_by' => $actor?->id]);
-            $license->events()->create(['company_id' => $license->company_id, 'actor_id' => $actor?->id, 'action' => $action, 'from_status' => $from, 'to_status' => $status, 'snapshot' => $license->fresh()->only(['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit']), 'notes' => $notes]);
+            $snapshot = $license->fresh()->only($tracked);
+            $changes = collect($snapshot)->filter(fn ($value, $key) => $before[$key] != $value)
+                ->mapWithKeys(fn ($value, $key) => [$key => ['from' => $before[$key], 'to' => $value]])->all();
+            $license->events()->create(['company_id' => $license->company_id, 'actor_id' => $actor?->id, 'action' => $action, 'from_status' => $from, 'to_status' => $status, 'snapshot' => $snapshot, 'changes' => $changes, 'notes' => $notes]);
 
             return $license->fresh();
         });
@@ -65,6 +71,39 @@ class CompanyLicenseService
             'manual',
             $attributes,
         );
+    }
+
+    public function changeLifecycle(Company $company, User $actor, string $action, ?string $notes = null, array $attributes = []): CompanyLicense
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+
+        $status = match ($action) {
+            'activate', 'reactivate' => 'active',
+            'suspend' => 'suspended',
+            'cancel' => 'cancelled',
+            default => throw ValidationException::withMessages(['action' => 'Acción de licencia no reconocida.']),
+        };
+
+        return $this->transition($this->ensure($company), $status, $actor, $notes, $action, $attributes);
+    }
+
+    public function renew(Company $company, User $actor, CarbonInterface $expiresAt, ?CarbonInterface $nextRenewalAt = null, ?CarbonInterface $graceUntil = null, ?string $notes = null, string $source = 'manual'): CompanyLicense
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+        $license = $this->ensure($company);
+        if ($expiresAt->isPast() || ($license->expires_at && $expiresAt->lessThanOrEqualTo($license->expires_at))) {
+            throw ValidationException::withMessages(['expires_at' => 'La renovación debe extender el vencimiento actual y quedar en el futuro.']);
+        }
+        if ($graceUntil && $graceUntil->lessThan($expiresAt)) {
+            throw ValidationException::withMessages(['grace_until' => 'El fin de gracia no puede ser anterior al vencimiento.']);
+        }
+
+        return $this->transition($license, 'active', $actor, $notes, 'renewal_'.$source, [
+            'starts_at' => $license->starts_at ?? now(),
+            'expires_at' => $expiresAt,
+            'next_renewal_at' => $nextRenewalAt,
+            'grace_until' => $graceUntil,
+        ]);
     }
 
     public function updateModules(Company $company, User $actor, array $enabledModules): void

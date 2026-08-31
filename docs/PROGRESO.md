@@ -1000,7 +1000,18 @@ Evidencia: regresión UI Panel/onboarding/navegación (14 pruebas, 66 aserciones
 - Platform Admin administra plantillas/contratos; tenant bloqueado en HTTP y servicio.
 - Corrección M12: datos fiscales y operativos, sucursales y usuarios son solo lectura en Panel Maestro; se retiraron sus rutas de mutación. El alta exige un propietario tenant distinto y ese propietario completa onboarding.
 
-Evidencia focal/regresión: 43 pruebas, 245 aserciones. **M14 siguiente.**
+Evidencia focal/regresión: 43 pruebas, 245 aserciones.
+
+### M14 — Renovaciones y ciclo de licencia: COMPLETADO
+
+- Ciclo seguro Trial, Active, Grace, Expired, Suspended y Cancelled centralizado en `CompanyLicenseService`.
+- Panel Maestro permite activar, renovar/extender, modificar vigencias y gracia, suspender, reactivar y cancelar.
+- Renovación valida extensión futura; suspensión/vencimiento bloquean operación sin borrar datos y la reactivación recupera el acceso intacto.
+- Eventos de licencia registran actor, fecha, estado anterior/nuevo, snapshot y delta contractual.
+- Servicio preparado para una futura confirmación de renovación, sin proveedor ni cobros integrados.
+- Regresión relacionada M01–M14: 51 pruebas, 285 aserciones antes del cierre documental; validación final registrada en el cronograma.
+
+**Cronograma M00–M14 cerrado técnicamente. PAUSA antes del despliegue a producción.**
 
 ---
 

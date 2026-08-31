@@ -869,3 +869,5 @@ El flujo completo M02–M12 separa alta comercial y onboarding operativo: MVS cr
 
 M13 añade `license_plans` como catálogo de plantillas. `CompanyLicense.license_plan_id` conserva la referencia opcional y los campos de `company_licenses` siguen siendo el contrato efectivo/snapshot. `CompanyLicenseService::applyPlan()` copia valores y módulos; los overrides posteriores pertenecen solo a esa empresa. La ficha maestra presenta datos operativos en solo lectura y ya no expone mutaciones de empresa, sucursales o usuarios.
 
+M14 centraliza el ciclo Trial → Active → Grace → Expired y los estados administrativos Suspended/Cancelled en `CompanyLicenseService`. Las acciones manuales y renovaciones escriben actor, transición, snapshot y delta de campos contractuales en `company_license_events`; las transiciones automáticas por fecha quedan identificadas como sistema. `renew()` es el punto de integración futuro para una renovación confirmada por cobro, pero actualmente exige Platform Admin y no existe pasarela ni proveedor configurado.
+
