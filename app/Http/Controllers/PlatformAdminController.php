@@ -63,11 +63,22 @@ class PlatformAdminController extends Controller
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search'));
-        $companies = Company::query()->with('license')->withCount(['branches', 'users'])
+        $status = trim((string) $request->query('status'));
+        $module = trim((string) $request->query('module'));
+        $companies = Company::query()
+            ->with(['license', 'modules', 'roles:id,company_id,name', 'users:id,name,email'])
+            ->withCount(['branches', 'users'])
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
                 ->where('trade_name', 'like', "%{$search}%")
                 ->orWhere('legal_name', 'like', "%{$search}%")
-                ->orWhere('identification_number', 'like', "%{$search}%")))
+                ->orWhere('identification_number', 'like', "%{$search}%")
+                ->orWhereHas('users', fn ($users) => $users
+                    ->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%"))))
+            ->when($status, fn ($query) => $query->whereHas('license', fn ($license) => $license->where('status', $status)))
+            ->when($module, fn ($query) => $query->whereHas('modules', fn ($modules) => $modules
+                ->where('module_key', $module)
+                ->where('is_enabled', true)))
             ->orderBy('trade_name')->paginate(15)->withQueryString();
 
         return view('platform.index', [
@@ -78,6 +89,7 @@ class PlatformAdminController extends Controller
                 'branches' => Branch::query()->count(),
                 'users' => User::query()->count(),
             ],
+            'moduleCatalog' => ModuleRegistry::MODULES,
         ]);
     }
 

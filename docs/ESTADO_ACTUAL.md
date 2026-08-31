@@ -10,7 +10,8 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 
 - **M01 — Licenciamiento SaaS por tenant: COMPLETADO.** Platform Admin controla estado/plan, `branch_limit` y módulos por empresa mediante el contrato existente; las mutaciones están protegidas en middleware y servicio.
 - Bloqueo tenant e aislamiento entre empresas cubiertos por pruebas; roles tenant no administran privilegios globales.
-- Fuente oficial: `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`. **M02 permanece pendiente y no fue iniciado.**
+- Fuente oficial: `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`.
+- **M02 — Listado global: COMPLETADO.** Búsqueda por empresa/propietario, filtros de licencia/módulo y resumen de propietario, plan, sucursales usadas/límite, módulos y usuarios. M03 queda siguiente.
 
 ## Onboarding de clientes y sucursales
 

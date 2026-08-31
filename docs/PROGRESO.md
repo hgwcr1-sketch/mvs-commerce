@@ -909,7 +909,15 @@ Fuente oficial: `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`.
 
 Evidencia: `M01SaaSLicensingTest` 6/6, 26 aserciones, cubriendo `branch_limit`, módulos, autorización Platform Admin, bloqueo tenant y aislamiento. Regresión relacionada con `CompanyLicenseTest`, `CompanyModuleAccessTest` y `PlatformAdminTest`: 26/26 pruebas, 131 aserciones.
 
-**M02 permanece PENDIENTE / NO INICIADO.**
+### M02 — Listado global de tenants: COMPLETADO
+
+- El Panel Maestro permite buscar por empresa, identificación o propietario y filtrar por estado de licencia y módulo activo.
+- Cada tarjeta resume estado/plan, propietario, sucursales usadas/límite, módulos y usuarios sin abrir ni consultar operación del tenant.
+- Acceso exclusivo de Platform Admin y consultas aisladas mediante relaciones empresariales existentes.
+
+Evidencia: `M02PlatformTenantListTest` + regresión `PlatformAdminTest` y `M01SaaSLicensingTest`.
+
+**M03 es el siguiente bloque; no iniciado en este corte.**
 
 ---
 
