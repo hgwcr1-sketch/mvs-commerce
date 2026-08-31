@@ -39,7 +39,8 @@ class CompanyLicenseTest extends TestCase
         $license->update(['grace_until' => now()->subMinute()]);
         $this->get(route('dashboard'))->assertRedirect(route('license.status'));
         $this->get(route('license.status'))->assertOk()->assertSee('datos permanecen intactos');
-        $service->transition($license->fresh(), 'active', null, 'Pago', 'transition', ['expires_at' => now()->addMonth(), 'grace_until' => now()->addMonth()->addDays(7)]);
+        $platformAdmin = User::factory()->create(['is_active' => true, 'is_platform_admin' => true]);
+        $service->updateContract($company, $platformAdmin, 'active', 'Pago', ['expires_at' => now()->addMonth(), 'grace_until' => now()->addMonth()->addDays(7)]);
         $reactivatedResponse = $this->get(route('dashboard'));
         $this->assertNotSame(route('license.status'), $reactivatedResponse->headers->get('Location'));
         $this->assertDatabaseHas('branches', ['id' => $branch->id]);

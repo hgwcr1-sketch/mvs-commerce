@@ -246,6 +246,14 @@ Regla específica de Producción/Portal:
 
 > Toda tarea de Portal/Puesta en Producción debe comenzar leyendo `docs/CRONOGRAMA_PRODUCCION.md` (fuente oficial) y el Excel único como referencia visual (`docs/Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`), además de `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. El cronograma determina el orden previsto, mientras Git, código y tests determinan qué está realmente implementado. Ningún agente puede usar cronogramas Excel anteriores ni renumerar tareas; si descubre funcionalidad adelantada, la marca como completada adelantadamente con su evidencia, pero eso NO cambia cuál bloque corresponde ejecutar a continuación.
 
+### `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`
+
+Fuente oficial del orden M00–M12 del Panel Maestro. El contrato SaaS (estado, límites y módulos) pertenece a Platform Admin; el tenant solo opera dentro de las capacidades contratadas y nunca administra privilegios de plataforma.
+
+Regla específica del Panel Maestro:
+
+> Toda tarea M debe comenzar leyendo este Excel, `docs/ESTADO_ACTUAL.md` y la sección correspondiente de `docs/PROGRESO.md`. No saltar bloques ni mezclar en una fase controles previstos para fases M posteriores. Actualizar únicamente el estado y la evidencia de la fase realmente terminada.
+
 No llenar `AGENTS.md` con detalles que correspondan a esos documentos.
 
 ---

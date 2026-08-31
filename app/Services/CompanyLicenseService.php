@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\CompanyLicense;
 use App\Models\User;
+use App\Services\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -36,7 +37,7 @@ class CompanyLicenseService
         return $license->refresh();
     }
 
-    public function transition(CompanyLicense $license, string $status, ?User $actor, ?string $notes, string $action = 'transition', array $attributes = []): CompanyLicense
+    private function transition(CompanyLicense $license, string $status, ?User $actor, ?string $notes, string $action = 'transition', array $attributes = []): CompanyLicense
     {
         if (! in_array($status, CompanyLicense::STATUSES, true)) {
             abort(422);
@@ -48,6 +49,41 @@ class CompanyLicenseService
             $license->events()->create(['company_id' => $license->company_id, 'actor_id' => $actor?->id, 'action' => $action, 'from_status' => $from, 'to_status' => $status, 'snapshot' => $license->fresh()->only(['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit']), 'notes' => $notes]);
 
             return $license->fresh();
+        });
+    }
+
+    public function updateContract(Company $company, User $actor, string $status, ?string $notes, array $attributes = []): CompanyLicense
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+
+        return $this->transition(
+            $this->ensure($company),
+            $status,
+            $actor,
+            $notes,
+            'manual',
+            $attributes,
+        );
+    }
+
+    public function updateModules(Company $company, User $actor, array $enabledModules): void
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+
+        $unknownModules = array_diff($enabledModules, array_keys(ModuleRegistry::MODULES));
+        if ($unknownModules !== []) {
+            throw ValidationException::withMessages([
+                'modules' => 'La selección contiene módulos no reconocidos.',
+            ]);
+        }
+
+        DB::transaction(function () use ($company, $enabledModules) {
+            foreach (array_keys(ModuleRegistry::MODULES) as $moduleKey) {
+                $company->modules()->updateOrCreate(
+                    ['module_key' => $moduleKey],
+                    ['is_enabled' => in_array($moduleKey, $enabledModules, true)],
+                );
+            }
         });
     }
 

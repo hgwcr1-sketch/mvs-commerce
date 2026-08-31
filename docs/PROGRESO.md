@@ -896,6 +896,23 @@ Antes de continuar una fase nueva, revisar:
 
 ---
 
+## Panel Maestro — Cronograma M
+
+Fuente oficial: `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`.
+
+### M01 — Licenciamiento SaaS por tenant: COMPLETADO
+
+- Platform Admin administra el estado y referencia comercial de la licencia, `branch_limit` y el contrato completo de módulos de cada empresa reutilizando `CompanyLicense`, `CompanyModule` y el Panel Maestro existentes.
+- Las mutaciones se autorizan también en `CompanyLicenseService`; un tenant no puede modificar su contrato ni el ajeno mediante HTTP o llamadas de servicio.
+- La escritura de módulos es transaccional y completa; las licencias conservan actor, snapshot e historial. Todas las consultas y escrituras permanecen aisladas por `company_id`.
+- Los privilegios globales siguen separados de roles tenant. No se implementó M02 ni se adelantaron controles de fases posteriores.
+
+Evidencia: `M01SaaSLicensingTest` 6/6, 26 aserciones, cubriendo `branch_limit`, módulos, autorización Platform Admin, bloqueo tenant y aislamiento. Regresión relacionada con `CompanyLicenseTest`, `CompanyModuleAccessTest` y `PlatformAdminTest`: 26/26 pruebas, 131 aserciones.
+
+**M02 permanece PENDIENTE / NO INICIADO.**
+
+---
+
 ## Puesta en Producción
 
 ### P00 — Login profesional MVS Commerce: COMPLETADO

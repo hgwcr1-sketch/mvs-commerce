@@ -855,3 +855,13 @@ La PC provisional de San Ramón puede alojar una única instancia con SQLite loc
 
 Los artefactos operativos versionables viven en `scripts/production/`; la guía de activación, backup, restore y despliegue es `docs/produccion/P08_OPERACION_PRODUCCION.md`.
 
+---
+
+## 37. Contrato SaaS por tenant (M01)
+
+`company_licenses` conserva un contrato único por empresa con estado, referencia comercial y límites; `company_modules` conserva las capacidades contratadas. Son controles globales del Platform Admin y no configuración operativa del tenant.
+
+`CompanyLicenseService::updateContract()` y `updateModules()` exigen una identidad Platform Admin incluso fuera de HTTP. La actualización de licencia conserva su historial y la de módulos escribe el catálogo completo dentro de una transacción. Ambas operaciones reciben una empresa explícita y no afectan contratos de otros tenants.
+
+Roles y permisos empresariales no conceden `is_platform_admin`. El tenant consume los módulos habilitados y los límites existentes, pero no puede modificarlos. La experiencia expandida del panel, la aplicación adicional de límites y la auditoría transversal corresponden a fases M posteriores.
+

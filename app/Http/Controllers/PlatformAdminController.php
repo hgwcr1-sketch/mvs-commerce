@@ -107,7 +107,7 @@ class PlatformAdminController extends Controller
         ]);
         $status = $data['status'];
         unset($data['status']);
-        $licenses->transition($licenses->ensure($company), $status, $request->user(), $data['notes'] ?? null, 'manual', $data);
+        $licenses->updateContract($company, $request->user(), $status, $data['notes'] ?? null, $data);
 
         return back()->with('success', 'Licencia actualizada y registrada en el historial.');
     }
@@ -146,14 +146,12 @@ class PlatformAdminController extends Controller
         return back()->with('success', 'Estado de usuario actualizado.');
     }
 
-    public function updateModules(Request $request, Company $company): RedirectResponse
+    public function updateModules(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
     {
         $data = $request->validate(['modules' => ['nullable', 'array'], 'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))]]);
         $enabled = $data['modules'] ?? [];
 
-        foreach (array_keys(ModuleRegistry::MODULES) as $moduleKey) {
-            $company->modules()->updateOrCreate(['module_key' => $moduleKey], ['is_enabled' => in_array($moduleKey, $enabled, true)]);
-        }
+        $licenses->updateModules($company, $request->user(), $enabled);
 
         return back()->with('success', 'Módulos contratados actualizados.');
     }
