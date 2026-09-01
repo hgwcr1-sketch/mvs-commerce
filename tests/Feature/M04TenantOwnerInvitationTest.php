@@ -64,8 +64,11 @@ class M04TenantOwnerInvitationTest extends TestCase
         $html = (string) $mail->render();
 
         $this->assertSame('Active su acceso a MVS Commerce', $mail->subject);
-        $this->assertMatchesRegularExpression('#https://[^" ]+/images/logo-mvs\.png#', $html);
+        $this->assertMatchesRegularExpression('#https://[^" ]+/images/logo-mvs-email\.png#', $html);
         $this->assertStringContainsString('alt="MVS Commerce"', $html);
+        $this->assertStringContainsString('width="180"', $html);
+        $this->assertFileExists(public_path('images/logo-mvs-email.png'));
+        $this->assertLessThan(100_000, filesize(public_path('images/logo-mvs-email.png')));
         $this->assertStringNotContainsString('Laravel Logo', $html);
         $this->assertStringContainsString('Hola Owner Invitado', $html);
         $this->assertStringContainsString('MVS creó el acceso comercial de su empresa.', $html);
