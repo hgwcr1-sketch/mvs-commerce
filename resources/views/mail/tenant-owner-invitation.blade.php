@@ -1,7 +1,7 @@
 <x-mail::layout>
 <x-slot:header>
 <x-mail::header :url="config('app.url')">
-<img src="{{ $logoUrl }}"
+<img src="{{ $message->embed($logoPath) }}"
      width="180"
      alt="MVS Commerce"
      style="display: inline-block; width: 100%; max-width: 180px; height: auto; border: 0; outline: none; text-decoration: none;">

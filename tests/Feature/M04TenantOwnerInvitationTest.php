@@ -8,6 +8,7 @@ use App\Notifications\TenantOwnerInvitation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Symfony\Component\Mime\Part\DataPart;
 use Tests\TestCase;
 
 class M04TenantOwnerInvitationTest extends TestCase
@@ -56,15 +57,26 @@ class M04TenantOwnerInvitationTest extends TestCase
         $this->assertFalse($owner->fresh()->is_active);
     }
 
-    public function test_invitation_email_renders_the_public_mvs_logo_and_keeps_current_content(): void
+    public function test_invitation_email_embeds_the_mvs_logo_inline_and_keeps_current_content(): void
     {
-        config(['app.url' => 'https://mvs-commerce.test']);
         $owner = User::factory()->create(['name' => 'Owner Invitado', 'email' => 'owner-render@invite.test']);
         $mail = (new TenantOwnerInvitation('secure-render-token'))->toMail($owner);
-        $html = (string) $mail->render();
+
+        $owner->notify(new TenantOwnerInvitation('secure-render-token'));
+
+        $sentMessage = app('mailer')->getSymfonyTransport()->messages()->sole();
+        $email = $sentMessage->getOriginalMessage();
+        $html = $email->getHtmlBody();
+        $inlineLogo = collect($email->getAttachments())->first(
+            fn (DataPart $attachment) => $attachment->getFilename() === 'logo-mvs-email.png'
+        );
 
         $this->assertSame('Active su acceso a MVS Commerce', $mail->subject);
-        $this->assertMatchesRegularExpression('#https://[^" ]+/images/logo-mvs-email\.png#', $html);
+        $this->assertNotNull($inlineLogo);
+        $this->assertSame('inline', $inlineLogo->getDisposition());
+        $this->assertSame('image/png', $inlineLogo->getMediaType().'/'.$inlineLogo->getMediaSubtype());
+        $this->assertStringContainsString('src="cid:'.$inlineLogo->getContentId().'"', $html);
+        $this->assertStringNotContainsString('/images/logo-mvs-email.png', $html);
         $this->assertStringContainsString('alt="MVS Commerce"', $html);
         $this->assertStringContainsString('width="180"', $html);
         $this->assertFileExists(public_path('images/logo-mvs-email.png'));

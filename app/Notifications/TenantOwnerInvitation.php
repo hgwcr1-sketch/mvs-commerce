@@ -25,7 +25,7 @@ class TenantOwnerInvitation extends Notification
             ->subject('Active su acceso a MVS Commerce')
             ->markdown('mail.tenant-owner-invitation', [
                 'activationUrl' => $url,
-                'logoUrl' => secure_asset('images/logo-mvs-email.png'),
+                'logoPath' => public_path('images/logo-mvs-email.png'),
                 'ownerName' => $notifiable->name,
             ]);
     }
