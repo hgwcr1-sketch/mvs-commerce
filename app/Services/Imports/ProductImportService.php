@@ -222,6 +222,7 @@ class ProductImportService
             + $this->existingValues(ProductBarcode::class, 'barcode', $sourceBarcodes);
         foreach ($rows as $index => $row) {
             $row['errors'] = [];
+            $requiredCost = ['required', 'decimal:0,4', 'gte:0'];
             $requiredMoney = ['required', 'decimal:0,2', 'gte:0'];
             $optionalMoney = ['nullable', 'decimal:0,2', 'gte:0'];
             $validator = Validator::make($row, [
@@ -230,7 +231,7 @@ class ProductImportService
                 'category_id' => ['nullable', 'integer'], 'brand_id' => ['nullable', 'integer'], 'unit_id' => ['nullable', 'integer'],
                 'product_type' => ['required', 'in:product,service,combo'], 'barcode' => ['nullable', 'string', 'max:100'],
                 'cabys_code' => ['nullable', 'string', 'max:20'], 'short_description' => ['nullable', 'string', 'max:255'],
-                'description' => ['nullable', 'string'], 'cost' => $requiredMoney,
+                'description' => ['nullable', 'string'], 'cost' => $requiredCost,
                 'sale_price' => $requiredMoney, 'wholesale_price' => $optionalMoney,
                 'special_price' => $optionalMoney, 'price_a' => $optionalMoney,
                 'price_b' => $optionalMoney, 'price_c' => $optionalMoney,

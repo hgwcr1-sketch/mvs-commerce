@@ -51,7 +51,7 @@ Incluye:
 
 - Reutiliza Centro de Datos, PhpSpreadsheet y `DataExportService`; añade plantilla XLSX e importación XLSX/XLS/CSV con preview y confirmación explícita.
 - Valida por fila/campo, resuelve categorías, marcas y unidades por nombre normalizado dentro de `company_id`, y revalida antes de confirmar. Los catálogos faltantes se anuncian en preview y se crean una sola vez al confirmar; mayúsculas y espacios no generan duplicados. Códigos internos y códigos de barras respetan las restricciones únicas reales de la base de datos, incluso ante concurrencia.
-- Costos, precios e impuesto se validan como cadenas decimales de máximo dos posiciones efectivas; archivos heredados con cuatro posiciones terminadas en cero (`5500.0000`) se normalizan sin pérdida ni aritmética `float`.
+- Costo admite y conserva hasta cuatro decimales (`412.9412`) como cadena; precios e impuesto mantienen máximo dos posiciones efectivas. No se usa aritmética `float`.
 - La confirmación crea catálogos, productos y códigos en una transacción única con rollback total. No crea `branch_product`, no modifica existencias y no genera Kardex: stock inicial e histórico pertenecen a P36.
 - Evidencia actual: `ProductImportP33Test` 9/9, 106 aserciones; regresión focal con plantillas, exportación, Centro de Datos, Inventario y Compras: 37/37, 299 aserciones.
 - Preparación sin implementar: P34/P35 podrán resolver los productos importados por código/barcode; P36 conserva la responsabilidad exclusiva de stock inicial y Kardex histórico por sucursal.

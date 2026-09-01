@@ -123,7 +123,7 @@ class ProductImportP33Test extends TestCase
         $this->assertSame($category->id, $product->category_id);
         $this->assertSame($brand->id, $product->brand_id);
         $this->assertSame($unit->id, $product->unit_id);
-        $this->assertSame('1234.56', $product->cost);
+        $this->assertSame('1234.5600', $product->cost);
         $this->assertSame('2500.75', $product->sale_price);
         $this->assertSame('2300.25', $product->price_a);
         $this->assertSame('2200.10', $product->price_b);
@@ -165,7 +165,7 @@ class ProductImportP33Test extends TestCase
         $this->assertSame($category->id, $product->category_id);
         $this->assertSame($brand->id, $product->brand_id);
         $this->assertSame($unit->id, $product->unit_id);
-        $this->assertSame('5500.00', $product->cost);
+        $this->assertSame('5500.0000', $product->cost);
         $this->assertSame('1000.00', $product->sale_price);
         $this->assertSame(2, ProductCategory::where('company_id', $company->id)->count());
         $this->assertSame(2, Brand::where('company_id', $company->id)->count());
@@ -198,6 +198,31 @@ class ProductImportP33Test extends TestCase
         $this->assertSame('5500', $preview['cost']);
         $this->assertSame('1000', $preview['sale_price']);
         $this->assertNotContains('validation.regex', array_column($preview['errors'], 'message'));
+    }
+
+    public function test_real_xlsx_preview_and_import_preserve_cost_with_four_decimals(): void
+    {
+        [$company, $branch, $user, $category, $brand, $unit] = $this->context(['productos.crear']);
+        $row = $this->validRow($category, $brand, $unit, 'COSTO-4D', '744100008888');
+        $path = $this->productFile([$row], 'xlsx');
+        $spreadsheet = IOFactory::load($path);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit('L2', '412.9412', DataType::TYPE_STRING);
+        (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.productos.preview'),
+            ['product_file' => $this->uploaded($path, 'xlsx')],
+        )->assertOk()->assertDontSee('validation.decimal');
+
+        $preview = session('product_import_preview.rows.0');
+        $this->assertTrue($preview['valid'], json_encode($preview['errors']));
+        $this->assertSame('412.9412', $preview['cost'], 'preview cost');
+
+        $this->post(route('importaciones.productos.import'))->assertRedirect(route('productos.index'));
+        $product = Product::where('company_id', $company->id)->where('internal_code', 'COSTO-4D')->sole();
+        $this->assertSame('412.9412', $product->cost, 'model cost');
+        $this->assertSame('412.9412', (string) DB::table('products')->where('id', $product->id)->value('cost'), 'database cost');
     }
 
     public function test_missing_catalogs_are_previewed_without_writes_and_created_once_on_confirmation(): void

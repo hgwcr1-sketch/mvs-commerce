@@ -4,10 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
@@ -28,11 +28,11 @@ class Product extends Model
         'cost',
         'sale_price',
         'wholesale_price',
-'special_price',
-'price_a',
-'price_b',
-'price_c',
-'stock',
+        'special_price',
+        'price_a',
+        'price_b',
+        'price_c',
+        'stock',
         'track_inventory',
         'minimum_stock',
         'maximum_stock',
@@ -44,14 +44,14 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'cost' => 'decimal:2',
+        'cost' => 'decimal:4',
         'sale_price' => 'decimal:2',
         'wholesale_price' => 'decimal:2',
-'special_price' => 'decimal:2',
-'price_a' => 'decimal:2',
-'price_b' => 'decimal:2',
-'price_c' => 'decimal:2',
-'stock' => 'decimal:2',
+        'special_price' => 'decimal:2',
+        'price_a' => 'decimal:2',
+        'price_b' => 'decimal:2',
+        'price_c' => 'decimal:2',
+        'stock' => 'decimal:2',
         'track_inventory' => 'boolean',
         'allow_negative_stock' => 'boolean',
         'is_active' => 'boolean',
@@ -104,7 +104,7 @@ class Product extends Model
             ->withTimestamps();
     }
 
-        /**
+    /**
      * Códigos de barras adicionales del producto.
      */
     public function barcodes()
