@@ -18,6 +18,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
@@ -169,6 +170,34 @@ class ProductImportP33Test extends TestCase
         $this->assertSame(2, ProductCategory::where('company_id', $company->id)->count());
         $this->assertSame(2, Brand::where('company_id', $company->id)->count());
         $this->assertSame(2, Unit::where('company_id', $company->id)->count());
+    }
+
+    public function test_real_xlsx_preview_accepts_text_cost_with_four_zero_decimals(): void
+    {
+        [$company, $branch, $user, $category, $brand, $unit] = $this->context(['productos.crear']);
+        $row = $this->validRow($category, $brand, $unit, 'XLSX-REAL', '744100009999');
+        $path = $this->productFile([$row], 'xlsx');
+        $spreadsheet = IOFactory::load($path);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit('L2', "5500.0000\u{00A0}", DataType::TYPE_STRING);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit('M2', '1000.0000', DataType::TYPE_STRING);
+        (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
+
+        $loaded = IOFactory::load($path)->getActiveSheet()->getCell('L2')->getValue();
+        $this->assertIsString($loaded);
+        $this->assertSame("5500.0000\u{00A0}", $loaded);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.productos.preview'),
+            ['product_file' => $this->uploaded($path, 'xlsx')],
+        );
+
+        $response->assertOk()->assertDontSee('validation.regex');
+        $preview = session('product_import_preview.rows.0');
+        $this->assertTrue($preview['valid'], json_encode($preview['errors']));
+        $this->assertSame('5500', $preview['cost']);
+        $this->assertSame('1000', $preview['sale_price']);
+        $this->assertNotContains('validation.regex', array_column($preview['errors'], 'message'));
     }
 
     public function test_missing_catalogs_are_previewed_without_writes_and_created_once_on_confirmation(): void
