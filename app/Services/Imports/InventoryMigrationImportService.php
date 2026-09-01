@@ -164,7 +164,15 @@ class InventoryMigrationImportService
 
     private function headerKey(mixed $header): string
     {
-        return trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
+        return Str::of((string) $header)
+            ->replace("\xEF\xBB\xBF", '')
+            ->ascii()
+            ->lower()
+            ->replace('*', '')
+            ->trim()
+            ->replaceMatches('/[\s_-]+/', '_')
+            ->trim('_')
+            ->toString();
     }
 
     private function normalize(array $data, int $rowNumber, int $companyId, bool $legacy = false): array

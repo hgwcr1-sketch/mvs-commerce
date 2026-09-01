@@ -214,6 +214,15 @@ class InventoryMigrationP36Test extends TestCase
             ->assertDontSee('name="movement_type"', false);
         $screen->assertSee(route('importaciones.inventario-migracion'), false);
 
+        $this->get(route('data-center.imports'))
+            ->assertOk()
+            ->assertSee('Importar Inventario')
+            ->assertSee('Inventario inicial e histórico')
+            ->assertSee('data-existing-import="inventory-migration"', false)
+            ->assertSee('href="'.route('importaciones.inventario-migracion').'"', false)
+            ->assertDontSee('data-existing-import="inventory"', false)
+            ->assertDontSee('href="'.route('importaciones.inventario').'"', false);
+
         foreach (['text/csv', 'text/plain', 'application/vnd.ms-excel'] as $index => $mime) {
             $csv = $this->legacyFile([
                 [$product->internal_code, $product->barcode, $product->name, '4.2500'],
@@ -227,6 +236,26 @@ class InventoryMigrationP36Test extends TestCase
             $this->assertDatabaseCount('inventory_movements', 0);
             $this->assertDatabaseCount('inventory_migration_batches', 0);
         }
+    }
+
+    public function test_legacy_csv_detects_real_headers_with_bom_outer_and_multiple_spaces(): void
+    {
+        [$company, $branch, $user, $product] = $this->context(['inventario.ajustar']);
+        $csv = $this->legacyFile(
+            [[$product->internal_code, $product->barcode, $product->name, '6.5432']],
+            ["\xEF\xBB\xBF CODIGO ", ' CODIGO  BARRA ', ' DESCRIPCION ', ' EXISTENCIA '],
+        );
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-HEADERS-REALES'),
+        )->assertOk();
+
+        $this->assertTrue(session('inventory_migration_preview.rows.0.valid'));
+        $this->assertSame('initial_balance', session('inventory_migration_preview.rows.0.record_type'));
+        $this->assertSame('6.5432', session('inventory_migration_preview.rows.0.quantity'));
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('inventory_migration_batches', 0);
     }
 
     private function context(array $permissions): array
@@ -271,13 +300,11 @@ class InventoryMigrationP36Test extends TestCase
         return $path;
     }
 
-    private function legacyFile(array $rows): string
+    private function legacyFile(array $rows, array $headers = ['CODIGO', 'CODIGO BARRA', 'DESCRIPCION', 'EXISTENCIA']): string
     {
         $path = tempnam(sys_get_temp_dir(), 'p36-mym-').'.csv';
         $sheet = new Spreadsheet;
-        $sheet->getActiveSheet()->fromArray(array_merge([
-            ['CODIGO', 'CODIGO BARRA', 'DESCRIPCION', 'EXISTENCIA'],
-        ], $rows));
+        $sheet->getActiveSheet()->fromArray(array_merge([$headers], $rows));
         (new Csv($sheet))->save($path);
 
         return $path;
