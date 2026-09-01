@@ -258,6 +258,70 @@ class InventoryMigrationP36Test extends TestCase
         $this->assertDatabaseCount('inventory_migration_batches', 0);
     }
 
+    public function test_legacy_numeric_code_with_leading_zeroes_resolves_existing_unpadded_code(): void
+    {
+        [$company, $branch, $user, $base] = $this->context(['inventario.ajustar']);
+        $product = $this->productForCode($base, '28');
+        $csv = $this->legacyFile([['000028', '', 'Producto 28', '7.2500']]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-CODIGO-000028'),
+        )->assertOk();
+
+        $row = session('inventory_migration_preview.rows.0');
+        $this->assertTrue($row['valid']);
+        $this->assertSame($product->id, $row['product_id']);
+        $this->assertSame('000028', $row['product_code']);
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_legacy_alphanumeric_codes_remain_exact_and_missing_products_do_not_create_false_initial_duplicates(): void
+    {
+        [$company, $branch, $user, $base] = $this->context(['inventario.ajustar']);
+        $product = $this->productForCode($base, 'ABC001');
+        $csv = $this->legacyFile([
+            ['ABC001', '', 'Exacto', '1.0000'],
+            ['000ABC001', '', 'No normalizar', '2.0000'],
+            ['NO-EXISTE-1', '', 'Faltante uno', '3.0000'],
+            ['NO-EXISTE-2', '', 'Faltante dos', '4.0000'],
+        ]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-ALFANUMERICOS'),
+        )->assertOk();
+
+        $rows = session('inventory_migration_preview.rows');
+        $this->assertSame($product->id, $rows[0]['product_id']);
+        $this->assertNull($rows[1]['product_id']);
+        foreach (array_slice($rows, 1) as $row) {
+            $this->assertNotContains('tipo_registro', array_column($row['errors'], 'field'));
+            $this->assertStringNotContainsString('repetido', implode(' ', array_column($row['errors'], 'message')));
+        }
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_legacy_numeric_normalization_blocks_multiple_existing_candidates(): void
+    {
+        [$company, $branch, $user, $base] = $this->context(['inventario.ajustar']);
+        $this->productForCode($base, '28');
+        $this->productForCode($base, '00028');
+        $csv = $this->legacyFile([['000028', '', 'Ambiguo', '5.0000']]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-AMBIGUO'),
+        )->assertOk();
+
+        $row = session('inventory_migration_preview.rows.0');
+        $this->assertFalse($row['valid']);
+        $this->assertNull($row['product_id']);
+        $this->assertContains('codigo', array_column($row['errors'], 'field'));
+        $this->assertStringContainsString('ambiguo', implode(' ', array_column($row['errors'], 'message')));
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
     private function context(array $permissions): array
     {
         $suffix = Str::lower(Str::random(8));
@@ -276,6 +340,22 @@ class InventoryMigrationP36Test extends TestCase
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'SKU-'.$suffix, 'barcode' => 'BAR-'.$suffix, 'cost' => 10, 'sale_price' => 20, 'tax_rate' => 13, 'track_inventory' => true, 'is_active' => true]);
 
         return [$company, $branch, $user, $product];
+    }
+
+    private function productForCode(Product $base, string $code): Product
+    {
+        return Product::create([
+            'company_id' => $base->company_id,
+            'category_id' => $base->category_id,
+            'unit_id' => $base->unit_id,
+            'name' => 'Producto '.$code,
+            'internal_code' => $code,
+            'cost' => 1,
+            'sale_price' => 2,
+            'tax_rate' => 13,
+            'track_inventory' => true,
+            'is_active' => true,
+        ]);
     }
 
     private function initialRow(Branch $branch, Product $product, string $source, string $key, string $quantity): array

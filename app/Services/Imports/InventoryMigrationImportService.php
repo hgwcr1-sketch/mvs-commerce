@@ -181,7 +181,7 @@ class InventoryMigrationImportService
         $productCode = $this->text($data['product_code'] ?? null);
         $barcode = $this->text($data['barcode'] ?? null);
         $branch = Branch::query()->where('company_id', $companyId)->where('code', $branchCode)->where('is_active', true)->first();
-        $byCode = $productCode === null ? collect() : Product::query()->where('company_id', $companyId)->where('internal_code', $productCode)->get();
+        $byCode = $this->productsByCode($productCode, $companyId, $legacy);
         $byBarcode = $barcode === null ? collect() : Product::query()->where('company_id', $companyId)->where(fn ($query) => $query->where('barcode', $barcode)->orWhereHas('barcodes', fn ($q) => $q->where('barcode', $barcode)->where('is_active', true)))->get()->unique('id')->values();
         $codeProduct = $byCode->count() === 1 ? $byCode->first() : null;
         $barcodeProduct = $byBarcode->count() === 1 ? $byBarcode->first() : null;
@@ -212,6 +212,34 @@ class InventoryMigrationImportService
             'current_stock' => $branch && $product ? $this->stock($branch->id, $product->id) : null,
             'valid' => true, 'errors' => [],
         ];
+    }
+
+    private function productsByCode(?string $productCode, int $companyId, bool $legacy)
+    {
+        if ($productCode === null) {
+            return collect();
+        }
+
+        if (! $legacy || preg_match('/^\d+$/', $productCode) !== 1) {
+            return Product::query()
+                ->where('company_id', $companyId)
+                ->where('internal_code', $productCode)
+                ->get();
+        }
+
+        $normalized = ltrim($productCode, '0') ?: '0';
+
+        return Product::query()
+            ->where('company_id', $companyId)
+            ->where('internal_code', 'like', '%'.$normalized)
+            ->get()
+            ->filter(function (Product $product) use ($normalized): bool {
+                $candidate = trim((string) $product->internal_code);
+
+                return preg_match('/^\d+$/', $candidate) === 1
+                    && (ltrim($candidate, '0') ?: '0') === $normalized;
+            })
+            ->values();
     }
 
     private function validate(array $rows, int $companyId, array $allowedBranchIds): array
@@ -285,12 +313,16 @@ class InventoryMigrationImportService
             if ($this->validDecimal($row['minimum_stock']) && $this->validDecimal($row['maximum_stock']) && bccomp($row['minimum_stock'], $row['maximum_stock'], 4) > 0) {
                 $errors[] = ['field' => 'stock_maximo', 'message' => 'No puede ser menor que el mínimo.'];
             }
-            $pair = $row['branch_id'].'|'.$row['product_id'];
+            $pair = $row['branch_id'] && $row['product_id']
+                ? $row['branch_id'].'|'.$row['product_id']
+                : null;
             if ($row['record_type'] === 'initial_balance') {
-                if (isset($seenInitial[$pair])) {
+                if ($pair !== null && isset($seenInitial[$pair])) {
                     $errors[] = ['field' => 'tipo_registro', 'message' => 'El saldo inicial del producto/sucursal está repetido.'];
                 }
-                $seenInitial[$pair] = true;
+                if ($pair !== null) {
+                    $seenInitial[$pair] = true;
+                }
                 if ($row['movement_type'] || $row['previous_stock'] !== null || $row['new_stock'] !== null) {
                     $errors[] = ['field' => 'tipo_registro', 'message' => 'Saldo inicial no usa tipo de movimiento ni stocks anterior/nuevo.'];
                 }
@@ -313,10 +345,12 @@ class InventoryMigrationImportService
                     if (bccomp($expected, $row['new_stock'], 4) !== 0 || bccomp($expected, '0', 4) < 0) {
                         $errors[] = ['field' => 'stock_nuevo', 'message' => "No concilia; el valor esperado es {$expected}."];
                     }
-                    if (isset($chains[$pair]) && bccomp($chains[$pair], $row['previous_stock'], 4) !== 0) {
+                    if ($pair !== null && isset($chains[$pair]) && bccomp($chains[$pair], $row['previous_stock'], 4) !== 0) {
                         $errors[] = ['field' => 'stock_anterior', 'message' => 'No continúa el stock nuevo del movimiento histórico anterior.'];
                     }
-                    $chains[$pair] = $row['new_stock'];
+                    if ($pair !== null) {
+                        $chains[$pair] = $row['new_stock'];
+                    }
                 }
             }
             $row['errors'] = collect($errors)->unique(fn ($error) => $error['field'].'|'.$error['message'])->values()->all();
