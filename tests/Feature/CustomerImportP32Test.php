@@ -214,6 +214,52 @@ class CustomerImportP32Test extends TestCase
         $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-3', 'email' => null]);
     }
 
+    public function test_large_customer_consolidation_uses_linear_indexes_without_timing_out(): void
+    {
+        $rows = [];
+
+        $rowCount = 6109;
+
+        for ($index = 0; $index < $rowCount; $index++) {
+            $rowNumber = $index + 2;
+            $rows[] = [
+                'row_number' => $rowNumber,
+                'customer_type' => 'individual',
+                'identification_type' => '01',
+                'identification' => 'VOLUMEN-'.$index,
+                'name' => 'Cliente '.$index,
+                'commercial_name' => null,
+                'phone_country_code' => '+506',
+                'phone' => (string) (10000000 + $index),
+                'mobile' => null,
+                'email' => 'cliente'.$index.'@example.com',
+                'address' => null,
+                'credit_limit' => '0',
+                'credit_days' => '0',
+                'price_level' => 'normal',
+                'birth_date' => null,
+                'is_active' => true,
+                'valid' => true,
+                'skipped' => false,
+                'merged_into_row' => null,
+                'source_rows' => [$rowNumber],
+                'merge_errors' => [],
+                'errors' => [],
+                'warnings' => [],
+            ];
+        }
+
+        $method = new \ReflectionMethod(CustomerImportService::class, 'consolidateRows');
+        $startedAt = hrtime(true);
+        $result = $method->invoke(app(CustomerImportService::class), $rows);
+        $elapsedSeconds = (hrtime(true) - $startedAt) / 1_000_000_000;
+
+        $this->assertCount($rowCount, $result);
+        $this->assertFalse($result[0]['skipped']);
+        $this->assertFalse($result[$rowCount - 1]['skipped']);
+        $this->assertLessThan(5.0, $elapsedSeconds, 'La consolidación de miles de filas debe mantenerse lineal.');
+    }
+
     public function test_confirmation_revalidates_and_rolls_back_all_rows_when_a_duplicate_appears(): void
     {
         [$company, $branch, $user] = $this->context(['clientes.crear']);

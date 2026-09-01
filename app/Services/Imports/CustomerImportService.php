@@ -305,55 +305,85 @@ class CustomerImportService
 
     private function consolidateRows(array $rows): array
     {
+        $identificationIndex = [];
+        $contactIndex = ['phone' => [], 'email' => []];
+
         foreach ($rows as $index => &$row) {
-            $canonicalIndexes = array_keys(array_filter(
-                array_slice($rows, 0, $index, true),
-                fn (array $candidate) => ! $candidate['skipped']
-            ));
-            $identificationMatches = array_values(array_filter(
-                $canonicalIndexes,
-                fn (int $candidate) => $row['identification'] !== null
-                    && $rows[$candidate]['identification'] === $row['identification']
-            ));
-            $contactMatches = array_values(array_filter(
-                $canonicalIndexes,
-                fn (int $candidate) => $this->rowsShareContact($rows[$candidate], $row)
-            ));
+            $identificationMatches = $row['identification'] === null
+                ? []
+                : array_keys($identificationIndex[$row['identification']] ?? []);
+            $contactMatches = $this->indexedContactMatches($row, $contactIndex);
+            $mutatedCanonical = null;
 
             if ($identificationMatches !== []) {
                 $candidate = $identificationMatches[0];
                 if (array_diff($contactMatches, [$candidate]) !== []) {
                     $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'La identificación y los contactos apuntan a clientes distintos dentro del archivo.');
-
-                    continue;
+                } else {
+                    $this->omitRepeatedIdentification($rows[$candidate], $row);
+                    $mutatedCanonical = $candidate;
                 }
-
-                $this->omitRepeatedIdentification($rows[$candidate], $row);
-
-                continue;
-            }
-
-            if (count($contactMatches) > 1) {
+            } elseif (count($contactMatches) > 1) {
                 $row['merge_errors'][] = $this->mergeConflict('contacto', $row, 'El teléfono/móvil o correo coincide con más de un cliente del archivo.');
-
-                continue;
-            }
-
-            if (count($contactMatches) === 1) {
+            } elseif (count($contactMatches) === 1) {
                 $candidate = $contactMatches[0];
                 $candidateIdentification = $rows[$candidate]['identification'];
                 if ($candidateIdentification !== null && $row['identification'] !== null && $candidateIdentification !== $row['identification']) {
                     $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'El contacto coincide, pero las identificaciones son diferentes.');
-
-                    continue;
+                } else {
+                    $this->mergeRows($rows[$candidate], $row);
+                    $mutatedCanonical = $candidate;
                 }
+            }
 
-                $this->mergeRows($rows[$candidate], $row);
+            if ($mutatedCanonical !== null) {
+                $this->indexCanonicalRow($rows[$mutatedCanonical], $mutatedCanonical, $identificationIndex, $contactIndex);
+            }
+
+            if (! $row['skipped']) {
+                $this->indexCanonicalRow($row, $index, $identificationIndex, $contactIndex);
             }
         }
         unset($row);
 
         return $rows;
+    }
+
+    private function indexedContactMatches(array $row, array $contactIndex): array
+    {
+        $matches = [];
+
+        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
+            foreach ($contactIndex['phone'][$phone] ?? [] as $index => $_) {
+                $matches[$index] = true;
+            }
+        }
+
+        if ($row['email'] !== null) {
+            foreach ($contactIndex['email'][$row['email']] ?? [] as $index => $_) {
+                $matches[$index] = true;
+            }
+        }
+
+        $indexes = array_keys($matches);
+        sort($indexes, SORT_NUMERIC);
+
+        return $indexes;
+    }
+
+    private function indexCanonicalRow(array $row, int $index, array &$identificationIndex, array &$contactIndex): void
+    {
+        if ($row['identification'] !== null) {
+            $identificationIndex[$row['identification']][$index] = true;
+        }
+
+        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
+            $contactIndex['phone'][$phone][$index] = true;
+        }
+
+        if ($row['email'] !== null) {
+            $contactIndex['email'][$row['email']][$index] = true;
+        }
     }
 
     private function normalizeRepeatedEmails(array $rows): array
@@ -392,16 +422,6 @@ class CustomerImportService
             'identificacion',
             'La identificación ya apareció en la fila '.$canonical['row_number'].'; se conservará la primera aparición y esta fila se omitirá.'
         ));
-    }
-
-    private function rowsShareContact(array $first, array $second): bool
-    {
-        $firstPhones = array_unique(array_filter([$first['phone'], $first['mobile']]));
-        $secondPhones = array_unique(array_filter([$second['phone'], $second['mobile']]));
-        $sharedPhone = array_intersect($firstPhones, $secondPhones) !== [];
-        $sharedEmail = $first['email'] !== null && $first['email'] === $second['email'];
-
-        return $sharedPhone || $sharedEmail;
     }
 
     private function mergeRows(array &$canonical, array &$duplicate): void
