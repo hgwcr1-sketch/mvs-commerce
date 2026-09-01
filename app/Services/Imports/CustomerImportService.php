@@ -83,7 +83,7 @@ class CustomerImportService
             ]);
         }
 
-        return $this->validateRows($rows, $companyId);
+        return $this->validateRows($this->consolidateRows($this->normalizeRepeatedEmails($rows)), $companyId);
     }
 
     public function confirm(array $preview, int $companyId): int
@@ -104,11 +104,13 @@ class CustomerImportService
         }
 
         return DB::transaction(function () use ($rows, $companyId): int {
-            foreach ($rows as $row) {
+            $importableRows = collect($rows)->reject(fn (array $row) => $row['skipped'])->values();
+
+            foreach ($importableRows as $row) {
                 Customer::create(['company_id' => $companyId, ...$this->attributes($row)]);
             }
 
-            return count($rows);
+            return $importableRows->count();
         });
     }
 
@@ -164,6 +166,10 @@ class CustomerImportService
             'birth_date' => $birthDate,
             'is_active' => $this->booleanValue($data['is_active'] ?? null),
             'valid' => true,
+            'skipped' => false,
+            'merged_into_row' => null,
+            'source_rows' => [$rowNumber],
+            'merge_errors' => [],
             'errors' => [],
             'warnings' => array_values(array_filter([
                 $phoneWarning, $mobileWarning, $birthDateWarning, $emailWarning,
@@ -174,11 +180,18 @@ class CustomerImportService
 
     private function validateRows(array $rows, int $companyId): array
     {
-        $seen = ['identification' => [], 'phone' => [], 'email' => []];
+        $seen = ['phone' => [], 'email' => []];
 
         foreach ($rows as $index => $row) {
-            $row['errors'] = [];
+            $row['errors'] = $row['merge_errors'] ?? [];
             $row['warnings'] ??= [];
+
+            if ($row['skipped']) {
+                $row['valid'] = true;
+                $rows[$index] = $row;
+
+                continue;
+            }
 
             if ($row['email'] !== null) {
                 if (isset($seen['email'][$row['email']])) {
@@ -217,7 +230,6 @@ class CustomerImportService
             }
 
             $identities = [
-                'identification' => array_filter([$row['identification'] ?? null]),
                 'phone' => array_values(array_unique(array_filter([$row['phone'] ?? null, $row['mobile'] ?? null]))),
             ];
 
@@ -269,7 +281,9 @@ class CustomerImportService
 
     private function attributes(array $row): array
     {
-        return collect($row)->except(['row_number', 'valid', 'errors', 'warnings'])->all() + [
+        return collect($row)->except([
+            'row_number', 'valid', 'skipped', 'merged_into_row', 'source_rows', 'merge_errors', 'errors', 'warnings',
+        ])->all() + [
             'accepts_email_invoice' => true,
             'points' => 0,
         ];
@@ -287,6 +301,175 @@ class CustomerImportService
         $value = Str::lower(trim((string) ($value ?? 'si')));
 
         return ! in_array($value, ['0', 'no', 'n', 'false', 'inactivo'], true);
+    }
+
+    private function consolidateRows(array $rows): array
+    {
+        foreach ($rows as $index => &$row) {
+            $canonicalIndexes = array_keys(array_filter(
+                array_slice($rows, 0, $index, true),
+                fn (array $candidate) => ! $candidate['skipped']
+            ));
+            $identificationMatches = array_values(array_filter(
+                $canonicalIndexes,
+                fn (int $candidate) => $row['identification'] !== null
+                    && $rows[$candidate]['identification'] === $row['identification']
+            ));
+            $contactMatches = array_values(array_filter(
+                $canonicalIndexes,
+                fn (int $candidate) => $this->rowsShareContact($rows[$candidate], $row)
+            ));
+
+            if ($identificationMatches !== []) {
+                $candidate = $identificationMatches[0];
+                if (array_diff($contactMatches, [$candidate]) !== []) {
+                    $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'La identificación y los contactos apuntan a clientes distintos dentro del archivo.');
+
+                    continue;
+                }
+
+                $this->omitRepeatedIdentification($rows[$candidate], $row);
+
+                continue;
+            }
+
+            if (count($contactMatches) > 1) {
+                $row['merge_errors'][] = $this->mergeConflict('contacto', $row, 'El teléfono/móvil o correo coincide con más de un cliente del archivo.');
+
+                continue;
+            }
+
+            if (count($contactMatches) === 1) {
+                $candidate = $contactMatches[0];
+                $candidateIdentification = $rows[$candidate]['identification'];
+                if ($candidateIdentification !== null && $row['identification'] !== null && $candidateIdentification !== $row['identification']) {
+                    $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'El contacto coincide, pero las identificaciones son diferentes.');
+
+                    continue;
+                }
+
+                $this->mergeRows($rows[$candidate], $row);
+            }
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    private function normalizeRepeatedEmails(array $rows): array
+    {
+        $seen = [];
+
+        foreach ($rows as &$row) {
+            if ($row['email'] === null) {
+                continue;
+            }
+
+            if (isset($seen[$row['email']])) {
+                $this->appendWarningOnce($row, $this->warning(
+                    'correo',
+                    'El correo se repite desde la fila '.$seen[$row['email']].'; se importará vacío en esta fila.'
+                ));
+                $row['email'] = null;
+
+                continue;
+            }
+
+            $seen[$row['email']] = $row['row_number'];
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    private function omitRepeatedIdentification(array &$canonical, array &$duplicate): void
+    {
+        $duplicate['skipped'] = true;
+        $duplicate['merged_into_row'] = $canonical['row_number'];
+        $canonical['source_rows'] = array_values(array_unique([...$canonical['source_rows'], ...$duplicate['source_rows']]));
+
+        $this->appendWarningOnce($duplicate, $this->warning(
+            'identificacion',
+            'La identificación ya apareció en la fila '.$canonical['row_number'].'; se conservará la primera aparición y esta fila se omitirá.'
+        ));
+    }
+
+    private function rowsShareContact(array $first, array $second): bool
+    {
+        $firstPhones = array_unique(array_filter([$first['phone'], $first['mobile']]));
+        $secondPhones = array_unique(array_filter([$second['phone'], $second['mobile']]));
+        $sharedPhone = array_intersect($firstPhones, $secondPhones) !== [];
+        $sharedEmail = $first['email'] !== null && $first['email'] === $second['email'];
+
+        return $sharedPhone || $sharedEmail;
+    }
+
+    private function mergeRows(array &$canonical, array &$duplicate): void
+    {
+        $duplicate['skipped'] = true;
+        $duplicate['merged_into_row'] = $canonical['row_number'];
+        $canonical['source_rows'] = array_values(array_unique([...$canonical['source_rows'], ...$duplicate['source_rows']]));
+
+        foreach ([
+            'customer_type', 'identification_type', 'identification', 'name', 'commercial_name',
+            'phone_country_code', 'email', 'address', 'credit_limit', 'credit_days', 'price_level',
+            'birth_date', 'is_active',
+        ] as $field) {
+            $current = $canonical[$field];
+            $incoming = $duplicate[$field];
+
+            if ($this->isEmptyMergeValue($current) && ! $this->isEmptyMergeValue($incoming)) {
+                $canonical[$field] = $incoming;
+            } elseif (! $this->isEmptyMergeValue($current) && ! $this->isEmptyMergeValue($incoming) && ! $this->sameMergeValue($current, $incoming)) {
+                $canonical['merge_errors'][] = $this->mergeConflict(
+                    self::FIELD_LABELS[$field] ?? $field,
+                    $duplicate,
+                    'Las filas '.$canonical['row_number'].' y '.$duplicate['row_number'].' contienen valores incompatibles; requiere revisión manual.'
+                );
+            }
+        }
+
+        $phones = array_values(array_unique(array_filter([
+            $canonical['phone'], $canonical['mobile'], $duplicate['phone'], $duplicate['mobile'],
+        ])));
+        if (count($phones) <= 2) {
+            $canonical['phone'] = $phones[0] ?? null;
+            $canonical['mobile'] = $phones[1] ?? null;
+        } else {
+            $canonical['merge_errors'][] = $this->mergeConflict(
+                'telefono',
+                $duplicate,
+                'Las filas consolidadas contienen más de dos teléfonos diferentes; requiere revisión manual.'
+            );
+        }
+
+        $this->appendWarningOnce($canonical, $this->warning(
+            'consolidacion',
+            'Se consolidaron '.count($canonical['source_rows']).' filas originales en el cliente de la fila '.$canonical['row_number'].'.'
+        ));
+        $this->appendWarningOnce($duplicate, $this->warning(
+            'consolidacion',
+            'Fila consolidada en el cliente de la fila '.$canonical['row_number'].'; no creará otro cliente.'
+        ));
+    }
+
+    private function isEmptyMergeValue(mixed $value): bool
+    {
+        return $value === null || $value === '';
+    }
+
+    private function sameMergeValue(mixed $first, mixed $second): bool
+    {
+        if (is_bool($first) || is_bool($second)) {
+            return (bool) $first === (bool) $second;
+        }
+
+        return mb_strtolower(trim((string) $first)) === mb_strtolower(trim((string) $second));
+    }
+
+    private function mergeConflict(string $field, array $row, string $message): array
+    {
+        return ['field' => $field, 'message' => $message, 'row_number' => $row['row_number']];
     }
 
     private function normalizeImportedPhone(mixed $value, ?string $countryCode, string $field): array
@@ -369,5 +552,12 @@ class CustomerImportService
     private function warning(string $field, string $message): array
     {
         return ['field' => $field, 'message' => $message];
+    }
+
+    private function appendWarningOnce(array &$row, array $warning): void
+    {
+        if (! in_array($warning, $row['warnings'], true)) {
+            $row['warnings'][] = $warning;
+        }
     }
 }

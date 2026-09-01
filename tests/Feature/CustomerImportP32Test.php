@@ -80,12 +80,13 @@ class CustomerImportP32Test extends TestCase
         );
 
         $response->assertOk()->assertSee('identificacion')->assertSee('telefono')->assertSee('correo')
-            ->assertSee('fila 3')->assertSee('Corrija todas las filas antes de confirmar');
+            ->assertSee('Omitida')->assertSee('Corrija todas las filas antes de confirmar');
         $rows = session('customer_import_preview.rows');
         $this->assertFalse($rows[0]['valid']);
         $this->assertContains('correo', array_column($rows[0]['errors'], 'field'));
         $this->assertFalse($rows[1]['valid']);
-        $this->assertFalse($rows[2]['valid']);
+        $this->assertTrue($rows[2]['valid']);
+        $this->assertTrue($rows[2]['skipped']);
         $this->assertDatabaseCount('customers', 1);
     }
 
@@ -113,6 +114,37 @@ class CustomerImportP32Test extends TestCase
         $this->assertSame(2, Customer::where('company_id', $company->id)->count());
         $this->assertFalse(DB::getSchemaBuilder()->hasColumn('customers', 'branch_id'));
         $this->assertNull(session('customer_import_preview'));
+    }
+
+    public function test_repeated_file_identification_keeps_first_row_and_omits_later_rows(): void
+    {
+        [$company, $branch, $user] = $this->context(['clientes.crear']);
+        $file = $this->customerFile([
+            ['individual', '01', 'DUP-ARCHIVO', 'Primera aparición', '', '+506', '81111111', '', 'primera@example.com', '', 0, 0, 'normal', '1990-01-01', 'Sí'],
+            ['individual', '01', 'DUP-ARCHIVO', 'Datos diferentes no fusionados', '', '+506', '82222222', '', 'segunda@example.com', '', 0, 0, 'normal', '1991-02-02', 'Sí'],
+            ['individual', '01', 'UNICO-ARCHIVO', 'Cliente único', '', '+506', '83333333', '', 'unico@example.com', '', 0, 0, 'normal', '1992-03-03', 'Sí'],
+        ]);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
+        );
+
+        $response->assertOk()->assertSee('Omitidas')->assertSee('Omitida')->assertSee('esta fila se omitirá')->assertSee('Confirmar importación de 2');
+        $rows = session('customer_import_preview.rows');
+        $this->assertFalse($rows[0]['skipped']);
+        $this->assertTrue($rows[1]['valid']);
+        $this->assertTrue($rows[1]['skipped']);
+        $this->assertFalse($rows[2]['skipped']);
+        $this->assertNotEmpty($rows[1]['warnings']);
+
+        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->assertSame(2, Customer::where('company_id', $company->id)->count());
+        $this->assertDatabaseHas('customers', [
+            'company_id' => $company->id, 'identification' => 'DUP-ARCHIVO',
+            'name' => 'Primera aparición', 'phone' => '81111111', 'email' => 'primera@example.com',
+        ]);
+        $this->assertDatabaseMissing('customers', ['company_id' => $company->id, 'phone' => '82222222']);
+        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'UNICO-ARCHIVO']);
     }
 
     public function test_legacy_phones_dates_and_safe_mojibake_are_imported_with_warnings_without_inventing_data(): void
