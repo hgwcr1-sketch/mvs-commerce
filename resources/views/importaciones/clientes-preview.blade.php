@@ -7,6 +7,7 @@
 @php
     $validCount = collect($rows)->where('valid', true)->count();
     $errorCount = collect($rows)->where('valid', false)->count();
+    $warningCount = collect($rows)->filter(fn ($row) => ! empty($row['warnings']))->count();
 @endphp
 <div class="mx-auto max-w-7xl space-y-6" data-customer-import-preview>
     <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -18,10 +19,11 @@
         <a href="{{ route('importaciones.clientes') }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 sm:w-auto">Cargar otro archivo</a>
     </header>
 
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Filas <strong class="block text-2xl text-slate-900">{{ count($rows) }}</strong></div>
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">Listas <strong class="block text-2xl">{{ $validCount }}</strong></div>
         <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Con errores <strong class="block text-2xl">{{ $errorCount }}</strong></div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">Con advertencias <strong class="block text-2xl">{{ $warningCount }}</strong></div>
     </div>
 
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -40,12 +42,19 @@
                             <td class="px-4 py-3 text-slate-700">{{ $row['email'] ?: '—' }}</td>
                             <td class="px-4 py-3">
                                 @if($row['valid'])
-                                    <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Lista</span>
+                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ empty($row['warnings']) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">{{ empty($row['warnings']) ? 'Lista' : 'Advertencia' }}</span>
                                 @else
                                     <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Error</span>
                                     <ul class="mt-2 space-y-1 text-xs text-red-700">
                                         @foreach($row['errors'] as $error)
                                             <li><strong>{{ $error['field'] }}:</strong> {{ $error['message'] }}</li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                                @if(! empty($row['warnings']))
+                                    <ul class="mt-2 space-y-1 text-xs text-amber-700">
+                                        @foreach($row['warnings'] as $warning)
+                                            <li><strong>{{ $warning['field'] }}:</strong> {{ $warning['message'] }}</li>
                                         @endforeach
                                     </ul>
                                 @endif

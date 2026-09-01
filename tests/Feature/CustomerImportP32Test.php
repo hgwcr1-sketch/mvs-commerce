@@ -114,6 +114,44 @@ class CustomerImportP32Test extends TestCase
         $this->assertNull(session('customer_import_preview'));
     }
 
+    public function test_legacy_phones_dates_and_safe_mojibake_are_imported_with_warnings_without_inventing_data(): void
+    {
+        [$company, $branch, $user] = $this->context(['clientes.crear']);
+        $file = $this->customerFile([
+            ['individual', '01', 'REAL-1', 'BRENDA ZUÃ‘IGA', '', '+506', '50,650,672,617,837', '', '', '', 0, 0, 'normal', '31/12/1980', 'Sí'],
+            ['individual', '01', 'REAL-2', 'Teléfono ambiguo', '', '+506', '12,34', 'sin número', '', '', 0, 0, 'normal', 'fecha desconocida', 'Sí'],
+            ['individual', '01', 'REAL-3', 'Sin fecha', '', '+506', '', '', '', '', 0, 0, 'normal', '', 'Sí'],
+        ]);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
+        );
+
+        $response->assertOk()->assertSee('Advertencia')->assertSee('Con advertencias')->assertDontSee('Corrija todas las filas antes de confirmar');
+        $rows = session('customer_import_preview.rows');
+        $this->assertTrue(collect($rows)->every(fn (array $row) => $row['valid']));
+        $this->assertSame('72617837', $rows[0]['phone']);
+        $this->assertSame('BRENDA ZUÑIGA', $rows[0]['name']);
+        $this->assertNull($rows[0]['birth_date']);
+        $this->assertNull($rows[1]['phone']);
+        $this->assertNull($rows[1]['mobile']);
+        $this->assertNull($rows[1]['birth_date']);
+        $this->assertNull($rows[2]['birth_date']);
+        $this->assertNotEmpty($rows[0]['warnings']);
+        $this->assertNotEmpty($rows[1]['warnings']);
+        $this->assertNotEmpty($rows[2]['warnings']);
+
+        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->assertDatabaseHas('customers', [
+            'company_id' => $company->id, 'identification' => 'REAL-1', 'name' => 'BRENDA ZUÑIGA',
+            'phone' => '72617837', 'birth_date' => null,
+        ]);
+        $this->assertDatabaseHas('customers', [
+            'company_id' => $company->id, 'identification' => 'REAL-2',
+            'phone' => null, 'mobile' => null, 'birth_date' => null,
+        ]);
+    }
+
     public function test_confirmation_revalidates_and_rolls_back_all_rows_when_a_duplicate_appears(): void
     {
         [$company, $branch, $user] = $this->context(['clientes.crear']);

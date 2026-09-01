@@ -134,31 +134,40 @@ class CustomerImportService
     private function normalizeRow(array $data, int $rowNumber, int $companyId): array
     {
         $companyCode = Company::query()->whereKey($companyId)->value('default_phone_country_code');
-        $phone = $this->phones->normalizePhone($this->nullable($data['phone'] ?? null));
-        $mobile = $this->phones->normalizePhone($this->nullable($data['mobile'] ?? null));
         $countryCode = $this->phones->normalizeCountryCode($this->nullable($data['phone_country_code'] ?? null));
+        $effectiveCountryCode = $countryCode ?? $this->phones->normalizeCountryCode($companyCode);
+        [$phone, $phoneWarning] = $this->normalizeImportedPhone($data['phone'] ?? null, $effectiveCountryCode, 'telefono');
+        [$mobile, $mobileWarning] = $this->normalizeImportedPhone($data['mobile'] ?? null, $effectiveCountryCode, 'movil');
+        [$birthDate, $birthDateWarning] = $this->normalizeBirthDate($data['birth_date'] ?? null);
+        [$name, $nameWarning] = $this->normalizeLegacyText(trim((string) ($data['name'] ?? '')), 'nombre');
+        [$commercialName, $commercialNameWarning] = $this->normalizeLegacyText($this->nullable($data['commercial_name'] ?? null), 'nombre_comercial');
+        [$address, $addressWarning] = $this->normalizeLegacyText($this->nullable($data['address'] ?? null), 'direccion');
 
         return [
             'row_number' => $rowNumber,
             'customer_type' => Str::lower(trim((string) ($data['customer_type'] ?? ''))),
             'identification_type' => $this->nullable($data['identification_type'] ?? null),
             'identification' => $this->nullable($data['identification'] ?? null),
-            'name' => trim((string) ($data['name'] ?? '')),
-            'commercial_name' => $this->nullable($data['commercial_name'] ?? null),
+            'name' => $name,
+            'commercial_name' => $commercialName,
             'phone_country_code' => ($phone !== null || $mobile !== null)
-                ? ($countryCode ?? $this->phones->normalizeCountryCode($companyCode))
+                ? $effectiveCountryCode
                 : null,
             'phone' => $phone,
             'mobile' => $mobile,
             'email' => ($email = $this->nullable($data['email'] ?? null)) ? Str::lower($email) : null,
-            'address' => $this->nullable($data['address'] ?? null),
+            'address' => $address,
             'credit_limit' => $this->nullable($data['credit_limit'] ?? null) ?? '0',
             'credit_days' => $this->nullable($data['credit_days'] ?? null) ?? '0',
             'price_level' => Str::lower($this->nullable($data['price_level'] ?? null) ?? 'normal'),
-            'birth_date' => $this->nullable($data['birth_date'] ?? null),
+            'birth_date' => $birthDate,
             'is_active' => $this->booleanValue($data['is_active'] ?? null),
             'valid' => true,
             'errors' => [],
+            'warnings' => array_values(array_filter([
+                $phoneWarning, $mobileWarning, $birthDateWarning,
+                $nameWarning, $commercialNameWarning, $addressWarning,
+            ])),
         ];
     }
 
@@ -246,7 +255,7 @@ class CustomerImportService
 
     private function attributes(array $row): array
     {
-        return collect($row)->except(['row_number', 'valid', 'errors'])->all() + [
+        return collect($row)->except(['row_number', 'valid', 'errors', 'warnings'])->all() + [
             'accepts_email_invoice' => true,
             'points' => 0,
         ];
@@ -264,5 +273,73 @@ class CustomerImportService
         $value = Str::lower(trim((string) ($value ?? 'si')));
 
         return ! in_array($value, ['0', 'no', 'n', 'false', 'inactivo'], true);
+    }
+
+    private function normalizeImportedPhone(mixed $value, ?string $countryCode, string $field): array
+    {
+        $original = $this->nullable($value);
+        if ($original === null) {
+            return [null, null];
+        }
+
+        $normalized = $this->phones->normalizePhone($original);
+        if (preg_match('/^\d{4,15}$/', (string) $normalized)) {
+            return [$normalized, null];
+        }
+
+        if (preg_match('/^\d{1,3}(,\d{3})+$/', $original)) {
+            $digits = str_replace(',', '', $original);
+            $countryDigits = ltrim((string) $countryCode, '+');
+
+            if (strlen($digits) === 8) {
+                return [$digits, $this->warning($field, 'Se quitaron separadores de miles del teléfono heredado.')];
+            }
+
+            foreach ([$countryDigits, $countryDigits.$countryDigits] as $prefix) {
+                if ($prefix !== '' && str_starts_with($digits, $prefix) && strlen(substr($digits, strlen($prefix))) === 8) {
+                    return [substr($digits, strlen($prefix)), $this->warning($field, 'Se recuperó el teléfono local eliminando separadores y prefijo(s) de país repetidos.')];
+                }
+            }
+        }
+
+        return [null, $this->warning($field, 'El valor heredado es inválido o ambiguo; se importará vacío.')];
+    }
+
+    private function normalizeBirthDate(mixed $value): array
+    {
+        $original = $this->nullable($value);
+        if ($original === null) {
+            return [null, $this->warning('fecha_nacimiento', 'La fecha está vacía; se importará vacía.')];
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $original);
+        $valid = $date !== false
+            && $date->format('Y-m-d') === $original
+            && \DateTimeImmutable::getLastErrors() === false;
+
+        return $valid
+            ? [$original, null]
+            : [null, $this->warning('fecha_nacimiento', 'La fecha heredada es inválida o ambigua; se importará vacía.')];
+    }
+
+    private function normalizeLegacyText(?string $value, string $field): array
+    {
+        if ($value === null || ! preg_match('/Ã.|Â.|â./u', $value)) {
+            return [$value, null];
+        }
+
+        $repaired = mb_convert_encoding($value, 'Windows-1252', 'UTF-8');
+        $roundTrip = mb_convert_encoding($repaired, 'UTF-8', 'Windows-1252');
+
+        if (mb_check_encoding($repaired, 'UTF-8') && $roundTrip === $value && ! preg_match('/Ã.|Â.|â./u', $repaired)) {
+            return [$repaired, $this->warning($field, 'Se corrigió texto UTF-8 mal decodificado de forma reversible.')];
+        }
+
+        return [$value, null];
+    }
+
+    private function warning(string $field, string $message): array
+    {
+        return ['field' => $field, 'message' => $message];
     }
 }
