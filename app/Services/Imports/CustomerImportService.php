@@ -139,6 +139,7 @@ class CustomerImportService
         [$phone, $phoneWarning] = $this->normalizeImportedPhone($data['phone'] ?? null, $effectiveCountryCode, 'telefono');
         [$mobile, $mobileWarning] = $this->normalizeImportedPhone($data['mobile'] ?? null, $effectiveCountryCode, 'movil');
         [$birthDate, $birthDateWarning] = $this->normalizeBirthDate($data['birth_date'] ?? null);
+        [$email, $emailWarning] = $this->normalizeImportedEmail($data['email'] ?? null);
         [$name, $nameWarning] = $this->normalizeLegacyText(trim((string) ($data['name'] ?? '')), 'nombre');
         [$commercialName, $commercialNameWarning] = $this->normalizeLegacyText($this->nullable($data['commercial_name'] ?? null), 'nombre_comercial');
         [$address, $addressWarning] = $this->normalizeLegacyText($this->nullable($data['address'] ?? null), 'direccion');
@@ -155,7 +156,7 @@ class CustomerImportService
                 : null,
             'phone' => $phone,
             'mobile' => $mobile,
-            'email' => ($email = $this->nullable($data['email'] ?? null)) ? Str::lower($email) : null,
+            'email' => $email,
             'address' => $address,
             'credit_limit' => $this->nullable($data['credit_limit'] ?? null) ?? '0',
             'credit_days' => $this->nullable($data['credit_days'] ?? null) ?? '0',
@@ -165,7 +166,7 @@ class CustomerImportService
             'valid' => true,
             'errors' => [],
             'warnings' => array_values(array_filter([
-                $phoneWarning, $mobileWarning, $birthDateWarning,
+                $phoneWarning, $mobileWarning, $birthDateWarning, $emailWarning,
                 $nameWarning, $commercialNameWarning, $addressWarning,
             ])),
         ];
@@ -177,6 +178,20 @@ class CustomerImportService
 
         foreach ($rows as $index => $row) {
             $row['errors'] = [];
+            $row['warnings'] ??= [];
+
+            if ($row['email'] !== null) {
+                if (isset($seen['email'][$row['email']])) {
+                    $row['warnings'][] = $this->warning(
+                        'correo',
+                        'El correo se repite desde la fila '.$seen['email'][$row['email']].'; se importará vacío en esta fila.'
+                    );
+                    $row['email'] = null;
+                } else {
+                    $seen['email'][$row['email']] = $row['row_number'];
+                }
+            }
+
             $validator = Validator::make($row, [
                 'customer_type' => ['required', 'in:individual,company'],
                 'identification_type' => ['nullable', 'in:01,02,03,04,05'],
@@ -204,7 +219,6 @@ class CustomerImportService
             $identities = [
                 'identification' => array_filter([$row['identification'] ?? null]),
                 'phone' => array_values(array_unique(array_filter([$row['phone'] ?? null, $row['mobile'] ?? null]))),
-                'email' => array_filter([$row['email'] ?? null]),
             ];
 
             foreach ($identities as $kind => $values) {
@@ -320,6 +334,20 @@ class CustomerImportService
         return $valid
             ? [$original, null]
             : [null, $this->warning('fecha_nacimiento', 'La fecha heredada es inválida o ambigua; se importará vacía.')];
+    }
+
+    private function normalizeImportedEmail(mixed $value): array
+    {
+        $email = $this->nullable($value);
+        if ($email === null) {
+            return [null, null];
+        }
+
+        $email = Str::lower($email);
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false && mb_strlen($email) <= 150
+            ? [$email, null]
+            : [null, $this->warning('correo', 'El correo heredado es inválido; se importará vacío.')];
     }
 
     private function normalizeLegacyText(?string $value, string $field): array

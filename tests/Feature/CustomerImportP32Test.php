@@ -83,6 +83,7 @@ class CustomerImportP32Test extends TestCase
             ->assertSee('fila 3')->assertSee('Corrija todas las filas antes de confirmar');
         $rows = session('customer_import_preview.rows');
         $this->assertFalse($rows[0]['valid']);
+        $this->assertContains('correo', array_column($rows[0]['errors'], 'field'));
         $this->assertFalse($rows[1]['valid']);
         $this->assertFalse($rows[2]['valid']);
         $this->assertDatabaseCount('customers', 1);
@@ -150,6 +151,35 @@ class CustomerImportP32Test extends TestCase
             'company_id' => $company->id, 'identification' => 'REAL-2',
             'phone' => null, 'mobile' => null, 'birth_date' => null,
         ]);
+    }
+
+    public function test_invalid_and_repeated_file_emails_become_null_with_warnings_without_blocking_rows(): void
+    {
+        [$company, $branch, $user] = $this->context(['clientes.crear']);
+        $file = $this->customerFile([
+            ['individual', '01', 'MAIL-1', 'Correo original', '', '+506', '', '', 'CLIENTE@EXAMPLE.COM', '', 0, 0, 'normal', '1990-01-01', 'Sí'],
+            ['individual', '01', 'MAIL-2', 'Correo repetido', '', '+506', '', '', 'cliente@example.com', '', 0, 0, 'normal', '1990-01-02', 'Sí'],
+            ['individual', '01', 'MAIL-3', 'Correo inválido', '', '+506', '', '', 'correo-invalido', '', 0, 0, 'normal', '1990-01-03', 'Sí'],
+        ]);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
+        );
+
+        $response->assertOk()->assertSee('Advertencia')->assertSee('El correo se repite desde la fila 2')->assertSee('El correo heredado es inválido');
+        $rows = session('customer_import_preview.rows');
+        $this->assertTrue(collect($rows)->every(fn (array $row) => $row['valid']));
+        $this->assertSame('cliente@example.com', $rows[0]['email']);
+        $this->assertNull($rows[1]['email']);
+        $this->assertNull($rows[2]['email']);
+        $this->assertEmpty($rows[0]['warnings']);
+        $this->assertNotEmpty($rows[1]['warnings']);
+        $this->assertNotEmpty($rows[2]['warnings']);
+
+        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-1', 'email' => 'cliente@example.com']);
+        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-2', 'email' => null]);
+        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-3', 'email' => null]);
     }
 
     public function test_confirmation_revalidates_and_rolls_back_all_rows_when_a_duplicate_appears(): void
