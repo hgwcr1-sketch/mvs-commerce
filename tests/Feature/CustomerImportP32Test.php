@@ -62,6 +62,34 @@ class CustomerImportP32Test extends TestCase
         $this->assertDatabaseCount('customers', 1);
     }
 
+    public function test_preview_normalizes_legacy_identification_types_and_blocks_unknown_values(): void
+    {
+        [$company, $branch, $user] = $this->context(['clientes.crear']);
+        $file = $this->customerFile([
+            ['individual', 1, 'TIPO-1', 'Tipo heredado', '', '+506', '', '', '', '', 0, 0, 'normal', '', 'Sí'],
+            ['individual', '01', 'TIPO-01', 'Tipo canónico', '', '+506', '', '', '', '', 0, 0, 'normal', '', 'Sí'],
+            ['individual', 6, 'TIPO-6', 'Tipo inválido', '', '+506', '', '', '', '', 0, 0, 'normal', '', 'Sí'],
+            ['individual', '', 'TIPO-VACIO', 'Tipo vacío', '', '+506', '', '', '', '', 0, 0, 'normal', '', 'Sí'],
+        ]);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
+        );
+
+        $response->assertOk()->assertSee('Tipo 01')->assertSee('Tipo 6')->assertSee('Corrija todas las filas antes de confirmar');
+        $rows = session('customer_import_preview.rows');
+        $this->assertSame('01', $rows[0]['identification_type']);
+        $this->assertSame('01', $rows[1]['identification_type']);
+        $this->assertTrue($rows[0]['valid']);
+        $this->assertTrue($rows[1]['valid']);
+        $this->assertSame('6', $rows[2]['identification_type']);
+        $this->assertFalse($rows[2]['valid']);
+        $this->assertContains('tipo_identificacion', array_column($rows[2]['errors'], 'field'));
+        $this->assertNull($rows[3]['identification_type']);
+        $this->assertTrue($rows[3]['valid']);
+        $this->assertDatabaseCount('customers', 0);
+    }
+
     public function test_preview_reports_clear_row_and_field_errors_for_existing_and_file_duplicates(): void
     {
         [$company, $branch, $user] = $this->context(['clientes.crear']);

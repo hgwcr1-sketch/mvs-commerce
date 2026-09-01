@@ -149,7 +149,7 @@ class CustomerImportService
         return [
             'row_number' => $rowNumber,
             'customer_type' => Str::lower(trim((string) ($data['customer_type'] ?? ''))),
-            'identification_type' => $this->nullable($data['identification_type'] ?? null),
+            'identification_type' => $this->normalizeIdentificationType($data['identification_type'] ?? null),
             'identification' => $this->nullable($data['identification'] ?? null),
             'name' => $name,
             'commercial_name' => $commercialName,
@@ -301,6 +301,15 @@ class CustomerImportService
         $value = Str::lower(trim((string) ($value ?? 'si')));
 
         return ! in_array($value, ['0', 'no', 'n', 'false', 'inactivo'], true);
+    }
+
+    private function normalizeIdentificationType(mixed $value): ?string
+    {
+        $type = $this->nullable($value);
+
+        return in_array($type, ['1', '2', '3', '4', '5'], true)
+            ? str_pad($type, 2, '0', STR_PAD_LEFT)
+            : $type;
     }
 
     private function consolidateRows(array $rows): array

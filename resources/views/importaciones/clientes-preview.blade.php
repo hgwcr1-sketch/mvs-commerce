@@ -32,13 +32,16 @@
         <div class="overflow-x-auto">
             <table class="min-w-[900px] w-full divide-y divide-slate-200 text-sm">
                 <thead class="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
-                    <tr><th class="px-4 py-3">Fila</th><th class="px-4 py-3">Identificación</th><th class="px-4 py-3">Nombre</th><th class="px-4 py-3">Teléfono / móvil</th><th class="px-4 py-3">Correo</th><th class="px-4 py-3">Estado</th></tr>
+                    <tr><th class="px-4 py-3">Fila</th><th class="px-4 py-3">Tipo / identificación</th><th class="px-4 py-3">Nombre</th><th class="px-4 py-3">Teléfono / móvil</th><th class="px-4 py-3">Correo</th><th class="px-4 py-3">Estado</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @foreach($rows as $row)
                         <tr class="align-top {{ !$row['valid'] ? 'bg-red-50/50' : ($row['skipped'] ? 'bg-amber-50/50' : '') }}">
                             <td class="px-4 py-3 font-semibold text-slate-700">{{ $row['row_number'] }}</td>
-                            <td class="px-4 py-3 text-slate-700">{{ $row['identification'] ?: '—' }}</td>
+                            <td class="px-4 py-3 text-slate-700">
+                                <span class="block">{{ $row['identification'] ?: '—' }}</span>
+                                <span class="mt-1 block text-xs text-slate-500">Tipo {{ $row['identification_type'] ?: '—' }}</span>
+                            </td>
                             <td class="px-4 py-3 font-medium text-slate-800">{{ $row['name'] ?: '—' }}</td>
                             <td class="px-4 py-3 text-slate-700">{{ $row['phone'] ?: ($row['mobile'] ?: '—') }}</td>
                             <td class="px-4 py-3 text-slate-700">{{ $row['email'] ?: '—' }}</td>
