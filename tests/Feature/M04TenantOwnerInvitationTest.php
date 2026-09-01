@@ -56,6 +56,25 @@ class M04TenantOwnerInvitationTest extends TestCase
         $this->assertFalse($owner->fresh()->is_active);
     }
 
+    public function test_invitation_email_renders_the_public_mvs_logo_and_keeps_current_content(): void
+    {
+        config(['app.url' => 'https://mvs-commerce.test']);
+        $owner = User::factory()->create(['name' => 'Owner Invitado', 'email' => 'owner-render@invite.test']);
+        $mail = (new TenantOwnerInvitation('secure-render-token'))->toMail($owner);
+        $html = (string) $mail->render();
+
+        $this->assertSame('Active su acceso a MVS Commerce', $mail->subject);
+        $this->assertMatchesRegularExpression('#https://[^" ]+/images/logo-mvs\.png#', $html);
+        $this->assertStringContainsString('alt="MVS Commerce"', $html);
+        $this->assertStringNotContainsString('Laravel Logo', $html);
+        $this->assertStringContainsString('Hola Owner Invitado', $html);
+        $this->assertStringContainsString('MVS creó el acceso comercial de su empresa.', $html);
+        $this->assertStringContainsString('Defina una contraseña segura para activar su cuenta y completar el onboarding de su tenant.', $html);
+        $this->assertStringContainsString('Activar mi acceso', $html);
+        $this->assertStringContainsString('secure-render-token', $html);
+        $this->assertStringContainsString('Este enlace es personal, expirable y de un solo uso.', $html);
+    }
+
     private function payload(): array
     {
         return [

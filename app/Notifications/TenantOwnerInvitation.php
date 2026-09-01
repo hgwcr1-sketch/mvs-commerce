@@ -23,10 +23,10 @@ class TenantOwnerInvitation extends Notification
 
         return (new MailMessage)
             ->subject('Active su acceso a MVS Commerce')
-            ->greeting('Hola '.$notifiable->name)
-            ->line('MVS creó el acceso comercial de su empresa.')
-            ->line('Defina una contraseña segura para activar su cuenta y completar el onboarding de su tenant.')
-            ->action('Activar mi acceso', $url)
-            ->line('Este enlace es personal, expirable y de un solo uso.');
+            ->markdown('mail.tenant-owner-invitation', [
+                'activationUrl' => $url,
+                'logoUrl' => secure_asset('images/logo-mvs.png'),
+                'ownerName' => $notifiable->name,
+            ]);
     }
 }
