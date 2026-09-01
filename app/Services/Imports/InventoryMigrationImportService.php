@@ -205,7 +205,9 @@ class InventoryMigrationImportService
             'barcode_ambiguous' => $byBarcode->count() > 1,
             'legacy' => $legacy,
             'tracks_inventory' => $product?->track_inventory, 'allows_decimals' => $product?->unit?->allows_decimals,
-            'movement_type' => $movementType, 'quantity' => $this->decimal($data['quantity'] ?? null),
+            'movement_type' => $movementType, 'quantity' => $legacy
+                ? $this->legacyQuantity($data['quantity'] ?? null)
+                : $this->decimal($data['quantity'] ?? null),
             'previous_stock' => $this->decimal($data['previous_stock'] ?? null), 'new_stock' => $this->decimal($data['new_stock'] ?? null),
             'minimum_stock' => $this->decimal($data['minimum_stock'] ?? null), 'maximum_stock' => $this->decimal($data['maximum_stock'] ?? null),
             'source_reference' => $this->text($data['source_reference'] ?? null), 'notes' => $this->text($data['notes'] ?? null),
@@ -371,6 +373,20 @@ class InventoryMigrationImportService
     private function decimal(mixed $value): ?string
     {
         return $this->text($value);
+    }
+
+    private function legacyQuantity(mixed $value): ?string
+    {
+        $value = $this->text($value);
+        if ($value === null || ! str_contains($value, ',')) {
+            return $value;
+        }
+
+        if (preg_match('/^\d{1,3}(?:,\d{3})+(?:\.\d{1,4})?$/', $value) !== 1) {
+            return $value;
+        }
+
+        return str_replace(',', '', $value);
     }
 
     private function validDecimal(?string $value): bool

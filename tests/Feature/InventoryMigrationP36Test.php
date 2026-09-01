@@ -15,6 +15,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
@@ -322,6 +324,35 @@ class InventoryMigrationP36Test extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
+    public function test_legacy_quantity_accepts_unambiguous_comma_thousands_without_float(): void
+    {
+        [$company, $branch, $user, $base] = $this->context(['inventario.ajustar']);
+        $large = $this->productForCode($base, 'CIERRE-CAJA');
+        $zero = $this->productForCode($base, 'CERO');
+        $ambiguous = $this->productForCode($base, 'AMBIGUO-CANTIDAD');
+        $csv = $this->legacyFile([
+            [$large->internal_code, '', 'CIERRE CAJA', '99,534.00'],
+            [$zero->internal_code, '', 'Existencia cero', '0.00'],
+            [$ambiguous->internal_code, '', 'Separador ambiguo', '99,53'],
+        ]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-MILES'),
+        )->assertOk();
+
+        $rows = session('inventory_migration_preview.rows');
+        $this->assertSame('99534.00', $rows[0]['quantity']);
+        $this->assertTrue($rows[0]['valid']);
+        $this->assertSame('0.00', $rows[1]['quantity']);
+        $this->assertTrue($rows[1]['valid']);
+        $this->assertSame('99,53', $rows[2]['quantity']);
+        $this->assertFalse($rows[2]['valid']);
+        $this->assertContains('cantidad', array_column($rows[2]['errors'], 'field'));
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('inventory_migration_batches', 0);
+    }
+
     private function context(array $permissions): array
     {
         $suffix = Str::lower(Str::random(8));
@@ -384,7 +415,15 @@ class InventoryMigrationP36Test extends TestCase
     {
         $path = tempnam(sys_get_temp_dir(), 'p36-mym-').'.csv';
         $sheet = new Spreadsheet;
-        $sheet->getActiveSheet()->fromArray(array_merge([$headers], $rows));
+        foreach (array_merge([$headers], $rows) as $rowIndex => $values) {
+            foreach ($values as $columnIndex => $value) {
+                $sheet->getActiveSheet()->setCellValueExplicit(
+                    Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 1),
+                    (string) $value,
+                    DataType::TYPE_STRING,
+                );
+            }
+        }
         (new Csv($sheet))->save($path);
 
         return $path;
