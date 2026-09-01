@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
@@ -29,13 +30,28 @@ class InventoryMigrationImportService
         'stock_maximo' => 'maximum_stock', 'referencia' => 'source_reference', 'notas' => 'notes',
     ];
 
-    public function preview(string $path, int $companyId, array $allowedBranchIds): array
+    private const LEGACY_MAP = [
+        'codigo' => 'product_code',
+        'codigo_barra' => 'barcode',
+        'descripcion' => 'legacy_description',
+        'existencia' => 'quantity',
+    ];
+
+    public function preview(string $path, int $companyId, array $allowedBranchIds, array $legacyContext = []): array
     {
-        $source = IOFactory::load($path)->getActiveSheet()->toArray(null, true, false, false);
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setValueBinder(new StringValueBinder);
+        $source = $reader->load($path)->getActiveSheet()->toArray(null, true, false, false);
         if (count($source) < 2) {
             throw ValidationException::withMessages(['migration_file' => 'El archivo debe incluir encabezados y al menos una fila.']);
         }
-        $headers = $this->headers(array_shift($source));
+        $headerRow = array_shift($source);
+        $legacy = $this->isLegacyHeaders($headerRow);
+        $headers = $legacy ? $this->legacyHeaders($headerRow) : $this->headers($headerRow);
+        $branch = null;
+        if ($legacy) {
+            $branch = $this->legacyBranch($legacyContext, $companyId, $allowedBranchIds);
+        }
         $rows = [];
         foreach ($source as $offset => $values) {
             if (collect($values)->every(fn ($value) => trim((string) $value) === '')) {
@@ -47,13 +63,55 @@ class InventoryMigrationImportService
                     $data[$field] = $values[$column] ?? null;
                 }
             }
-            $rows[] = $this->normalize($data, $offset + 2, $companyId);
+            if ($legacy) {
+                $data += [
+                    'source_key' => $this->text($legacyContext['source_key'] ?? null),
+                    'row_key' => 'LEGACY-'.($offset + 2),
+                    'record_type' => 'saldo_inicial',
+                    'occurred_at' => $legacyContext['occurred_at'] ?? null,
+                    'branch_code' => $branch->code,
+                    'source_reference' => $this->text($data['legacy_description'] ?? null),
+                ];
+            }
+            $rows[] = $this->normalize($data, $offset + 2, $companyId, $legacy);
         }
         if ($rows === []) {
             throw ValidationException::withMessages(['migration_file' => 'El archivo no contiene filas para revisar.']);
         }
 
         return $this->validate($rows, $companyId, $allowedBranchIds);
+    }
+
+    private function isLegacyHeaders(array $headers): bool
+    {
+        $keys = collect($headers)->map(fn ($header) => $this->headerKey($header))->filter()->values()->all();
+
+        return collect(array_keys(self::LEGACY_MAP))->every(fn ($required) => in_array($required, $keys, true));
+    }
+
+    private function legacyHeaders(array $headers): array
+    {
+        return collect($headers)->mapWithKeys(fn ($header, $column) => [
+            $column => self::LEGACY_MAP[$this->headerKey($header)] ?? null,
+        ])->all();
+    }
+
+    private function legacyBranch(array $context, int $companyId, array $allowedBranchIds): Branch
+    {
+        if (! $this->text($context['source_key'] ?? null) || ! $this->date($context['occurred_at'] ?? null)) {
+            throw ValidationException::withMessages([
+                'migration_file' => 'El CSV legado requiere clave única del lote y fecha del saldo inicial.',
+            ]);
+        }
+        $branchId = (int) ($context['branch_id'] ?? 0);
+        $branch = Branch::query()->where('company_id', $companyId)->where('is_active', true)->find($branchId);
+        if (! $branch || ! in_array($branchId, $allowedBranchIds, true)) {
+            throw ValidationException::withMessages([
+                'migration_file' => 'Seleccione una sucursal activa y autorizada para el CSV legado.',
+            ]);
+        }
+
+        return $branch;
     }
 
     public function confirm(array $preview, int $companyId, int $userId, array $allowedBranchIds): int
@@ -92,7 +150,7 @@ class InventoryMigrationImportService
     {
         $resolved = [];
         foreach ($headers as $column => $header) {
-            $key = trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
+            $key = $this->headerKey($header);
             $resolved[$column] = self::MAP[$key] ?? null;
         }
         foreach (['source_key', 'row_key', 'record_type', 'occurred_at', 'branch_code', 'quantity'] as $required) {
@@ -104,15 +162,22 @@ class InventoryMigrationImportService
         return $resolved;
     }
 
-    private function normalize(array $data, int $rowNumber, int $companyId): array
+    private function headerKey(mixed $header): string
+    {
+        return trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
+    }
+
+    private function normalize(array $data, int $rowNumber, int $companyId, bool $legacy = false): array
     {
         $branchCode = $this->text($data['branch_code'] ?? null);
         $productCode = $this->text($data['product_code'] ?? null);
         $barcode = $this->text($data['barcode'] ?? null);
         $branch = Branch::query()->where('company_id', $companyId)->where('code', $branchCode)->where('is_active', true)->first();
-        $byCode = $productCode === null ? null : Product::query()->where('company_id', $companyId)->where('internal_code', $productCode)->first();
-        $byBarcode = $barcode === null ? null : Product::query()->where('company_id', $companyId)->where(fn ($query) => $query->where('barcode', $barcode)->orWhereHas('barcodes', fn ($q) => $q->where('barcode', $barcode)->where('is_active', true)))->first();
-        $product = $byCode ?? $byBarcode;
+        $byCode = $productCode === null ? collect() : Product::query()->where('company_id', $companyId)->where('internal_code', $productCode)->get();
+        $byBarcode = $barcode === null ? collect() : Product::query()->where('company_id', $companyId)->where(fn ($query) => $query->where('barcode', $barcode)->orWhereHas('barcodes', fn ($q) => $q->where('barcode', $barcode)->where('is_active', true)))->get()->unique('id')->values();
+        $codeProduct = $byCode->count() === 1 ? $byCode->first() : null;
+        $barcodeProduct = $byBarcode->count() === 1 ? $byBarcode->first() : null;
+        $product = $legacy ? $codeProduct : ($codeProduct ?? $barcodeProduct);
         $recordType = match (Str::lower($this->text($data['record_type'] ?? null) ?? '')) {
             'initial_balance', 'saldo_inicial', 'inicial' => 'initial_balance',
             'historical_movement', 'movimiento_historico', 'histórico', 'historico' => 'historical_movement', default => null,
@@ -126,7 +191,11 @@ class InventoryMigrationImportService
             'row_key' => $this->text($data['row_key'] ?? null), 'record_type' => $recordType,
             'occurred_at' => $this->date($data['occurred_at'] ?? null), 'branch_code' => $branchCode, 'branch_id' => $branch?->id,
             'product_code' => $productCode, 'barcode' => $barcode, 'product_id' => $product?->id,
-            'product_name' => $product?->name, 'product_conflict' => $byCode && $byBarcode && $byCode->id !== $byBarcode->id,
+            'product_name' => $product?->name,
+            'product_conflict' => $codeProduct && $barcodeProduct && $codeProduct->id !== $barcodeProduct->id,
+            'product_code_ambiguous' => $byCode->count() > 1,
+            'barcode_ambiguous' => $byBarcode->count() > 1,
+            'legacy' => $legacy,
             'tracks_inventory' => $product?->track_inventory, 'allows_decimals' => $product?->unit?->allows_decimals,
             'movement_type' => $movementType, 'quantity' => $this->decimal($data['quantity'] ?? null),
             'previous_stock' => $this->decimal($data['previous_stock'] ?? null), 'new_stock' => $this->decimal($data['new_stock'] ?? null),
@@ -143,6 +212,9 @@ class InventoryMigrationImportService
         $batchExists = $sourceKeys->count() === 1 && InventoryMigrationBatch::query()->where('company_id', $companyId)->where('source_key', $sourceKeys->first())->exists();
         $seenRows = [];
         $seenInitial = [];
+        $legacyCodeCounts = collect($rows)->where('legacy', true)
+            ->map(fn ($row) => Str::lower(trim((string) ($row['product_code'] ?? ''))))
+            ->filter()->countBy();
         $chains = [];
         foreach ($rows as $index => $row) {
             $errors = [];
@@ -165,14 +237,28 @@ class InventoryMigrationImportService
             if (! $row['branch_id'] || ! in_array($row['branch_id'], $allowedBranchIds, true)) {
                 $errors[] = ['field' => 'codigo_sucursal', 'message' => 'La sucursal no existe o no está autorizada para este usuario.'];
             }
-            if (! $row['product_code'] && ! $row['barcode']) {
+            if ($row['legacy'] ?? false) {
+                if (! $row['product_code']) {
+                    $errors[] = ['field' => 'codigo', 'message' => 'El código interno es obligatorio; el barcode no sustituye el código.'];
+                }
+                $codeKey = Str::lower(trim((string) ($row['product_code'] ?? '')));
+                if ($codeKey !== '' && ($legacyCodeCounts[$codeKey] ?? 0) > 1) {
+                    $errors[] = ['field' => 'codigo', 'message' => 'El código interno está repetido en el archivo.'];
+                }
+            } elseif (! $row['product_code'] && ! $row['barcode']) {
                 $errors[] = ['field' => 'producto', 'message' => 'Indique código de producto o código de barras.'];
             }
+            if ($row['product_code_ambiguous'] ?? false) {
+                $errors[] = ['field' => 'codigo', 'message' => 'El código interno es ambiguo dentro de la empresa activa.'];
+            }
             if (! $row['product_id']) {
-                $errors[] = ['field' => 'producto', 'message' => 'El producto no existe en la empresa activa.'];
+                $errors[] = ['field' => 'producto', 'message' => 'El producto no existe por código interno en la empresa activa.'];
             }
             if ($row['product_conflict']) {
-                $errors[] = ['field' => 'producto', 'message' => 'Código y barcode corresponden a productos distintos.'];
+                $errors[] = ['field' => 'codigo_barras', 'message' => 'El barcode corresponde a un producto distinto del código interno.'];
+            }
+            if ($row['barcode_ambiguous'] ?? false) {
+                $errors[] = ['field' => 'codigo_barras', 'message' => 'El barcode corresponde a más de un producto de la empresa activa.'];
             }
             if ($row['product_id'] && ! $row['tracks_inventory']) {
                 $errors[] = ['field' => 'producto', 'message' => 'El producto no controla inventario.'];
@@ -242,10 +328,6 @@ class InventoryMigrationImportService
 
     private function decimal(mixed $value): ?string
     {
-        if (is_float($value)) {
-            return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
-        }
-
         return $this->text($value);
     }
 

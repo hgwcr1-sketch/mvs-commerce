@@ -18,9 +18,14 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DataImportController extends Controller
 {
-    public function inventoryMigration()
+    public function inventoryMigration(Request $request)
     {
-        return view('importaciones.inventario-migracion');
+        $companyId = (int) session('active_company_id');
+        $branches = $this->allowedBranches($request, $companyId);
+        $branchId = $branches->firstWhere('id', (int) session('active_branch_id'))?->id
+            ?? $branches->first()?->id;
+
+        return view('importaciones.inventario-migracion', compact('branches', 'branchId'));
     }
 
     public function inventoryMigrationTemplate(MigrationTemplateService $templates)
@@ -30,10 +35,27 @@ class DataImportController extends Controller
 
     public function inventoryMigrationPreview(Request $request, InventoryMigrationImportService $import)
     {
-        $request->validate(['migration_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $data = $request->validate([
+            'migration_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'legacy_branch_id' => ['nullable', 'integer'],
+            'legacy_source_key' => ['nullable', 'string', 'max:100'],
+            'legacy_occurred_at' => ['nullable', 'date'],
+        ]);
         $companyId = (int) session('active_company_id');
         $allowedBranchIds = $this->allowedBranches($request, $companyId)->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $rows = $import->preview($request->file('migration_file')->getRealPath(), $companyId, $allowedBranchIds);
+        if (! empty($data['legacy_branch_id']) && ! in_array((int) $data['legacy_branch_id'], $allowedBranchIds, true)) {
+            abort(403, 'No tiene acceso a la sucursal seleccionada.');
+        }
+        $rows = $import->preview(
+            $request->file('migration_file')->getRealPath(),
+            $companyId,
+            $allowedBranchIds,
+            [
+                'branch_id' => isset($data['legacy_branch_id']) ? (int) $data['legacy_branch_id'] : null,
+                'source_key' => $data['legacy_source_key'] ?? null,
+                'occurred_at' => $data['legacy_occurred_at'] ?? null,
+            ],
+        );
         session(['inventory_migration_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
 
         return view('importaciones.inventario-migracion-preview', compact('rows'));

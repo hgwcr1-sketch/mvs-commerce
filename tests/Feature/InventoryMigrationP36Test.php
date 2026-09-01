@@ -127,6 +127,81 @@ class InventoryMigrationP36Test extends TestCase
         $this->actingAs($denied)->withSession($this->activeSession($otherCompany, $otherBranch))->get(route('importaciones.inventario-migracion'))->assertForbidden();
     }
 
+    public function test_real_legacy_csv_previews_without_writes_and_confirms_exact_initial_stock_only_in_selected_branch(): void
+    {
+        [$company, $sanRamon, $user, $product] = $this->context(['inventario.ajustar', 'inventario.ver_otras_sucursales']);
+        $sanRamon->update(['name' => 'San Ramón']);
+        $liberia = Branch::create(['company_id' => $company->id, 'name' => 'Liberia', 'code' => 'LIB', 'is_active' => true]);
+        $user->branches()->attach($liberia->id);
+        $this->stock($liberia, $product, '8.0000');
+        $csv = $this->legacyFile([
+            [$product->internal_code, $product->barcode, $product->name, '12.3456'],
+        ]);
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $sanRamon))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $sanRamon, 'MYM-SR-REAL'),
+        )->assertOk();
+
+        $response->assertSee('12.3456');
+        $this->assertTrue(session('inventory_migration_preview.rows.0.valid'));
+        $this->assertSame('12.3456', session('inventory_migration_preview.rows.0.quantity'));
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseMissing('branch_product', ['branch_id' => $sanRamon->id, 'product_id' => $product->id]);
+
+        $this->post(route('importaciones.inventario-migracion.import'))->assertRedirect(route('inventario.index'));
+        $this->assertSame('12.3456', $this->stockValue($sanRamon, $product));
+        $this->assertSame('8.0000', $this->stockValue($liberia, $product));
+        $this->assertDatabaseHas('inventory_movements', [
+            'company_id' => $company->id,
+            'branch_id' => $sanRamon->id,
+            'product_id' => $product->id,
+            'type' => 'initial_balance',
+            'new_stock' => 12.3456,
+        ]);
+    }
+
+    public function test_legacy_csv_accepts_zero_and_blocks_missing_duplicate_and_conflicting_codes_without_barcode_fallback(): void
+    {
+        [$company, $branch, $user, $product] = $this->context(['inventario.ajustar']);
+        $other = Product::create([
+            'company_id' => $company->id,
+            'category_id' => $product->category_id,
+            'unit_id' => $product->unit_id,
+            'name' => 'Otro producto',
+            'internal_code' => 'SKU-OTRO',
+            'barcode' => 'BAR-OTRO',
+            'cost' => 1,
+            'sale_price' => 2,
+            'tax_rate' => 13,
+            'track_inventory' => true,
+            'is_active' => true,
+        ]);
+        $csv = $this->legacyFile([
+            [$product->internal_code, $product->barcode, $product->name, '0'],
+            [$product->internal_code, $product->barcode, $product->name, '1.0000'],
+            ['NO-EXISTE', $other->barcode, 'No debe adivinar', '2.5000'],
+            [$other->internal_code, $product->barcode, 'Barcode conflictivo', '3.0000'],
+        ]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.inventario-migracion.preview'),
+            $this->legacyRequest($csv, $branch, 'MYM-SR-ERRORES'),
+        )->assertOk();
+
+        $rows = session('inventory_migration_preview.rows');
+        $this->assertSame('0', $rows[0]['quantity']);
+        $this->assertNotContains('cantidad', array_column($rows[0]['errors'], 'field'));
+        $this->assertFalse($rows[0]['valid']);
+        $this->assertFalse($rows[1]['valid']);
+        $this->assertContains('codigo', array_column($rows[0]['errors'], 'field'));
+        $this->assertNull($rows[2]['product_id']);
+        $this->assertContains('producto', array_column($rows[2]['errors'], 'field'));
+        $this->assertContains('codigo_barras', array_column($rows[3]['errors'], 'field'));
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('inventory_migration_batches', 0);
+    }
+
     private function context(array $permissions): array
     {
         $suffix = Str::lower(Str::random(8));
@@ -167,6 +242,28 @@ class InventoryMigrationP36Test extends TestCase
         };
 
         return $path;
+    }
+
+    private function legacyFile(array $rows): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'p36-mym-').'.csv';
+        $sheet = new Spreadsheet;
+        $sheet->getActiveSheet()->fromArray(array_merge([
+            ['CODIGO', 'CODIGO BARRA', 'DESCRIPCION', 'EXISTENCIA'],
+        ], $rows));
+        (new Csv($sheet))->save($path);
+
+        return $path;
+    }
+
+    private function legacyRequest(string $path, Branch $branch, string $source): array
+    {
+        return [
+            'migration_file' => $this->upload($path, 'csv'),
+            'legacy_branch_id' => $branch->id,
+            'legacy_source_key' => $source,
+            'legacy_occurred_at' => '2026-09-01 08:00:00',
+        ];
     }
 
     private function upload(string $path, string $format): UploadedFile
