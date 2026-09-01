@@ -36,7 +36,14 @@
                             <td class="px-4 py-3 font-semibold text-slate-700">{{ $row['row_number'] }}</td>
                             <td class="px-4 py-3 font-mono text-slate-700">{{ $row['internal_code'] ?: '—' }}</td>
                             <td class="px-4 py-3 font-medium text-slate-800">{{ $row['name'] ?: '—' }}</td>
-                            <td class="px-4 py-3 text-slate-700">{{ $row['category_name'] ?: '—' }} · {{ $row['unit_name'] ?: '—' }}<br>{{ $row['brand_name'] ?: 'Sin marca' }}</td>
+                            <td class="px-4 py-3 text-slate-700">
+                                {{ $row['category_name'] ?: '—' }}
+                                @if($row['category_will_create'] ?? false)<span class="text-xs font-semibold text-amber-700">(se creará al confirmar)</span>@endif
+                                · {{ $row['unit_name'] ?: '—' }}
+                                @if($row['unit_will_create'] ?? false)<span class="text-xs font-semibold text-amber-700">(se creará al confirmar)</span>@endif
+                                <br>{{ $row['brand_name'] ?: 'Sin marca' }}
+                                @if($row['brand_will_create'] ?? false)<span class="text-xs font-semibold text-amber-700">(se creará al confirmar)</span>@endif
+                            </td>
                             <td class="px-4 py-3 text-slate-700">{{ implode(' · ', $row['barcodes']) ?: '—' }}</td>
                             <td class="px-4 py-3 text-right text-slate-700">{{ $row['cost'] ?? '—' }} / {{ $row['sale_price'] ?? '—' }}</td>
                             <td class="px-4 py-3">

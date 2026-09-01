@@ -87,8 +87,7 @@ class ProductImportP33Test extends TestCase
             ['product_file' => $this->uploaded($this->productFile($rows, 'xlsx'), 'xlsx')],
         );
 
-        $response->assertOk()->assertSee('codigo_interno')->assertSee('categoria')->assertSee('unidad')
-            ->assertSee('marca')->assertSee('codigos_barras')->assertSee('precio_venta')
+        $response->assertOk()->assertSee('codigo_interno')->assertSee('codigos_barras')->assertSee('precio_venta')
             ->assertSee('fila 3')->assertSee('Corrija todas las filas antes de confirmar');
         $preview = session('product_import_preview.rows');
         $this->assertFalse($preview[0]['valid']);
@@ -136,6 +135,116 @@ class ProductImportP33Test extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
         $this->assertSame('9.0000', bcadd((string) DB::table('branch_product')->value('stock'), '0', 4));
         $this->assertNull(session('product_import_preview'));
+    }
+
+    public function test_real_catalog_values_are_reused_and_four_zero_decimals_are_accepted(): void
+    {
+        [$company, $branch, $user] = $this->context(['productos.crear']);
+        $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Unas', 'slug' => 'unas-'.$company->id, 'is_active' => true]);
+        $brand = Brand::create(['company_id' => $company->id, 'name' => 'General', 'is_active' => true]);
+        $unit = Unit::create(['company_id' => $company->id, 'name' => 'General', 'abbreviation' => 'GEN', 'slug' => 'general-'.$company->id, 'allows_decimals' => false, 'is_active' => true]);
+        $row = ['REAL-P33', 'Producto real', '  UNAS  ', ' GENERAL ', ' general ', 'product', '', '', '', '', '',
+            '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'];
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.productos.preview'),
+            ['product_file' => $this->uploaded($this->productFile([$row], 'xlsx'), 'xlsx')],
+        )->assertOk();
+
+        $preview = session('product_import_preview.rows.0');
+        $this->assertTrue($preview['valid'], json_encode($preview['errors']));
+        $this->assertSame($category->id, $preview['category_id']);
+        $this->assertSame($brand->id, $preview['brand_id']);
+        $this->assertSame($unit->id, $preview['unit_id']);
+        $this->assertSame('5500', $preview['cost']);
+        $this->assertSame('1000', $preview['sale_price']);
+
+        $this->post(route('importaciones.productos.import'))->assertRedirect(route('productos.index'));
+        $product = Product::where('company_id', $company->id)->where('internal_code', 'REAL-P33')->sole();
+        $this->assertSame($category->id, $product->category_id);
+        $this->assertSame($brand->id, $product->brand_id);
+        $this->assertSame($unit->id, $product->unit_id);
+        $this->assertSame('5500.00', $product->cost);
+        $this->assertSame('1000.00', $product->sale_price);
+        $this->assertSame(2, ProductCategory::where('company_id', $company->id)->count());
+        $this->assertSame(2, Brand::where('company_id', $company->id)->count());
+        $this->assertSame(2, Unit::where('company_id', $company->id)->count());
+    }
+
+    public function test_missing_catalogs_are_previewed_without_writes_and_created_once_on_confirmation(): void
+    {
+        [$company, $branch, $user] = $this->context(['productos.crear']);
+        $catalogCounts = [
+            ProductCategory::where('company_id', $company->id)->count(),
+            Brand::where('company_id', $company->id)->count(),
+            Unit::where('company_id', $company->id)->count(),
+        ];
+        $rows = [
+            ['CAT-1', 'Producto uno', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+            ['CAT-2', 'Producto dos', '  unas ', ' general ', '  GENERAL  ', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+        ];
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.productos.preview'),
+            ['product_file' => $this->uploaded($this->productFile($rows, 'xlsx'), 'xlsx')],
+        )->assertOk()->assertSee('se creará al confirmar');
+
+        foreach (session('product_import_preview.rows') as $previewRow) {
+            $this->assertTrue($previewRow['valid'], json_encode($previewRow['errors']));
+            $this->assertTrue($previewRow['category_will_create']);
+            $this->assertTrue($previewRow['brand_will_create']);
+            $this->assertTrue($previewRow['unit_will_create']);
+        }
+        $this->assertSame($catalogCounts[0], ProductCategory::where('company_id', $company->id)->count());
+        $this->assertSame($catalogCounts[1], Brand::where('company_id', $company->id)->count());
+        $this->assertSame($catalogCounts[2], Unit::where('company_id', $company->id)->count());
+        $this->assertDatabaseCount('products', 0);
+
+        $this->post(route('importaciones.productos.import'))->assertRedirect(route('productos.index'));
+        $this->assertSame($catalogCounts[0] + 1, ProductCategory::where('company_id', $company->id)->count());
+        $this->assertSame($catalogCounts[1] + 1, Brand::where('company_id', $company->id)->count());
+        $this->assertSame($catalogCounts[2] + 1, Unit::where('company_id', $company->id)->count());
+        $this->assertSame(2, Product::where('company_id', $company->id)->count());
+        $this->assertDatabaseCount('branch_product', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_catalog_creation_is_company_scoped_and_rolls_back_with_products(): void
+    {
+        [$company, $branch, $user] = $this->context(['productos.crear']);
+        [$otherCompany] = $this->context([]);
+        ProductCategory::create(['company_id' => $otherCompany->id, 'name' => 'UNAS', 'slug' => 'unas-'.$otherCompany->id, 'is_active' => true]);
+        Brand::create(['company_id' => $otherCompany->id, 'name' => 'GENERAL', 'is_active' => true]);
+        Unit::create(['company_id' => $otherCompany->id, 'name' => 'GENERAL', 'abbreviation' => 'GEN', 'slug' => 'general-'.$otherCompany->id, 'is_active' => true]);
+        $rows = [
+            ['ROLL-CAT-1', 'Primero', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+            ['ROLL-CAT-2', 'Segundo', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+        ];
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
+            route('importaciones.productos.preview'),
+            ['product_file' => $this->uploaded($this->productFile($rows, 'xlsx'), 'xlsx')],
+        )->assertOk();
+        $this->assertTrue(session('product_import_preview.rows.0.category_will_create'));
+
+        Product::creating(function (Product $product): void {
+            if ($product->internal_code === 'ROLL-CAT-2') {
+                throw new \RuntimeException('fallo controlado P33');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->post(route('importaciones.productos.import'));
+            $this->fail('La confirmación debía fallar.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('fallo controlado P33', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('product_categories', ['company_id' => $company->id, 'name' => 'UNAS']);
+        $this->assertDatabaseMissing('brands', ['company_id' => $company->id, 'name' => 'GENERAL']);
+        $this->assertDatabaseMissing('units', ['company_id' => $company->id, 'name' => 'GENERAL']);
+        $this->assertDatabaseMissing('products', ['company_id' => $company->id, 'internal_code' => 'ROLL-CAT-1']);
+        $this->assertDatabaseHas('product_categories', ['company_id' => $otherCompany->id, 'name' => 'UNAS']);
     }
 
     public function test_confirmation_revalidates_and_rolls_back_when_a_code_appears_concurrently(): void

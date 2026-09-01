@@ -17,6 +17,12 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ProductImportService
 {
+    private array $categoryCache = [];
+
+    private array $brandCache = [];
+
+    private array $unitCache = [];
+
     public const HEADERS = [
         'codigo_interno*', 'nombre*', 'categoria*', 'marca', 'unidad*', 'tipo_producto*',
         'codigo_barras_principal', 'codigos_barras_adicionales', 'cabys', 'descripcion_corta',
@@ -40,8 +46,8 @@ class ProductImportService
     ];
 
     private const FIELD_LABELS = [
-        'internal_code' => 'codigo_interno', 'name' => 'nombre', 'category_id' => 'categoria',
-        'brand_id' => 'marca', 'unit_id' => 'unidad', 'product_type' => 'tipo_producto',
+        'internal_code' => 'codigo_interno', 'name' => 'nombre', 'category_name' => 'categoria',
+        'brand_name' => 'marca', 'unit_name' => 'unidad', 'product_type' => 'tipo_producto',
         'barcode' => 'codigo_barras_principal', 'additional_barcodes' => 'codigos_barras_adicionales',
         'cabys_code' => 'cabys', 'short_description' => 'descripcion_corta', 'description' => 'descripcion',
         'cost' => 'costo', 'sale_price' => 'precio_venta', 'wholesale_price' => 'precio_mayorista',
@@ -104,6 +110,15 @@ class ProductImportService
         }
 
         return DB::transaction(function () use ($rows, $companyId): int {
+            $rows = array_map(fn (array $row) => $this->resolveCatalogsForConfirmation($row, $companyId), $rows);
+            $rows = $this->validateRows($rows, $companyId);
+            $invalid = collect($rows)->firstWhere('valid', false);
+            if ($invalid !== null) {
+                throw ValidationException::withMessages([
+                    'product_file' => 'La importación cambió mientras se confirmaba. Revise la fila '.($invalid['row_number'] ?? '?').'.',
+                ]);
+            }
+
             foreach ($rows as $row) {
                 $product = Product::create(['company_id' => $companyId, ...$this->attributes($row)]);
                 foreach ($row['barcodes'] as $index => $barcode) {
@@ -125,7 +140,8 @@ class ProductImportService
     {
         $resolved = [];
         foreach ($headers as $column => $header) {
-            $key = trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
+            $key = Str::of((string) $header)->replace("\xEF\xBB\xBF", '')->ascii()->lower()
+                ->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->toString();
             $resolved[$column] = self::HEADER_MAP[$key] ?? null;
         }
         foreach (['internal_code', 'name', 'category', 'unit', 'product_type', 'cost', 'sale_price', 'tax_rate'] as $required) {
@@ -141,9 +157,9 @@ class ProductImportService
 
     private function normalizeRow(array $data, int $rowNumber, int $companyId): array
     {
-        $categoryName = $this->nullable($data['category'] ?? null);
-        $brandName = $this->nullable($data['brand'] ?? null);
-        $unitName = $this->nullable($data['unit'] ?? null);
+        $categoryName = $this->catalogName($data['category'] ?? null);
+        $brandName = $this->catalogName($data['brand'] ?? null);
+        $unitName = $this->catalogName($data['unit'] ?? null);
         $category = $this->category($companyId, $categoryName);
         $brand = $this->brand($companyId, $brandName);
         $unit = $this->unit($companyId, $unitName);
@@ -158,10 +174,13 @@ class ProductImportService
             'name' => $this->nullable($data['name'] ?? null),
             'category_name' => $categoryName,
             'category_id' => $category?->id,
+            'category_will_create' => $categoryName !== null && $category === null,
             'brand_name' => $brandName,
             'brand_id' => $brand?->id,
+            'brand_will_create' => $brandName !== null && $brand === null,
             'unit_name' => $unitName,
             'unit_id' => $unit?->id,
+            'unit_will_create' => $unitName !== null && $unit === null,
             'product_type' => Str::lower($this->nullable($data['product_type'] ?? null) ?? ''),
             'barcode' => $primary,
             'additional_barcodes' => $additional,
@@ -190,11 +209,23 @@ class ProductImportService
     {
         $seenCodes = [];
         $seenBarcodes = [];
+        $categoryIds = ProductCategory::query()->where('company_id', $companyId)->where('is_active', true)
+            ->pluck('id')->mapWithKeys(fn ($id) => [(int) $id => true])->all();
+        $brandIds = Brand::query()->where('company_id', $companyId)->where('is_active', true)
+            ->pluck('id')->mapWithKeys(fn ($id) => [(int) $id => true])->all();
+        $unitIds = Unit::query()->where('company_id', $companyId)->where('is_active', true)
+            ->pluck('id')->mapWithKeys(fn ($id) => [(int) $id => true])->all();
+        $sourceCodes = collect($rows)->pluck('internal_code')->filter()->unique()->values()->all();
+        $existingCodes = $this->existingValues(Product::class, 'internal_code', $sourceCodes, true);
+        $sourceBarcodes = collect($rows)->flatMap(fn (array $row) => $row['barcodes'])->filter()->unique()->values()->all();
+        $existingBarcodes = $this->existingValues(Product::class, 'barcode', $sourceBarcodes, true)
+            + $this->existingValues(ProductBarcode::class, 'barcode', $sourceBarcodes);
         foreach ($rows as $index => $row) {
             $row['errors'] = [];
             $validator = Validator::make($row, [
                 'internal_code' => ['required', 'string', 'max:50'], 'name' => ['required', 'string', 'max:150'],
-                'category_id' => ['required', 'integer'], 'brand_id' => ['nullable', 'integer'], 'unit_id' => ['required', 'integer'],
+                'category_name' => ['required', 'string', 'max:100'], 'brand_name' => ['nullable', 'string', 'max:150'], 'unit_name' => ['required', 'string', 'max:50'],
+                'category_id' => ['nullable', 'integer'], 'brand_id' => ['nullable', 'integer'], 'unit_id' => ['nullable', 'integer'],
                 'product_type' => ['required', 'in:product,service,combo'], 'barcode' => ['nullable', 'string', 'max:100'],
                 'cabys_code' => ['nullable', 'string', 'max:20'], 'short_description' => ['nullable', 'string', 'max:255'],
                 'description' => ['nullable', 'string'], 'cost' => ['required', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'],
@@ -210,19 +241,13 @@ class ProductImportService
                 }
             }
 
-            if ($row['category_id'] === null) {
-                $row['errors'][] = ['field' => 'categoria', 'message' => $row['category_name'] ? 'La categoría no existe o no pertenece a la empresa activa.' : 'La categoría es obligatoria.'];
-            } elseif (! ProductCategory::query()->whereKey($row['category_id'])->where('company_id', $companyId)->where('is_active', true)->exists()) {
+            if ($row['category_id'] !== null && ! isset($categoryIds[(int) $row['category_id']])) {
                 $row['errors'][] = ['field' => 'categoria', 'message' => 'La categoría ya no está activa o no pertenece a la empresa activa.'];
             }
-            if ($row['unit_id'] === null) {
-                $row['errors'][] = ['field' => 'unidad', 'message' => $row['unit_name'] ? 'La unidad no existe o no pertenece a la empresa activa.' : 'La unidad es obligatoria.'];
-            } elseif (! Unit::query()->whereKey($row['unit_id'])->where('company_id', $companyId)->where('is_active', true)->exists()) {
+            if ($row['unit_id'] !== null && ! isset($unitIds[(int) $row['unit_id']])) {
                 $row['errors'][] = ['field' => 'unidad', 'message' => 'La unidad ya no está activa o no pertenece a la empresa activa.'];
             }
-            if ($row['brand_name'] !== null && $row['brand_id'] === null) {
-                $row['errors'][] = ['field' => 'marca', 'message' => 'La marca no existe o no pertenece a la empresa activa.'];
-            } elseif ($row['brand_id'] !== null && ! Brand::query()->whereKey($row['brand_id'])->where('company_id', $companyId)->where('is_active', true)->exists()) {
+            if ($row['brand_id'] !== null && ! isset($brandIds[(int) $row['brand_id']])) {
                 $row['errors'][] = ['field' => 'marca', 'message' => 'La marca ya no está activa o no pertenece a la empresa activa.'];
             }
 
@@ -232,7 +257,7 @@ class ProductImportService
             } else {
                 $seenCodes[$codeKey] = $row['row_number'];
             }
-            if ($row['internal_code'] !== null && Product::withTrashed()->where('internal_code', $row['internal_code'])->exists()) {
+            if ($row['internal_code'] !== null && isset($existingCodes[$row['internal_code']])) {
                 $row['errors'][] = ['field' => 'codigo_interno', 'message' => 'El código interno ya está asignado a un producto.'];
             }
 
@@ -245,7 +270,7 @@ class ProductImportService
                 } else {
                     $seenBarcodes[$barcode] = $row['row_number'];
                 }
-                if (Product::withTrashed()->where('barcode', $barcode)->exists() || ProductBarcode::query()->where('barcode', $barcode)->exists()) {
+                if (isset($existingBarcodes[$barcode])) {
                     $row['errors'][] = ['field' => 'codigos_barras', 'message' => 'El código de barras ya está asignado a otro producto.'];
                 }
             }
@@ -267,16 +292,59 @@ class ProductImportService
         ]);
     }
 
+    private function resolveCatalogsForConfirmation(array $row, int $companyId): array
+    {
+        $category = $this->category($companyId, $row['category_name'])
+            ?? $this->rememberCategory(ProductCategory::create([
+                'company_id' => $companyId,
+                'name' => $row['category_name'],
+                'slug' => $this->uniqueSlug(ProductCategory::class, $row['category_name'], $companyId),
+                'is_active' => true,
+            ]));
+        $unit = $this->unit($companyId, $row['unit_name'])
+            ?? $this->rememberUnit(Unit::create([
+                'company_id' => $companyId,
+                'name' => $row['unit_name'],
+                'abbreviation' => $this->uniqueUnitAbbreviation($row['unit_name'], $companyId),
+                'slug' => $this->uniqueSlug(Unit::class, $row['unit_name'], $companyId),
+                'allows_decimals' => false,
+                'is_active' => true,
+            ]));
+        $brand = $row['brand_name'] === null
+            ? null
+            : ($this->brand($companyId, $row['brand_name']) ?? $this->rememberBrand(Brand::create([
+                'company_id' => $companyId,
+                'name' => $row['brand_name'],
+                'is_active' => true,
+            ])));
+
+        return [...$row,
+            'category_id' => $category->id, 'category_will_create' => false,
+            'unit_id' => $unit->id, 'unit_will_create' => false,
+            'brand_id' => $brand?->id, 'brand_will_create' => false,
+        ];
+    }
+
     private function category(int $companyId, ?string $name): ?ProductCategory
     {
-        return $name === null ? null : ProductCategory::query()->where('company_id', $companyId)->where('is_active', true)
-            ->whereRaw('LOWER(name) = ?', [Str::lower($name)])->first();
+        if ($name === null) {
+            return null;
+        }
+        $this->categoryCache[$companyId] ??= ProductCategory::query()->where('company_id', $companyId)
+            ->where('is_active', true)->get()->keyBy(fn (ProductCategory $category) => $this->catalogKey($category->name))->all();
+
+        return $this->categoryCache[$companyId][$this->catalogKey($name)] ?? null;
     }
 
     private function brand(int $companyId, ?string $name): ?Brand
     {
-        return $name === null ? null : Brand::query()->where('company_id', $companyId)->where('is_active', true)
-            ->whereRaw('LOWER(name) = ?', [Str::lower($name)])->first();
+        if ($name === null) {
+            return null;
+        }
+        $this->brandCache[$companyId] ??= Brand::query()->where('company_id', $companyId)
+            ->where('is_active', true)->get()->keyBy(fn (Brand $brand) => $this->catalogKey($brand->name))->all();
+
+        return $this->brandCache[$companyId][$this->catalogKey($name)] ?? null;
     }
 
     private function unit(int $companyId, ?string $name): ?Unit
@@ -284,10 +352,37 @@ class ProductImportService
         if ($name === null) {
             return null;
         }
-        $normalized = Str::lower($name);
+        if (! isset($this->unitCache[$companyId])) {
+            $this->unitCache[$companyId] = [];
+            foreach (Unit::query()->where('company_id', $companyId)->where('is_active', true)->get() as $unit) {
+                $this->unitCache[$companyId][$this->catalogKey($unit->name)] = $unit;
+                $this->unitCache[$companyId][$this->catalogKey($unit->abbreviation)] = $unit;
+            }
+        }
 
-        return Unit::query()->where('company_id', $companyId)->where('is_active', true)
-            ->where(fn ($query) => $query->whereRaw('LOWER(name) = ?', [$normalized])->orWhereRaw('LOWER(abbreviation) = ?', [$normalized]))->first();
+        return $this->unitCache[$companyId][$this->catalogKey($name)] ?? null;
+    }
+
+    private function rememberCategory(ProductCategory $category): ProductCategory
+    {
+        $this->categoryCache[$category->company_id][$this->catalogKey($category->name)] = $category;
+
+        return $category;
+    }
+
+    private function rememberBrand(Brand $brand): Brand
+    {
+        $this->brandCache[$brand->company_id][$this->catalogKey($brand->name)] = $brand;
+
+        return $brand;
+    }
+
+    private function rememberUnit(Unit $unit): Unit
+    {
+        $this->unitCache[$unit->company_id][$this->catalogKey($unit->name)] = $unit;
+        $this->unitCache[$unit->company_id][$this->catalogKey($unit->abbreviation)] = $unit;
+
+        return $unit;
     }
 
     private function nullable(mixed $value): ?string
@@ -295,6 +390,18 @@ class ProductImportService
         $value = trim((string) ($value ?? ''));
 
         return $value === '' ? null : $value;
+    }
+
+    private function catalogName(mixed $value): ?string
+    {
+        $value = $this->nullable($value);
+
+        return $value === null ? null : preg_replace('/\s+/u', ' ', $value);
+    }
+
+    private function catalogKey(string $value): string
+    {
+        return Str::lower(preg_replace('/\s+/u', ' ', trim($value)));
     }
 
     private function booleanValue(mixed $value, bool $default): bool
@@ -309,10 +416,59 @@ class ProductImportService
 
     private function decimalValue(mixed $value): ?string
     {
-        if (is_float($value)) {
-            return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+        if (is_float($value) || is_int($value)) {
+            $value = sprintf('%.10F', $value);
         }
 
-        return $this->nullable($value);
+        $value = $this->nullable($value);
+        if ($value === null || ! preg_match('/^\d+(?:\.\d+)?$/', $value)) {
+            return $value;
+        }
+
+        return str_contains($value, '.')
+            ? (rtrim(rtrim($value, '0'), '.') ?: '0')
+            : $value;
+    }
+
+    private function uniqueSlug(string $model, string $name, int $companyId): string
+    {
+        $base = Str::slug($name) ?: 'catalogo';
+        $candidate = $base.'-'.$companyId;
+        $suffix = 2;
+        while ($model::withTrashed()->where('slug', $candidate)->exists()) {
+            $candidate = $base.'-'.$companyId.'-'.$suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function uniqueUnitAbbreviation(string $name, int $companyId): string
+    {
+        $base = mb_strtoupper(mb_substr(preg_replace('/\s+/u', '', $name), 0, 10));
+        $base = $base !== '' ? $base : 'UNIDAD';
+        $candidate = $base;
+        $suffix = 2;
+        while (Unit::withTrashed()->where('company_id', $companyId)
+            ->whereRaw('LOWER(abbreviation) = ?', [Str::lower($candidate)])->exists()) {
+            $suffixText = (string) $suffix++;
+            $candidate = mb_substr($base, 0, 10 - mb_strlen($suffixText)).$suffixText;
+        }
+
+        return $candidate;
+    }
+
+    private function existingValues(string $model, string $column, array $values, bool $withTrashed = false): array
+    {
+        $existing = [];
+        foreach (array_chunk($values, 500) as $chunk) {
+            $query = $withTrashed ? $model::withTrashed() : $model::query();
+            foreach ($query->whereIn($column, $chunk)->pluck($column) as $value) {
+                if ($value !== null) {
+                    $existing[(string) $value] = true;
+                }
+            }
+        }
+
+        return $existing;
     }
 }
