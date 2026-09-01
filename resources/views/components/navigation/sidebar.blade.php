@@ -204,10 +204,10 @@
                 label="Ajustes de Inventario" />
         @endcan
 
-        @can('inventario.ver')
-    <x-navigation.submenu
-        route="importaciones.inventario"
-        label="Importar Inventario" />
+        @can('inventario.ajustar')
+            <x-navigation.submenu
+                route="importaciones.inventario-migracion"
+                label="Inventario inicial P36" />
         @endcan
 
         @can('inventario.kardex')

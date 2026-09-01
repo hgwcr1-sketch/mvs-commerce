@@ -36,7 +36,17 @@ class DataImportController extends Controller
     public function inventoryMigrationPreview(Request $request, InventoryMigrationImportService $import)
     {
         $data = $request->validate([
-            'migration_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'migration_file' => [
+                'required',
+                'file',
+                'max:10240',
+                function (string $attribute, mixed $file, \Closure $fail): void {
+                    $extension = strtolower((string) $file->getClientOriginalExtension());
+                    if (! in_array($extension, ['xlsx', 'xls', 'csv'], true)) {
+                        $fail('El archivo debe tener extensión XLSX, XLS o CSV.');
+                    }
+                },
+            ],
             'legacy_branch_id' => ['nullable', 'integer'],
             'legacy_source_key' => ['nullable', 'string', 'max:100'],
             'legacy_occurred_at' => ['nullable', 'date'],

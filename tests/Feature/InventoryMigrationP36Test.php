@@ -202,6 +202,33 @@ class InventoryMigrationP36Test extends TestCase
         $this->assertDatabaseCount('inventory_migration_batches', 0);
     }
 
+    public function test_http_p36_accepts_real_csv_mime_variants_and_never_enters_operational_entry_exit_flow(): void
+    {
+        [$company, $branch, $user, $product] = $this->context(['inventario.ajustar']);
+
+        $screen = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('importaciones.inventario-migracion'))
+            ->assertOk()
+            ->assertSee('Inventario inicial e histórico')
+            ->assertSee('CSV legado: CODIGO / CODIGO BARRA / DESCRIPCION / EXISTENCIA')
+            ->assertDontSee('name="movement_type"', false);
+        $screen->assertSee(route('importaciones.inventario-migracion'), false);
+
+        foreach (['text/csv', 'text/plain', 'application/vnd.ms-excel'] as $index => $mime) {
+            $csv = $this->legacyFile([
+                [$product->internal_code, $product->barcode, $product->name, '4.2500'],
+            ]);
+            $request = $this->legacyRequest($csv, $branch, 'MYM-MIME-'.$index);
+            $request['migration_file'] = $this->upload($csv, 'csv', $mime);
+
+            $this->post(route('importaciones.inventario-migracion.preview'), $request)->assertOk();
+            $this->assertTrue(session('inventory_migration_preview.rows.0.valid'));
+            $this->assertSame('initial_balance', session('inventory_migration_preview.rows.0.record_type'));
+            $this->assertDatabaseCount('inventory_movements', 0);
+            $this->assertDatabaseCount('inventory_migration_batches', 0);
+        }
+    }
+
     private function context(array $permissions): array
     {
         $suffix = Str::lower(Str::random(8));
@@ -266,9 +293,9 @@ class InventoryMigrationP36Test extends TestCase
         ];
     }
 
-    private function upload(string $path, string $format): UploadedFile
+    private function upload(string $path, string $format, ?string $mime = null): UploadedFile
     {
-        return new UploadedFile($path, 'p36.'.$format, match ($format) {
+        return new UploadedFile($path, 'p36.'.$format, $mime ?? match ($format) {
             'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xls' => 'application/vnd.ms-excel', default => 'text/csv'
         }, null, true);
     }
