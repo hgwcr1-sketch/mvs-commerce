@@ -80,6 +80,7 @@ Incluye:
 - P39 incorpora preview, conciliación, errores CSV, revalidación y reintento sin duplicados.
 - P40 deja el procedimiento SQLite→PostgreSQL y la conciliación read-only documentados/probados; no se ejecutó PostgreSQL ni producción.
 - Evidencia: focal 9 tests/90 aserciones; regresión P31–P40 y Fidelización relacionada 62 tests/488 aserciones.
+- Mejora transversal posterior: las cinco plantillas de entrada P31–P37 ahora son autoexplicativas y seguras para Excel; preservan como texto identificaciones, códigos, teléfonos, códigos de barras y CABYS, aplican decimales solo a datos cuantitativos y usan listas cerradas/catálogos empresariales reales. P38–P40 reutilizan estos contratos. `MigrationTemplateSafetyTest` 2/2; regresión focal P31–P40 40/40.
 - P37 queda pendiente y separado.
 
 ---

@@ -9,6 +9,7 @@ use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
 use App\Services\Imports\InventoryMigrationImportService;
 use App\Services\Imports\LoyaltyMigrationImportService;
+use App\Services\Imports\MigrationTemplateService;
 use App\Services\Imports\ProductImportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -22,9 +23,9 @@ class DataImportController extends Controller
         return view('importaciones.inventario-migracion');
     }
 
-    public function inventoryMigrationTemplate()
+    public function inventoryMigrationTemplate(MigrationTemplateService $templates)
     {
-        return $this->spreadsheetDownload(InventoryMigrationImportService::HEADERS, 'plantilla_migracion_inventario_p36.xlsx', true, 'Inventario P36');
+        return $this->templateDownload($templates->make('inventory', (int) session('active_company_id')), 'plantilla_migracion_inventario_p36.xlsx');
     }
 
     public function inventoryMigrationPreview(Request $request, InventoryMigrationImportService $import)
@@ -57,9 +58,9 @@ class DataImportController extends Controller
         return view('importaciones.fidelidad-migracion');
     }
 
-    public function loyaltyMigrationTemplate()
+    public function loyaltyMigrationTemplate(MigrationTemplateService $templates)
     {
-        return $this->spreadsheetDownload(LoyaltyMigrationImportService::HEADERS, 'plantilla_migracion_fidelidad_p37.xlsx', true, 'Fidelidad P37');
+        return $this->templateDownload($templates->make('loyalty', (int) session('active_company_id')), 'plantilla_migracion_fidelidad_p37.xlsx');
     }
 
     public function loyaltyMigrationPreview(Request $request, LoyaltyMigrationImportService $import)
@@ -111,9 +112,9 @@ class DataImportController extends Controller
         return view('importaciones.ventas-historicas');
     }
 
-    public function historicalSaleTemplate()
+    public function historicalSaleTemplate(MigrationTemplateService $templates)
     {
-        return $this->spreadsheetDownload(HistoricalSaleImportService::HEADERS, 'plantilla_ventas_historicas.xlsx', true, 'Ventas historicas');
+        return $this->templateDownload($templates->make('sales', (int) session('active_company_id')), 'plantilla_ventas_historicas.xlsx');
     }
 
     public function historicalSalePreview(Request $request, HistoricalSaleImportService $import)
@@ -143,9 +144,9 @@ class DataImportController extends Controller
         return view('importaciones.productos');
     }
 
-    public function productTemplate()
+    public function productTemplate(MigrationTemplateService $templates)
     {
-        return $this->spreadsheetDownload(ProductImportService::HEADERS, 'plantilla_importacion_productos.xlsx', true, 'Productos');
+        return $this->templateDownload($templates->make('products', (int) session('active_company_id')), 'plantilla_importacion_productos.xlsx');
     }
 
     public function productPreview(Request $request, ProductImportService $import)
@@ -177,14 +178,9 @@ class DataImportController extends Controller
         return view('importaciones.clientes');
     }
 
-    public function customerTemplate()
+    public function customerTemplate(MigrationTemplateService $templates)
     {
-        return $this->spreadsheetDownload(
-            CustomerImportService::HEADERS,
-            'plantilla_importacion_clientes.xlsx',
-            true,
-            'Clientes',
-        );
+        return $this->templateDownload($templates->make('customers', (int) session('active_company_id')), 'plantilla_importacion_clientes.xlsx');
     }
 
     public function customerPreview(Request $request, CustomerImportService $import)
@@ -330,7 +326,30 @@ class DataImportController extends Controller
         $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(
-            fn () => $writer->save('php://output'),
+            function () use ($writer, $spreadsheet): void {
+                try {
+                    $writer->save('php://output');
+                } finally {
+                    $spreadsheet->disconnectWorksheets();
+                }
+            },
+            $fileName,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    private function templateDownload(Spreadsheet $spreadsheet, string $fileName)
+    {
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(
+            function () use ($writer, $spreadsheet): void {
+                try {
+                    $writer->save('php://output');
+                } finally {
+                    $spreadsheet->disconnectWorksheets();
+                }
+            },
             $fileName,
             ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         );
