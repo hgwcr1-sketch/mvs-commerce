@@ -222,17 +222,19 @@ class ProductImportService
             + $this->existingValues(ProductBarcode::class, 'barcode', $sourceBarcodes);
         foreach ($rows as $index => $row) {
             $row['errors'] = [];
+            $requiredMoney = ['required', 'decimal:0,2', 'gte:0'];
+            $optionalMoney = ['nullable', 'decimal:0,2', 'gte:0'];
             $validator = Validator::make($row, [
                 'internal_code' => ['required', 'string', 'max:50'], 'name' => ['required', 'string', 'max:150'],
                 'category_name' => ['required', 'string', 'max:100'], 'brand_name' => ['nullable', 'string', 'max:150'], 'unit_name' => ['required', 'string', 'max:50'],
                 'category_id' => ['nullable', 'integer'], 'brand_id' => ['nullable', 'integer'], 'unit_id' => ['nullable', 'integer'],
                 'product_type' => ['required', 'in:product,service,combo'], 'barcode' => ['nullable', 'string', 'max:100'],
                 'cabys_code' => ['nullable', 'string', 'max:20'], 'short_description' => ['nullable', 'string', 'max:255'],
-                'description' => ['nullable', 'string'], 'cost' => ['required', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'],
-                'sale_price' => ['required', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'], 'wholesale_price' => ['nullable', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'],
-                'special_price' => ['nullable', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'], 'price_a' => ['nullable', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'],
-                'price_b' => ['nullable', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'], 'price_c' => ['nullable', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0'],
-                'tax_rate' => ['required', 'regex:/^\d+(?:\.\d{1,2})?$/', 'gte:0', 'lte:100'], 'track_inventory' => ['required', 'boolean'],
+                'description' => ['nullable', 'string'], 'cost' => $requiredMoney,
+                'sale_price' => $requiredMoney, 'wholesale_price' => $optionalMoney,
+                'special_price' => $optionalMoney, 'price_a' => $optionalMoney,
+                'price_b' => $optionalMoney, 'price_c' => $optionalMoney,
+                'tax_rate' => [...$requiredMoney, 'lte:100'], 'track_inventory' => ['required', 'boolean'],
                 'allow_negative_stock' => ['required', 'boolean'], 'prints_label' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
             ], [], self::FIELD_LABELS);
             foreach ($validator->errors()->messages() as $field => $messages) {
@@ -416,18 +418,23 @@ class ProductImportService
 
     private function decimalValue(mixed $value): ?string
     {
-        if (is_float($value) || is_int($value)) {
-            $value = sprintf('%.10F', $value);
-        }
-
         $value = $this->nullable($value);
-        if ($value === null || ! preg_match('/^\d+(?:\.\d+)?$/', $value)) {
+        if ($value === null) {
+            return $value;
+        }
+        $value = preg_replace('/[\p{Z}\s]+/u', '', $value);
+        if (str_starts_with($value, "'") && preg_match('/^\'\d+(?:\.\d+)?$/', $value)) {
+            $value = substr($value, 1);
+        }
+        if (! preg_match('/^\d+(?:\.\d+)?$/', $value)) {
             return $value;
         }
 
-        return str_contains($value, '.')
-            ? (rtrim(rtrim($value, '0'), '.') ?: '0')
-            : $value;
+        [$integer, $fraction] = array_pad(explode('.', $value, 2), 2, null);
+        $integer = ltrim($integer, '0') ?: '0';
+        $fraction = $fraction === null ? null : rtrim($fraction, '0');
+
+        return $fraction === null || $fraction === '' ? $integer : $integer.'.'.$fraction;
     }
 
     private function uniqueSlug(string $model, string $name, int $companyId): string
