@@ -14,6 +14,7 @@ use App\Services\Imports\LoyaltyMigrationImportService;
 use App\Services\Loyalty\LoyaltyAccountService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -172,6 +173,47 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
         $this->assertSame('3.0000', (string) LoyaltyAccount::where('company_id', $company->id)->value('balance'));
         $this->assertDatabaseCount('loyalty_movements', 0);
+    }
+
+    public function test_preview_indexes_a_large_company_customer_list_with_one_query(): void
+    {
+        [$company] = $this->context([]);
+        $now = now();
+        $customers = [];
+        for ($index = 0; $index < 1999; $index++) {
+            $customers[] = [
+                'company_id' => $company->id,
+                'customer_type' => 'individual',
+                'name' => 'Cliente volumen '.$index,
+                'identification_type' => 'national',
+                'identification' => 'VOL'.$index,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($customers, 500) as $chunk) {
+            DB::table('customers')->insert($chunk);
+        }
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            if (str_contains(Str::lower($query->sql), 'from "customers"')) {
+                $queries[] = $query->sql;
+            }
+        });
+
+        $rows = [];
+        for ($index = 0; $index < 100; $index++) {
+            $rows[] = ['Cliente inexistente '.$index, '10.0000', '1.0000', '9.0000'];
+        }
+
+        $preview = app(LoyaltyMigrationImportService::class)
+            ->preview($this->file($rows, 'csv'), $company->id);
+
+        $this->assertCount(100, $preview['rows']);
+        $this->assertCount(100, collect($preview['rows'])->where('valid', false));
+        $this->assertCount(1, $queries, 'P37 debe cargar e indexar los clientes una sola vez por vista previa.');
     }
 
     private function context(array $permissions, ?string $customerName = null): array

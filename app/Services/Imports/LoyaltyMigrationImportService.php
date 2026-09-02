@@ -41,7 +41,7 @@ class LoyaltyMigrationImportService
         }
 
         $headers = $this->resolveHeaders(array_shift($source));
-        $customers = Customer::withTrashed()->where('company_id', $companyId)->get();
+        $customerIndex = $this->customerIndex($companyId);
         $rows = [];
 
         foreach ($source as $offset => $values) {
@@ -53,7 +53,7 @@ class LoyaltyMigrationImportService
             foreach ($headers as $column => $field) {
                 $data[$field] = $values[$column] ?? null;
             }
-            $rows[] = $this->normalizeRow($data, $offset + 2, $companyId, $customers);
+            $rows[] = $this->normalizeRow($data, $offset + 2, $companyId, $customerIndex);
         }
 
         if ($rows === []) {
@@ -65,7 +65,7 @@ class LoyaltyMigrationImportService
         $sourceKey = $this->sourceKey($rows);
         $rows = array_map(fn (array $row) => $row + ['source_key' => $sourceKey], $rows);
 
-        return ['company_id' => $companyId, 'source_key' => $sourceKey, 'rows' => $this->validateRows($rows, $companyId)];
+        return ['company_id' => $companyId, 'source_key' => $sourceKey, 'rows' => $this->validateRows($rows, $companyId, $customerIndex)];
     }
 
     public function confirm(array $preview, int $companyId, int $userId): int
@@ -82,7 +82,7 @@ class LoyaltyMigrationImportService
             return 0;
         }
 
-        $rows = $this->validateRows($preview['rows'] ?? [], $companyId);
+        $rows = $this->validateRows($preview['rows'] ?? [], $companyId, $this->customerIndex($companyId));
         if ($invalid = collect($rows)->firstWhere('valid', false)) {
             $error = $invalid['errors'][0] ?? ['field' => 'fila', 'message' => 'dato inválido'];
             throw ValidationException::withMessages([
@@ -169,13 +169,11 @@ class LoyaltyMigrationImportService
         return $resolved;
     }
 
-    private function normalizeRow(array $data, int $rowNumber, int $companyId, Collection $customers): array
+    private function normalizeRow(array $data, int $rowNumber, int $companyId, Collection $customerIndex): array
     {
         $name = $this->text($data['name'] ?? null);
         $normalizedName = $this->normalizeName($name);
-        $matches = $normalizedName === null
-            ? collect()
-            : $customers->filter(fn (Customer $customer) => $this->normalizeName($customer->name) === $normalizedName)->values();
+        $matches = $this->customerMatches($normalizedName, $customerIndex);
         $customer = $matches->count() === 1 ? $matches->first() : null;
         $account = $customer
             ? LoyaltyAccount::query()->where('company_id', $companyId)->where('customer_id', $customer->id)->first()
@@ -198,13 +196,13 @@ class LoyaltyMigrationImportService
         ];
     }
 
-    private function validateRows(array $rows, int $companyId): array
+    private function validateRows(array $rows, int $companyId, Collection $customerIndex): array
     {
         $seenCustomers = [];
 
         foreach ($rows as $index => $row) {
             $errors = [];
-            $matches = $this->customerMatches((string) ($row['normalized_name'] ?? ''), $companyId);
+            $matches = $this->customerMatches($row['normalized_name'] ?? null, $customerIndex);
 
             if (! $row['name']) {
                 $errors[] = ['field' => 'nombre', 'message' => 'El nombre es obligatorio.'];
@@ -258,15 +256,19 @@ class LoyaltyMigrationImportService
         return $rows;
     }
 
-    private function customerMatches(string $normalizedName, int $companyId): Collection
+    private function customerIndex(int $companyId): Collection
     {
-        if ($normalizedName === '') {
-            return collect();
-        }
+        return Customer::withTrashed()
+            ->where('company_id', $companyId)
+            ->get(['id', 'name'])
+            ->groupBy(fn (Customer $customer) => $this->normalizeName($customer->name));
+    }
 
-        return Customer::withTrashed()->where('company_id', $companyId)->get()
-            ->filter(fn (Customer $customer) => $this->normalizeName($customer->name) === $normalizedName)
-            ->values();
+    private function customerMatches(?string $normalizedName, Collection $customerIndex): Collection
+    {
+        return $normalizedName === null || $normalizedName === ''
+            ? collect()
+            : $customerIndex->get($normalizedName, collect())->values();
     }
 
     private function sourceKey(array $rows): string
