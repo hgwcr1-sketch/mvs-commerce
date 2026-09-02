@@ -152,6 +152,32 @@ class LoyaltyMigrationImportService
         });
     }
 
+    public function resolveCustomers(array $preview, int $companyId, array $selections): array
+    {
+        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'La vista previa no pertenece a la empresa activa.',
+            ]);
+        }
+
+        $customerIndex = $this->customerIndex($companyId);
+        $rows = array_map(function (array $row) use ($selections, $companyId): array {
+            $rowNumber = (string) ($row['row_number'] ?? '');
+            if (! array_key_exists($rowNumber, $selections)) {
+                return $row;
+            }
+
+            $selectedId = filter_var($selections[$rowNumber], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            $row['customer_id'] = $selectedId === false ? null : $selectedId;
+
+            return $this->withAccountSnapshot($row, $companyId);
+        }, $preview['rows'] ?? []);
+
+        $preview['rows'] = $this->validateRows($rows, $companyId, $customerIndex);
+
+        return $preview;
+    }
+
     private function resolveHeaders(array $headers): array
     {
         $nonEmpty = collect($headers)->filter(fn ($header) => trim((string) $header) !== '');
@@ -181,25 +207,19 @@ class LoyaltyMigrationImportService
         $normalizedName = $this->normalizeName($name);
         $matches = $this->customerMatches($normalizedName, $customerIndex);
         $customer = $matches->count() === 1 ? $matches->first() : null;
-        $account = $customer
-            ? LoyaltyAccount::query()->where('company_id', $companyId)->where('customer_id', $customer->id)->first()
-            : null;
-
-        return [
+        return $this->withAccountSnapshot([
             'row_number' => $rowNumber,
             'name' => $name,
             'normalized_name' => $normalizedName,
             'customer_id' => $customer?->id,
             'customer_match_count' => $matches->count(),
-            'current_account_id' => $account?->id,
-            'current_balance' => $account ? bcadd((string) $account->balance, '0', 4) : null,
-            'current_movement_count' => $account?->movements()->count() ?? 0,
+            'customer_candidates' => $this->customerCandidates($matches),
             'awarded_points' => $this->decimal($data['awarded_points'] ?? null),
             'used_points' => $this->decimal($data['used_points'] ?? null),
             'balance' => $this->decimal($data['balance'] ?? null),
             'valid' => true,
             'errors' => [],
-        ];
+        ], $companyId);
     }
 
     private function validateRows(array $rows, int $companyId, Collection $customerIndex): array
@@ -209,14 +229,17 @@ class LoyaltyMigrationImportService
         foreach ($rows as $index => $row) {
             $errors = [];
             $matches = $this->customerMatches($row['normalized_name'] ?? null, $customerIndex);
+            $selected = $matches->first(fn (Customer $customer) => (int) $customer->id === (int) ($row['customer_id'] ?? 0));
+            $row['customer_match_count'] = $matches->count();
+            $row['customer_candidates'] = $this->customerCandidates($matches);
 
             if (! $row['name']) {
                 $errors[] = ['field' => 'nombre', 'message' => 'El nombre es obligatorio.'];
             } elseif ($matches->isEmpty()) {
                 $errors[] = ['field' => 'nombre', 'message' => 'El cliente no existe en la empresa activa.'];
-            } elseif ($matches->count() > 1) {
-                $errors[] = ['field' => 'nombre', 'message' => 'Hay más de un cliente con este nombre normalizado.'];
-            } elseif ((int) $matches->first()->id !== (int) ($row['customer_id'] ?? 0)) {
+            } elseif ($matches->count() > 1 && ! $row['customer_id']) {
+                $errors[] = ['field' => 'nombre', 'message' => 'Hay más de un cliente con este nombre normalizado; seleccione el cliente correcto.'];
+            } elseif (! $selected) {
                 $errors[] = ['field' => 'nombre', 'message' => 'El cliente cambió después de la vista previa; cargue el archivo nuevamente.'];
             }
 
@@ -267,7 +290,7 @@ class LoyaltyMigrationImportService
     {
         return Customer::withTrashed()
             ->where('company_id', $companyId)
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'identification', 'phone', 'mobile', 'email'])
             ->groupBy(fn (Customer $customer) => $this->normalizeName($customer->name));
     }
 
@@ -276,6 +299,30 @@ class LoyaltyMigrationImportService
         return $normalizedName === null || $normalizedName === ''
             ? collect()
             : $customerIndex->get($normalizedName, collect())->values();
+    }
+
+    private function customerCandidates(Collection $matches): array
+    {
+        return $matches->map(fn (Customer $customer) => [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'identification' => $customer->identification,
+            'phone' => $customer->mobile ?: $customer->phone,
+            'email' => $customer->email,
+        ])->values()->all();
+    }
+
+    private function withAccountSnapshot(array $row, int $companyId): array
+    {
+        $account = ! empty($row['customer_id'])
+            ? LoyaltyAccount::query()->where('company_id', $companyId)->where('customer_id', $row['customer_id'])->first()
+            : null;
+
+        $row['current_account_id'] = $account?->id;
+        $row['current_balance'] = $account ? bcadd((string) $account->balance, '0', 4) : null;
+        $row['current_movement_count'] = $account?->movements()->count() ?? 0;
+
+        return $row;
     }
 
     private function sourceKey(array $rows): string

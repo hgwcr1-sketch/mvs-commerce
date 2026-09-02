@@ -78,9 +78,10 @@ class LoyaltyMigrationP37Test extends TestCase
     public function test_preview_blocks_missing_ambiguous_duplicate_customer_and_wrong_balance(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Nombre Duplicado');
-        Customer::create([
+        $duplicate = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' nombre   duplicado ',
-            'identification_type' => 'national', 'identification' => 'OTRA', 'is_active' => true,
+            'identification_type' => 'national', 'identification' => 'OTRA', 'phone' => '2222-3333',
+            'email' => 'duplicado@example.test', 'is_active' => true,
         ]);
         $valid = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Único',
@@ -98,9 +99,75 @@ class LoyaltyMigrationP37Test extends TestCase
             ->assertOk();
 
         $response->assertSee('no existe')->assertSee('más de un cliente')->assertSee('saldo esperado')
-            ->assertSee('cliente está repetido')->assertSee('Corrija todas las filas');
+            ->assertSee('cliente está repetido')->assertSee('OTRA')->assertSee('2222-3333')
+            ->assertSee('duplicado@example.test')->assertSee('Resuelva o corrija todas las filas');
         $this->assertSame(4, collect(session('loyalty_migration_preview.rows'))->where('valid', false)->count());
+        $this->assertEqualsCanonicalizing([$customer->id, $duplicate->id], collect(session('loyalty_migration_preview.rows.1.customer_candidates'))->pluck('id')->all());
         $this->assertDatabaseCount('loyalty_accounts', 0);
+    }
+
+    public function test_manual_customer_selection_allows_import_and_remains_idempotent(): void
+    {
+        [$company, $branch, $user, $first] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
+            'identification_type' => 'national', 'identification' => 'ELEGIDO', 'is_active' => true,
+        ]);
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([['Cliente Ambiguo', '0', '0', '15.0000']], 'xlsx'), $company->id);
+
+        $this->assertFalse($preview['rows'][0]['valid']);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch) + ['loyalty_migration_preview' => $preview])
+            ->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])
+            ->assertOk()->assertSee('ELEGIDO')->assertSee('Confirmar migración');
+        $resolved = session('loyalty_migration_preview');
+        $this->assertTrue($resolved['rows'][0]['valid']);
+        $this->assertSame($selected->id, $resolved['rows'][0]['customer_id']);
+        $this->assertSame(1, $service->confirm($resolved, $company->id, $user->id));
+        $this->assertSame(0, $service->confirm($resolved, $company->id, $user->id));
+        $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $selected->id, 'balance' => 15]);
+        $this->assertDatabaseMissing('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $first->id]);
+    }
+
+    public function test_manual_selection_rejects_customer_from_another_company(): void
+    {
+        [$company, $branch, $user] = $this->context([], 'Cliente Ambiguo');
+        Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'LOCAL2', 'is_active' => true,
+        ]);
+        [$otherCompany, $otherBranch, $otherUser, $foreign] = $this->context([], 'Cliente Ambiguo');
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'csv'), $company->id);
+        $resolved = $service->resolveCustomers($preview, $company->id, ['2' => $foreign->id]);
+
+        $this->assertFalse($resolved['rows'][0]['valid']);
+        $this->assertSame($foreign->id, $resolved['rows'][0]['customer_id']);
+        $this->assertStringContainsString('cambió', $resolved['rows'][0]['errors'][0]['message']);
+        $this->assertNotContains($foreign->id, collect($resolved['rows'][0]['customer_candidates'])->pluck('id')->all());
+    }
+
+    public function test_confirmation_blocks_when_manually_selected_customer_changes_after_preview(): void
+    {
+        [$company, $branch, $user] = $this->context([], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'CAMBIA', 'is_active' => true,
+        ]);
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx'), $company->id);
+        $resolved = $service->resolveCustomers($preview, $company->id, ['2' => $selected->id]);
+        $selected->update(['name' => 'Cliente Renombrado']);
+
+        try {
+            $service->confirm($resolved, $company->id, $user->id);
+            $this->fail('La confirmación debía bloquear al cliente seleccionado que cambió.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertStringContainsString('cambió', $exception->errors()['migrar_file'][0]);
+        }
+
+        $this->assertDatabaseCount('loyalty_accounts', 0);
+        $this->assertDatabaseCount('loyalty_migration_batches', 0);
     }
 
     public function test_confirmation_uses_loyalty_infrastructure_and_is_idempotent(): void

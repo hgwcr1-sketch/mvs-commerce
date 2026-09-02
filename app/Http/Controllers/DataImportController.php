@@ -119,6 +119,23 @@ class DataImportController extends Controller
         return redirect()->route('loyalty.dashboard')->with('success', "Se migraron {$count} registros de fidelización correctamente.");
     }
 
+    public function loyaltyMigrationResolve(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $preview = session('loyalty_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+
+        $validated = $request->validate([
+            'selections' => ['required', 'array'],
+            'selections.*' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $preview = $import->resolveCustomers($preview, (int) session('active_company_id'), $validated['selections']);
+        session(['loyalty_migration_preview' => $preview]);
+
+        return view('importaciones.fidelidad-migracion-preview', ['rows' => $preview['rows']]);
+    }
+
     public function loyaltyMigrationErrors()
     {
         $preview = session('loyalty_migration_preview');

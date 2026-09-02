@@ -835,6 +835,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.template');
     Route::post('/importar-datos/fidelidad-migracion/revisar', [DataImportController::class, 'loyaltyMigrationPreview'])
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.preview');
+    Route::post('/importar-datos/fidelidad-migracion/resolver-clientes', [DataImportController::class, 'loyaltyMigrationResolve'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.resolve');
     Route::post('/importar-datos/fidelidad-migracion/confirmar', [DataImportController::class, 'loyaltyMigrationImport'])
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.import');
     Route::get('/importar-datos/fidelidad-migracion/errores', [DataImportController::class, 'loyaltyMigrationErrors'])
