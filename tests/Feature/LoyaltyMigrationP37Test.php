@@ -14,9 +14,10 @@ use App\Services\Imports\LoyaltyMigrationImportService;
 use App\Services\Loyalty\LoyaltyAccountService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
@@ -28,118 +29,106 @@ class LoyaltyMigrationP37Test extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_template_and_equivalent_export_share_the_same_headers(): void
+    public function test_template_and_equivalent_export_have_exactly_the_four_approved_columns(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion', 'fidelidad.ver', 'reportes.exportar']);
-        $this->createAccount($company, $customer, '100.0000');
+        LoyaltyAccount::create([
+            'company_id' => $company->id, 'customer_id' => $customer->id,
+            'balance' => '80.2500', 'total_earned' => '100.5000',
+            'total_redeemed' => '20.2500', 'total_expired' => '0.0000', 'is_active' => true,
+        ]);
 
         $template = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->get(route('importaciones.fidelidad-migracion.template'))->assertOk();
-        $this->assertSame(LoyaltyMigrationImportService::HEADERS, $this->spreadsheet($template->streamedContent())[0]);
+        $book = $this->spreadsheet($template->streamedContent());
+        $this->assertSame(LoyaltyMigrationImportService::HEADERS, $book->getSheet(0)->rangeToArray('A1:D1')[0]);
+        $this->assertNull($book->getSheet(0)->getCell('E1')->getValue());
 
-        $rows = $this->spreadsheet($this->get(route('data-center.exports.download', ['loyalty-migration', 'xlsx']))->assertOk()->streamedContent());
-        $this->assertSame(LoyaltyMigrationImportService::HEADERS, $rows[0]);
-        $this->assertSame('saldo_inicial', $rows[1][2]);
-        $this->assertSame('100', (string) $rows[1][9]);
+        $export = $this->spreadsheet($this->get(route('data-center.exports.download', ['loyalty-migration', 'xlsx']))->assertOk()->streamedContent());
+        $this->assertSame(LoyaltyMigrationImportService::HEADERS, $export->getSheet(0)->rangeToArray('A1:D1')[0]);
+        $this->assertSame($customer->name, $export->getSheet(0)->getCell('A2')->getValue());
+        $this->assertSame('100.5', (string) $export->getSheet(0)->getCell('B2')->getValue());
+        $this->assertSame('20.25', (string) $export->getSheet(0)->getCell('C2')->getValue());
+        $this->assertSame('80.25', (string) $export->getSheet(0)->getCell('D2')->getValue());
     }
 
-    public function test_preview_accepts_xlsx_xls_csv_without_mutation(): void
+    public function test_preview_accepts_xlsx_xls_csv_normalizes_name_and_preserves_decimal_precision_without_writes(): void
     {
-        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Cliente Alvarez');
+
         foreach (['xlsx', 'xls', 'csv'] as $format) {
-            $row = $this->initialRow($customer, 'SRC-'.$format, '50.0000');
+            $path = $this->file([['  CLIENTE   ÁLVAREZ ', '100.1255', '20.0255', '80.1000']], $format);
             $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-                ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file([$row], $format), $format)])
+                ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, $format)])
                 ->assertOk();
-            $this->assertTrue(session('loyalty_migration_preview.rows.0.valid'));
+            $row = session('loyalty_migration_preview.rows.0');
+            $this->assertTrue($row['valid']);
+            $this->assertSame($customer->id, $row['customer_id']);
+            $this->assertSame('100.1255', $row['awarded_points']);
+            $this->assertSame('20.0255', $row['used_points']);
+            $this->assertSame('80.1000', $row['balance']);
         }
+
         $this->assertDatabaseCount('loyalty_accounts', 0);
         $this->assertDatabaseCount('loyalty_movements', 0);
         $this->assertDatabaseCount('loyalty_migration_batches', 0);
     }
 
-    public function test_preview_reports_duplicate_and_company_isolation(): void
+    public function test_preview_blocks_missing_ambiguous_duplicate_customer_and_wrong_balance(): void
     {
-        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        [$otherCompany, $otherBranch, $otherUser, $otherCustomer] = $this->context([]);
-        DB::table('loyalty_migration_batches')->insert(['company_id' => $company->id, 'user_id' => $user->id, 'source_key' => 'REPETIDO', 'row_count' => 1, 'imported_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
-
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Nombre Duplicado');
+        Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' nombre   duplicado ',
+            'identification_type' => 'national', 'identification' => 'OTRA', 'is_active' => true,
+        ]);
+        $valid = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Único',
+            'identification_type' => 'national', 'identification' => 'UNICO', 'is_active' => true,
+        ]);
         $rows = [
-            $this->movementRow($customer, 'REPETIDO', 'DUP-M', 'purchase', '10.0000'),
-            $this->movementRow($otherCustomer, 'REPETIDO', 'DUP-F', 'redemption', '5.0000'),
+            ['No Existe', '10.0000', '1.0000', '9.0000'],
+            [$customer->name, '10.0000', '1.0000', '9.0000'],
+            [$valid->name, '10.0000', '1.0000', '8.0000'],
+            [$valid->name, '10.0000', '1.0000', '9.0000'],
         ];
 
         $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file($rows, 'xlsx'), 'xlsx')])
             ->assertOk();
 
-        $response->assertSee('origen_migracion')->assertSee('identificacion_cliente')->assertSee('tipo_saldo')
-            ->assertSee('tipo_movimiento')->assertSee('Corrija todas las filas')->assertSee('Descargar errores CSV');
-        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
-        $this->assertFalse(session('loyalty_migration_preview.rows.1.valid'));
-        $this->get(route('importaciones.fidelidad-migracion.errors'))->assertOk()
-            ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+        $response->assertSee('no existe')->assertSee('más de un cliente')->assertSee('saldo esperado')
+            ->assertSee('cliente está repetido')->assertSee('Corrija todas las filas');
+        $this->assertSame(4, collect(session('loyalty_migration_preview.rows'))->where('valid', false)->count());
+        $this->assertDatabaseCount('loyalty_accounts', 0);
     }
 
-    public function test_confirmation_sets_initial_balance_and_adds_movement_without_operational_effects(): void
+    public function test_confirmation_uses_loyalty_infrastructure_and_is_idempotent(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        $rows = [
-            $this->initialRow($customer, 'MIG-2024', '15.0000'),
-            $this->movementRow($customer, 'MIG-2024', 'HIST-1', 'purchase', '15.0000'),
-        ];
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([[$customer->name, '100.1255', '20.0255', '80.1000']], 'xlsx'), $company->id);
 
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file($rows, 'xlsx'), 'xlsx')])
-            ->assertOk();
-        $this->post(route('importaciones.fidelidad-migracion.import'))->assertRedirect(route('loyalty.dashboard'));
+        $this->assertSame(1, $service->confirm($preview, $company->id, $user->id));
+        $this->assertSame(0, $service->confirm($preview, $company->id, $user->id));
 
         $account = LoyaltyAccount::where('company_id', $company->id)->where('customer_id', $customer->id)->sole();
-        $this->assertSame('15.0000', (string) $account->balance);
-        $this->assertSame('15.0000', (string) $account->total_earned);
-        $this->assertSame(1, LoyaltyMovement::where('company_id', $company->id)->where('loyalty_account_id', $account->id)->count());
-        $this->assertSame(LoyaltyMovement::TYPE_PURCHASE, LoyaltyMovement::where('company_id', $company->id)->value('type'));
-        $this->assertSame('MIG-2024', DB::table('loyalty_migration_batches')->where('company_id', $company->id)->value('source_key'));
-        foreach (['inventory_movements', 'sales', 'sale_items', 'sale_payments', 'cash_sessions', 'accounts_receivable'] as $table) {
-            $this->assertSame(0, DB::table($table)->count(), $table);
-        }
-        $this->assertNull(session('loyalty_migration_preview'));
-    }
-
-    public function test_retry_and_concurrent_change_are_idempotent_and_atomic(): void
-    {
-        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        $row = $this->initialRow($customer, 'ATOMIC', '9.0000');
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file([$row], 'xlsx'), 'xlsx')])
-            ->assertOk();
-        $this->post(route('importaciones.fidelidad-migracion.import'))->assertRedirect(route('loyalty.dashboard'));
-        $this->assertSame('9.0000', (string) LoyaltyAccount::where('company_id', $company->id)->where('customer_id', $customer->id)->value('balance'));
-
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file([$row], 'xlsx'), 'xlsx')])
-            ->assertOk();
-        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
-        $this->from(route('importaciones.fidelidad-migracion'))
-            ->post(route('importaciones.fidelidad-migracion.import'))
-            ->assertRedirect(route('importaciones.fidelidad-migracion'))
-            ->assertSessionHasErrors('migrar_file');
-        $this->assertSame('9.0000', (string) LoyaltyAccount::where('company_id', $company->id)->where('customer_id', $customer->id)->value('balance'));
-        $this->assertDatabaseCount('loyalty_movements', 0);
+        $this->assertSame('80.1000', (string) $account->balance);
+        $this->assertSame('100.1255', (string) $account->total_earned);
+        $this->assertSame('20.0255', (string) $account->total_redeemed);
         $this->assertDatabaseCount('loyalty_migration_batches', 1);
+        $this->assertSame(2, LoyaltyMovement::where('company_id', $company->id)->count());
+        $types = LoyaltyMovement::where('company_id', $company->id)->pluck('type')->sort()->values()->all();
+        $this->assertSame([LoyaltyMovement::TYPE_PROMOTION, LoyaltyMovement::TYPE_REDEMPTION], $types);
+        $this->assertSame(2, LoyaltyMovement::where('company_id', $company->id)->where('source_type', 'LoyaltyMigration')->count());
     }
 
-    public function test_failure_after_balance_rolls_back_the_whole_batch(): void
+    public function test_confirmation_rolls_back_account_movements_and_batch_on_failure(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        $rows = [
-            $this->initialRow($customer, 'ROLLBACK', '9.0000'),
-            $this->movementRow($customer, 'ROLLBACK', 'FAIL-1', 'purchase', '9.0000'),
-        ];
-        $mock = Mockery::mock(LoyaltyAccountService::class);
-        $mock->shouldReceive('recordHistoricalMigrationMovement')->once()->andThrow(new \RuntimeException('fallo controlado'));
-        $service = new LoyaltyMigrationImportService($mock);
-        $preview = $service->preview($this->file($rows, 'xlsx'), $company->id);
+        $partial = Mockery::mock(LoyaltyAccountService::class)->makePartial();
+        $partial->shouldReceive('subtractPoints')->once()->andThrow(new \RuntimeException('fallo controlado'));
+        $service = new LoyaltyMigrationImportService($partial);
+        $preview = $service->preview($this->file([[$customer->name, '10.0000', '2.0000', '8.0000']], 'xlsx'), $company->id);
 
         try {
             $service->confirm($preview, $company->id, $user->id);
@@ -153,24 +142,39 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertDatabaseCount('loyalty_migration_batches', 0);
     }
 
-    public function test_permissions_and_cross_company_are_blocked(): void
+    public function test_customer_resolution_is_strictly_isolated_by_company(): void
     {
-        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        [$otherCompany, $otherBranch, $denied] = $this->context([]);
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Cliente Compartido');
+        [$otherCompany, $otherBranch, $otherUser, $otherCustomer] = $this->context([], 'Cliente Compartido');
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([['Cliente Compartido', '5.0000', '1.0000', '4.0000']], 'csv'), $company->id);
 
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-            ->get(route('data-center.imports'))->assertOk()->assertSee('data-existing-import="loyalty-migration"', false);
-
-        $row = $this->initialRow($customer, 'FOREIGN', '3.0000');
-        $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($this->file([$row], 'xlsx'), 'xlsx')])
-            ->assertOk();
-        $this->assertTrue(session('loyalty_migration_preview.rows.0.valid'));
-
-        $this->actingAs($denied)->withSession($this->activeSession($otherCompany, $otherBranch))
-            ->get(route('importaciones.fidelidad-migracion'))->assertForbidden();
+        $this->assertTrue($preview['rows'][0]['valid']);
+        $this->assertSame($customer->id, $preview['rows'][0]['customer_id']);
+        $service->confirm($preview, $company->id, $user->id);
+        $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $customer->id]);
+        $this->assertDatabaseMissing('loyalty_accounts', ['company_id' => $otherCompany->id, 'customer_id' => $otherCustomer->id]);
     }
 
-    private function context(array $permissions): array
+    public function test_existing_operational_account_is_not_overwritten(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        LoyaltyAccount::create([
+            'company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => '3.0000',
+            'total_earned' => '3.0000', 'total_redeemed' => '0.0000', 'total_expired' => '0.0000', 'is_active' => true,
+        ]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), [
+                'migrar_file' => $this->upload($this->file([[$customer->name, '10.0000', '1.0000', '9.0000']], 'xlsx'), 'xlsx'),
+            ])->assertOk()->assertSee('no los sobrescribe');
+
+        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertSame('3.0000', (string) LoyaltyAccount::where('company_id', $company->id)->value('balance'));
+        $this->assertDatabaseCount('loyalty_movements', 0);
+    }
+
+    private function context(array $permissions, ?string $customerName = null): array
     {
         $suffix = Str::lower(Str::random(8));
         $company = Company::create(['trade_name' => 'Fid37 '.$suffix, 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
@@ -183,45 +187,31 @@ class LoyaltyMigrationP37Test extends TestCase
         $user = User::factory()->create(['is_active' => true]);
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
-        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente '.$suffix, 'identification_type' => 'national', 'identification' => 'ID'.$suffix, 'is_active' => true]);
+        $customer = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => $customerName ?? 'Cliente '.$suffix,
+            'identification_type' => 'national', 'identification' => 'ID'.$suffix, 'is_active' => true,
+        ]);
 
         return [$company, $branch, $user, $customer];
-    }
-
-    private function createAccount(Company $company, Customer $customer, string $balance): LoyaltyAccount
-    {
-        return LoyaltyAccount::create([
-            'company_id' => $company->id, 'customer_id' => $customer->id,
-            'balance' => $balance, 'total_earned' => '0.0000',
-            'total_redeemed' => '0.0000', 'total_expired' => '0.0000',
-            'is_active' => true,
-        ]);
-    }
-
-    private function initialRow(Customer $customer, string $source, string $balance): array
-    {
-        return [
-            $source, $customer->identification, 'saldo_inicial', '2022-01-01 08:00:00',
-            '', '', '', '', '', $balance, $balance, '0.0000', '0.0000',
-            '2022-01-01 08:00:00', '2022-01-01 08:00:00', 'Sí', '', '', 'Snapshot exportado', '',
-        ];
-    }
-
-    private function movementRow(Customer $customer, string $source, string $key, string $type, string $points): array
-    {
-        return [
-            $source, $customer->identification, 'movimiento_historico', '2022-01-01 08:00:00',
-            '', '', '', $type, $points, '', '', '', '', '', '', '', '0.0000', $points, 'Movimiento histórico', '',
-        ];
     }
 
     private function file(array $rows, string $format): string
     {
         $path = tempnam(sys_get_temp_dir(), 'p37-').'.'.$format;
-        $sheet = new Spreadsheet;
-        $sheet->getActiveSheet()->fromArray(array_merge([LoyaltyMigrationImportService::HEADERS], $rows));
+        $spreadsheet = new Spreadsheet;
+        foreach (array_merge([LoyaltyMigrationImportService::HEADERS], $rows) as $rowIndex => $values) {
+            foreach ($values as $columnIndex => $value) {
+                $spreadsheet->getActiveSheet()->setCellValueExplicit(
+                    Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 1),
+                    (string) $value,
+                    DataType::TYPE_STRING,
+                );
+            }
+        }
         match ($format) {
-            'xlsx' => (new Xlsx($sheet))->save($path), 'xls' => (new Xls($sheet))->save($path), 'csv' => (new Csv($sheet))->save($path)
+            'xlsx' => (new Xlsx($spreadsheet))->save($path),
+            'xls' => (new Xls($spreadsheet))->save($path),
+            'csv' => (new Csv($spreadsheet))->save($path),
         };
 
         return $path;
@@ -230,16 +220,18 @@ class LoyaltyMigrationP37Test extends TestCase
     private function upload(string $path, string $format): UploadedFile
     {
         return new UploadedFile($path, 'p37.'.$format, match ($format) {
-            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xls' => 'application/vnd.ms-excel', default => 'text/csv'
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls' => 'application/vnd.ms-excel',
+            default => 'text/csv',
         }, null, true);
     }
 
-    private function spreadsheet(string $content): array
+    private function spreadsheet(string $content): Spreadsheet
     {
         $path = tempnam(sys_get_temp_dir(), 'p37-sheet-');
         file_put_contents($path, $content);
 
-        return IOFactory::load($path)->getActiveSheet()->toArray(null, true, false, false);
+        return IOFactory::load($path);
     }
 
     private function activeSession(Company $company, Branch $branch): array

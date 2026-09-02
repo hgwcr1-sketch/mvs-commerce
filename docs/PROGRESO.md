@@ -75,13 +75,13 @@ Incluye:
 
 #### P37–P40 — Fidelización, paquete, ensayo y cierre: COMPLETADOS ADELANTADAMENTE
 
-- P37 importa saldos consolidados y Kardex histórico sin reaplicar puntos, bloquea cuentas con actividad operativa y conserva aislamiento, idempotencia y rollback.
+- P37 importa saldos de fidelización mediante plantilla simple aprobada de 4 columnas (`NOMBRE`, `PUNTOS OTORGADOS`, `PUNTOS UTILIZADOS`, `SALDO`), resolviendo cliente único por nombre normalizado y empresa; conciliación decimal exacta (PUNTOS OTORGADOS − PUNTOS UTILIZADOS = SALDO), movimientos mediante `LoyaltyAccountService`, lote derivado del contenido con idempotencia y rollback, y bloqueo de cuentas operativas.
 - P38 genera un ZIP portable de clientes, productos, facturas/líneas, Kardex y puntos con manifiesto, conteos y SHA-256.
 - P39 incorpora preview, conciliación, errores CSV, revalidación y reintento sin duplicados.
 - P40 deja el procedimiento SQLite→PostgreSQL y la conciliación read-only documentados/probados; no se ejecutó PostgreSQL ni producción.
 - Evidencia: focal 9 tests/90 aserciones; regresión P31–P40 y Fidelización relacionada 62 tests/488 aserciones.
 - Mejora transversal posterior: las cinco plantillas de entrada P31–P37 ahora son autoexplicativas y seguras para Excel; preservan como texto identificaciones, códigos, teléfonos, códigos de barras y CABYS, aplican decimales solo a datos cuantitativos y usan listas cerradas/catálogos empresariales reales. P38–P40 reutilizan estos contratos. `MigrationTemplateSafetyTest` 2/2; regresión focal P31–P40 40/40.
-- P37 queda pendiente y separado.
+- P37 completado, separado de inventario; `LoyaltyMigrationP37Test` 7/7, 61 aserciones.
 
 ---
 

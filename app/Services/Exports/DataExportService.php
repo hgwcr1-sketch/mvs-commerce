@@ -8,7 +8,6 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\InventoryMovement;
 use App\Models\LoyaltyAccount;
-use App\Models\LoyaltyMovement;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Supplier;
@@ -190,29 +189,18 @@ class DataExportService
 
     private function loyaltyMigration(int $companyId, ?int $branchId): array
     {
-        $source = 'P37-EXPORT-'.$companyId.'-'.now()->format('YmdHis');
         $balances = LoyaltyAccount::query()->where('company_id', $companyId)->with('customer')
-            ->orderBy('customer_id')->get()->map(fn (LoyaltyAccount $account, $index) => [
-                $source, $account->customer?->identification, 'saldo_inicial', now()->format('Y-m-d H:i:s'),
-                null, null, null, null, null, $account->balance, $account->total_earned, $account->total_redeemed,
-                $account->total_expired, $account->last_qualifying_purchase_at?->format('Y-m-d H:i:s'),
-                $account->last_activity_at?->format('Y-m-d H:i:s'),
-                $account->is_active ? 'Sí' : 'No', null, null, 'Snapshot exportado', null,
-            ]);
+            ->orderBy('customer_id')->get()->map(function (LoyaltyAccount $account): array {
+                $awarded = bcadd((string) $account->total_earned, '0', 4);
+                $balance = bcadd((string) $account->balance, '0', 4);
+                $used = bcsub($awarded, $balance, 4);
 
-        $movements = LoyaltyMovement::query()->where('company_id', $companyId)
-            ->with('customer')->orderBy('created_at')->orderBy('id')->get()->map(fn (LoyaltyMovement $movement, $index) => [
-                $source, $movement->customer?->identification, 'movimiento_historico', $movement->created_at?->format('Y-m-d H:i:s'),
-                $movement->branch?->code ?? null, null, null, $movement->type, ltrim((string) $movement->points, '-'),
-                null, null, null, null, null, null,
-                $movement->balance_before, $movement->balance_after,
-                LoyaltyMovement::LABELS[$movement->type] ?? $movement->type,
-                $movement->description,
-            ]);
+                return [$account->customer?->name, $awarded, $used, $balance];
+            });
 
         return [
             LoyaltyMigrationImportService::HEADERS,
-            $balances->concat($movements)->values()->all(),
+            $balances->values()->all(),
         ];
     }
 }

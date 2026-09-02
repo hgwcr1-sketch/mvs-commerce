@@ -118,7 +118,17 @@ class MigrationTemplateService
             ]), 'lists' => ['categoria' => ProductCategory::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'marca' => Brand::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'unidad' => Unit::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'tipo_producto' => ['product', 'service', 'combo'], 'controla_inventario' => $yesNo, 'permite_stock_negativo' => $yesNo, 'imprime_etiqueta' => $yesNo, 'activo' => $yesNo]],
             'sales' => $this->genericDefinition('Ventas históricas', HistoricalSaleImportService::HEADERS, ['numero_documento', 'codigo_sucursal', 'identificacion_cliente', 'codigo_producto', 'codigo_barras'], ['tipo_documento' => ['electronic_invoice', 'electronic_ticket'], 'condicion_venta' => ['cash', 'credit']], ['fecha' => 'Fecha y hora (AAAA-MM-DD HH:MM:SS)']),
             'inventory' => $this->genericDefinition('Inventario P36', InventoryMigrationImportService::HEADERS, ['origen_migracion', 'clave_fila', 'codigo_sucursal', 'codigo_producto', 'codigo_barras', 'referencia'], ['tipo_registro' => ['saldo_inicial', 'movimiento_historico'], 'tipo_movimiento' => ['entrada', 'salida']], ['fecha' => 'Fecha y hora (AAAA-MM-DD HH:MM:SS)']),
-            'loyalty' => $this->genericDefinition('Fidelidad P37', LoyaltyMigrationImportService::HEADERS, ['origen_migracion', 'identificacion_cliente', 'codigo_sucursal', 'codigo_producto', 'codigo_barras'], ['tipo_saldo' => ['saldo_inicial', 'movimiento_historico'], 'tipo_movimiento' => ['purchase', 'new_customer', 'birthday', 'return_customer', 'promotion', 'redemption', 'reward', 'return', 'void', 'expiration', 'adjustment'], 'activo' => $yesNo], ['fecha' => 'Fecha y hora (AAAA-MM-DD HH:MM:SS)', 'fecha_ultima_compra' => 'Fecha y hora', 'fecha_ultima_actividad' => 'Fecha y hora']),
+            'loyalty' => [
+                'title' => 'Fidelidad P37',
+                'headers' => LoyaltyMigrationImportService::HEADERS,
+                'fields' => [
+                    ['name' => 'NOMBRE', 'required' => true, 'format_type' => 'text', 'format' => 'Nombre completo; se compara sin distinguir mayúsculas, tildes ni espacios repetidos', 'allowed' => 'Cliente único de la empresa activa', 'example' => 'María Rodríguez', 'number_format' => null],
+                    ['name' => 'PUNTOS OTORGADOS', 'required' => true, 'format_type' => 'text', 'format' => 'Decimal no negativo, máximo 4 decimales', 'allowed' => null, 'example' => '125.5000', 'number_format' => null],
+                    ['name' => 'PUNTOS UTILIZADOS', 'required' => true, 'format_type' => 'text', 'format' => 'Decimal no negativo, máximo 4 decimales', 'allowed' => null, 'example' => '25.2500', 'number_format' => null],
+                    ['name' => 'SALDO', 'required' => true, 'format_type' => 'text', 'format' => 'PUNTOS OTORGADOS menos PUNTOS UTILIZADOS', 'allowed' => null, 'example' => '100.2500', 'number_format' => null],
+                ],
+                'lists' => [],
+            ],
         ];
 
         return $definitions[$type];
