@@ -123,6 +123,51 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertSame(2, LoyaltyMovement::where('company_id', $company->id)->where('source_type', 'LoyaltyMigration')->count());
     }
 
+    public function test_legacy_initial_balance_creates_one_traceable_migration_movement_without_inventing_history(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([[$customer->name, '0', '0.0000', '87.4321']], 'xlsx'), $company->id);
+
+        $this->assertTrue($preview['rows'][0]['valid']);
+        $this->assertSame(1, $service->confirm($preview, $company->id, $user->id));
+        $this->assertSame(0, $service->confirm($preview, $company->id, $user->id));
+
+        $account = LoyaltyAccount::where('company_id', $company->id)->where('customer_id', $customer->id)->sole();
+        $this->assertSame('87.4321', (string) $account->balance);
+        $this->assertSame('0.0000', (string) $account->total_earned);
+        $this->assertSame('0.0000', (string) $account->total_redeemed);
+
+        $movement = LoyaltyMovement::where('company_id', $company->id)->sole();
+        $this->assertSame(LoyaltyMovement::TYPE_ADJUSTMENT, $movement->type);
+        $this->assertSame('87.4321', (string) $movement->points);
+        $this->assertSame('LoyaltyMigration', $movement->source_type);
+        $this->assertSame('legacy_initial_balance', $movement->metadata['kind']);
+        $this->assertDatabaseCount('loyalty_migration_batches', 1);
+    }
+
+    public function test_preview_safely_repairs_spanish_enye_mojibake_for_customer_matching(): void
+    {
+        [$company, $branch, $user, $bolanos] = $this->context([], 'BOLAÑOS');
+        $zuniga = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'ZUÑIGA',
+            'identification_type' => 'national', 'identification' => 'MOJI1', 'is_active' => true,
+        ]);
+        $nunez = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'NUÑEZ',
+            'identification_type' => 'national', 'identification' => 'MOJI2', 'is_active' => true,
+        ]);
+
+        $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
+            ["BOLA\u{00C3}\u{2018}OS", '0', '0', '5.0000'],
+            ["ZU\u{00C3}\u{2018}IGA", '10.0000', '2.0000', '8.0000'],
+            ["NU\u{00C3}\u{2018}EZ", '3.0000', '1.0000', '2.0000'],
+        ], 'xlsx'), $company->id);
+
+        $this->assertCount(3, collect($preview['rows'])->where('valid', true));
+        $this->assertSame([$bolanos->id, $zuniga->id, $nunez->id], collect($preview['rows'])->pluck('customer_id')->all());
+    }
+
     public function test_confirmation_rolls_back_account_movements_and_batch_on_failure(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);

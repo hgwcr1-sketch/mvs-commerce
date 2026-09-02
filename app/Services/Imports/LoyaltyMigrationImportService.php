@@ -119,7 +119,13 @@ class LoyaltyMigrationImportService
                     'effective_at' => now(),
                 ];
 
-                if (bccomp($row['awarded_points'], '0', 4) > 0) {
+                if ($this->isLegacyInitialBalance($row)) {
+                    $this->accounts->adjustPoints($account, $row['balance'], $context + [
+                        'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:legacy_initial_balance",
+                        'description' => 'P37 · Saldo inicial legado migrado',
+                        'metadata' => ['migration' => 'P37', 'kind' => 'legacy_initial_balance'],
+                    ]);
+                } elseif (bccomp($row['awarded_points'], '0', 4) > 0) {
                     $this->accounts->addPoints($account, $row['awarded_points'], LoyaltyMovement::TYPE_PROMOTION, $context + [
                         'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:awarded",
                         'description' => 'P37 · Puntos otorgados migrados',
@@ -229,7 +235,8 @@ class LoyaltyMigrationImportService
 
             if ($this->validDecimal($row['awarded_points'] ?? null)
                 && $this->validDecimal($row['used_points'] ?? null)
-                && $this->validDecimal($row['balance'] ?? null)) {
+                && $this->validDecimal($row['balance'] ?? null)
+                && ! $this->isLegacyInitialBalance($row)) {
                 $expected = bcsub($row['awarded_points'], $row['used_points'], 4);
                 if (bccomp($expected, $row['balance'], 4) !== 0) {
                     $errors[] = ['field' => 'saldo', 'message' => "No concilia; el saldo esperado es {$expected}."];
@@ -292,6 +299,12 @@ class LoyaltyMigrationImportService
             return null;
         }
 
+        $name = str_replace(
+            ["\u{00C3}\u{2018}", "\u{00C3}\u{0091}", "\u{00C3}\u{00B1}"],
+            ["\u{00D1}", "\u{00D1}", "\u{00F1}"],
+            $name,
+        );
+
         return Str::of($name)->squish()->ascii()->lower()->toString();
     }
 
@@ -310,5 +323,15 @@ class LoyaltyMigrationImportService
     private function validDecimal(?string $value): bool
     {
         return $value !== null && preg_match('/^\d+(?:\.\d{1,4})?$/', $value) === 1;
+    }
+
+    private function isLegacyInitialBalance(array $row): bool
+    {
+        return $this->validDecimal($row['awarded_points'] ?? null)
+            && $this->validDecimal($row['used_points'] ?? null)
+            && $this->validDecimal($row['balance'] ?? null)
+            && bccomp($row['awarded_points'], '0', 4) === 0
+            && bccomp($row['used_points'], '0', 4) === 0
+            && bccomp($row['balance'], '0', 4) > 0;
     }
 }
