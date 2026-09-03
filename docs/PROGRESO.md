@@ -75,7 +75,7 @@ Incluye:
 
 #### P37–P40 — Fidelización, paquete, ensayo y cierre: COMPLETADOS ADELANTADAMENTE
 
-- P37 importa saldos de fidelización mediante plantilla simple aprobada de 4 columnas (`NOMBRE`, `PUNTOS OTORGADOS`, `PUNTOS UTILIZADOS`, `SALDO`), resolviendo cliente único por nombre normalizado y empresa; conciliación decimal exacta (PUNTOS OTORGADOS − PUNTOS UTILIZADOS = SALDO), movimientos mediante `LoyaltyAccountService`, lote derivado del contenido con idempotencia y rollback, y bloqueo de cuentas operativas.
+- P37 importa saldos de fidelización mediante plantilla simple aprobada de 4 columnas; puede aprovechar identificación, teléfono o email opcionales ya presentes en el origen para desambiguar de forma exacta (sin fuzzy matching). Consolida por cliente históricos conciliados sumando otorgados/utilizados y snapshots legacy solo cuando el saldo final coincide; mezclas o snapshots incompatibles quedan pendientes. La confirmación importa únicamente clientes válidos, registra pendientes y motivos, conserva resoluciones manuales por empresa+lote+fila+nombre y mantiene idempotencia, rollback y bloqueo de cuentas operativas.
 - P38 genera un ZIP portable de clientes, productos, facturas/líneas, Kardex y puntos con manifiesto, conteos y SHA-256.
 - P39 incorpora preview, conciliación, errores CSV, revalidación y reintento sin duplicados.
 - P40 deja el procedimiento SQLite→PostgreSQL y la conciliación read-only documentados/probados; no se ejecutó PostgreSQL ni producción.

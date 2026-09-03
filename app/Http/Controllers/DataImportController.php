@@ -118,10 +118,15 @@ class DataImportController extends Controller
             return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
         }
         $companyId = (int) session('active_company_id');
+        $pendingCount = collect($preview['rows'] ?? [])->where('valid', false)->count();
+        $consolidatedCount = collect($preview['rows'] ?? [])->sum(fn (array $row) => max(0, (int) ($row['consolidated_count'] ?? 1) - 1));
         $count = $import->confirm($preview, $companyId, (int) $request->user()->id);
         session()->forget('loyalty_migration_preview');
 
-        return redirect()->route('loyalty.dashboard')->with('success', "Se migraron {$count} registros de fidelización correctamente.");
+        return redirect()->route('loyalty.dashboard')->with(
+            'success',
+            "Migración P37: {$count} clientes importados, {$consolidatedCount} filas consolidadas y {$pendingCount} pendientes trazables.",
+        );
     }
 
     public function loyaltyMigrationResolve(Request $request, LoyaltyMigrationImportService $import)

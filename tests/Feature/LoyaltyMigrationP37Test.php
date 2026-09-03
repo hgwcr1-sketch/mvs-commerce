@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\Imports\LoyaltyMigrationImportService;
 use App\Services\Loyalty\LoyaltyAccountService;
+use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -100,9 +101,14 @@ class LoyaltyMigrationP37Test extends TestCase
             ->assertOk();
 
         $response->assertSee('no existe')->assertSee('más de un cliente')->assertSee('saldo esperado')
-            ->assertSee('cliente está repetido')->assertSee('OTRA')->assertSee('2222-3333')
-            ->assertSee('duplicado@example.test')->assertSee('Resuelva o corrija todas las filas');
-        $this->assertSame(4, collect(session('loyalty_migration_preview.rows'))->where('valid', false)->count());
+            ->assertSee('OTRA')->assertSee('2222-3333')
+            ->assertSee('duplicado@example.test');
+        $this->assertSame(3, collect(session('loyalty_migration_preview.rows'))->where('valid', false)->count());
+        $this->assertSame(0, collect(session('loyalty_migration_preview.rows'))->where('valid', true)->count());
+        $this->assertStringContainsString(
+            'no se importará parcialmente',
+            collect(session('loyalty_migration_preview.rows.2.errors'))->pluck('message')->join(' '),
+        );
         $this->assertEqualsCanonicalizing([$customer->id, $duplicate->id], collect(session('loyalty_migration_preview.rows.1.customer_candidates'))->pluck('id')->all());
         $this->assertDatabaseCount('loyalty_accounts', 0);
     }
@@ -120,7 +126,7 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertFalse($preview['rows'][0]['valid']);
         $this->actingAs($user)->withSession($this->activeSession($company, $branch) + ['loyalty_migration_preview' => $preview])
             ->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])
-            ->assertOk()->assertSee('ELEGIDO')->assertSee('Confirmar migración');
+            ->assertOk()->assertSee('ELEGIDO')->assertSee('Importar 1 clientes listos');
         $resolved = session('loyalty_migration_preview');
         $this->assertTrue($resolved['rows'][0]['valid']);
         $this->assertSame($selected->id, $resolved['rows'][0]['customer_id']);
@@ -229,7 +235,7 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertNull(session('loyalty_migration_preview.rows.0.customer_id'));
     }
 
-    public function test_repeated_rows_remain_separate_and_the_later_row_is_blocked(): void
+    public function test_compatible_historical_repeated_rows_are_consolidated(): void
     {
         [$company, $branch] = $this->context([], 'Cliente Repetido');
         $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
@@ -237,12 +243,119 @@ class LoyaltyMigrationP37Test extends TestCase
             ['Cliente Repetido', '7.0000', '2.0000', '5.0000'],
         ], 'xlsx'), $company->id);
 
-        $this->assertCount(2, $preview['rows'], 'P37 detecta filas repetidas sin consolidarlas.');
+        $this->assertCount(1, $preview['rows']);
         $this->assertTrue($preview['rows'][0]['valid']);
-        $this->assertFalse($preview['rows'][1]['valid']);
-        $this->assertStringContainsString('repetido en el archivo', collect($preview['rows'][1]['errors'])->pluck('message')->join(' '));
-        $this->assertSame('5.0000', $preview['rows'][0]['awarded_points']);
-        $this->assertSame('7.0000', $preview['rows'][1]['awarded_points']);
+        $this->assertSame('12.0000', $preview['rows'][0]['awarded_points']);
+        $this->assertSame('3.0000', $preview['rows'][0]['used_points']);
+        $this->assertSame('9.0000', $preview['rows'][0]['balance']);
+        $this->assertSame('historical_totals_sum', $preview['rows'][0]['consolidation_method']);
+        $this->assertSame([2, 3], $preview['rows'][0]['source_row_numbers']);
+    }
+
+    public function test_compatible_legacy_duplicates_keep_one_snapshot_without_adding_balances(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context([], 'Cliente Snapshot');
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([
+            [$customer->name, '0', '0', '25.5000'],
+            [$customer->name, '0.0000', '0.0000', '25.5000'],
+        ], 'xlsx'), $company->id);
+
+        $this->assertCount(1, $preview['rows']);
+        $this->assertSame('25.5000', $preview['rows'][0]['balance']);
+        $this->assertSame('legacy_snapshot_identical', $preview['rows'][0]['consolidation_method']);
+        $this->assertSame(1, $service->confirm($preview, $company->id, $user->id));
+        $this->assertSame('25.5000', (string) LoyaltyAccount::where('customer_id', $customer->id)->value('balance'));
+        $this->assertDatabaseCount('loyalty_movements', 1);
+    }
+
+    public function test_incompatible_legacy_duplicates_remain_pending_with_reason(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context([], 'Cliente Snapshot');
+        $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
+            [$customer->name, '0', '0', '25.5000'],
+            [$customer->name, '0', '0', '30.0000'],
+        ], 'csv'), $company->id);
+
+        $this->assertCount(1, $preview['rows']);
+        $this->assertFalse($preview['rows'][0]['valid']);
+        $this->assertSame('incompatible', $preview['rows'][0]['consolidation_method']);
+        $this->assertStringContainsString('saldos finales distintos', $preview['rows'][0]['errors'][0]['message']);
+    }
+
+    public function test_ambiguous_customer_is_resolved_by_unique_optional_identification_without_changing_template(): void
+    {
+        [$company, $branch, $user, $first] = $this->context([], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'ID-EVIDENCIA', 'phone' => '8888-9999',
+            'email' => 'evidencia@example.test', 'is_active' => true,
+        ]);
+        $headers = array_merge(LoyaltyMigrationImportService::HEADERS, ['IDENTIFICACION', 'TELEFONO', 'EMAIL']);
+        $preview = app(LoyaltyMigrationImportService::class)->preview($this->fileWithHeaders($headers, [[
+            'Cliente Ambiguo', '5.0000', '1.0000', '4.0000', 'ID-EVIDENCIA', '0000-0000', 'otro@example.test',
+        ]], 'xlsx'), $company->id);
+
+        $this->assertTrue($preview['rows'][0]['valid']);
+        $this->assertSame($selected->id, $preview['rows'][0]['customer_id']);
+        $this->assertSame('identification', $preview['rows'][0]['resolution_method']);
+        $this->assertNotSame($first->id, $preview['rows'][0]['customer_id']);
+    }
+
+    public function test_ambiguous_customer_without_source_evidence_still_requires_manual_selection(): void
+    {
+        [$company] = $this->context([], 'Cliente Ambiguo');
+        Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'OTRO', 'is_active' => true,
+        ]);
+        $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
+            ['Cliente Ambiguo', '5.0000', '1.0000', '4.0000'],
+        ], 'xlsx'), $company->id);
+
+        $this->assertFalse($preview['rows'][0]['valid']);
+        $this->assertNull($preview['rows'][0]['customer_id']);
+        $this->assertCount(2, $preview['rows'][0]['customer_candidates']);
+    }
+
+    public function test_partial_confirmation_imports_valid_customer_and_traces_missing_customer_as_pending(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Cliente Válido');
+        $path = $this->file([
+            [$customer->name, '10.0000', '2.0000', '8.0000'],
+            ['Cliente Inexistente', '7.0000', '1.0000', '6.0000'],
+        ], 'xlsx');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
+            ->assertOk()->assertSee('Importar 1 clientes listos')->assertSee('Pendiente');
+        $this->post(route('importaciones.fidelidad-migracion.import'))->assertRedirect(route('loyalty.dashboard'))
+            ->assertSessionHas('success', fn (string $message) => str_contains($message, '1 clientes importados') && str_contains($message, '1 pendientes'));
+
+        $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => 8]);
+        $this->assertDatabaseCount('loyalty_migration_pending_rows', 1);
+        $pending = DB::table('loyalty_migration_pending_rows')->sole();
+        $this->assertStringContainsString('Cliente Inexistente', $pending->source_data);
+        $this->assertStringContainsString('no existe', $pending->reasons);
+        $this->assertDatabaseCount('customers', 1);
+    }
+
+    public function test_consolidated_partial_confirmation_is_idempotent_without_duplicate_movements_or_pending_rows(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context([], 'Cliente Histórico');
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([
+            [$customer->name, '10.0000', '2.0000', '8.0000'],
+            [$customer->name, '5.0000', '1.0000', '4.0000'],
+            ['No Existe', '3.0000', '1.0000', '2.0000'],
+        ], 'csv'), $company->id);
+
+        $this->assertSame(1, $service->confirm($preview, $company->id, $user->id));
+        $this->assertSame(0, $service->confirm($preview, $company->id, $user->id));
+        $this->assertSame('12.0000', (string) LoyaltyAccount::where('customer_id', $customer->id)->value('balance'));
+        $this->assertDatabaseCount('loyalty_movements', 2);
+        $this->assertDatabaseCount('loyalty_migration_pending_rows', 1);
+        $this->assertDatabaseCount('loyalty_migration_batches', 1);
     }
 
     public function test_manual_selection_rejects_customer_from_another_company(): void
@@ -378,7 +491,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
         $partial = Mockery::mock(LoyaltyAccountService::class)->makePartial();
         $partial->shouldReceive('subtractPoints')->once()->andThrow(new \RuntimeException('fallo controlado'));
-        $service = new LoyaltyMigrationImportService($partial);
+        $service = new LoyaltyMigrationImportService($partial, app(PhoneNumberService::class));
         $preview = $service->preview($this->file([[$customer->name, '10.0000', '2.0000', '8.0000']], 'xlsx'), $company->id);
 
         try {
@@ -489,9 +602,14 @@ class LoyaltyMigrationP37Test extends TestCase
 
     private function file(array $rows, string $format): string
     {
+        return $this->fileWithHeaders(LoyaltyMigrationImportService::HEADERS, $rows, $format);
+    }
+
+    private function fileWithHeaders(array $headers, array $rows, string $format): string
+    {
         $path = tempnam(sys_get_temp_dir(), 'p37-').'.'.$format;
         $spreadsheet = new Spreadsheet;
-        foreach (array_merge([LoyaltyMigrationImportService::HEADERS], $rows) as $rowIndex => $values) {
+        foreach (array_merge([$headers], $rows) as $rowIndex => $values) {
             foreach ($values as $columnIndex => $value) {
                 $spreadsheet->getActiveSheet()->setCellValueExplicit(
                     Coordinate::stringFromColumnIndex($columnIndex + 1).($rowIndex + 1),
