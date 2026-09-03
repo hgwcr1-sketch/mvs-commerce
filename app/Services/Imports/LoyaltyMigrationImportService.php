@@ -126,8 +126,9 @@ class LoyaltyMigrationImportService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+            $pendingInserts = [];
             foreach ($pendingRows as $row) {
-                DB::table('loyalty_migration_pending_rows')->insert([
+                $pendingInserts[] = [
                     'batch_id' => $batchId,
                     'company_id' => $companyId,
                     'source_key' => $sourceKey,
@@ -137,51 +138,184 @@ class LoyaltyMigrationImportService
                     'reasons' => json_encode($row['errors'] ?? [], JSON_THROW_ON_ERROR),
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
-            }
-            $company = Company::query()->findOrFail($companyId);
-
-            foreach ($validRows as $row) {
-                $customer = Customer::withTrashed()->where('company_id', $companyId)->findOrFail($row['customer_id']);
-                $account = $this->accounts->getOrCreateAccount($customer, $company);
-                $context = [
-                    'user_id' => $userId,
-                    'source_type' => 'LoyaltyMigration',
-                    'source_id' => $batchId,
-                    'effective_at' => now(),
                 ];
-
-                if ($this->isLegacyInitialBalance($row)) {
-                    $this->accounts->adjustPoints($account, $row['balance'], $context + [
-                        'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:legacy_initial_balance",
-                        'description' => 'P37 · Saldo inicial legado migrado',
-                        'metadata' => ['migration' => 'P37', 'kind' => 'legacy_initial_balance'],
-                    ]);
-                } elseif (bccomp($row['awarded_points'], '0', 4) > 0) {
-                    $this->accounts->addPoints($account, $row['awarded_points'], LoyaltyMovement::TYPE_PROMOTION, $context + [
-                        'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:awarded",
-                        'description' => 'P37 · Puntos otorgados migrados',
-                        'metadata' => ['migration' => 'P37', 'kind' => 'awarded'],
-                    ]);
-                }
-                if (bccomp($row['used_points'], '0', 4) > 0) {
-                    $this->accounts->subtractPoints($account, $row['used_points'], LoyaltyMovement::TYPE_REDEMPTION, $context + [
-                        'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:used",
-                        'description' => 'P37 · Puntos utilizados migrados',
-                        'metadata' => ['migration' => 'P37', 'kind' => 'used'],
-                    ]);
-                }
-
-                $account->refresh();
-                if (bccomp((string) $account->balance, $row['balance'], 4) !== 0) {
-                    throw ValidationException::withMessages([
-                        'migrar_file' => "El saldo final no coincide para {$row['name']}.",
-                    ]);
-                }
             }
+            foreach (array_chunk($pendingInserts, 500) as $chunk) {
+                DB::table('loyalty_migration_pending_rows')->insert($chunk);
+            }
+
+            $this->bulkImportValidRows($validRows, $companyId, $userId, $batchId, $sourceKey);
 
             return count($validRows);
         });
+    }
+
+    private function bulkImportValidRows(array $rows, int $companyId, int $userId, int $batchId, string $sourceKey): void
+    {
+        $customerIds = collect($rows)->pluck('customer_id')->map(fn ($id) => (int) $id)->unique()->values();
+        $customers = collect();
+        foreach ($customerIds->chunk(500) as $ids) {
+            $customers = $customers->merge(Customer::withTrashed()
+                ->where('company_id', $companyId)
+                ->whereIn('id', $ids)
+                ->get(['id', 'deleted_at']));
+        }
+        $customersById = $customers->keyBy('id');
+        if ($customers->count() !== $customerIds->count() || collect($rows)->contains(
+            fn (array $row) => ! empty($row['manual_resolution'])
+                && $customersById->get((int) $row['customer_id'])?->deleted_at !== null
+        )) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'Uno o más clientes cambiaron después de la vista previa; cargue el archivo nuevamente.',
+            ]);
+        }
+
+        $existingAccounts = collect();
+        foreach ($customerIds->chunk(500) as $ids) {
+            $existingAccounts = $existingAccounts->merge(LoyaltyAccount::query()
+                ->where('company_id', $companyId)
+                ->whereIn('customer_id', $ids)
+                ->lockForUpdate()
+                ->get());
+        }
+        $existingByCustomer = $existingAccounts->keyBy('customer_id');
+        $movementCounts = collect();
+        foreach ($existingAccounts->pluck('id')->chunk(500) as $accountIds) {
+            $movementCounts = $movementCounts->merge(DB::table('loyalty_movements')
+                ->whereIn('loyalty_account_id', $accountIds)
+                ->selectRaw('loyalty_account_id, COUNT(*) AS aggregate')
+                ->groupBy('loyalty_account_id')
+                ->pluck('aggregate', 'loyalty_account_id'));
+        }
+
+        foreach ($rows as $row) {
+            $account = $existingByCustomer->get((int) $row['customer_id']);
+            $movementCount = $account ? (int) $movementCounts->get($account->id, 0) : 0;
+            if ($account && (bccomp((string) $account->balance, '0', 4) !== 0 || $movementCount > 0)) {
+                throw ValidationException::withMessages([
+                    'migrar_file' => "La cuenta de {$row['name']} cambió después de la vista previa.",
+                ]);
+            }
+            if (($row['current_account_id'] ?? null) && (! $account
+                || (int) $row['current_account_id'] !== (int) $account->id
+                || bccomp((string) $account->balance, (string) ($row['current_balance'] ?? '0'), 4) !== 0
+                || $movementCount !== (int) ($row['current_movement_count'] ?? 0))) {
+                throw ValidationException::withMessages([
+                    'migrar_file' => "La cuenta de {$row['name']} cambió después de la vista previa.",
+                ]);
+            }
+        }
+
+        $now = now();
+        $newAccounts = $customerIds->reject(fn (int $customerId) => $existingByCustomer->has($customerId))
+            ->map(fn (int $customerId) => [
+                'company_id' => $companyId,
+                'customer_id' => $customerId,
+                'balance' => '0.0000',
+                'total_earned' => '0.0000',
+                'total_redeemed' => '0.0000',
+                'total_expired' => '0.0000',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->values()->all();
+        foreach (array_chunk($newAccounts, 200) as $chunk) {
+            DB::table('loyalty_accounts')->insertOrIgnore($chunk);
+        }
+
+        $accountsByCustomer = collect();
+        foreach ($customerIds->chunk(500) as $ids) {
+            $accountsByCustomer = $accountsByCustomer->merge(LoyaltyAccount::query()
+                ->where('company_id', $companyId)
+                ->whereIn('customer_id', $ids)
+                ->get(['id', 'customer_id']));
+        }
+        $accountsByCustomer = $accountsByCustomer->keyBy('customer_id');
+        if ($accountsByCustomer->count() !== $customerIds->count()) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'No fue posible preparar todas las cuentas del lote P37.',
+            ]);
+        }
+        $accountUpdates = [];
+        $movements = [];
+
+        foreach ($rows as $row) {
+            $accountId = (int) $accountsByCustomer->get((int) $row['customer_id'])->id;
+            $legacy = $this->isLegacyInitialBalance($row);
+            $hasAwarded = ! $legacy && bccomp($row['awarded_points'], '0', 4) > 0;
+            $hasUsed = bccomp($row['used_points'], '0', 4) > 0;
+            $accountUpdates[] = [
+                'company_id' => $companyId,
+                'customer_id' => (int) $row['customer_id'],
+                'balance' => $row['balance'],
+                'total_earned' => $legacy ? '0.0000' : $row['awarded_points'],
+                'total_redeemed' => $legacy ? '0.0000' : $row['used_points'],
+                'total_expired' => '0.0000',
+                'last_activity_at' => ($legacy || $hasAwarded || $hasUsed) ? $now : null,
+                'updated_at' => $now,
+            ];
+
+            if ($legacy) {
+                $movements[] = $this->migrationMovement($companyId, $accountId, $row, $userId, $batchId, $sourceKey, 'legacy_initial_balance', LoyaltyMovement::TYPE_ADJUSTMENT, $row['balance'], '0.0000', $row['balance'], 'P37 · Saldo inicial legado migrado', $now);
+            } elseif ($hasAwarded) {
+                $movements[] = $this->migrationMovement($companyId, $accountId, $row, $userId, $batchId, $sourceKey, 'awarded', LoyaltyMovement::TYPE_PROMOTION, $row['awarded_points'], '0.0000', $row['awarded_points'], 'P37 · Puntos otorgados migrados', $now);
+            }
+            if ($hasUsed) {
+                $before = $legacy ? $row['balance'] : $row['awarded_points'];
+                $movements[] = $this->migrationMovement($companyId, $accountId, $row, $userId, $batchId, $sourceKey, 'used', LoyaltyMovement::TYPE_REDEMPTION, bcsub('0', $row['used_points'], 4), $before, $row['balance'], 'P37 · Puntos utilizados migrados', $now);
+            }
+        }
+
+        foreach (array_chunk($accountUpdates, 200) as $chunk) {
+            DB::table('loyalty_accounts')->upsert(
+                $chunk,
+                ['company_id', 'customer_id'],
+                ['balance', 'total_earned', 'total_redeemed', 'total_expired', 'last_activity_at', 'updated_at'],
+            );
+        }
+        foreach (array_chunk($movements, 200) as $chunk) {
+            DB::table('loyalty_movements')->insert($chunk);
+        }
+    }
+
+    private function migrationMovement(
+        int $companyId,
+        int $accountId,
+        array $row,
+        int $userId,
+        int $batchId,
+        string $sourceKey,
+        string $kind,
+        string $type,
+        string $points,
+        string $before,
+        string $after,
+        string $description,
+        mixed $now,
+    ): array {
+        return [
+            'company_id' => $companyId,
+            'branch_id' => null,
+            'loyalty_account_id' => $accountId,
+            'customer_id' => (int) $row['customer_id'],
+            'user_id' => $userId,
+            'type' => $type,
+            'points' => $points,
+            'balance_before' => $before,
+            'balance_after' => $after,
+            'base_amount' => null,
+            'earning_percentage' => null,
+            'point_value' => null,
+            'description' => $description,
+            'source_type' => 'LoyaltyMigration',
+            'source_id' => $batchId,
+            'related_movement_id' => null,
+            'event_key' => "loyalty_migration:{$sourceKey}:{$row['row_number']}:{$kind}",
+            'effective_at' => $now,
+            'metadata' => json_encode(['migration' => 'P37', 'kind' => $kind], JSON_THROW_ON_ERROR),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
     }
 
     public function enqueue(array $preview, int $companyId, int $userId): LoyaltyMigrationRun
@@ -518,6 +652,24 @@ class LoyaltyMigrationImportService
 
     private function validateRows(array $rows, int $companyId, Collection $customerIndex): array
     {
+        $customerIds = collect($rows)->pluck('customer_id')->filter()->map(fn ($id) => (int) $id)->unique();
+        $accounts = collect();
+        foreach ($customerIds->chunk(500) as $ids) {
+            $accounts = $accounts->merge(LoyaltyAccount::query()
+                ->where('company_id', $companyId)
+                ->whereIn('customer_id', $ids)
+                ->get());
+        }
+        $accountsByCustomer = $accounts->keyBy('customer_id');
+        $movementCounts = collect();
+        foreach ($accounts->pluck('id')->chunk(500) as $accountIds) {
+            $movementCounts = $movementCounts->merge(DB::table('loyalty_movements')
+                ->whereIn('loyalty_account_id', $accountIds)
+                ->selectRaw('loyalty_account_id, COUNT(*) AS aggregate')
+                ->groupBy('loyalty_account_id')
+                ->pluck('aggregate', 'loyalty_account_id'));
+        }
+
         foreach ($rows as $index => $row) {
             $errors = [];
             $matches = $this->customerMatches($row['normalized_name'] ?? null, $customerIndex);
@@ -551,15 +703,14 @@ class LoyaltyMigrationImportService
                 }
             }
 
-            $account = $row['customer_id']
-                ? LoyaltyAccount::query()->where('company_id', $companyId)->where('customer_id', $row['customer_id'])->first()
-                : null;
-            if ($account && (bccomp((string) $account->balance, '0', 4) !== 0 || $account->movements()->exists())) {
+            $account = $accountsByCustomer->get((int) ($row['customer_id'] ?? 0));
+            $movementCount = $account ? (int) $movementCounts->get($account->id, 0) : 0;
+            if ($account && (bccomp((string) $account->balance, '0', 4) !== 0 || $movementCount > 0)) {
                 $errors[] = ['field' => 'saldo', 'message' => 'La cuenta ya tiene saldo o movimientos operativos; P37 no los sobrescribe.'];
             }
             if (($row['current_account_id'] ?? null) && (! $account
                 || bccomp((string) $account->balance, (string) ($row['current_balance'] ?? '0'), 4) !== 0
-                || $account->movements()->count() !== (int) ($row['current_movement_count'] ?? 0))) {
+                || $movementCount !== (int) ($row['current_movement_count'] ?? 0))) {
                 $errors[] = ['field' => 'saldo', 'message' => 'La cuenta cambió después de la vista previa; cargue el archivo nuevamente.'];
             }
 

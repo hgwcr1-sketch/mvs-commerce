@@ -13,15 +13,13 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Imports\LoyaltyMigrationImportService;
-use App\Services\Loyalty\LoyaltyAccountService;
-use App\Services\PhoneNumberService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Mockery;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -536,16 +534,15 @@ class LoyaltyMigrationP37Test extends TestCase
     public function test_confirmation_rolls_back_account_movements_and_batch_on_failure(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
-        $partial = Mockery::mock(LoyaltyAccountService::class)->makePartial();
-        $partial->shouldReceive('subtractPoints')->once()->andThrow(new \RuntimeException('fallo controlado'));
-        $service = new LoyaltyMigrationImportService($partial, app(PhoneNumberService::class));
+        $service = app(LoyaltyMigrationImportService::class);
         $preview = $service->preview($this->file([[$customer->name, '10.0000', '2.0000', '8.0000']], 'xlsx'), $company->id);
+        DB::statement("CREATE TRIGGER p37_force_failure BEFORE INSERT ON loyalty_movements BEGIN SELECT RAISE(ABORT, 'fallo controlado'); END");
 
         try {
             $service->confirm($preview, $company->id, $user->id);
             $this->fail('La confirmación debía fallar.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('fallo controlado', $exception->getMessage());
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('fallo controlado', $exception->getMessage());
         }
 
         $this->assertDatabaseCount('loyalty_accounts', 0);
@@ -687,15 +684,13 @@ class LoyaltyMigrationP37Test extends TestCase
         $preview = app(LoyaltyMigrationImportService::class)
             ->preview($this->file([[$customer->name, '10.0000', '2.0000', '8.0000']], 'xlsx'), $company->id);
         $run = app(LoyaltyMigrationImportService::class)->enqueue($preview, $company->id, $user->id);
-        $accounts = Mockery::mock(LoyaltyAccountService::class)->makePartial();
-        $accounts->shouldReceive('subtractPoints')->once()->andThrow(new \RuntimeException('fallo real del worker'));
-        $faultyImport = new LoyaltyMigrationImportService($accounts, app(PhoneNumberService::class));
+        DB::statement("CREATE TRIGGER p37_force_async_failure BEFORE INSERT ON loyalty_movements BEGIN SELECT RAISE(ABORT, 'fallo real del worker'); END");
 
         try {
-            (new ProcessLoyaltyMigration($run->id))->handle($faultyImport);
+            (new ProcessLoyaltyMigration($run->id))->handle(app(LoyaltyMigrationImportService::class));
             $this->fail('El Job debía propagar el error al worker.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('fallo real del worker', $exception->getMessage());
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('fallo real del worker', $exception->getMessage());
         }
 
         $run->refresh();
