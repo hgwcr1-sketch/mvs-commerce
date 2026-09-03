@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\LoyaltyMigrationRun;
 use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
@@ -118,15 +119,24 @@ class DataImportController extends Controller
             return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
         }
         $companyId = (int) session('active_company_id');
-        $pendingCount = collect($preview['rows'] ?? [])->where('valid', false)->count();
-        $consolidatedCount = collect($preview['rows'] ?? [])->sum(fn (array $row) => max(0, (int) ($row['consolidated_count'] ?? 1) - 1));
-        $count = $import->confirm($preview, $companyId, (int) $request->user()->id);
+        $run = $import->enqueue($preview, $companyId, (int) $request->user()->id);
         session()->forget('loyalty_migration_preview');
 
-        return redirect()->route('loyalty.dashboard')->with(
-            'success',
-            "Migración P37: {$count} clientes importados, {$consolidatedCount} filas consolidadas y {$pendingCount} pendientes trazables.",
-        );
+        return redirect()->route('importaciones.fidelidad-migracion.status', $run);
+    }
+
+    public function loyaltyMigrationStatus(LoyaltyMigrationRun $run)
+    {
+        abort_unless((int) $run->company_id === (int) session('active_company_id'), 404);
+
+        return view('importaciones.fidelidad-migracion-status', compact('run'));
+    }
+
+    public function loyaltyMigrationRetry(LoyaltyMigrationRun $run, LoyaltyMigrationImportService $import)
+    {
+        $run = $import->retry($run, (int) session('active_company_id'));
+
+        return redirect()->route('importaciones.fidelidad-migracion.status', $run);
     }
 
     public function loyaltyMigrationResolve(Request $request, LoyaltyMigrationImportService $import)

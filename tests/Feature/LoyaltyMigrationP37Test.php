@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessLoyaltyMigration;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
+use App\Models\LoyaltyMigrationRun;
 use App\Models\LoyaltyMovement;
 use App\Models\Permission;
 use App\Models\Role;
@@ -16,6 +18,7 @@ use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Mockery;
@@ -361,6 +364,7 @@ class LoyaltyMigrationP37Test extends TestCase
 
     public function test_partial_confirmation_imports_valid_customer_and_traces_missing_customer_as_pending(): void
     {
+        Queue::fake();
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Cliente Válido');
         $path = $this->file([
             [$customer->name, '10.0000', '2.0000', '8.0000'],
@@ -370,8 +374,10 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
             ->assertOk()->assertSee('Importar 1 clientes listos')->assertSee('Pendiente');
-        $this->post(route('importaciones.fidelidad-migracion.import'))->assertRedirect(route('loyalty.dashboard'))
-            ->assertSessionHas('success', fn (string $message) => str_contains($message, '1 clientes importados') && str_contains($message, '1 pendientes'));
+        $this->post(route('importaciones.fidelidad-migracion.import'))
+            ->assertRedirect(route('importaciones.fidelidad-migracion.status', 1));
+        Queue::assertPushed(ProcessLoyaltyMigration::class, 1);
+        app(ProcessLoyaltyMigration::class, ['runId' => 1])->handle(app(LoyaltyMigrationImportService::class));
 
         $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => 8]);
         $this->assertDatabaseCount('loyalty_migration_pending_rows', 1);
@@ -618,6 +624,132 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertCount(100, $preview['rows']);
         $this->assertCount(100, collect($preview['rows'])->where('valid', false));
         $this->assertCount(1, $queries, 'P37 debe cargar e indexar los clientes una sola vez por vista previa.');
+    }
+
+    public function test_mass_confirmation_queues_thousands_and_double_submit_dispatches_only_once(): void
+    {
+        Queue::fake();
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion']);
+        $sourceKey = 'P37-SIMPLE-'.str_repeat('A', 40);
+        $rows = [];
+        for ($index = 1; $index <= 2000; $index++) {
+            $rows[] = [
+                'row_number' => $index + 1,
+                'source_key' => $sourceKey,
+                'valid' => true,
+                'consolidated_count' => 1,
+            ];
+        }
+        $preview = ['company_id' => $company->id, 'source_key' => $sourceKey, 'rows' => $rows];
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch) + ['loyalty_migration_preview' => $preview])
+            ->post(route('importaciones.fidelidad-migracion.import'))
+            ->assertRedirect(route('importaciones.fidelidad-migracion.status', 1));
+        $this->withSession(['loyalty_migration_preview' => $preview])
+            ->post(route('importaciones.fidelidad-migracion.import'))
+            ->assertRedirect(route('importaciones.fidelidad-migracion.status', 1));
+
+        Queue::assertPushed(ProcessLoyaltyMigration::class, 1);
+        $this->assertDatabaseHas('loyalty_migration_runs', [
+            'company_id' => $company->id,
+            'source_key' => $sourceKey,
+            'status' => LoyaltyMigrationRun::STATUS_PENDING,
+            'valid_count' => 2000,
+        ]);
+        $this->assertDatabaseCount('loyalty_migration_batches', 0);
+    }
+
+    public function test_failed_async_run_can_be_retried_but_completed_run_is_not_dispatched_again(): void
+    {
+        Queue::fake();
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([[$customer->name, '5.0000', '1.0000', '4.0000']], 'csv'), $company->id);
+        $run = $service->enqueue($preview, $company->id, $user->id);
+        Queue::assertPushed(ProcessLoyaltyMigration::class, 1);
+        $run->update(['status' => LoyaltyMigrationRun::STATUS_FAILED, 'last_error' => 'fallo previo', 'failed_at' => now()]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.retry', $run))
+            ->assertRedirect(route('importaciones.fidelidad-migracion.status', $run));
+        Queue::assertPushed(ProcessLoyaltyMigration::class, 2);
+        $this->assertDatabaseHas('loyalty_migration_runs', ['id' => $run->id, 'status' => LoyaltyMigrationRun::STATUS_PENDING, 'last_error' => null]);
+
+        $run->update(['status' => LoyaltyMigrationRun::STATUS_COMPLETED]);
+        $this->post(route('importaciones.fidelidad-migracion.retry', $run));
+        Queue::assertPushed(ProcessLoyaltyMigration::class, 2);
+    }
+
+    public function test_async_failure_rolls_back_import_and_records_the_real_error(): void
+    {
+        Queue::fake();
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        $preview = app(LoyaltyMigrationImportService::class)
+            ->preview($this->file([[$customer->name, '10.0000', '2.0000', '8.0000']], 'xlsx'), $company->id);
+        $run = app(LoyaltyMigrationImportService::class)->enqueue($preview, $company->id, $user->id);
+        $accounts = Mockery::mock(LoyaltyAccountService::class)->makePartial();
+        $accounts->shouldReceive('subtractPoints')->once()->andThrow(new \RuntimeException('fallo real del worker'));
+        $faultyImport = new LoyaltyMigrationImportService($accounts, app(PhoneNumberService::class));
+
+        try {
+            (new ProcessLoyaltyMigration($run->id))->handle($faultyImport);
+            $this->fail('El Job debía propagar el error al worker.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('fallo real del worker', $exception->getMessage());
+        }
+
+        $run->refresh();
+        $this->assertSame(LoyaltyMigrationRun::STATUS_FAILED, $run->status);
+        $this->assertStringContainsString('fallo real del worker', $run->last_error);
+        $this->assertSame(1, $run->attempts);
+        $this->assertDatabaseCount('loyalty_accounts', 0);
+        $this->assertDatabaseCount('loyalty_movements', 0);
+        $this->assertDatabaseCount('loyalty_migration_batches', 0);
+        $this->assertDatabaseCount('loyalty_migration_pending_rows', 0);
+    }
+
+    public function test_async_completion_imports_valid_rows_preserves_pending_and_is_idempotent(): void
+    {
+        Queue::fake();
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Cliente Asíncrono');
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([
+            [$customer->name, '10.0000', '2.0000', '8.0000'],
+            ['Cliente inexistente', '7.0000', '1.0000', '6.0000'],
+        ], 'xlsx'), $company->id);
+        $run = $service->enqueue($preview, $company->id, $user->id);
+        $job = new ProcessLoyaltyMigration($run->id);
+
+        $job->handle($service);
+        $job->handle($service);
+
+        $run->refresh();
+        $this->assertSame(LoyaltyMigrationRun::STATUS_COMPLETED, $run->status);
+        $this->assertSame(1, $run->imported_count);
+        $this->assertSame(1, $run->pending_count);
+        $this->assertSame(1, $run->attempts);
+        $this->assertDatabaseHas('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => 8]);
+        $this->assertDatabaseCount('loyalty_movements', 2);
+        $this->assertDatabaseCount('loyalty_migration_batches', 1);
+        $this->assertDatabaseCount('loyalty_migration_pending_rows', 1);
+    }
+
+    public function test_async_run_status_is_isolated_by_active_company(): void
+    {
+        Queue::fake();
+        [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);
+        [$otherCompany, $otherBranch, $otherUser] = $this->context(['fidelidad.configuracion']);
+        $service = app(LoyaltyMigrationImportService::class);
+        $preview = $service->preview($this->file([[$customer->name, '5', '1', '4']], 'csv'), $company->id);
+        $run = $service->enqueue($preview, $company->id, $user->id);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('importaciones.fidelidad-migracion.status', $run))
+            ->assertOk()->assertSee('Pendiente')->assertSee($run->source_key);
+        $this->actingAs($otherUser)->withSession($this->activeSession($otherCompany, $otherBranch))
+            ->get(route('importaciones.fidelidad-migracion.status', $run))
+            ->assertNotFound();
+        $this->post(route('importaciones.fidelidad-migracion.retry', $run))->assertNotFound();
     }
 
     private function context(array $permissions, ?string $customerName = null): array

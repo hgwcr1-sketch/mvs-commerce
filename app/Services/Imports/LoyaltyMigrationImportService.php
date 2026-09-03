@@ -2,9 +2,11 @@
 
 namespace App\Services\Imports;
 
+use App\Jobs\ProcessLoyaltyMigration;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
+use App\Models\LoyaltyMigrationRun;
 use App\Models\LoyaltyMovement;
 use App\Services\Loyalty\LoyaltyAccountService;
 use App\Services\PhoneNumberService;
@@ -180,6 +182,87 @@ class LoyaltyMigrationImportService
 
             return count($validRows);
         });
+    }
+
+    public function enqueue(array $preview, int $companyId, int $userId): LoyaltyMigrationRun
+    {
+        $summary = $this->validateForDispatch($preview, $companyId);
+        $run = LoyaltyMigrationRun::query()->firstOrCreate(
+            ['company_id' => $companyId, 'source_key' => $summary['source_key']],
+            [
+                'user_id' => $userId,
+                'status' => LoyaltyMigrationRun::STATUS_PENDING,
+                'preview_payload' => $preview,
+                'valid_count' => $summary['valid_count'],
+                'pending_count' => $summary['pending_count'],
+                'consolidated_count' => $summary['consolidated_count'],
+                'queued_at' => now(),
+            ],
+        );
+
+        if ($run->wasRecentlyCreated) {
+            ProcessLoyaltyMigration::dispatch($run->id)->afterCommit();
+        }
+
+        return $run;
+    }
+
+    public function retry(LoyaltyMigrationRun $run, int $companyId): LoyaltyMigrationRun
+    {
+        abort_unless((int) $run->company_id === $companyId, 404);
+
+        $queued = LoyaltyMigrationRun::query()
+            ->whereKey($run->id)
+            ->where('company_id', $companyId)
+            ->where('status', LoyaltyMigrationRun::STATUS_FAILED)
+            ->update([
+                'status' => LoyaltyMigrationRun::STATUS_PENDING,
+                'queued_at' => now(),
+                'started_at' => null,
+                'completed_at' => null,
+                'failed_at' => null,
+                'last_error' => null,
+                'updated_at' => now(),
+            ]);
+
+        if ($queued === 1) {
+            ProcessLoyaltyMigration::dispatch($run->id)->afterCommit();
+        }
+
+        return $run->fresh();
+    }
+
+    private function validateForDispatch(array $preview, int $companyId): array
+    {
+        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'La vista previa no pertenece a la empresa activa.',
+            ]);
+        }
+
+        $sourceKey = trim((string) ($preview['source_key'] ?? ''));
+        $rows = collect($preview['rows'] ?? []);
+        if ($sourceKey === '' || $rows->isEmpty() || $rows->contains(
+            fn (array $row) => (string) ($row['source_key'] ?? '') !== $sourceKey
+        )) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'El lote P37 no es válido. Genere nuevamente la vista previa.',
+            ]);
+        }
+
+        $validCount = $rows->where('valid', true)->count();
+        if ($validCount === 0) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'No hay filas válidas para importar.',
+            ]);
+        }
+
+        return [
+            'source_key' => $sourceKey,
+            'valid_count' => $validCount,
+            'pending_count' => $rows->where('valid', false)->count(),
+            'consolidated_count' => $rows->sum(fn (array $row) => max(0, (int) ($row['consolidated_count'] ?? 1) - 1)),
+        ];
     }
 
     public function resolveCustomers(array $preview, int $companyId, array $selections): array

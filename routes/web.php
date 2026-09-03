@@ -839,6 +839,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.resolve');
     Route::post('/importar-datos/fidelidad-migracion/confirmar', [DataImportController::class, 'loyaltyMigrationImport'])
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.import');
+    Route::get('/importar-datos/fidelidad-migracion/estado/{run}', [DataImportController::class, 'loyaltyMigrationStatus'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.status');
+    Route::post('/importar-datos/fidelidad-migracion/estado/{run}/reintentar', [DataImportController::class, 'loyaltyMigrationRetry'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.retry');
     Route::get('/importar-datos/fidelidad-migracion/errores', [DataImportController::class, 'loyaltyMigrationErrors'])
         ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.errors');
 
