@@ -235,6 +235,28 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertSame([$bolanos->id, $zuniga->id, $nunez->id], collect($preview['rows'])->pluck('customer_id')->all());
     }
 
+    public function test_preview_normalizes_reversible_legacy_accent_and_apostrophe_artifacts_without_fuzzy_matching(): void
+    {
+        [$company, $branch, $user, $customer] = $this->context([], 'BREIDIY PINTO CAÑAS');
+        $service = app(LoyaltyMigrationImportService::class);
+        $variants = [
+            "BREIDIY \u{00C2}\u{00B4}PINTO CA\u{00C3}\u{2018}AS",
+            'BREIDIY ´PINTO CAÑAS',
+            'BREIDIY ’PINTO CAÑAS',
+            "BREIDIY 'PINTO CAÑAS",
+            'BREIDIY PINTO CAÑAS',
+        ];
+
+        foreach ($variants as $name) {
+            $preview = $service->preview($this->file([[$name, '0', '0', '5.0000']], 'xlsx'), $company->id);
+
+            $this->assertTrue($preview['rows'][0]['valid'], "La variante {$name} debe resolver por equivalencia tipográfica exacta.");
+            $this->assertSame($customer->id, $preview['rows'][0]['customer_id']);
+            $this->assertSame($name, $preview['rows'][0]['name']);
+            $this->assertSame('breidiy pinto canas', $preview['rows'][0]['normalized_name']);
+        }
+    }
+
     public function test_confirmation_rolls_back_account_movements_and_batch_on_failure(): void
     {
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion']);

@@ -347,10 +347,11 @@ class LoyaltyMigrationImportService
         }
 
         $name = str_replace(
-            ["\u{00C3}\u{2018}", "\u{00C3}\u{0091}", "\u{00C3}\u{00B1}"],
-            ["\u{00D1}", "\u{00D1}", "\u{00F1}"],
+            ["\u{00C3}\u{2018}", "\u{00C3}\u{0091}", "\u{00C3}\u{00B1}", "\u{00C2}\u{00B4}"],
+            ["\u{00D1}", "\u{00D1}", "\u{00F1}", "\u{00B4}"],
             $name,
         );
+        $name = preg_replace('/[\x{0027}\x{0060}\x{00B4}\x{02BC}\x{2018}\x{2019}\x{2032}]+/u', ' ', $name) ?? $name;
 
         return Str::of($name)->squish()->ascii()->lower()->toString();
     }
