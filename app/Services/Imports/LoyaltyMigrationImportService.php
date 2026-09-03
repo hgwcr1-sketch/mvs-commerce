@@ -194,6 +194,47 @@ class LoyaltyMigrationImportService
             })->all();
     }
 
+    public function storeManualResolutions(array $preview, int $companyId): void
+    {
+        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'La vista previa no pertenece a la empresa activa.',
+            ]);
+        }
+
+        $customerIndex = $this->customerIndex($companyId);
+        $records = collect($this->reusableManualResolutions($preview))->filter(function (array $resolution) use ($customerIndex): bool {
+            return $this->customerMatches($resolution['normalized_name'], $customerIndex)
+                ->contains(fn (Customer $customer) => $customer->deleted_at === null
+                    && (int) $customer->id === (int) $resolution['customer_id']);
+        })->map(fn (array $resolution) => $resolution + [
+            'company_id' => $companyId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->values()->all();
+
+        DB::transaction(function () use ($companyId, $preview, $records): void {
+            DB::table('loyalty_migration_manual_resolutions')
+                ->where('company_id', $companyId)
+                ->where('source_key', $preview['source_key'])
+                ->delete();
+
+            if ($records !== []) {
+                DB::table('loyalty_migration_manual_resolutions')->insert($records);
+            }
+        });
+    }
+
+    public function storedManualResolutions(int $companyId, string $sourceKey): array
+    {
+        return DB::table('loyalty_migration_manual_resolutions')
+            ->where('company_id', $companyId)
+            ->where('source_key', $sourceKey)
+            ->get(['source_key', 'row_number', 'normalized_name', 'customer_id'])
+            ->mapWithKeys(fn (object $resolution) => [(string) $resolution->row_number => (array) $resolution])
+            ->all();
+    }
+
     public function reuseManualResolutions(array $preview, int $companyId, array $resolutions): array
     {
         if ((int) ($preview['company_id'] ?? 0) !== $companyId) {

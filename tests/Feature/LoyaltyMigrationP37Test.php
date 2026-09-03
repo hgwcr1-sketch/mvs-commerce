@@ -144,6 +144,13 @@ class LoyaltyMigrationP37Test extends TestCase
             ->assertOk();
         $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])
             ->assertOk();
+        $this->assertDatabaseHas('loyalty_migration_manual_resolutions', [
+            'company_id' => $company->id,
+            'row_number' => 2,
+            'normalized_name' => 'cliente ambiguo',
+            'customer_id' => $selected->id,
+        ]);
+        $this->get(route('importaciones.fidelidad-migracion'))->assertOk();
         $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
             ->assertOk()->assertSee('PERSISTE');
 
