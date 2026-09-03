@@ -671,7 +671,9 @@ class LoyaltyMigrationImportService
         }
 
         foreach ($rows as $index => $row) {
-            $errors = [];
+            $errors = ($row['consolidation_method'] ?? null) === 'incompatible'
+                ? ($row['errors'] ?? [['field' => 'fila', 'message' => 'El grupo consolidado es incompatible.']])
+                : [];
             $matches = $this->customerMatches($row['normalized_name'] ?? null, $customerIndex);
             $selected = $matches->first(fn (Customer $customer) => (int) $customer->id === (int) ($row['customer_id'] ?? 0));
             $row['customer_match_count'] = $matches->count();

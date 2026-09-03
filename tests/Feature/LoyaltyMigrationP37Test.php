@@ -314,15 +314,28 @@ class LoyaltyMigrationP37Test extends TestCase
     public function test_incompatible_legacy_duplicates_remain_pending_with_reason(): void
     {
         [$company, $branch, $user, $customer] = $this->context([], 'Cliente Snapshot');
+        $valid = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Válido Snapshot',
+            'identification_type' => 'national', 'identification' => 'SNAPSHOT-VALIDO', 'is_active' => true,
+        ]);
+        LoyaltyAccount::create([
+            'company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => '0.0000',
+            'total_earned' => '0.0000', 'total_redeemed' => '0.0000', 'total_expired' => '0.0000',
+        ]);
         $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
             [$customer->name, '0', '0', '25.5000'],
             [$customer->name, '0', '0', '30.0000'],
+            [$valid->name, '10.0000', '2.0000', '8.0000'],
         ], 'csv'), $company->id);
 
-        $this->assertCount(1, $preview['rows']);
+        $this->assertCount(2, $preview['rows']);
         $this->assertFalse($preview['rows'][0]['valid']);
         $this->assertSame('incompatible', $preview['rows'][0]['consolidation_method']);
         $this->assertStringContainsString('saldos finales distintos', $preview['rows'][0]['errors'][0]['message']);
+        $this->assertSame(1, app(LoyaltyMigrationImportService::class)->confirm($preview, $company->id, $user->id));
+        $this->assertDatabaseHas('loyalty_migration_pending_rows', ['row_number' => 2, 'company_id' => $company->id]);
+        $this->assertDatabaseHas('loyalty_accounts', ['customer_id' => $customer->id, 'balance' => 0]);
+        $this->assertDatabaseMissing('loyalty_movements', ['customer_id' => $customer->id]);
     }
 
     public function test_ambiguous_customer_is_resolved_by_unique_optional_identification_without_changing_template(): void
