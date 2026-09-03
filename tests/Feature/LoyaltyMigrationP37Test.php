@@ -164,6 +164,47 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertSame($selected->id, session('loyalty_migration_preview.rows.0.customer_id'));
     }
 
+    public function test_legacy_source_key_and_manual_resolution_survive_internal_consolidation_changes(): void
+    {
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
+            'identification_type' => 'national', 'identification' => 'RESUELTO', 'is_active' => true,
+        ]);
+        $repeated = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Repetido',
+            'identification_type' => 'national', 'identification' => 'REPETIDO', 'is_active' => true,
+        ]);
+        $sourceRows = [
+            ['Cliente Ambiguo', '5.0000', '1.0000', '4.0000'],
+            [$repeated->name, '10.0000', '2.0000', '8.0000'],
+            [$repeated->name, '5.0000', '1.0000', '4.0000'],
+        ];
+        $path = $this->file($sourceRows, 'xlsx');
+        $legacyPayload = [
+            ['cliente ambiguo', '5.0000', '1.0000', '4.0000'],
+            ['cliente repetido', '10.0000', '2.0000', '8.0000'],
+            ['cliente repetido', '5.0000', '1.0000', '4.0000'],
+        ];
+        $legacyKey = 'P37-SIMPLE-'.strtoupper(substr(hash('sha256', json_encode($legacyPayload, JSON_THROW_ON_ERROR)), 0, 40));
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
+            ->assertOk();
+        $this->assertSame($legacyKey, session('loyalty_migration_preview.source_key'));
+        $this->assertSame(2, count(session('loyalty_migration_preview.rows')));
+
+        $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])->assertOk();
+        $this->get(route('importaciones.fidelidad-migracion'))->assertOk();
+        $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])->assertOk();
+
+        $preview = session('loyalty_migration_preview');
+        $this->assertSame($legacyKey, $preview['source_key']);
+        $this->assertSame($selected->id, collect($preview['rows'])->firstWhere('row_number', 2)['customer_id']);
+        $this->assertSame(0, collect($preview['rows'])->filter(fn (array $row) => count($row['customer_candidates'] ?? []) > 1 && ! $row['customer_id'])->count());
+        $this->assertSame(1, collect($preview['rows'])->where('consolidation_method', 'historical_totals_sum')->count());
+    }
+
     public function test_manual_selection_does_not_pass_to_a_different_file(): void
     {
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');

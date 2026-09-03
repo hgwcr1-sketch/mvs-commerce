@@ -586,10 +586,16 @@ class LoyaltyMigrationImportService
 
     private function sourceKey(array $rows): string
     {
-        $payload = array_map(fn (array $row) => [
-            $row['normalized_name'], $row['identification'] ?? null, $row['phone'] ?? null, $row['email'] ?? null,
-            $row['awarded_points'], $row['used_points'], $row['balance'],
-        ], $rows);
+        $payload = array_map(function (array $row): array {
+            $source = [$row['normalized_name'], $row['awarded_points'], $row['used_points'], $row['balance']];
+            $evidence = array_filter([
+                'identification' => $this->normalizeEvidence($row['identification'] ?? null),
+                'phone' => $this->phones->normalizePhone($row['phone'] ?? null),
+                'email' => $this->normalizeEvidence($row['email'] ?? null),
+            ], fn (?string $value) => $value !== null);
+
+            return $evidence === [] ? $source : [$source, $evidence];
+        }, $rows);
 
         return 'P37-SIMPLE-'.strtoupper(substr(hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)), 0, 40));
     }
