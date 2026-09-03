@@ -169,6 +169,62 @@ class LoyaltyMigrationImportService
 
             $selectedId = filter_var($selections[$rowNumber], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $row['customer_id'] = $selectedId === false ? null : $selectedId;
+            $row['manual_resolution'] = $selectedId === false ? null : ['customer_id' => $selectedId];
+
+            return $this->withAccountSnapshot($row, $companyId);
+        }, $preview['rows'] ?? []);
+
+        $preview['rows'] = $this->validateRows($rows, $companyId, $customerIndex);
+
+        return $preview;
+    }
+
+    public function reusableManualResolutions(array $preview): array
+    {
+        $sourceKey = (string) ($preview['source_key'] ?? '');
+
+        return collect($preview['rows'] ?? [])->filter(fn (array $row) => ! empty($row['manual_resolution']))
+            ->mapWithKeys(function (array $row) use ($sourceKey): array {
+                return [(string) $row['row_number'] => [
+                    'source_key' => $sourceKey,
+                    'row_number' => (int) $row['row_number'],
+                    'normalized_name' => $row['normalized_name'],
+                    'customer_id' => (int) $row['manual_resolution']['customer_id'],
+                ]];
+            })->all();
+    }
+
+    public function reuseManualResolutions(array $preview, int $companyId, array $resolutions): array
+    {
+        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
+            throw ValidationException::withMessages([
+                'migrar_file' => 'La vista previa no pertenece a la empresa activa.',
+            ]);
+        }
+
+        $sourceKey = (string) ($preview['source_key'] ?? '');
+        $customerIndex = $this->customerIndex($companyId);
+        $rows = array_map(function (array $row) use ($resolutions, $sourceKey, $customerIndex, $companyId): array {
+            $resolution = $resolutions[(string) ($row['row_number'] ?? '')] ?? null;
+            if (! is_array($resolution)
+                || ! hash_equals($sourceKey, (string) ($resolution['source_key'] ?? ''))
+                || (int) ($resolution['row_number'] ?? 0) !== (int) ($row['row_number'] ?? 0)
+                || (string) ($resolution['normalized_name'] ?? '') !== (string) ($row['normalized_name'] ?? '')) {
+                return $row;
+            }
+
+            $selectedId = (int) ($resolution['customer_id'] ?? 0);
+            $selected = $this->customerMatches($row['normalized_name'] ?? null, $customerIndex)
+                ->first(fn (Customer $customer) => $customer->deleted_at === null && (int) $customer->id === $selectedId);
+            if (! $selected) {
+                $row['customer_id'] = $selectedId;
+                $row['manual_resolution'] = ['customer_id' => $selectedId];
+
+                return $this->withAccountSnapshot($row, $companyId);
+            }
+
+            $row['customer_id'] = $selectedId;
+            $row['manual_resolution'] = ['customer_id' => $selectedId];
 
             return $this->withAccountSnapshot($row, $companyId);
         }, $preview['rows'] ?? []);
@@ -207,6 +263,7 @@ class LoyaltyMigrationImportService
         $normalizedName = $this->normalizeName($name);
         $matches = $this->customerMatches($normalizedName, $customerIndex);
         $customer = $matches->count() === 1 ? $matches->first() : null;
+
         return $this->withAccountSnapshot([
             'row_number' => $rowNumber,
             'name' => $name,
@@ -239,7 +296,7 @@ class LoyaltyMigrationImportService
                 $errors[] = ['field' => 'nombre', 'message' => 'El cliente no existe en la empresa activa.'];
             } elseif ($matches->count() > 1 && ! $row['customer_id']) {
                 $errors[] = ['field' => 'nombre', 'message' => 'Hay más de un cliente con este nombre normalizado; seleccione el cliente correcto.'];
-            } elseif (! $selected) {
+            } elseif (! $selected || (! empty($row['manual_resolution']) && $selected->deleted_at !== null)) {
                 $errors[] = ['field' => 'nombre', 'message' => 'El cliente cambió después de la vista previa; cargue el archivo nuevamente.'];
             }
 
@@ -290,7 +347,7 @@ class LoyaltyMigrationImportService
     {
         return Customer::withTrashed()
             ->where('company_id', $companyId)
-            ->get(['id', 'name', 'identification', 'phone', 'mobile', 'email'])
+            ->get(['id', 'name', 'identification', 'phone', 'mobile', 'email', 'deleted_at'])
             ->groupBy(fn (Customer $customer) => $this->normalizeName($customer->name));
     }
 

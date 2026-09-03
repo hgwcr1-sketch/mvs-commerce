@@ -100,6 +100,12 @@ class DataImportController extends Controller
         $request->validate(['migrar_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
         $companyId = (int) session('active_company_id');
         $preview = $import->preview($request->file('migrar_file')->getRealPath(), $companyId);
+        $resolutionKey = $companyId.':'.$preview['source_key'];
+        $preview = $import->reuseManualResolutions(
+            $preview,
+            $companyId,
+            session("loyalty_migration_resolutions.{$resolutionKey}", []),
+        );
         session(['loyalty_migration_preview' => $preview]);
         $rows = $preview['rows'];
 
@@ -131,7 +137,11 @@ class DataImportController extends Controller
             'selections.*' => ['nullable', 'integer', 'min:1'],
         ]);
         $preview = $import->resolveCustomers($preview, (int) session('active_company_id'), $validated['selections']);
-        session(['loyalty_migration_preview' => $preview]);
+        $resolutionKey = $preview['company_id'].':'.$preview['source_key'];
+        session([
+            'loyalty_migration_preview' => $preview,
+            "loyalty_migration_resolutions.{$resolutionKey}" => $import->reusableManualResolutions($preview),
+        ]);
 
         return view('importaciones.fidelidad-migracion-preview', ['rows' => $preview['rows']]);
     }

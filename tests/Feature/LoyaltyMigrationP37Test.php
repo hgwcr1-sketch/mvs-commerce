@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Mockery;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -129,6 +130,114 @@ class LoyaltyMigrationP37Test extends TestCase
         $this->assertDatabaseMissing('loyalty_accounts', ['company_id' => $company->id, 'customer_id' => $first->id]);
     }
 
+    public function test_manual_selection_persists_when_preview_is_regenerated_for_the_same_file(): void
+    {
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
+            'identification_type' => 'national', 'identification' => 'PERSISTE', 'is_active' => true,
+        ]);
+        $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
+            ->assertOk();
+        $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])
+            ->assertOk();
+        $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])
+            ->assertOk()->assertSee('PERSISTE');
+
+        $this->assertTrue(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertSame($selected->id, session('loyalty_migration_preview.rows.0.customer_id'));
+    }
+
+    public function test_manual_selection_does_not_pass_to_a_different_file(): void
+    {
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'ARCHIVO1', 'is_active' => true,
+        ]);
+        $firstPath = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'csv');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($firstPath, 'csv')]);
+        $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])->assertOk();
+        $this->post(route('importaciones.fidelidad-migracion.preview'), [
+            'migrar_file' => $this->upload($this->file([['Cliente Ambiguo', '6.0000', '1.0000', '5.0000']], 'csv'), 'csv'),
+        ])->assertOk();
+
+        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertNull(session('loyalty_migration_preview.rows.0.customer_id'));
+    }
+
+    public function test_changed_or_deleted_customer_invalidates_persisted_manual_selection(): void
+    {
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'INVALIDA', 'is_active' => true,
+        ]);
+        $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')]);
+        $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])->assertOk();
+        $selected->update(['name' => 'Cliente Renombrado']);
+        $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])->assertOk();
+
+        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertSame($selected->id, session('loyalty_migration_preview.rows.0.customer_id'));
+
+        $selected->update(['name' => 'Cliente Ambiguo']);
+        $selected->delete();
+        $this->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'xlsx')])->assertOk();
+
+        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertSame($selected->id, session('loyalty_migration_preview.rows.0.customer_id'));
+    }
+
+    public function test_persisted_manual_selection_is_isolated_by_company(): void
+    {
+        [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        $selected = Customer::create([
+            'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'EMPRESA1', 'is_active' => true,
+        ]);
+        $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'csv');
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'csv')]);
+        $this->post(route('importaciones.fidelidad-migracion.resolve'), ['selections' => ['2' => $selected->id]])->assertOk();
+
+        [$otherCompany, $otherBranch, $otherUser] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
+        Customer::create([
+            'company_id' => $otherCompany->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
+            'identification_type' => 'national', 'identification' => 'EMPRESA2', 'is_active' => true,
+        ]);
+        $this->actingAs($otherUser)->withSession($this->activeSession($otherCompany, $otherBranch))
+            ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'csv')])
+            ->assertOk();
+
+        $this->assertFalse(session('loyalty_migration_preview.rows.0.valid'));
+        $this->assertNull(session('loyalty_migration_preview.rows.0.customer_id'));
+    }
+
+    public function test_repeated_rows_remain_separate_and_the_later_row_is_blocked(): void
+    {
+        [$company, $branch] = $this->context([], 'Cliente Repetido');
+        $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
+            ['Cliente Repetido', '5.0000', '1.0000', '4.0000'],
+            ['Cliente Repetido', '7.0000', '2.0000', '5.0000'],
+        ], 'xlsx'), $company->id);
+
+        $this->assertCount(2, $preview['rows'], 'P37 detecta filas repetidas sin consolidarlas.');
+        $this->assertTrue($preview['rows'][0]['valid']);
+        $this->assertFalse($preview['rows'][1]['valid']);
+        $this->assertStringContainsString('repetido en el archivo', collect($preview['rows'][1]['errors'])->pluck('message')->join(' '));
+        $this->assertSame('5.0000', $preview['rows'][0]['awarded_points']);
+        $this->assertSame('7.0000', $preview['rows'][1]['awarded_points']);
+    }
+
     public function test_manual_selection_rejects_customer_from_another_company(): void
     {
         [$company, $branch, $user] = $this->context([], 'Cliente Ambiguo');
@@ -162,7 +271,7 @@ class LoyaltyMigrationP37Test extends TestCase
         try {
             $service->confirm($resolved, $company->id, $user->id);
             $this->fail('La confirmación debía bloquear al cliente seleccionado que cambió.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertStringContainsString('cambió', $exception->errors()['migrar_file'][0]);
         }
 
