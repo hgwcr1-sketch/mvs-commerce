@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalPost;
+use App\Models\LoyaltySetting;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -13,6 +14,8 @@ use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class LoyaltyPortalManagementTest extends TestCase
@@ -71,6 +74,107 @@ class LoyaltyPortalManagementTest extends TestCase
     {
         [$company, $branch, $user] = $this->context([]);
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('loyalty.portal-management.index'))->assertForbidden();
+    }
+
+    public function test_every_post_type_accepts_and_stores_its_own_image_inside_the_company_directory(): void
+    {
+        Storage::fake('public');
+        [$company, $branch, $user] = $this->context(['fidelidad.portal.contenido']);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch));
+
+        foreach (LoyaltyPortalPost::TYPES as $type) {
+            $this->post(route('loyalty.portal-management.posts.store'), [
+                'type' => $type,
+                'title' => 'Publicación '.$type,
+                'image' => UploadedFile::fake()->image($type.'.jpg', 900, 600)->size(300),
+                'is_active' => 1,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+            $post = LoyaltyPortalPost::query()->where('company_id', $company->id)->where('type', $type)->sole();
+            $this->assertStringStartsWith("loyalty-portal/{$company->id}/", $post->image);
+            Storage::disk('public')->assertExists($post->image);
+        }
+    }
+
+    public function test_own_image_has_priority_over_product_image_and_both_admin_and_portal_render_it(): void
+    {
+        Storage::fake('public');
+        [$company, $branch, $user] = $this->context(['fidelidad.portal.contenido', 'fidelidad.portal.ver']);
+        $product = $this->product($company, 'Producto con imagen', 'IMAGEN');
+        Storage::disk('public')->put('products/producto.jpg', 'producto');
+        $product->update(['image' => 'products/producto.jpg']);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(route('loyalty.portal-management.posts.store'), [
+            'type' => 'offer', 'product_id' => $product->id, 'title' => 'Oferta con imagen propia',
+            'image' => UploadedFile::fake()->image('propia.png', 800, 500), 'is_active' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $post = LoyaltyPortalPost::query()->sole();
+        $this->assertSame($post->image, $post->fresh('product')->resolvedImagePath());
+        LoyaltySetting::create(['company_id' => $company->id, 'is_active' => true]);
+
+        $this->get(route('loyalty.portal-management.index'))->assertOk()
+            ->assertSee(Storage::disk('public')->url($post->image), false);
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente portal', 'is_active' => true]);
+        $this->get(route('loyalty.portal-management.preview', $customer))->assertOk()
+            ->assertSee(Storage::disk('public')->url($post->image), false)
+            ->assertDontSee(Storage::disk('public')->url($product->image), false);
+    }
+
+    public function test_product_image_is_fallback_and_missing_images_render_professional_placeholder(): void
+    {
+        Storage::fake('public');
+        [$company, $branch, $user] = $this->context(['fidelidad.portal.contenido', 'fidelidad.portal.ver']);
+        $product = $this->product($company, 'Producto fallback', 'FALLBACK');
+        Storage::disk('public')->put('products/fallback.jpg', 'imagen');
+        $product->update(['image' => 'products/fallback.jpg']);
+        LoyaltyPortalPost::create(['company_id' => $company->id, 'product_id' => $product->id, 'type' => 'notice', 'title' => 'Usa producto', 'is_active' => true]);
+        LoyaltyPortalPost::create(['company_id' => $company->id, 'type' => 'promotion', 'title' => 'Sin imagen', 'image' => 'loyalty-portal/inexistente.jpg', 'is_active' => true]);
+        LoyaltySetting::create(['company_id' => $company->id, 'is_active' => true]);
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente fallback', 'is_active' => true]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('loyalty.portal-management.preview', $customer))->assertOk()
+            ->assertSee(Storage::disk('public')->url($product->image), false)
+            ->assertSee('Imagen no disponible');
+    }
+
+    public function test_post_image_validation_rejects_invalid_type_and_oversized_file(): void
+    {
+        Storage::fake('public');
+        [$company, $branch, $user] = $this->context(['fidelidad.portal.contenido']);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch));
+
+        $response = $this->from(route('loyalty.portal-management.index'))->post(route('loyalty.portal-management.posts.store'), [
+            'type' => 'notice', 'title' => 'Archivo inválido',
+            'image' => UploadedFile::fake()->createWithContent('archivo.txt', 'no es una imagen'),
+        ]);
+        $response->assertRedirect(route('loyalty.portal-management.index'))->assertSessionHasErrors('image');
+        $this->post(route('loyalty.portal-management.posts.store'), [
+            'type' => 'notice', 'title' => 'Archivo grande',
+            'image' => UploadedFile::fake()->image('grande.jpg')->size(3073),
+        ])->assertSessionHasErrors('image');
+        $this->assertDatabaseCount('loyalty_portal_posts', 0);
+    }
+
+    public function test_edit_replaces_own_image_without_exposing_or_deleting_another_company_file(): void
+    {
+        Storage::fake('public');
+        [$company, $branch, $user] = $this->context(['fidelidad.portal.contenido']);
+        [$other] = $this->context(['fidelidad.portal.contenido']);
+        Storage::disk('public')->put("loyalty-portal/{$company->id}/anterior.jpg", 'anterior');
+        Storage::disk('public')->put("loyalty-portal/{$other->id}/ajena.jpg", 'ajena');
+        $post = LoyaltyPortalPost::create([
+            'company_id' => $company->id, 'type' => 'promotion', 'title' => 'Editable',
+            'image' => "loyalty-portal/{$company->id}/anterior.jpg", 'is_active' => true,
+        ]);
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(route('loyalty.portal-management.posts.update', $post), [
+            '_method' => 'PUT', 'type' => 'promotion', 'title' => 'Editada',
+            'image' => UploadedFile::fake()->image('nueva.jpg'), 'is_active' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        Storage::disk('public')->assertMissing("loyalty-portal/{$company->id}/anterior.jpg");
+        Storage::disk('public')->assertExists($post->fresh()->image);
+        Storage::disk('public')->assertExists("loyalty-portal/{$other->id}/ajena.jpg");
+        $this->assertStringStartsWith("loyalty-portal/{$company->id}/", $post->fresh()->image);
     }
 
     private function context(array $permissions, ?Company $company = null, ?Branch $branch = null): array

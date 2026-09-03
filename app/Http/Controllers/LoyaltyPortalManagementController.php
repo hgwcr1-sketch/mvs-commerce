@@ -83,11 +83,20 @@ class LoyaltyPortalManagementController extends Controller
     public function storePost(Request $request): RedirectResponse
     {
         $data = $this->postData($request);
-        $data['company_id'] = (int) session('active_company_id');
+        $companyId = (int) session('active_company_id');
+        $data['company_id'] = $companyId;
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('loyalty-portal', 'public');
+            $data['image'] = $request->file('image')->store("loyalty-portal/{$companyId}", 'public');
         }
-        LoyaltyPortalPost::create($data);
+        try {
+            LoyaltyPortalPost::create($data);
+        } catch (\Throwable $exception) {
+            if (! empty($data['image'])) {
+                Storage::disk('public')->delete($data['image']);
+            }
+
+            throw $exception;
+        }
 
         return back()->with('success', 'Publicación creada.');
     }
@@ -97,10 +106,21 @@ class LoyaltyPortalManagementController extends Controller
         $this->companyPost($post);
         $data = $this->postData($request);
         if ($request->hasFile('image')) {
-            if ($post->image) {
-                Storage::disk('public')->delete($post->image);
+            $oldImage = $post->image;
+            $newImage = $request->file('image')->store("loyalty-portal/{$post->company_id}", 'public');
+            try {
+                $data['image'] = $newImage;
+                $post->update($data);
+            } catch (\Throwable $exception) {
+                Storage::disk('public')->delete($newImage);
+
+                throw $exception;
             }
-            $data['image'] = $request->file('image')->store('loyalty-portal', 'public');
+            if ($oldImage && $oldImage !== $newImage) {
+                Storage::disk('public')->delete($oldImage);
+            }
+
+            return back()->with('success', 'Publicación actualizada.');
         }
         $post->update($data);
 
@@ -144,7 +164,18 @@ class LoyaltyPortalManagementController extends Controller
     private function postData(Request $request): array
     {
         $companyId = (int) session('active_company_id');
-        $data = $request->validate(['type' => ['required', Rule::in(LoyaltyPortalPost::TYPES)], 'product_id' => ['nullable', Rule::exists('products', 'id')->where('company_id', $companyId)], 'title' => ['required', 'string', 'max:120'], 'message' => ['nullable', 'string', 'max:500'], 'image' => ['nullable', 'image', 'max:3072'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'], 'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'], 'is_active' => ['nullable', 'boolean'], 'is_featured' => ['nullable', 'boolean']]);
+        $data = $request->validate([
+            'type' => ['required', Rule::in(LoyaltyPortalPost::TYPES)],
+            'product_id' => ['nullable', Rule::exists('products', 'id')->where('company_id', $companyId)],
+            'title' => ['required', 'string', 'max:120'],
+            'message' => ['nullable', 'string', 'max:500'],
+            'image' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'is_active' => ['nullable', 'boolean'],
+            'is_featured' => ['nullable', 'boolean'],
+        ]);
         $data['is_active'] = $request->boolean('is_active');
         $data['is_featured'] = $request->boolean('is_featured');
         $data['sort_order'] = (int) ($data['sort_order'] ?? 0);

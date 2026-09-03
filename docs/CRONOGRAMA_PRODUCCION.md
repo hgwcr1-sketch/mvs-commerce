@@ -82,9 +82,39 @@ Si cronograma y código difieren: registrar discrepancia, no saltar bloques sile
 | P35 | Importar detalle por artículo + cliente + sucursal + fecha | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Líneas ligadas a productos/clientes existentes, precisión decimal y exportación equivalente; sin stock, Kardex, fidelización ni comunicaciones. |
 | P36 | Importar inventario inicial y Kardex histórico por sucursal | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Saldo inicial fija stock con locking; Kardex histórico conciliado conserva fecha y no altera stock actual. Lote/origen único e idempotente. |
 | P37 | Importar saldos y movimientos históricos de puntos | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Plantilla simple aprobada de 4 columnas; resolución exacta empresarial, consolidación segura por cliente, pendientes trazables, confirmación parcial, resoluciones manuales persistentes, idempotencia y rollback. Evidencia: `LoyaltyMigrationP37Test`. |
+| **P37.1** | **Portal Comercial Premium de Fidelización** | **FASE 1 — HACER AHORA, antes de retomar P33/migración definitiva** | Mejora comercial del Portal en dos fases, sin renumerar ni sustituir P01–P50. Alcance detallado debajo. |
 | P38 | Exportar paquete completo: clientes, productos, facturas, líneas, Kardex y puntos | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | ZIP reutiliza D09/P31–P37 e incluye CSV por dominio, manifiesto, conteos y SHA-256, aislado por empresa/sucursal. |
 | P39 | Vista previa, conciliación, errores descargables, reintento y rollback | **COMPLETADO ADELANTADAMENTE (AUTORIZADO)** | Preview sin mutación, errores CSV, revalidación al confirmar, transacciones y reintento sin duplicados. |
 | P40 | Ensayo de migración completa + conciliación final | **COMPLETADO ADELANTADAMENTE (SIN EJECUTAR PRODUCCIÓN)** | Procedimiento SQLite→PostgreSQL documentado; resumen read-only concilia clientes, productos, ventas/última compra, existencias/Kardex y puntos. `MigrationP38P40Test` 2/2. |
+
+#### P37.1 — Portal Comercial Premium de Fidelización
+
+P37.1 es una subfase explícita y no renumera P01–P50. Fidelización debe funcionar como una herramienta sutil de retención y ventas: MVS detecta oportunidades y recomienda acciones; cualquier incentivo económico debe respetar las reglas autorizadas por cada empresa. Todo el alcance exige aislamiento SaaS y diseño mobile-first.
+
+**FASE 1 — HACER AHORA ANTES DE RETOMAR P33 / MIGRACIÓN DEFINITIVA**
+
+- **A.** Corregir carga y visualización de imágenes en todos los tipos de publicaciones.
+- **B.** Mejorar el formulario de publicaciones: bordes, inputs, textarea, fechas, responsive y touch.
+- **C.** Permitir varias imágenes con carrusel automático y swipe móvil.
+- **D.** CTA configurable: Comprar, WhatsApp, Ver producto, Reservar o Ver más.
+- **E.** Enlaces opcionales a Instagram, Facebook y TikTok.
+- **F.** Mostrar puntos próximos a vencer: cantidad, fecha, días restantes y alerta.
+- **G.** Personalización por empresa: nombre de app/portal, logo, icono, colores y bienvenida/contenido.
+- **H.** Passkeys/WebAuthn para ingreso con huella, Face ID o PIN del dispositivo, sin almacenar biometría.
+
+**FASE 2 — DESPUÉS DE LA MIGRACIÓN DEFINITIVA**
+
+- **I.** PWA instalable.
+- **J.** Push notifications con consentimiento.
+- **K.** Segmentación comercial.
+- **L.** Clientes inactivos y recuperación.
+- **M.** Campañas e incentivos personalizados.
+- **N.** Promociones personalizadas.
+- **O.** Automatizaciones: cumpleaños, inactividad, puntos por vencer, segunda compra y premio cercano.
+- **P.** Controles anti-spam, consentimiento y horarios.
+- **Q.** Métricas y dashboard de oportunidades comerciales.
+
+**Límites y continuidad:** no integrar automáticamente APIs de Meta/TikTok en esta fase. Al completar la Fase 1, regresar a la migración definitiva en este orden operativo: **Productos → Inventario San Ramón → Inventario Liberia**.
 
 ### Bloque Fidelización Pendiente — P41–P50 (solo si siguen pendientes según código/tests)
 
@@ -161,6 +191,7 @@ Antes de cualquier tarea: leer este archivo + `docs/ESTADO_ACTUAL.md` + sección
 
 ## Control de cambios
 
+- 2026-09-02: **incorporado P37.1 — Portal Comercial Premium de Fidelización sin renumerar P01–P50**. Fase 1 queda como trabajo inmediato antes de retomar P33/migración definitiva; Fase 2 queda después. Se fijan aislamiento SaaS, mobile-first, recomendaciones sujetas a reglas empresariales, ausencia de integración automática Meta/TikTok y retorno a Productos → Inventario San Ramón → Inventario Liberia.
 - 2026-08-29 (mañana): creado como fuente oficial P01–P30 (basado en correcciones 29-08); inicialmente documentó `a60425f` como P22/P23, etiquetas corregidas posteriormente a P21/P22 sin alterar el commit.
 - 2026-08-29 (tarde): **reconciliado con Excel único `Cronograma_Unico_Portal_Correcciones_MVS_Commerce_28-08-2026.xlsx`** – amplía a P01–P50, incorpora P31–P40 migración y P41–P50 fidelización pendiente, sin pisar IDs ni reutilizar numeraciones. P01–P04 se mantienen COMPLETADOS, P05 sigue como siguiente y P09A–P09D conservan sus IDs exactos.
 - 2026-08-29 (noche): **sincronizado P09–P14 con Excel único y estado real del repositorio** – P09 ajuste QR compacto commit `58aba11` documentado; P10–P13 añadidos como bloques siguientes en orden (P10 patrón pestañas, P11 Portal por pestañas, P12 Clientes+Configuración, P13 extensión transversal); P14 marcado PAUSADO/PARCIAL con código parcial preservado; regla de producción añadida (desarrollo → validación local → APROBADO PARA PRODUCCIÓN → despliegue controlado); regla P10–P13 responsive/touch/overflow añadida.

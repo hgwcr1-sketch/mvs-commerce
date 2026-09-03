@@ -83,6 +83,15 @@ Incluye:
 - Mejora transversal posterior: las cinco plantillas de entrada P31–P37 ahora son autoexplicativas y seguras para Excel; preservan como texto identificaciones, códigos, teléfonos, códigos de barras y CABYS, aplican decimales solo a datos cuantitativos y usan listas cerradas/catálogos empresariales reales. P38–P40 reutilizan estos contratos. `MigrationTemplateSafetyTest` 2/2; regresión focal P31–P40 40/40.
 - P37 completado, separado de inventario; `LoyaltyMigrationP37Test` 7/7, 61 aserciones.
 
+#### P37.1 — Portal Comercial Premium de Fidelización: PLANIFICADO, FASE 1 SIGUIENTE
+
+P37.1 se incorpora como subfase sin renumerar P01–P50. Su objetivo es convertir Fidelización en una herramienta sutil de retención y ventas: MVS detecta y recomienda oportunidades, mientras los incentivos económicos siempre se limitan a las reglas autorizadas por la empresa. Aislamiento SaaS y mobile-first son requisitos transversales.
+
+- **Fase 1 — hacer ahora antes de retomar P33/migración definitiva:** A) imágenes correctas en todas las publicaciones; B) formulario de publicaciones mejorado en bordes, inputs, textarea, fechas, responsive/touch; C) varias imágenes, carrusel automático y swipe; D) CTA Comprar/WhatsApp/Ver producto/Reservar/Ver más; E) enlaces opcionales Instagram/Facebook/TikTok; F) puntos próximos a vencer con cantidad, fecha, días y alerta; G) nombre de app/portal, logo, icono, colores y bienvenida/contenido por empresa; H) Passkeys/WebAuthn mediante huella/Face ID/PIN del dispositivo, sin almacenar biometría.
+- **Fase 2 — después de migración definitiva:** I) PWA; J) push con consentimiento; K) segmentación; L) clientes inactivos/recuperación; M) campañas e incentivos personalizados; N) promociones personalizadas; O) automatizaciones de cumpleaños, inactividad, vencimiento, segunda compra y premio cercano; P) anti-spam, consentimiento y horarios; Q) métricas/dashboard comercial.
+- **Límite actual:** no integrar automáticamente APIs Meta/TikTok.
+- **Continuidad obligatoria:** al completar Fase 1, regresar a la migración definitiva **Productos → Inventario San Ramón → Inventario Liberia**.
+
 ---
 
 ### Seguridad
