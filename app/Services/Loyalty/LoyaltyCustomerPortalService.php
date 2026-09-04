@@ -50,7 +50,14 @@ class LoyaltyCustomerPortalService
         $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
         $portalSetting = LoyaltyPortalSetting::query()->firstOrNew(['company_id' => $company->id], ['is_active' => true, 'show_active_offers' => true]);
         $rewards = $this->rewards((int) $company->id, $balancePoints);
-        $passkeyCount = \App\Models\LoyaltyPortalPasskey::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->whereNull('revoked_at')->count();
+        $passkeyCount = 0;
+        if (class_exists(\App\Models\LoyaltyPortalPasskey::class)) {
+            try {
+                $passkeyCount = \App\Models\LoyaltyPortalPasskey::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->whereNull('revoked_at')->count();
+            } catch (\Throwable $e) {
+                $passkeyCount = 0;
+            }
+        }
         $pointValue = null;
         try {
             $pointValue = $this->pointValues->pointValue($company);
