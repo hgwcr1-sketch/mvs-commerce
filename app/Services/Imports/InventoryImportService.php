@@ -171,9 +171,11 @@ class InventoryImportService
         if (is_numeric($row['minimum']) && is_numeric($row['maximum']) && (float) $row['maximum'] < (float) $row['minimum']) {
             $errors[] = 'El máximo no puede ser menor que el mínimo.';
         }
-        foreach (['cost' => 'costo', 'sale_price' => 'precio de venta', 'wholesale_price' => 'precio mayorista', 'special_price' => 'precio especial'] as $field => $label) {
-            if ($row[$field] !== null && (! is_numeric($row[$field]) || (float) $row[$field] < 0)) {
-                $errors[] = "El {$label} debe ser un número mayor o igual a cero.";
+        if ($row['is_new']) {
+            foreach (['cost' => 'costo', 'sale_price' => 'precio de venta', 'wholesale_price' => 'precio mayorista', 'special_price' => 'precio especial'] as $field => $label) {
+                if ($row[$field] !== null && (! is_numeric($row[$field]) || (float) $row[$field] < 0)) {
+                    $errors[] = "El {$label} debe ser un número mayor o igual a cero.";
+                }
             }
         }
         if ($row['tax_rate'] !== null && (! is_numeric($row['tax_rate']) || (float) $row['tax_rate'] < 0 || (float) $row['tax_rate'] > 100)) {
