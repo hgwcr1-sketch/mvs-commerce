@@ -1,6 +1,6 @@
 @extends('layouts.portal')
 
-@section('title', 'Programa de fidelización · '.$company->trade_name)
+@section('title', 'Programa de fidelización · '.$portalSetting->displayName($company))
 
 @section('content')
 
@@ -14,6 +14,8 @@
     $decimal = static function ($value): string {
         return rtrim(rtrim(number_format((float) $value, 2, ',', '.'), '0'), ',');
     };
+    $portalName = $portalSetting->displayName($company);
+    $portalLogo = $portalSetting->logoUrl($company);
 @endphp
 
 <div class="space-y-6">
@@ -23,13 +25,13 @@
     {{-- Encabezado con la identidad visual de la empresa (F31) --}}
     <header class="rounded-2xl px-5 py-6 text-white shadow-sm sm:px-8" style="background-color:var(--portal-primary)">
         <div class="flex items-center gap-4">
-            @if($company->logo)
-                <img src="{{ asset('storage/'.$company->logo) }}" alt="Logo de {{ $company->trade_name }}" class="h-14 w-14 shrink-0 rounded-xl border border-white/10 bg-white object-contain p-1.5">
+            @if($portalLogo)
+                <img src="{{ $portalLogo }}" alt="Logo de {{ $portalName }}" class="h-14 w-14 shrink-0 rounded-xl border border-white/10 bg-white object-contain p-1.5">
             @else
-                <div data-brand-initial class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white" style="background-color:var(--portal-accent)" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($company->trade_name), 0, 1)) }}</div>
+                <div data-brand-initial class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white" style="background-color:var(--portal-accent)" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim($portalName), 0, 1)) }}</div>
             @endif
             <div class="min-w-0">
-                <p class="truncate text-sm font-semibold" style="color:var(--portal-accent)">{{ $company->trade_name }}</p>
+                <p class="truncate text-sm font-semibold" style="color:var(--portal-accent)">{{ $portalName }}</p>
                 <h1 class="mt-0.5 truncate text-xl font-bold sm:text-2xl">Programa de fidelización</h1>
             </div>
         </div>
@@ -59,11 +61,22 @@
                 <p class="mt-3 text-sm text-slate-600">@if($redemption['eligible']) Ya puedes canjear puntos. @else Te faltan {{ $money($redemption['missing_money']) }} para alcanzar el mínimo de {{ $money($redemption['minimum_money']) }}. @endif</p>
             @endif
             @if($expiration)
-                <div class="mt-4 rounded-xl p-3 text-sm {{ $expiration['near'] ? 'bg-red-50 text-red-800' : 'bg-slate-50 text-slate-700' }}">
-                    Tus puntos vencen el <strong>{{ $expiration['date']->format('d/m/Y') }}</strong> ({{ $expiration['days'] }} días restantes). Una compra que califique renueva la vigencia por {{ $expiration['months'] }} meses según las reglas del programa.
+                <div role="alert" class="mt-4 rounded-xl border p-4 text-left text-sm {{ $expiration['urgent'] ? 'border-red-300 bg-red-50 text-red-900' : ($expiration['near'] ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700') }}">
+                    <p class="font-bold">{{ $points($expiration['points']) }} {{ $expiration['overdue'] ? 'están pendientes de vencimiento' : 'vencen en '.$expiration['days'].' días' }}</p>
+                    <p class="mt-1">Fecha de vencimiento: <strong>{{ $expiration['date']->format('d/m/Y') }}</strong> ({{ $expiration['days'] }} días restantes).</p>
+                    <p class="mt-1 text-xs">Una compra que califique renueva la vigencia por {{ $expiration['months'] }} meses según las reglas reales del programa.</p>
                 </div>
             @endif
         </section>
+
+        @if($rewardProgress)
+            <section aria-label="Progreso hacia tu próximo premio" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div class="flex flex-wrap items-start justify-between gap-2"><div><h2 class="font-semibold text-slate-900">Tu próximo premio</h2><p class="mt-1 text-sm text-slate-600">{{ $rewardProgress['reward']->name }}</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{{ $points($rewardProgress['reward']->points_cost) }}</span></div>
+                <p class="mt-4 text-sm font-semibold" style="color:var(--portal-primary)">@if($rewardProgress['reached']) Ya alcanzaste este premio. @else Te faltan {{ $points($rewardProgress['missing_points']) }} para tu próximo premio. @endif</p>
+                <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Progreso para {{ $rewardProgress['reward']->name }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $rewardProgress['percentage'] }}"><div class="h-full rounded-full transition-all" style="width:{{ $rewardProgress['percentage_display'] }}%;background-color:var(--portal-accent)"></div></div>
+                <p class="mt-2 text-right text-xs font-semibold text-slate-500">{{ $rewardProgress['percentage_display'] }}%</p>
+            </section>
+        @endif
 
         @if(!$credentialExists && ($customerAuthenticated ?? false))
             <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 class="font-semibold text-amber-950">Activa tu acceso con contraseña</h2><form method="POST" action="{{ route('loyalty.customer.activate') }}" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">@csrf<input name="username" required placeholder="Usuario" class="min-h-11 w-full rounded-xl border-amber-300"><input type="email" name="email" required value="{{ $customer->email }}" placeholder="Correo" class="min-h-11 w-full rounded-xl border-amber-300"><input type="password" name="password" required placeholder="Contraseña" class="min-h-11 w-full rounded-xl border-amber-300"><input type="password" name="password_confirmation" required placeholder="Confirmar contraseña" class="min-h-11 w-full rounded-xl border-amber-300"><button class="min-h-11 rounded-xl bg-amber-600 px-4 font-semibold text-white sm:col-span-2">Guardar acceso</button></form></section>
@@ -74,11 +87,49 @@
         @endif
 
         @if($posts->isNotEmpty())
-            <section aria-label="Novedades" class="space-y-3"><h2 class="text-lg font-semibold">Novedades y avisos</h2><div class="grid grid-cols-1 gap-4 sm:grid-cols-2">@foreach($posts as $post)<article class="overflow-hidden rounded-xl border bg-white {{ $post->is_featured ? 'ring-2 ring-amber-400' : '' }}"><x-loyalty-post-image :post="$post" image-class="h-48 w-full" class="rounded-none border-0 border-b" /><div class="p-4"><p class="text-xs font-bold uppercase text-amber-700">{{ ['new_product' => 'Nuevo producto', 'offer' => 'Oferta', 'promotion' => 'Promoción', 'notice' => 'Aviso'][$post->type] }}</p><h3 class="mt-1 font-semibold">{{ $post->title }}</h3>@if($post->message)<p class="mt-2 text-sm text-slate-600">{{ $post->message }}</p>@endif @if($post->product)<p class="mt-2 text-sm text-slate-500">{{ $post->product->name }}</p><p class="font-semibold">{{ $money($post->product->special_price ?? $post->product->sale_price) }}</p>@endif</div></article>@endforeach</div></section>
+            <section aria-label="Novedades" class="space-y-3">
+                <h2 class="text-lg font-semibold">Novedades y avisos</h2>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    @foreach($posts as $post)
+                        <article class="overflow-hidden rounded-xl border bg-white {{ $post->is_featured ? 'ring-2 ring-amber-400' : '' }}">
+                            <x-loyalty-post-carousel :post="$post" :href="$post->cta_url" image-class="h-48 w-full" class="rounded-none border-0 border-b" />
+                            <div class="p-4">
+                                <p class="text-xs font-bold uppercase" style="color:var(--portal-accent)">{{ ['new_product' => 'Nuevo producto', 'offer' => 'Oferta', 'promotion' => 'Promoción', 'notice' => 'Aviso'][$post->type] }}</p>
+                                <h3 class="mt-1 font-semibold">{{ $post->title }}</h3>
+                                @if($post->message)<p class="mt-2 text-sm text-slate-600">{{ $post->message }}</p>@endif
+                                @if($post->product)
+                                    <div class="mt-4 rounded-xl bg-slate-50 p-3">
+                                        <p class="font-semibold text-slate-900">{{ $post->product->name }}</p>
+                                        <div class="mt-1 flex flex-wrap items-baseline gap-2">
+                                            @if($post->product->special_price !== null && (float) $post->product->special_price < (float) $post->product->sale_price)
+                                                <span class="text-sm text-slate-500 line-through">{{ $money($post->product->sale_price) }}</span>
+                                                <strong class="text-emerald-700">{{ $money($post->product->special_price) }}</strong>
+                                            @else
+                                                <strong>{{ $money($post->product->sale_price) }}</strong>
+                                            @endif
+                                        </div>
+                                        <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                                            <span class="rounded-full bg-white px-2.5 py-1 text-slate-700">{{ $post->product->portal_availability }}</span>
+                                            @if($post->product->portal_loyalty_benefit)<span class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">{{ $post->product->portal_loyalty_benefit }}</span>@endif
+                                        </div>
+                                    </div>
+                                @endif
+                                @if($post->cta_url && $post->ctaLabel())
+                                    <a href="{{ $post->cta_url }}" target="_blank" rel="noopener noreferrer" class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-center text-sm font-bold text-white" style="background-color:var(--portal-primary)">{{ $post->ctaLabel() }}</a>
+                                @endif
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
         @endif
 
         @if($portalLinks->isNotEmpty())
             <nav aria-label="Acciones comerciales" class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($portalLinks as $link)<a href="{{ $link->url }}" rel="noopener noreferrer" target="_blank" class="min-h-11 rounded-xl bg-amber-600 px-4 py-3 text-center font-semibold text-white">{{ $link->label }}</a>@endforeach</nav>
+        @endif
+
+        @if($socialLinks->isNotEmpty())
+            <nav aria-label="Redes sociales" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-sm font-semibold text-slate-700">Síguenos y conoce más</p><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">@foreach($socialLinks as $social)<a href="{{ $social['url'] }}" target="_blank" rel="noopener noreferrer" class="flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">{{ $social['label'] }}</a>@endforeach</div></nav>
         @endif
 
         @if($recommended->isNotEmpty())

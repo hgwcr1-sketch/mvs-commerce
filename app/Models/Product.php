@@ -141,4 +141,48 @@ class Product extends Model
     {
         return $this->hasMany(PurchaseOrderItem::class);
     }
+
+    public function getPortalAvailabilityAttribute(): string
+    {
+        $stock = $this->availableStock();
+        if ($stock === null) {
+            return 'Sin existencias';
+        }
+        if ((float) $stock <= 0) {
+            return 'Agotado';
+        }
+
+        return 'Disponible';
+    }
+
+    public function getPortalLoyaltyBenefitAttribute(): ?string
+    {
+        $percentage = $this->companyLoyaltyEarningPercentage();
+        if ($percentage === null || (float) $percentage <= 0) {
+            return null;
+        }
+        $decimal = rtrim(rtrim(number_format((float) $percentage, 2, ',', '.'), '0'), ',');
+
+        return "{$decimal}% en puntos";
+    }
+
+    public function availableStock(): ?string
+    {
+        $pivot = $this->branches()->first();
+        if ($pivot && isset($pivot->pivot->stock)) {
+            return (string) $pivot->pivot->stock;
+        }
+
+        return null;
+    }
+
+    private function companyLoyaltyEarningPercentage(): ?string
+    {
+        $setting = LoyaltySetting::query()->where('company_id', $this->company_id)->first();
+        if (! $setting) {
+            return null;
+        }
+
+        return (string) $setting->earning_percentage;
+    }
 }

@@ -9,6 +9,7 @@
 
     @vite(['resources/css/app.css'])
     @php($branding = $portalBranding ?? $portalSetting ?? null)
+    @if($branding?->iconUrl())<link rel="icon" href="{{ $branding->iconUrl() }}">@endif
     <style>:root{--portal-primary:{{ $branding?->brand_primary_color ?? '#0F172A' }};--portal-accent:{{ $branding?->brand_accent_color ?? '#F59E0B' }};}</style>
 </head>
 

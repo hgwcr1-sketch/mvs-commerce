@@ -83,14 +83,39 @@ Incluye:
 - Mejora transversal posterior: las cinco plantillas de entrada P31–P37 ahora son autoexplicativas y seguras para Excel; preservan como texto identificaciones, códigos, teléfonos, códigos de barras y CABYS, aplican decimales solo a datos cuantitativos y usan listas cerradas/catálogos empresariales reales. P38–P40 reutilizan estos contratos. `MigrationTemplateSafetyTest` 2/2; regresión focal P31–P40 40/40.
 - P37 completado, separado de inventario; `LoyaltyMigrationP37Test` 7/7, 61 aserciones.
 
-#### P37.1 — Portal Comercial Premium de Fidelización: PLANIFICADO, FASE 1 SIGUIENTE
+#### P37.1 — Portal Comercial Premium de Fidelización: FASE 1 EN CURSO (A–H COMPLETADOS; K PENDIENTE)
 
-P37.1 se incorpora como subfase sin renumerar P01–P50. Su objetivo es convertir Fidelización en una herramienta sutil de retención y ventas: MVS detecta y recomienda oportunidades, mientras los incentivos económicos siempre se limitan a las reglas autorizadas por la empresa. Aislamiento SaaS y mobile-first son requisitos transversales.
+P37.1 se incorpora como subfase sin renumerar P01–P50. El Portal continúa siendo principalmente un Portal de Fidelización. Debe convertirse en una herramienta sutil pero poderosa de retención, recuperación y ventas. NO convertirlo en ecommerce/catalogo general.
 
-- **Fase 1 — hacer ahora antes de retomar P33/migración definitiva:** A) imágenes correctas en todas las publicaciones; B) formulario de publicaciones mejorado en bordes, inputs, textarea, fechas, responsive/touch; C) varias imágenes, carrusel automático y swipe; D) CTA Comprar/WhatsApp/Ver producto/Reservar/Ver más; E) enlaces opcionales Instagram/Facebook/TikTok; F) puntos próximos a vencer con cantidad, fecha, días y alerta; G) nombre de app/portal, logo, icono, colores y bienvenida/contenido por empresa; H) Passkeys/WebAuthn mediante huella/Face ID/PIN del dispositivo, sin almacenar biometría.
-- **Fase 2 — después de migración definitiva:** I) PWA; J) push con consentimiento; K) segmentación; L) clientes inactivos/recuperación; M) campañas e incentivos personalizados; N) promociones personalizadas; O) automatizaciones de cumpleaños, inactividad, vencimiento, segunda compra y premio cercano; P) anti-spam, consentimiento y horarios; Q) métricas/dashboard comercial.
+Principio oficial: "MVS Portal no es una tienda. Es un portal de fidelización capaz de convertir una oportunidad en una compra."
+
+- **Fase 1 — hacer ahora antes de retomar P33/migración definitiva:**
+  - **P37.1-A — COMPLETADO.** Imagen propia en todos los tipos, preview, fallback, prioridad sobre producto y render administración/portal.
+  - **P37.1-B — COMPLETADO.** Formulario con controles visibles, estados de foco/error, mobile-first y touch.
+  - **P37.1-C — COMPLETADO.** Galería por publicación, carrusel con autoplay, flechas/puntos y swipe móvil.
+  - **P37.1-D — COMPLETADO.** CTA validado y configurable (Comprar/Ver producto/WhatsApp/Reservar/Ver más/URL externa), imagen/carrusel clickeable y producto MVS opcional de la misma empresa. La ficha consume precio, imagen e inventario Core y muestra solo disponibilidad binaria, beneficio de puntos y precios comerciales; sin stock exacto, catálogo general, carrito o pago.
+  - **P37.1-E — COMPLETADO.** URLs HTTPS opcionales de Instagram/Facebook/TikTok validadas por dominio y abiertas externamente; sin APIs sociales.
+  - **P37.1-F — COMPLETADO.** El Portal presenta saldo real próximo a vencer, fecha calculada por la regla F22/F23, días y alerta por severidad; no crea vencimientos ficticios.
+  - **P37.1-G — COMPLETADO.** Próximo premio activo real, puntos faltantes y barra responsive/accesible calculada contra su costo.
+  - **P37.1-H — COMPLETADO.** Nombre, logo, icono, colores, bienvenida, destacado y redes por empresa; fallback compatible al branding empresarial y marca MVS discreta.
+  - **P37.1-K** Passkeys/WebAuthn en Fase 1 (subir de prioridad): huella/Face ID/PIN del dispositivo, MVS nunca almacena biometría, registrar credencial, login con passkey, preparar administración/eliminación y recuperación segura. Implementar antes de volver a P33.
+- **Fase 2 — después de migración definitiva:**
+  - **P37.1-I** PWA instalable.
+  - **P37.1-J** Push notifications con consentimiento.
+  - **P37.1-L** Segmentación comercial: inactivos, frecuentes, VIP, próximos a premio, categorías/productos de interés, nuevos sin segunda compra, disminución de frecuencia, puntos por vencer.
+  - **P37.1-M** Campañas inteligentes por segmento: puntos extra, multiplicadores, descuentos, premios, promociones. MVS detecta/recomienda; empresa controla incentivo económico.
+  - **P37.1-N** Promociones personalizadas según comportamiento/segmento, no invasivas, fidelización ayuda a vender de forma relevante.
+  - **P37.1-O** Recuperación de clientes: ejemplo "120 días sin comprar → oportunidad", incentivo configurable, MVS detecta oportunidad y empresa decide beneficio/regla.
+  - **P37.1-P** Automatizaciones: cumpleaños, inactividad, regreso, puntos por vencer, segunda compra, premio cercano, otras oportunidades comerciales.
+  - **P37.1-Q** Anti-spam/privacidad: consentimiento, frecuencia máxima, horarios, cancelar notificaciones, auditoría.
+  - **P37.1-R** Métricas comerciales: campañas, aperturas/clics cuando técnicamente sea medible, clientes recuperados, ventas posteriores, puntos utilizados, efectividad de campañas.
+  - **P37.1-S** Dashboard comercial: clientes por recuperar, puntos próximos a vencer, campañas activas, oportunidades del día.
+  - **P37.1-T** Calidad obligatoria transversal: responsive/mobile-first, aislamiento SaaS, Empresa A jamás accede a campañas/branding/clientes/configuración de Empresa B, pruebas de seguridad, permisos y regresión.
+  - **Portal Commerce — Fase 2:** extensión de Fidelización, NO tienda general. Carrito ligero solo para productos/promociones del Portal. Cliente ya identificado por sesión. Retiro en sucursal. Envío a domicilio con costo configurable. Disponibilidad simple por sucursal. Usar Core MVS para pedido/venta. NO duplicar clientes, productos, inventario, ventas ni fidelización. Pago online en etapa posterior independiente.
+- **Principio comercial:** Fidelización no debe limitarse a consultar puntos. Debe detectar oportunidades y facilitar acciones de venta/retención. MVS detecta y recomienda; cada empresa mantiene control sobre descuentos, puntos, promociones e incentivos.
 - **Límite actual:** no integrar automáticamente APIs Meta/TikTok.
 - **Continuidad obligatoria:** al completar Fase 1, regresar a la migración definitiva **Productos → Inventario San Ramón → Inventario Liberia**.
+- **Evidencia A–H:** `LoyaltyPortalManagementTest`, `LoyaltyPortalPremiumP371Test`, migraciones `2026_09_03_000001` y `2026_09_03_000002`. P37.1-K sigue pendiente fuera de esta ejecución.
 
 ---
 

@@ -33,7 +33,7 @@ class LoyaltyCustomerPortalService
 {
     public function __construct(private readonly LoyaltyPointValueService $pointValues, private readonly LoyaltyPromotionService $promotions, private readonly LoyaltyRedemptionEligibilityService $eligibility) {}
 
-    /** @return array{company:Company,customer:Customer,module_active:bool,balance_points:string,balance_money:?string,movements:LengthAwarePaginator,rewards:Collection,promotions:Collection,multipliers:Collection} */
+    /** @return array<string,mixed> */
     public function data(Company $company, Customer $customer): array
     {
         $moduleActive = LoyaltySetting::query()
@@ -49,6 +49,7 @@ class LoyaltyCustomerPortalService
         $balancePoints = (string) ($account->balance ?? '0.0000');
         $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
         $portalSetting = LoyaltyPortalSetting::query()->firstOrNew(['company_id' => $company->id], ['is_active' => true, 'show_active_offers' => true]);
+        $rewards = $this->rewards((int) $company->id, $balancePoints);
 
         return [
             'company' => $company,
@@ -59,17 +60,19 @@ class LoyaltyCustomerPortalService
             'total_redeemed' => (string) ($account->total_redeemed ?? '0.0000'),
             'balance_money' => $this->balanceMoney($company, $balancePoints),
             'movements' => $this->movements((int) $company->id, (int) $customer->id),
-            'rewards' => $this->rewards((int) $company->id, $balancePoints),
+            'rewards' => $rewards,
+            'rewardProgress' => $this->rewardProgress($rewards, $balancePoints),
             'promotions' => $this->publicity($company),
             'multipliers' => $this->multipliers($company),
             'redemption' => $account ? $this->eligibility->evaluate($account, $company) : null,
-            'expiration' => $this->expiration($company, $setting, $account),
+            'expiration' => $this->expiration($company, $setting, $account, $balancePoints),
             'sales' => $this->sales((int) $company->id, (int) $customer->id),
             'offers' => $portalSetting->show_active_offers ? Product::query()->where('company_id', $company->id)->where('is_active', true)->whereNotNull('special_price')->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']) : new Collection,
             'recommended' => $this->recommended((int) $company->id, (int) $customer->id),
             'credentialExists' => LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->exists(),
             'posts' => LoyaltyPortalPost::query()->where('company_id', $company->id)->where('is_active', true)->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))->with('product:id,company_id,name,image,sale_price,special_price')->orderByDesc('is_featured')->orderBy('sort_order')->get(),
             'portalLinks' => LoyaltyPortalLink::query()->where('company_id', $company->id)->where('is_active', true)->orderBy('sort_order')->get(),
+            'socialLinks' => $this->socialLinks($portalSetting),
             'portalSetting' => $portalSetting,
         ];
     }
@@ -103,15 +106,74 @@ class LoyaltyCustomerPortalService
             ->with('branch:id,company_id,name')->latest('completed_at')->paginate(8, ['*'], 'sales_page')->withQueryString();
     }
 
-    private function expiration(Company $company, ?LoyaltySetting $setting, ?LoyaltyAccount $account): ?array
+    private function expiration(Company $company, ?LoyaltySetting $setting, ?LoyaltyAccount $account, string $balancePoints): ?array
     {
         if (! $setting?->expiration_enabled || ! $account?->last_qualifying_purchase_at || (int) $setting->expiration_months < 1) {
             return null;
         }
         $due = CarbonImmutable::instance($account->last_qualifying_purchase_at)->setTimezone($company->timezone ?: config('app.timezone'))->addMonthsNoOverflow((int) $setting->expiration_months)->startOfDay();
         $today = CarbonImmutable::now($company->timezone ?: config('app.timezone'))->startOfDay();
+        $daysDiff = (int) $today->diffInDays($due, false);
+        $overdue = $daysDiff < 0;
+        $near = abs($daysDiff) <= 30;
+        $urgent = $overdue || $daysDiff <= 7;
 
-        return ['date' => $due, 'days' => max(0, $today->diffInDays($due, false)), 'near' => $today->diffInDays($due, false) <= 30, 'months' => (int) $setting->expiration_months];
+        return [
+            'date' => $due,
+            'days' => $overdue ? 0 : $daysDiff,
+            'near' => $near,
+            'overdue' => $overdue,
+            'urgent' => $urgent,
+            'points' => $balancePoints,
+            'months' => (int) $setting->expiration_months,
+        ];
+    }
+
+    private function rewardProgress(Collection $rewards, string $balancePoints): ?array
+    {
+        $candidate = $rewards->firstWhere(fn (LoyaltyReward $reward) => bccomp((string) $reward->points_cost, $balancePoints, 4) > 0);
+        if (! $candidate) {
+            return null;
+        }
+        $cost = (string) $candidate->points_cost;
+        $missing = bcsub($cost, $balancePoints, 4);
+        $ratio = (float) $cost > 0 ? ((float) $balancePoints / (float) $cost) * 100 : 0.0;
+        $percentage = (int) min(100, max(0, round($ratio)));
+
+        return [
+            'reward' => $candidate,
+            'reached' => false,
+            'missing_points' => $missing,
+            'percentage' => $percentage,
+            'percentage_display' => number_format($ratio, 1, '.', ''),
+        ];
+    }
+
+    /** @return Collection<int,array{url:string,label:string}> */
+    private function socialLinks(LoyaltyPortalSetting $setting): Collection
+    {
+        $links = [];
+        if ($url = $this->safeUrl($setting->instagram_url)) {
+            $links[] = ['url' => $url, 'label' => 'Instagram'];
+        }
+        if ($url = $this->safeUrl($setting->facebook_url)) {
+            $links[] = ['url' => $url, 'label' => 'Facebook'];
+        }
+        if ($url = $this->safeUrl($setting->tiktok_url)) {
+            $links[] = ['url' => $url, 'label' => 'TikTok'];
+        }
+
+        return Collection::make($links);
+    }
+
+    private function safeUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+        if ($url === '' || ! preg_match('/^https?:\/\//i', $url)) {
+            return null;
+        }
+
+        return $url;
     }
 
     private function recommended(int $companyId, int $customerId): Collection

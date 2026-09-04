@@ -60,13 +60,38 @@ class LoyaltyPortalManagementController extends Controller
         ]);
         $data = $request->validate([
             'welcome_message' => ['nullable', 'string', 'max:300'],
+            'portal_name' => ['nullable', 'string', 'max:120'],
             'is_active' => ['nullable', 'boolean'],
             'show_active_offers' => ['nullable', 'boolean'],
             'brand_primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'brand_accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'portal_logo' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
+            'portal_icon' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp,svg,ico', 'max:1024'],
+            'instagram_url' => ['nullable', 'string', 'max:500', 'regex:#^https://(www\.)?instagram\.com/.+#i'],
+            'facebook_url' => ['nullable', 'string', 'max:500', 'regex:#^https://(www\.)?facebook\.com/.+#i'],
+            'tiktok_url' => ['nullable', 'string', 'max:500', 'regex:#^https://(www\.)?tiktok\.com/.+#i'],
+        ], [
+            'instagram_url.regex' => 'El campo instagram_url debe ser una URL válida de Instagram (https://...).',
+            'facebook_url.regex' => 'El campo facebook_url debe ser una URL válida de Facebook (https://...).',
+            'tiktok_url.regex' => 'El campo tiktok_url debe ser una URL válida de TikTok (https://...).',
         ]);
         $data['is_active'] = $request->boolean('is_active');
         $data['show_active_offers'] = $request->boolean('show_active_offers');
+        $data['portal_name'] = trim((string) ($data['portal_name'] ?? '')) ?: null;
+
+        if ($request->hasFile('portal_logo')) {
+            if ($current?->portal_logo) {
+                Storage::disk('public')->delete($current->portal_logo);
+            }
+            $data['portal_logo'] = $request->file('portal_logo')->store("loyalty-portal/{$companyId}/branding", 'public');
+        }
+        if ($request->hasFile('portal_icon')) {
+            if ($current?->portal_icon) {
+                Storage::disk('public')->delete($current->portal_icon);
+            }
+            $data['portal_icon'] = $request->file('portal_icon')->store("loyalty-portal/{$companyId}/branding", 'public');
+        }
+
         LoyaltyPortalSetting::updateOrCreate(['company_id' => $companyId], $data);
 
         return back()->with('success', 'Configuración del portal actualizada.');
@@ -175,10 +200,23 @@ class LoyaltyPortalManagementController extends Controller
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],
+            'cta_type' => ['nullable', Rule::in(array_keys(LoyaltyPortalPost::CTA_LABELS))],
+            'cta_url' => [
+                'nullable',
+                'string',
+                'max:500',
+                'required_if:cta_type,buy,product,whatsapp,external,more,reserve',
+                'regex:#^(https://|/)[^\s]*$#i',
+            ],
+        ], [
+            'cta_url.required_if' => 'El campo cta_url es obligatorio cuando defines un tipo de CTA.',
+            'cta_url.regex' => 'El campo cta_url debe iniciar con https:// o con una ruta interna (/).',
         ]);
         $data['is_active'] = $request->boolean('is_active');
         $data['is_featured'] = $request->boolean('is_featured');
         $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
+        $data['cta_type'] = $data['cta_type'] ?? null;
+        $data['cta_url'] = $data['cta_type'] === null ? null : ($data['cta_url'] ?? null);
 
         return $data;
     }

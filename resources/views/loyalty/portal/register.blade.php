@@ -1,9 +1,9 @@
 @extends('layouts.portal')
-@section('title', 'Crear cuenta · '.$company->trade_name)
+@section('title', 'Crear cuenta · '.$portalBranding->displayName($company))
 @section('content')
 <div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-    <x-portal-brand :company="$company" class="mb-5" />
-    <h1 class="text-2xl font-bold text-slate-900">Crear mi cuenta en {{ $company->trade_name }}</h1>
+    <x-portal-brand :company="$company" :branding="$portalBranding" class="mb-5" />
+    <h1 class="text-2xl font-bold text-slate-900">Crear mi cuenta en {{ $portalBranding->displayName($company) }}</h1>
     <p class="mt-2 text-sm text-slate-600">Tu cuenta quedará disponible de inmediato en esta empresa para compras, POS y fidelización.</p>
     @if(session('success'))<p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</p>@endif
     @if($errors->any())<p class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{{ $errors->first() }}</p>@endif

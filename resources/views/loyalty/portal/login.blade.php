@@ -1,9 +1,9 @@
 @extends('layouts.portal')
-@section('title', 'Ingresar · '.$company->trade_name)
+@section('title', 'Ingresar · '.$portalBranding->displayName($company))
 @section('content')
 <div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-    <x-portal-brand :company="$company" class="mb-5" />
-    <h1 class="text-2xl font-bold text-slate-900">Tu portal en {{ $company->trade_name }}</h1>
+    <x-portal-brand :company="$company" :branding="$portalBranding" class="mb-5" />
+    <h1 class="text-2xl font-bold text-slate-900">Tu portal en {{ $portalBranding->displayName($company) }}</h1>
     <p class="mt-2 text-sm text-slate-600">Consulta tus puntos y compras de todas las sucursales.</p>
     @if(session('success'))<p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</p>@endif
     @if($errors->any())<p class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{{ $errors->first() }}</p>@endif

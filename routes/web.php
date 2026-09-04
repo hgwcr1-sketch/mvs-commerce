@@ -466,6 +466,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
             Route::post('/publicaciones', [LoyaltyPortalManagementController::class, 'storePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.store');
             Route::put('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'updatePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.update');
             Route::delete('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'destroyPost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.destroy');
+            Route::post('/publicaciones/{post}/imagenes', [LoyaltyPortalManagementController::class, 'addPostImage'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.add');
+            Route::delete('/publicaciones/{post}/imagenes/{image}', [LoyaltyPortalManagementController::class, 'deletePostImage'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.delete');
+            Route::put('/publicaciones/{post}/imagenes/orden', [LoyaltyPortalManagementController::class, 'reorderPostImages'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.reorder');
             Route::post('/enlaces', [LoyaltyPortalManagementController::class, 'storeLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.store');
             Route::put('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'updateLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.update');
             Route::delete('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'destroyLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.destroy');
