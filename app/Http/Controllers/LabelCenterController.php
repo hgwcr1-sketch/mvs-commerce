@@ -9,6 +9,7 @@ use App\Models\ProductCategory;
 use App\Models\PurchaseVerification;
 use App\Services\Labels\Code128Barcode;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class LabelCenterController extends Controller
@@ -28,13 +29,14 @@ class LabelCenterController extends Controller
     {
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $query = Product::query()->where('company_id', $companyId)->with(['category:id,name', 'brand:id,name', 'barcodes' => fn ($query) => $query->where('is_active', true)]);
 
         if ($search = trim((string) $request->query('search'))) {
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")
-                ->orWhere('internal_code', 'like', "%{$search}%")
-                ->orWhere('barcode', 'like', "%{$search}%")
-                ->orWhereHas('barcodes', fn ($barcode) => $barcode->where('is_active', true)->where('barcode', 'like', "%{$search}%")));
+            $query->where(fn ($q) => $q->where('name', $likeOperator, "%{$search}%")
+                ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                ->orWhere('barcode', $likeOperator, "%{$search}%")
+                ->orWhereHas('barcodes', fn ($barcode) => $barcode->where('is_active', true)->where('barcode', $likeOperator, "%{$search}%")));
         }
         foreach (['category_id', 'brand_id'] as $filter) {
             if ($request->filled($filter)) {

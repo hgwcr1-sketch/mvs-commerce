@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Unit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -32,11 +33,12 @@ class ProductController extends Controller
          * Buscador.
          */
         if ($search = request('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhere('cabys_code', 'like', "%{$search}%");
+            $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($q) use ($search, $likeOperator) {
+                $q->where('name', $likeOperator, "%{$search}%")
+                    ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('barcode', $likeOperator, "%{$search}%")
+                    ->orWhere('cabys_code', $likeOperator, "%{$search}%");
             });
         }
 
@@ -386,6 +388,7 @@ if ($branchId) {
         $companyId = session('active_company_id');
         $branchId = request('branch_id') ?: session('active_branch_id');
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $products = Product::where('company_id', $companyId)
             ->with(['unit:id,allows_decimals'])
             ->with([
@@ -394,13 +397,13 @@ if ($branchId) {
                 },
             ])
             ->where('is_active', true)
-            ->where(function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhereHas('barcodes', function ($q) use ($search) {
+            ->where(function ($query) use ($search, $likeOperator) {
+                $query->where('name', $likeOperator, "%{$search}%")
+                    ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('barcode', $likeOperator, "%{$search}%")
+                    ->orWhereHas('barcodes', function ($q) use ($search, $likeOperator) {
                         $q->where('is_active', true)
-                            ->where('barcode', 'like', "%{$search}%");
+                            ->where('barcode', $likeOperator, "%{$search}%");
                     });
             })
             ->orderBy('name')

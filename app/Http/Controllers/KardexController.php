@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InventoryMovement;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class KardexController extends Controller
 {
@@ -22,6 +23,7 @@ class KardexController extends Controller
         $dateFrom = $request->get('date_from');
 $dateTo = $request->get('date_to');
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $movements = InventoryMovement::with([
                 'product',
                 'user',
@@ -46,17 +48,17 @@ $dateTo = $request->get('date_to');
     $query->whereDate('created_at', '<=', $dateTo);
 })
 
-            ->when($search, function ($query) use ($search) {
+            ->when($search, function ($query) use ($search, $likeOperator) {
 
-                $query->where(function ($query) use ($search) {
+                $query->where(function ($query) use ($search, $likeOperator) {
 
-                    $query->where('reason', 'like', "%{$search}%")
-                        ->orWhere('notes', 'like', "%{$search}%")
-                        ->orWhereHas('product', function ($query) use ($search) {
+                    $query->where('reason', $likeOperator, "%{$search}%")
+                        ->orWhere('notes', $likeOperator, "%{$search}%")
+                        ->orWhereHas('product', function ($query) use ($search, $likeOperator) {
 
-                            $query->where('name', 'like', "%{$search}%")
-                                ->orWhere('internal_code', 'like', "%{$search}%")
-                                ->orWhere('barcode', 'like', "%{$search}%");
+                            $query->where('name', $likeOperator, "%{$search}%")
+                                ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                                ->orWhere('barcode', $likeOperator, "%{$search}%");
 
                         });
 

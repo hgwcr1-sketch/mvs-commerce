@@ -88,20 +88,22 @@ class PurchaseController extends Controller
             return response()->json([]);
         }
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
         $products = Product::query()
             ->where('products.company_id', $companyId)
             ->where('products.is_active', true)
-            ->where(function ($query) use ($search) {
-                $query->where('products.name', 'like', "%{$search}%")
-                    ->orWhere('products.internal_code', 'like', "%{$search}%")
-                    ->orWhere('products.barcode', 'like', "%{$search}%")
-                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($search) {
+            ->where(function ($query) use ($search, $likeOperator) {
+                $query->where('products.name', $likeOperator, "%{$search}%")
+                    ->orWhere('products.internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('products.barcode', $likeOperator, "%{$search}%")
+                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($search, $likeOperator) {
                         $barcodeQuery
                             ->where('is_active', true)
-                            ->where('barcode', 'like', "%{$search}%");
+                            ->where('barcode', $likeOperator, "%{$search}%");
                     })
-                    ->orWhereHas('brand', function ($brandQuery) use ($search) {
-                        $brandQuery->where('name', 'like', "%{$search}%");
+                    ->orWhereHas('brand', function ($brandQuery) use ($search, $likeOperator) {
+                        $brandQuery->where('name', $likeOperator, "%{$search}%");
                     });
             })
             ->with([

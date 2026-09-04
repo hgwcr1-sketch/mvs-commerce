@@ -8,6 +8,7 @@ use App\Models\InventoryTransfer;
 use App\Models\Product;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TransferController extends Controller
@@ -80,19 +81,21 @@ class TransferController extends Controller
             return response()->json([]);
         }
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
         $products = Product::query()
             ->where('company_id', $companyId)
             ->where('is_active', true)
             ->where('track_inventory', true)
             ->with(['unit:id,allows_decimals'])
             ->with(['branches' => fn ($query) => $query->where('branches.id', $branchId)])
-            ->where(function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%")
+            ->where(function ($query) use ($search, $likeOperator) {
+                $query->where('name', $likeOperator, "%{$search}%")
+                    ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('barcode', $likeOperator, "%{$search}%")
                     ->orWhereHas('barcodes', fn ($barcodes) => $barcodes
                         ->where('is_active', true)
-                        ->where('barcode', 'like', "%{$search}%"));
+                        ->where('barcode', $likeOperator, "%{$search}%"));
             })
             ->orderBy('name')
             ->limit(10)
