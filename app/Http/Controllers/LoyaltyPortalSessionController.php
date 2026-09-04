@@ -200,7 +200,7 @@ class LoyaltyPortalSessionController extends Controller
         $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->firstOrFail();
         abort_unless($credential->must_change_password, 404);
 
-        return view('loyalty.portal.force-change', compact('company'));
+        return view('loyalty.portal.force-change', ['company' => $company, 'portalBranding' => $this->branding($company)]);
     }
 
     public function forceChange(Request $request, Company $company): RedirectResponse
@@ -226,7 +226,7 @@ class LoyaltyPortalSessionController extends Controller
             return redirect()->route('loyalty.customer.password.force', $company);
         }
 
-        return view('loyalty.portal.show', $portal->data($company, $customer) + ['customerAuthenticated' => true]);
+        return view('loyalty.portal.show', $portal->data($company, $customer) + ['customerAuthenticated' => true, 'portalBranding' => $this->branding($company)]);
     }
 
     public function activate(Request $request): RedirectResponse
@@ -293,7 +293,7 @@ class LoyaltyPortalSessionController extends Controller
 
     public function forgotForm(Company $company): View
     {
-        return view('loyalty.portal.forgot-password', compact('company'));
+        return view('loyalty.portal.forgot-password', ['company' => $company, 'portalBranding' => $this->branding($company)]);
     }
 
     public function forgot(Request $request, Company $company): RedirectResponse
@@ -314,7 +314,7 @@ class LoyaltyPortalSessionController extends Controller
     {
         abort_unless($this->validReset($company, $token), 404);
 
-        return view('loyalty.portal.reset-password', compact('company', 'token'));
+        return view('loyalty.portal.reset-password', ['company' => $company, 'token' => $token, 'portalBranding' => $this->branding($company)]);
     }
 
     public function reset(Request $request, Company $company, string $token): RedirectResponse

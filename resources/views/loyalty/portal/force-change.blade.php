@@ -1,5 +1,6 @@
 @extends('layouts.portal')
-@section('title', 'Cambiar contraseña · '.$portalBranding->displayName($company))
+@php($portalBranding = $portalBranding ?? $portalSetting ?? null)
+@section('title', 'Cambiar contraseña · '.($portalBranding ? $portalBranding->displayName($company) : $company->trade_name))
 @section('content')
 <div class="mx-auto max-w-md rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-8">
     <x-portal-brand :company="$company" :branding="$portalBranding" class="mb-5" />
