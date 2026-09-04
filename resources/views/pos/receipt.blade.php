@@ -8,7 +8,7 @@
         *{box-sizing:border-box}html,body{height:auto}body{margin:0;background:#e2e8f0;color:#111827;font-family:Arial,Helvetica,sans-serif;line-height:1.35}
         .receipt{max-width:100%;margin:24px auto;background:#fff;padding:5mm;box-shadow:0 8px 30px #0002;height:auto;min-height:0}
         .format-80mm{width:80mm}
-        .format-58mm{width:58mm;padding:3mm 3mm 2mm 3mm;font-size:12.5px}
+        .format-58mm{width:58mm;padding:2mm 3mm 1.5mm 3mm;font-size:12.5px}
         .format-letter{width:210mm;min-height:270mm;padding:14mm}
         h1{margin:0;font-size:20px;text-align:center}
         h2{margin:4px 0 0;font-size:13px;text-align:center;font-weight:700}
@@ -27,28 +27,30 @@
         .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:20px auto;padding:0 12px}
         .actions button,.actions a{min-height:44px;border:0;border-radius:10px;padding:11px 16px;background:#d97706;color:#fff;font-weight:bold;text-decoration:none;cursor:pointer}
         .actions a{background:#334155}
-        /* 58mm legible y compacto — prueba física: letra más grande */
+        /* 58mm legible y compacto — prueba física: letra más grande, márgenes reducidos */
         .format-58mm h1{font-size:16px}
-        .format-58mm h2{font-size:12px}
+        .format-58mm h2{font-size:13.5px;font-weight:800;color:#111827}
         .format-58mm .muted{font-size:10.5px}
+        .format-58mm header .muted{font-size:12px;font-weight:600;color:#111827;line-height:1.35}
         .format-58mm .details{font-size:12.5px;gap:3px}
         .format-58mm .warning{font-size:11px;padding:6px}
-        .format-58mm .rule{margin:6px 0}
+        .format-58mm .rule{margin:5px 0}
         .format-58mm .totals{max-width:100%;margin:0}
         .format-58mm .totals td{font-size:12.5px;padding:3px 0}
         .format-58mm .grand td{font-size:23px}
         /* items 58mm : 2 líneas - ancho completo */
         .items58{border-top:1px solid #e2e8f0}
-        .item58{padding:7px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
+        .item58{padding:6px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
         .item58-name{font-size:13.5px;font-weight:800;line-height:1.3;word-break:break-word;color:#111827}
         .item58-name .muted{display:block;font-size:10px;font-weight:400;margin-top:1px}
-        .item58-line{display:flex;justify-content:space-between;gap:6px;font-size:12px;margin-top:3px;align-items:flex-start}
-        .item58-line .left{color:#334155;flex:1;word-break:break-word}
+        .item58-line{display:flex;justify-content:space-between;gap:6px;font-size:12.5px;margin-top:3px;align-items:flex-start}
+        .item58-line .left{color:#111827;font-weight:700;flex:1;word-break:break-word}
         .item58-line .right{font-weight:800;white-space:nowrap;color:#111827;font-size:12.5px}
-        .format-58mm .pay-table td,.format-58mm .loyalty-table td{font-size:12.5px;padding:3px 0}
-        .format-58mm .thanks{margin-top:8px;font-size:12.5px;font-weight:700}
-        .format-58mm .thanks + .cut-tail{height:10mm}
-        .format-80mm .thanks + .cut-tail{height:10mm}
+        .format-58mm .pay-table td,.format-58mm .loyalty-table td{font-size:13px;font-weight:600;color:#111827;padding:3px 0}
+        .format-58mm .pay-table .muted,.format-58mm .loyalty-table .muted{font-size:11.5px;font-weight:600;color:#1e293b}
+        .format-58mm .thanks{margin-top:6px;font-size:12.5px;font-weight:700}
+        .format-58mm .thanks + .cut-tail{height:4mm}
+        .format-80mm .thanks + .cut-tail{height:4mm}
         .format-letter .details{grid-template-columns:repeat(2,1fr);gap:6px}
         .format-letter table{font-size:13px}
         .format-letter th,.format-letter td{padding:9px 6px}
