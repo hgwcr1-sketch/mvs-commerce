@@ -8,7 +8,7 @@
         *{box-sizing:border-box}html,body{height:auto}body{margin:0;background:#e2e8f0;color:#111827;font-family:Arial,Helvetica,sans-serif;line-height:1.35}
         .receipt{max-width:100%;margin:24px auto;background:#fff;padding:5mm;box-shadow:0 8px 30px #0002;height:auto;min-height:0}
         .format-80mm{width:80mm}
-        .format-58mm{width:58mm;padding:2mm 3mm 1.5mm 3mm;font-size:12.5px}
+        .format-58mm{width:58mm;padding:1mm 3mm 1mm 3mm;font-size:12.5px}
         .format-letter{width:210mm;min-height:270mm;padding:14mm}
         h1{margin:0;font-size:20px;text-align:center}
         h2{margin:4px 0 0;font-size:13px;text-align:center;font-weight:700}
@@ -29,26 +29,27 @@
         .actions a{background:#334155}
         /* 58mm legible y compacto — prueba física: letra más grande, márgenes reducidos */
         .format-58mm h1{font-size:16px}
-        .format-58mm h2{font-size:13.5px;font-weight:800;color:#111827}
+        .format-58mm h2{font-size:13.5px;font-weight:800;color:#111827;margin:1px 0 0}
         .format-58mm .muted{font-size:10.5px}
-        .format-58mm header .muted{font-size:12px;font-weight:600;color:#111827;line-height:1.35}
-        .format-58mm .details{font-size:12.5px;gap:3px}
+        .format-58mm header .muted{font-size:12px;font-weight:600;color:#111827;line-height:1.2}
+        .format-58mm header{gap:2px}
+        .format-58mm .details{font-size:12.5px;gap:2px}
         .format-58mm .warning{font-size:11px;padding:6px}
-        .format-58mm .rule{margin:5px 0}
+        .format-58mm .rule{margin:4px 0}
         .format-58mm .totals{max-width:100%;margin:0}
         .format-58mm .totals td{font-size:12.5px;padding:3px 0}
         .format-58mm .grand td{font-size:23px}
         /* items 58mm : 2 líneas - ancho completo */
         .items58{border-top:1px solid #e2e8f0}
-        .item58{padding:6px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
+        .item58{padding:5px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
         .item58-name{font-size:13.5px;font-weight:800;line-height:1.3;word-break:break-word;color:#111827}
         .item58-name .muted{display:block;font-size:10px;font-weight:400;margin-top:1px}
-        .item58-line{display:flex;justify-content:space-between;gap:6px;font-size:12.5px;margin-top:3px;align-items:flex-start}
+        .item58-line{display:flex;justify-content:space-between;gap:5px;font-size:12.5px;margin-top:3px;align-items:flex-start}
         .item58-line .left{color:#111827;font-weight:700;flex:1;word-break:break-word}
         .item58-line .right{font-weight:800;white-space:nowrap;color:#111827;font-size:12.5px}
         .format-58mm .pay-table td,.format-58mm .loyalty-table td{font-size:13px;font-weight:600;color:#111827;padding:3px 0}
         .format-58mm .pay-table .muted,.format-58mm .loyalty-table .muted{font-size:11.5px;font-weight:600;color:#1e293b}
-        .format-58mm .thanks{margin-top:6px;font-size:12.5px;font-weight:700}
+        .format-58mm .thanks{margin-top:4px;font-size:12.5px;font-weight:700}
         .format-58mm .thanks + .cut-tail{height:4mm}
         .format-80mm .thanks + .cut-tail{height:4mm}
         .format-letter .details{grid-template-columns:repeat(2,1fr);gap:6px}
@@ -64,7 +65,7 @@
         .receipt{page-break-after:auto}
         }
     </style>
-    @if($format === '58mm')<style>@media print{@page{size:58mm auto;margin:0} html,body{width:58mm;margin:0;padding:0} .receipt{width:58mm;margin:0;padding:3mm 3mm 2mm 3mm} }</style>@endif
+    @if($format === '58mm')<style>@media print{@page{size:58mm auto;margin:0} html,body{width:58mm;margin:0;padding:0} .receipt{width:58mm;margin:0;padding:1mm 3mm 1mm 3mm} }</style>@endif
     @if($format === '80mm')<style>@media print{@page{size:80mm auto;margin:0} html,body{width:80mm;margin:0;padding:0} .receipt{width:80mm;margin:0} }</style>@endif
 </head>
 <body>
@@ -74,7 +75,7 @@
         <h2 class="center">{{ $company->trade_name }}</h2>
         <p class="center muted">{{ $company->legal_name }}<br>{{ $company->identification_number }}<br>{{ $sale->branch->name }} · {{ $sale->branch->phone }}<br>{{ $sale->branch->address ?: $company->address }}</p>
     </header>
-    <div class="center" style="margin:7px 0 6px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">TICKET ELECTRÓNICO</div>
+    <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">TICKET ELECTRÓNICO</div>
     @if($sale->status === \App\Models\Sale::STATUS_VOIDED)
         <div class="warning">VENTA ANULADA</div>
     @endif
