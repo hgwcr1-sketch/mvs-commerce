@@ -49,6 +49,7 @@ use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
 use App\Http\Controllers\LoyaltyPortalManagementController;
 use App\Http\Controllers\LoyaltyPortalSessionController;
+use App\Http\Controllers\LoyaltyPortalPasskeyController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
 use App\Http\Controllers\LoyaltyRewardController;
@@ -155,6 +156,19 @@ Route::prefix('portal-clientes/{company}')->name('loyalty.customer.')->middlewar
     Route::post('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'reset'])->name('password.update');
     Route::get('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChangeForm'])->name('password.force');
     Route::post('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChange'])->name('password.force.store');
+    Route::get('/passkeys', [LoyaltyPortalPasskeyController::class, 'manage'])->name('passkeys.manage');
+    Route::delete('/passkeys/{passkey}', [LoyaltyPortalPasskeyController::class, 'revoke'])->whereNumber('passkey')->name('passkeys.revoke');
+    Route::patch('/passkeys/{passkey}', [LoyaltyPortalPasskeyController::class, 'rename'])->whereNumber('passkey')->name('passkeys.rename');
+});
+Route::middleware('throttle:20,1')->group(function () {
+    Route::post('/portal-clientes/{company}/passkeys/iniciar-registro', [LoyaltyPortalPasskeyController::class, 'startRegistration'])
+        ->name('loyalty.customer.passkeys.start');
+    Route::post('/portal-clientes/{company}/passkeys/finalizar-registro', [LoyaltyPortalPasskeyController::class, 'finishRegistration'])
+        ->name('loyalty.customer.passkeys.finish');
+    Route::post('/portal-clientes/{company}/passkeys/iniciar-autenticacion', [LoyaltyPortalPasskeyController::class, 'startAuthentication'])
+        ->name('loyalty.customer.passkeys.auth.start');
+    Route::post('/portal-clientes/{company}/passkeys/finalizar-autenticacion', [LoyaltyPortalPasskeyController::class, 'finishAuthentication'])
+        ->name('loyalty.customer.passkeys.auth.finish');
 });
 Route::post('/portal-clientes/activar', [LoyaltyPortalSessionController::class, 'activate'])->middleware('throttle:10,1')->name('loyalty.customer.activate');
 
@@ -485,6 +499,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         });
         Route::middleware('permission:fidelidad.portal')->prefix('accesos')->name('accesses.')->group(function () {
             Route::get('/', [LoyaltyPortalAccessController::class, 'index'])->name('index');
+            Route::get('/clientes/buscar', [LoyaltyPortalAccessController::class, 'searchCustomers'])->name('customers.search');
             Route::post('/', [LoyaltyPortalAccessController::class, 'store'])->name('store');
             Route::patch('/{cliente}/revocar', [LoyaltyPortalAccessController::class, 'revoke'])->name('revoke');
         });

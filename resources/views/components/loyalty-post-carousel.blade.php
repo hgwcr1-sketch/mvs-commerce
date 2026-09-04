@@ -36,7 +36,7 @@
     @endif
 >
     @if($hasMultiple)
-        <div class="relative {{ $imageClass }}">
+        <div class="relative {{ $imageClass }} bg-white">
             <template x-for="(image, index) in images" :key="index">
                 <a
                     x-show="current === index"
@@ -47,10 +47,10 @@
                     x-transition:leave-start="opacity-100"
                     x-transition:leave-end="opacity-0"
                     @if($href) href="{{ $href }}" target="_blank" rel="noopener noreferrer" @endif
-                    class="absolute inset-0 {{ $imageClass }}"
+                    class="absolute inset-0 flex items-center justify-center bg-white p-1 {{ $imageClass }}"
                     @if($href) aria-label="{{ $post->ctaLabel() }}: {{ $post->title }}" @endif
                 >
-                    <img :src="image.startsWith('/') ? image : '/' + image" :alt="'Imagen ' + (index + 1)" class="{{ $imageClass }} object-cover" loading="lazy">
+                    <img :src="image.startsWith('/') ? image : '/' + image" :alt="'Imagen ' + (index + 1)" class="h-full w-full object-contain" loading="lazy">
                 </a>
             </template>
             <button
@@ -93,11 +93,13 @@
         </div>
         @if(count($images) === 1)
             @if($href)
-                <a href="{{ $href }}" target="_blank" rel="noopener noreferrer" aria-label="{{ $post->ctaLabel() }}: {{ $post->title }}" class="absolute inset-0 {{ $imageClass }}">
-                    <img src="{{ $images[0] }}" alt="Imagen de {{ $post->title }}" class="{{ $imageClass }} object-cover" loading="lazy">
+                <a href="{{ $href }}" target="_blank" rel="noopener noreferrer" aria-label="{{ $post->ctaLabel() }}: {{ $post->title }}" class="absolute inset-0 flex items-center justify-center bg-white p-1 {{ $imageClass }}">
+                    <img src="{{ $images[0] }}" alt="Imagen de {{ $post->title }}" class="h-full w-full object-contain" loading="lazy">
                 </a>
             @else
-                <img src="{{ $images[0] }}" alt="Imagen de {{ $post->title }}" class="absolute inset-0 {{ $imageClass }} object-cover" loading="lazy">
+                <div class="absolute inset-0 flex items-center justify-center bg-white p-1 {{ $imageClass }}">
+                    <img src="{{ $images[0] }}" alt="Imagen de {{ $post->title }}" class="h-full w-full object-contain" loading="lazy">
+                </div>
             @endif
         @endif
     @endif

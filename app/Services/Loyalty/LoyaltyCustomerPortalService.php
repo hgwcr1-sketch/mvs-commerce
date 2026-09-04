@@ -50,6 +50,13 @@ class LoyaltyCustomerPortalService
         $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
         $portalSetting = LoyaltyPortalSetting::query()->firstOrNew(['company_id' => $company->id], ['is_active' => true, 'show_active_offers' => true]);
         $rewards = $this->rewards((int) $company->id, $balancePoints);
+        $passkeyCount = \App\Models\LoyaltyPortalPasskey::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->whereNull('revoked_at')->count();
+        $pointValue = null;
+        try {
+            $pointValue = $this->pointValues->pointValue($company);
+        } catch (\Illuminate\Validation\ValidationException) {
+            $pointValue = null;
+        }
 
         return [
             'company' => $company,
@@ -59,6 +66,7 @@ class LoyaltyCustomerPortalService
             'total_earned' => (string) ($account->total_earned ?? '0.0000'),
             'total_redeemed' => (string) ($account->total_redeemed ?? '0.0000'),
             'balance_money' => $this->balanceMoney($company, $balancePoints),
+            'point_value' => $pointValue,
             'movements' => $this->movements((int) $company->id, (int) $customer->id),
             'rewards' => $rewards,
             'rewardProgress' => $this->rewardProgress($rewards, $balancePoints),
@@ -70,6 +78,7 @@ class LoyaltyCustomerPortalService
             'offers' => $portalSetting->show_active_offers ? Product::query()->where('company_id', $company->id)->where('is_active', true)->whereNotNull('special_price')->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']) : new Collection,
             'recommended' => $this->recommended((int) $company->id, (int) $customer->id),
             'credentialExists' => LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->exists(),
+            'passkeyCount' => $passkeyCount,
             'posts' => LoyaltyPortalPost::query()->where('company_id', $company->id)->where('is_active', true)->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))->with('product:id,company_id,name,image,sale_price,special_price')->orderByDesc('is_featured')->orderBy('sort_order')->get(),
             'portalLinks' => LoyaltyPortalLink::query()->where('company_id', $company->id)->where('is_active', true)->orderBy('sort_order')->get(),
             'socialLinks' => $this->socialLinks($portalSetting),
@@ -181,7 +190,46 @@ class LoyaltyCustomerPortalService
         $categoryIds = DB::table('sale_items')->join('sales', 'sales.id', '=', 'sale_items.sale_id')->join('products', 'products.id', '=', 'sale_items.product_id')
             ->where('sales.company_id', $companyId)->where('sales.customer_id', $customerId)->whereNotNull('products.category_id')->selectRaw('products.category_id, COUNT(*) purchases')->groupBy('products.category_id')->orderByDesc('purchases')->limit(3)->pluck('products.category_id');
 
-        return Product::query()->where('company_id', $companyId)->where('is_active', true)->whereIn('category_id', $categoryIds)->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']);
+        if ($categoryIds->isEmpty()) {
+            return new Collection;
+        }
+
+        $branchId = $this->resolveBranchForCustomer($companyId, $customerId);
+        if ($branchId === null) {
+            return new Collection;
+        }
+
+        return Product::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->whereIn('category_id', $categoryIds)
+            ->whereExists(function ($query) use ($branchId) {
+                $query->from('branch_product')
+                    ->whereColumn('branch_product.product_id', 'products.id')
+                    ->where('branch_product.branch_id', $branchId)
+                    ->where('branch_product.stock', '>', 0);
+            })
+            ->latest()
+            ->limit(6)
+            ->get(['id', 'name', 'image', 'sale_price', 'special_price']);
+    }
+
+    private function resolveBranchForCustomer(int $companyId, int $customerId): ?int
+    {
+        // Sucursal real asociada al cliente: última venta, luego último movimiento, luego primera sucursal activa de la empresa
+        $branchId = Sale::query()->where('company_id', $companyId)->where('customer_id', $customerId)->whereNotNull('branch_id')->latest('completed_at')->value('branch_id');
+        if ($branchId) {
+            return (int) $branchId;
+        }
+
+        $branchId = LoyaltyMovement::query()->where('company_id', $companyId)->where('customer_id', $customerId)->whereNotNull('branch_id')->latest('effective_at')->value('branch_id');
+        if ($branchId) {
+            return (int) $branchId;
+        }
+
+        $branchId = \App\Models\Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('id')->value('id');
+
+        return $branchId ? (int) $branchId : null;
     }
 
     private function rewards(int $companyId, string $balancePoints): Collection

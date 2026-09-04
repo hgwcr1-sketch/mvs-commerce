@@ -70,7 +70,7 @@ class LoyaltyPortalPremiumP371Test extends TestCase
         $response->assertSee('Café premium')
             ->assertSee('₡100,00')
             ->assertSee('₡80,00')
-            ->assertSee('5% en puntos')
+            ->assertSee('Te faltan 80 puntos')
             ->assertSee('Disponible')
             ->assertSee('https://comercio.example/buy', false)
             ->assertDontSee('7,4321')

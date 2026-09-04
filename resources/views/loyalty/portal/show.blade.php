@@ -82,6 +82,18 @@
             <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 class="font-semibold text-amber-950">Activa tu acceso con contraseña</h2><form method="POST" action="{{ route('loyalty.customer.activate') }}" class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">@csrf<input name="username" required placeholder="Usuario" class="min-h-11 w-full rounded-xl border-amber-300"><input type="email" name="email" required value="{{ $customer->email }}" placeholder="Correo" class="min-h-11 w-full rounded-xl border-amber-300"><input type="password" name="password" required placeholder="Contraseña" class="min-h-11 w-full rounded-xl border-amber-300"><input type="password" name="password_confirmation" required placeholder="Confirmar contraseña" class="min-h-11 w-full rounded-xl border-amber-300"><button class="min-h-11 rounded-xl bg-amber-600 px-4 font-semibold text-white sm:col-span-2">Guardar acceso</button></form></section>
         @endif
 
+        @if($credentialExists && ($customerAuthenticated ?? false))
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="font-semibold text-slate-900">Passkeys de este dispositivo</h2>
+                        <p class="mt-1 text-sm text-slate-600">Tienes <strong>{{ $passkeyCount ?? 0 }}</strong> passkey{{ ($passkeyCount ?? 0) === 1 ? '' : 's' }} activa{{ ($passkeyCount ?? 0) === 1 ? '' : 's' }}. MVS no guarda tu biometría ni la clave privada.</p>
+                    </div>
+                    <a href="{{ route('loyalty.customer.passkeys.manage', $company) }}" class="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Administrar</a>
+                </div>
+            </section>
+        @endif
+
         @if($offers->isNotEmpty())
             <section aria-label="Ofertas" class="space-y-3"><h2 class="text-lg font-semibold">Ofertas</h2><div class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($offers as $product)<article class="rounded-xl border bg-white p-4"><h3 class="font-semibold">{{ $product->name }}</h3><p class="mt-2 text-sm"><s>{{ $money($product->sale_price) }}</s> <strong class="text-emerald-700">{{ $money($product->special_price) }}</strong></p></article>@endforeach</div></section>
         @endif
@@ -108,9 +120,26 @@
                                                 <strong>{{ $money($post->product->sale_price) }}</strong>
                                             @endif
                                         </div>
+                                        @php
+                                            $price = $post->product->special_price ?? $post->product->sale_price;
+                                            $needed = null; $missing = null; $hasEnough = false;
+                                            if($point_value !== null && $price !== null){
+                                                try {
+                                                    $needed = app(\App\Services\Loyalty\LoyaltyPointValueService::class)->pointsForMoney((string) $price, $company);
+                                                    $hasEnough = bccomp($balance_points, $needed, 4) >= 0;
+                                                    if(!$hasEnough){ $missing = bcsub($needed, $balance_points, 4); }
+                                                } catch (\Illuminate\Validation\ValidationException $e) { $needed = null; }
+                                            }
+                                        @endphp
                                         <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
                                             <span class="rounded-full bg-white px-2.5 py-1 text-slate-700">{{ $post->product->portal_availability }}</span>
-                                            @if($post->product->portal_loyalty_benefit)<span class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">{{ $post->product->portal_loyalty_benefit }}</span>@endif
+                                            @if($needed !== null)
+                                                @if($hasEnough)
+                                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">Ya tienes puntos suficientes</span>
+                                                @else
+                                                    <span class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Te faltan {{ $points($missing) }}</span>
+                                                @endif
+                                            @endif
                                         </div>
                                     </div>
                                 @endif
@@ -125,15 +154,54 @@
         @endif
 
         @if($portalLinks->isNotEmpty())
-            <nav aria-label="Acciones comerciales" class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($portalLinks as $link)<a href="{{ $link->url }}" rel="noopener noreferrer" target="_blank" class="min-h-11 rounded-xl bg-amber-600 px-4 py-3 text-center font-semibold text-white">{{ $link->label }}</a>@endforeach</nav>
+            <nav aria-label="Acciones comerciales" class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($portalLinks as $link)
+                    @php $isBranded = in_array($link->type, ['store','catalog','whatsapp'], true); @endphp
+                    <a href="{{ $link->url }}" rel="noopener noreferrer" target="_blank" class="flex min-h-11 items-center justify-center rounded-xl px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:opacity-90" style="{{ $isBranded ? 'background-color:var(--portal-primary)' : 'background-color:var(--portal-accent);color:#111827' }}">{{ $link->label }}</a>
+                @endforeach</nav>
         @endif
 
         @if($socialLinks->isNotEmpty())
-            <nav aria-label="Redes sociales" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-sm font-semibold text-slate-700">Síguenos y conoce más</p><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">@foreach($socialLinks as $social)<a href="{{ $social['url'] }}" target="_blank" rel="noopener noreferrer" class="flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">{{ $social['label'] }}</a>@endforeach</div></nav>
+            <nav aria-label="Redes sociales" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-sm font-semibold text-slate-700">Síguenos y conoce más</p><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">@foreach($socialLinks as $social)
+                    @php
+                        $socialStyle = match($social['label']){
+                            'Facebook' => 'background-color:#1877F2;color:#fff;border-color:#1877F2',
+                            'Instagram' => 'background:linear-gradient(45deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5);color:#fff;border-color:transparent',
+                            'TikTok' => 'background-color:#000000;color:#fff;border-color:#000000',
+                            default => 'background-color:#fff;color:#334155;border-color:#cbd5e1'
+                        };
+                    @endphp
+                    <a href="{{ $social['url'] }}" target="_blank" rel="noopener noreferrer" class="flex min-h-11 items-center justify-center rounded-xl border px-4 py-3 text-sm font-bold transition hover:opacity-90" style="{{ $socialStyle }}">{{ $social['label'] }}</a>
+                @endforeach</div></nav>
         @endif
 
         @if($recommended->isNotEmpty())
-            <section aria-label="Para ti" class="space-y-3"><h2 class="text-lg font-semibold">Para ti</h2><p class="text-sm text-slate-500">Basado en categorías de tus compras anteriores.</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($recommended as $product)<article class="rounded-xl border bg-white p-4"><h3 class="font-semibold">{{ $product->name }}</h3><p class="mt-2 text-sm">{{ $money($product->special_price ?? $product->sale_price) }}</p></article>@endforeach</div></section>
+            <section aria-label="Para ti" class="space-y-3"><h2 class="text-lg font-semibold">Para ti</h2><p class="text-sm text-slate-500">Basado en categorías de tus compras anteriores. Solo productos con existencia en tu sucursal.</p><div class="grid grid-cols-1 gap-3 sm:grid-cols-2">@foreach($recommended as $product)
+                    @php
+                        $price = $product->special_price ?? $product->sale_price;
+                        $needed = null; $missing = null; $hasEnough = false;
+                        if($point_value !== null && $price !== null){
+                            try {
+                                $needed = app(\App\Services\Loyalty\LoyaltyPointValueService::class)->pointsForMoney((string) $price, $company);
+                                $hasEnough = bccomp($balance_points, $needed, 4) >= 0;
+                                if(!$hasEnough){ $missing = bcsub($needed, $balance_points, 4); }
+                            } catch (\Illuminate\Validation\ValidationException $e) { $needed = null; }
+                        }
+                    @endphp
+                    <article class="rounded-xl border bg-white p-4">
+                        <h3 class="font-semibold">{{ $product->name }}</h3>
+                        <p class="mt-2 text-sm">{{ $money($price) }}</p>
+                        <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                            <span class="rounded-full bg-white px-2.5 py-1 text-slate-700">{{ $product->portal_availability ?? 'Disponible' }}</span>
+                            @if($needed !== null)
+                                @if($hasEnough)
+                                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">Ya tienes puntos suficientes</span>
+                                @else
+                                    <span class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Te faltan {{ $points($missing) }}</span>
+                                @endif
+                            @endif
+                        </div>
+                    </article>
+                @endforeach</div></section>
         @endif
 
         {{-- Promociones vigentes: contenido administrable de la empresa (F35) --}}
