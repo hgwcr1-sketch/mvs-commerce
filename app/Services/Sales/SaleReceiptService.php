@@ -34,15 +34,54 @@ class SaleReceiptService
 
     public function pdf(Sale $sale, Company $company, string $format = 'letter'): DomPdf
     {
-        $pdf = Pdf::loadView('pos.receipt', [
+        $viewData = [
             'sale' => $sale,
             'company' => $company,
             'format' => $format,
             'autoPrint' => false,
             'pdfMode' => true,
             'loyalty' => $this->loyalty->forSale($sale),
-        ]);
-        $pdf->setPaper($format === 'letter' ? 'letter' : [0, 0, $format === '58mm' ? 164.41 : 226.77, 841.89]);
+        ];
+
+        if ($format === 'letter') {
+            $pdf = Pdf::loadView('pos.receipt', $viewData);
+            $pdf->setPaper('letter');
+
+            return $pdf;
+        }
+
+        // Térmico 58/80mm: altura dinámica eficiente sin riesgo de corte
+        // 1 render de medición con papel grande + 1 render final (máx 3 intentos si subestima)
+        $html = view('pos.receipt', $viewData)->render();
+        $widthPt = $format === '58mm' ? 164.41 : 226.77;
+        $tailPt = 28.35; // ~10mm papel + 6mm CSS = ~16mm cola total
+
+        $items = $sale->items->count();
+        $payments = $sale->payments->count();
+        $hasLoyalty = $this->loyalty->forSale($sale) !== null;
+
+        // Estimación generosa afinada por formato (58mm 2 líneas necesita más alto por item)
+        if ($format === '58mm') {
+            $estimatePt = 380 + ($items * 48) + ($payments * 26) + ($hasLoyalty ? 85 : 0);
+        } else {
+            $estimatePt = 320 + ($items * 32) + ($payments * 22) + ($hasLoyalty ? 75 : 0);
+        }
+        $paperHeightPt = (int) max($estimatePt + $tailPt, 280);
+        $paperHeightPt = min($paperHeightPt, 6000);
+
+        // Verificación con page_count: si corta (2+ págs) aumentamos 40% y reintentamos
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $pdf = Pdf::loadHTML($html);
+            $pdf->setPaper([0, 0, $widthPt, $paperHeightPt]);
+            @$pdf->getDomPDF()->render();
+            if ($pdf->getDomPDF()->getCanvas()->get_page_count() <= 1) {
+                return $pdf;
+            }
+            $paperHeightPt = (int) min($paperHeightPt * 1.4, 6000);
+            if ($paperHeightPt >= 6000) {
+                break;
+            }
+        }
 
         return $pdf;
     }
