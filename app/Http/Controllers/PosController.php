@@ -79,6 +79,7 @@ class PosController extends Controller
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
         $like = '%'.$search.'%';
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $canViewOtherBranches = $request->user()->hasPermission(
             'inventario.ver_otras_sucursales',
             Company::query()->findOrFail($companyId),
@@ -87,20 +88,20 @@ class PosController extends Controller
         $products = Product::query()
             ->where('products.company_id', $companyId)
             ->where('products.is_active', true)
-            ->where(function ($query) use ($like) {
-                $query->where('products.name', 'like', $like)
-                    ->orWhere('products.internal_code', 'like', $like)
-                    ->orWhere('products.barcode', 'like', $like)
-                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($like) {
+            ->where(function ($query) use ($like, $likeOperator) {
+                $query->where('products.name', $likeOperator, $like)
+                    ->orWhere('products.internal_code', $likeOperator, $like)
+                    ->orWhere('products.barcode', $likeOperator, $like)
+                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($like, $likeOperator) {
                         $barcodeQuery
                             ->where('is_active', true)
-                            ->where('barcode', 'like', $like);
+                            ->where('barcode', $likeOperator, $like);
                     });
             })
-            ->with(['unit:id,abbreviation,allows_decimals', 'barcodes' => function ($query) use ($like) {
+            ->with(['unit:id,abbreviation,allows_decimals', 'barcodes' => function ($query) use ($like, $likeOperator) {
                 $query
                     ->where('is_active', true)
-                    ->where('barcode', 'like', $like)
+                    ->where('barcode', $likeOperator, $like)
                     ->select(['id', 'product_id', 'barcode']);
             }])
             ->select([
