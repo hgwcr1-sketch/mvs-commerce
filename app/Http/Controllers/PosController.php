@@ -347,10 +347,7 @@ class PosController extends Controller
         if ($exists) {
             return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
         }
-        $plainPassword = Str::password(12, true, true, false, false);
-        if (!preg_match('/[a-z]/', $plainPassword) || !preg_match('/[A-Z]/', $plainPassword) || !preg_match('/[0-9]/', $plainPassword)) {
-            $plainPassword = 'Aa1' . Str::random(9);
-        }
+        $plainPassword = chr(random_int(97, 122)).chr(random_int(65, 90)).str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
         $credential = LoyaltyPortalCredential::create([
             'company_id' => $companyId,
             'customer_id' => $customer->id,

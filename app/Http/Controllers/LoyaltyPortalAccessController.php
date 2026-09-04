@@ -101,6 +101,10 @@ class LoyaltyPortalAccessController extends Controller
         $phones = app(\App\Services\PhoneNumberService::class);
         $rawPhone = $customer->phone ?: $customer->mobile;
         $countryCode = $customer->phone_country_code ?: $company->default_phone_country_code;
+        $rawDigits = preg_replace('/\D/', '', (string) $rawPhone);
+        if (!$countryCode && $rawDigits && preg_match('/^\d{8}$/', $rawDigits)) {
+            $countryCode = '506';
+        }
         $whatsappPhone = $phones->forWhatsApp($countryCode, $rawPhone);
         $whatsappUrl = null;
         if ($whatsappPhone) {

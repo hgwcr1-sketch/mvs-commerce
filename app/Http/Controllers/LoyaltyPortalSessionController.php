@@ -207,7 +207,6 @@ class LoyaltyPortalSessionController extends Controller
     {
         $customer = $this->sessionCustomer($request, $company);
         $credential = LoyaltyPortalCredential::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->firstOrFail();
-        abort_unless($credential->must_change_password, 404);
 
         $data = $request->validate([
             'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->mixedCase()->numbers()],

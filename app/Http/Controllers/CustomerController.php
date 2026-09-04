@@ -168,22 +168,13 @@ class CustomerController extends Controller
             return ['created' => false, 'error' => 'Este cliente ya tiene acceso al Portal.'];
         }
 
-        $phones = app(PhoneNumberService::class);
-        $phoneNormalized = $phones->normalizePhone($customer->phone ?? $customer->mobile);
-        $emailNormalized = $customer->email ? mb_strtolower(trim($customer->email)) : null;
+        $resolver = app(\App\Services\Loyalty\LoyaltyPortalUsernameResolver::class);
+        $resolved = $resolver->resolve($customer, Company::query()->findOrFail($companyId));
+        $username = $resolved['username'];
+        $emailNormalized = $resolved['emailNormalized'];
+        $phoneNormalized = $resolved['phoneNormalized'];
 
-        $username = null;
-        if ($phoneNormalized) {
-            $username = $phoneNormalized;
-        } elseif ($emailNormalized && filter_var($emailNormalized, FILTER_VALIDATE_EMAIL)) {
-            $username = $emailNormalized;
-        }
-
-        if (!$username) {
-            return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
-        }
-
-        // Validar unicidad dentro de la empresa
+        // Validar unicidad dentro de la empresa (usa misma regla que el resolver)
         $exists = LoyaltyPortalCredential::query()
             ->where('company_id', $companyId)
             ->where(function ($q) use ($username, $emailNormalized) {
@@ -196,12 +187,11 @@ class CustomerController extends Controller
         if ($exists) {
             return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
         }
-
-        $plainPassword = Str::password(12, true, true, false, false);
-        // Asegurar que cumple reglas: si no, generar uno que cumpla
-        if (!preg_match('/[a-z]/', $plainPassword) || !preg_match('/[A-Z]/', $plainPassword) || !preg_match('/[0-9]/', $plainPassword)) {
-            $plainPassword = 'Aa1' . Str::random(9);
+        if (!$username) {
+            return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
         }
+
+        $plainPassword = chr(random_int(97, 122)).chr(random_int(65, 90)).str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
 
         $credential = LoyaltyPortalCredential::create([
             'company_id' => $companyId,
