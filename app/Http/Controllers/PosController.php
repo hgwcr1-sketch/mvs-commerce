@@ -40,6 +40,20 @@ class PosController extends Controller
         $branchId = (int) session('active_branch_id');
 
         $company = Company::query()->findOrFail($companyId);
+
+        /**
+         * Si el admin global (platform admin o con permiso dashboard.admin)
+         * entra al POS sin haber seleccionado una sucursal concreta,
+         * exigir selección explícita en lugar de asignar la primera por defecto.
+         */
+        $isGlobalAdmin = $request->user()->isPlatformAdmin()
+            || $request->user()->hasPermission('dashboard.admin', $company);
+
+        if (!$branchId && $isGlobalAdmin) {
+            return redirect()->route('dashboard')
+                ->with('warning', 'Debe seleccionar una sucursal concreta para operar el POS.');
+        }
+
         app(PaymentMethodProvisioner::class)->provision($company);
         $branch = Branch::query()
             ->where('company_id', $companyId)

@@ -18,11 +18,18 @@ class EnsurePosCashSession
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
 
-        if (! $user || ! $companyId || ! $branchId) {
+        if (! $user || ! $companyId) {
             return $next($request);
         }
 
         $company = Company::findOrFail($companyId);
+        $isGlobalAdmin = $user->isPlatformAdmin()
+            || $user->hasPermission('dashboard.admin', $company);
+
+        if ($isGlobalAdmin) {
+            return $next($request);
+        }
+
         if ($mode === 'after-login' && ! $user->hasPermission('pos.acceder', $company)) {
             return $next($request);
         }

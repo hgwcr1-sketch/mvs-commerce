@@ -156,6 +156,16 @@ class User extends Authenticatable
             ->exists();
     }
 
+    /**
+     * Verifica si el usuario puede operar en contexto global de sucursales.
+     * Platform Admin O usuario con permiso dashboard.admin para la empresa activa.
+     */
+    public function canUseGlobalBranchContext(Company $company): bool
+    {
+        return $this->isPlatformAdmin()
+            || $this->hasPermission('dashboard.admin', $company);
+    }
+
     public function openedCashSessions()
     {
         return $this->hasMany(CashSession::class, 'opened_by');
