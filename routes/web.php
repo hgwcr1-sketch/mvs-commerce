@@ -527,13 +527,32 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         });
     });
 
-    Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
-        ->middleware(['active.branch', 'permission:inventario.transferir'])
-        ->name('transferencias.products.search');
+Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
+    ->middleware(['active.branch', 'permission:inventario.transferir'])
+    ->name('transferencias.products.search');
 
-    Route::resource('transferencias', TransferController::class)
-        ->only(['index', 'create', 'store'])
-        ->middleware(['active.branch', 'permission:inventario.transferir']);
+Route::resource('transferencias', TransferController::class)
+    ->only(['index', 'create', 'store'])
+    ->middleware(['active.branch', 'permission:inventario.transferir']);
+
+    Route::post('/transferencias/{transfer}/prepare', [TransferController::class, 'prepare'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.prepare');
+    Route::post('/transferencias/{transfer}/dispatch', [TransferController::class, 'dispatch'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.dispatch');
+    Route::post('/transferencias/{transfer}/review', [TransferController::class, 'review'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.review');
+    Route::post('/transferencias/{transfer}/receive', [TransferController::class, 'receive'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.receive');
+    Route::post('/transferencias/{transfer}/cancel', [TransferController::class, 'cancel'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.cancel');
+    Route::get('/transferencias/{transfer}/show', [TransferController::class, 'show'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.show');
 
     /*
     |--------------------------------------------------------------------------
