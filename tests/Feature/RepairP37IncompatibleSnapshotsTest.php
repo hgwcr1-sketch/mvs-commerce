@@ -99,7 +99,7 @@ class RepairP37IncompatibleSnapshotsTest extends TestCase
         for ($index = 0; $index < 32; $index++) {
             $customer = Customer::create([
                 'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Snapshot '.$index,
-                'identification_type' => 'national', 'identification' => 'REPAIR'.$index, 'is_active' => true,
+                'identification_type' => '01', 'identification' => 'REPAIR'.$index, 'is_active' => true,
             ]);
             $rowNumber = 2 + ($index * 2);
             $sourceRows[] = $this->sourceRow($customer, $sourceKey, $rowNumber, '10.0000');

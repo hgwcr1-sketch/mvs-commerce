@@ -165,7 +165,7 @@ class HistoricalSaleImportP34P35Test extends TestCase
         $user = User::factory()->create(['is_active' => true]);
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
-        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente '.$suffix, 'identification_type' => 'national', 'identification' => 'ID'.$suffix, 'is_active' => true]);
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente '.$suffix, 'identification_type' => '01', 'identification' => 'ID'.$suffix, 'is_active' => true]);
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'General '.$suffix, 'slug' => 'general-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad '.$suffix, 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'is_active' => true]);
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'SKU-'.$suffix, 'barcode' => 'BAR-'.$suffix, 'cost' => '40.0000', 'sale_price' => '100.0000', 'tax_rate' => '13.0000', 'track_inventory' => true, 'is_active' => true]);

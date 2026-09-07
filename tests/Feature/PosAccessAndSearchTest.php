@@ -727,7 +727,7 @@ class PosAccessAndSearchTest extends TestCase
         return Customer::create(array_merge([
             'company_id' => $company->id,
             'customer_type' => 'individual',
-            'identification_type' => 'physical',
+            'identification_type' => '01',
             'identification' => 'ID-'.$suffix,
             'name' => 'Cliente '.$suffix,
             'phone' => null,

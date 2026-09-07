@@ -27,7 +27,7 @@ class LoyaltyMigrationP37BulkTest extends TestCase
                 'company_id' => $company->id,
                 'customer_type' => 'individual',
                 'name' => 'Carga masiva '.$index,
-                'identification_type' => 'national',
+                'identification_type' => '01',
                 'identification' => 'MASIVA'.$index,
                 'is_active' => true,
                 'created_at' => $now,

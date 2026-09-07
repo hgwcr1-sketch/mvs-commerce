@@ -75,9 +75,9 @@ class DataExportTest extends TestCase
         [$company, $branch, $user] = $this->context(['reportes.exportar', 'clientes.ver']);
         [$otherCompany] = $this->context([]);
         Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Uno',
-            'identification_type' => 'national', 'identification' => '101110111', 'is_active' => true]);
+            'identification_type' => '01', 'identification' => '101110111', 'is_active' => true]);
         Customer::create(['company_id' => $otherCompany->id, 'customer_type' => 'individual', 'name' => 'Cliente Ajeno',
-            'identification_type' => 'national', 'identification' => '202220222', 'is_active' => true]);
+            'identification_type' => '01', 'identification' => '202220222', 'is_active' => true]);
 
         $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->get(route('data-center.exports.download', ['customers', 'xlsx']))->assertOk();

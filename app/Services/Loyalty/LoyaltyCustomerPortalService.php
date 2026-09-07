@@ -2,6 +2,7 @@
 
 namespace App\Services\Loyalty;
 
+use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
@@ -9,6 +10,7 @@ use App\Models\LoyaltyMovement;
 use App\Models\LoyaltyMultiplier;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\LoyaltyPortalLink;
+use App\Models\LoyaltyPortalPasskey;
 use App\Models\LoyaltyPortalPost;
 use App\Models\LoyaltyPortalSetting;
 use App\Models\LoyaltyReward;
@@ -31,7 +33,7 @@ use Illuminate\Validation\ValidationException;
  */
 class LoyaltyCustomerPortalService
 {
-    public function __construct(private readonly LoyaltyPointValueService $pointValues, private readonly LoyaltyPromotionService $promotions, private readonly LoyaltyRedemptionEligibilityService $eligibility) {}
+    public function __construct(private readonly LoyaltyPointValueService $pointValues, private readonly LoyaltyPromotionService $promotions, private readonly LoyaltyRedemptionEligibilityService $eligibility, private readonly LoyaltyExpirationPolicyService $expirationPolicy) {}
 
     /** @return array<string,mixed> */
     public function data(Company $company, Customer $customer): array
@@ -51,9 +53,9 @@ class LoyaltyCustomerPortalService
         $portalSetting = LoyaltyPortalSetting::query()->firstOrNew(['company_id' => $company->id], ['is_active' => true, 'show_active_offers' => true]);
         $rewards = $this->rewards((int) $company->id, $balancePoints);
         $passkeyCount = 0;
-        if (class_exists(\App\Models\LoyaltyPortalPasskey::class)) {
+        if (class_exists(LoyaltyPortalPasskey::class)) {
             try {
-                $passkeyCount = \App\Models\LoyaltyPortalPasskey::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->whereNull('revoked_at')->count();
+                $passkeyCount = LoyaltyPortalPasskey::query()->where('company_id', $company->id)->where('customer_id', $customer->id)->whereNull('revoked_at')->count();
             } catch (\Throwable $e) {
                 $passkeyCount = 0;
             }
@@ -61,7 +63,7 @@ class LoyaltyCustomerPortalService
         $pointValue = null;
         try {
             $pointValue = $this->pointValues->pointValue($company);
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             $pointValue = null;
         }
 
@@ -80,7 +82,7 @@ class LoyaltyCustomerPortalService
             'promotions' => $this->publicity($company),
             'multipliers' => $this->multipliers($company),
             'redemption' => $account ? $this->eligibility->evaluate($account, $company) : null,
-            'expiration' => $this->expiration($company, $setting, $account, $balancePoints),
+            'expiration' => $this->expirationPolicy->resolve($company, $setting, $account),
             'sales' => $this->sales((int) $company->id, (int) $customer->id),
             'offers' => $portalSetting->show_active_offers ? Product::query()->where('company_id', $company->id)->where('is_active', true)->whereNotNull('special_price')->latest()->limit(6)->get(['id', 'name', 'image', 'sale_price', 'special_price']) : new Collection,
             'recommended' => $this->recommended((int) $company->id, (int) $customer->id),
@@ -120,29 +122,6 @@ class LoyaltyCustomerPortalService
         return Sale::query()->where('company_id', $companyId)->where('customer_id', $customerId)
             ->whereIn('status', [Sale::STATUS_COMPLETED, Sale::STATUS_PARTIALLY_RETURNED, Sale::STATUS_RETURNED, Sale::STATUS_VOIDED])
             ->with('branch:id,company_id,name')->latest('completed_at')->paginate(8, ['*'], 'sales_page')->withQueryString();
-    }
-
-    private function expiration(Company $company, ?LoyaltySetting $setting, ?LoyaltyAccount $account, string $balancePoints): ?array
-    {
-        if (! $setting?->expiration_enabled || ! $account?->last_qualifying_purchase_at || (int) $setting->expiration_months < 1) {
-            return null;
-        }
-        $due = CarbonImmutable::instance($account->last_qualifying_purchase_at)->setTimezone($company->timezone ?: config('app.timezone'))->addMonthsNoOverflow((int) $setting->expiration_months)->startOfDay();
-        $today = CarbonImmutable::now($company->timezone ?: config('app.timezone'))->startOfDay();
-        $daysDiff = (int) $today->diffInDays($due, false);
-        $overdue = $daysDiff < 0;
-        $near = abs($daysDiff) <= 30;
-        $urgent = $overdue || $daysDiff <= 7;
-
-        return [
-            'date' => $due,
-            'days' => $overdue ? 0 : $daysDiff,
-            'near' => $near,
-            'overdue' => $overdue,
-            'urgent' => $urgent,
-            'points' => $balancePoints,
-            'months' => (int) $setting->expiration_months,
-        ];
     }
 
     private function rewardProgress(Collection $rewards, string $balancePoints): ?array
@@ -234,7 +213,7 @@ class LoyaltyCustomerPortalService
             return (int) $branchId;
         }
 
-        $branchId = \App\Models\Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('id')->value('id');
+        $branchId = Branch::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('id')->value('id');
 
         return $branchId ? (int) $branchId : null;
     }

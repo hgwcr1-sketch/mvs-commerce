@@ -83,12 +83,12 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $customer] = $this->context(['fidelidad.configuracion'], 'Nombre Duplicado');
         $duplicate = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' nombre   duplicado ',
-            'identification_type' => 'national', 'identification' => 'OTRA', 'phone' => '2222-3333',
+            'identification_type' => '01', 'identification' => 'OTRA', 'phone' => '2222-3333',
             'email' => 'duplicado@example.test', 'is_active' => true,
         ]);
         $valid = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Único',
-            'identification_type' => 'national', 'identification' => 'UNICO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'UNICO', 'is_active' => true,
         ]);
         $rows = [
             ['No Existe', '10.0000', '1.0000', '9.0000'],
@@ -119,7 +119,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $first] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
-            'identification_type' => 'national', 'identification' => 'ELEGIDO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'ELEGIDO', 'is_active' => true,
         ]);
         $service = app(LoyaltyMigrationImportService::class);
         $preview = $service->preview($this->file([['Cliente Ambiguo', '0', '0', '15.0000']], 'xlsx'), $company->id);
@@ -142,7 +142,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
-            'identification_type' => 'national', 'identification' => 'PERSISTE', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'PERSISTE', 'is_active' => true,
         ]);
         $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx');
 
@@ -170,11 +170,11 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => ' cliente ambiguo ',
-            'identification_type' => 'national', 'identification' => 'RESUELTO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'RESUELTO', 'is_active' => true,
         ]);
         $repeated = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Repetido',
-            'identification_type' => 'national', 'identification' => 'REPETIDO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'REPETIDO', 'is_active' => true,
         ]);
         $sourceRows = [
             ['Cliente Ambiguo', '5.0000', '1.0000', '4.0000'],
@@ -211,7 +211,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'ARCHIVO1', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'ARCHIVO1', 'is_active' => true,
         ]);
         $firstPath = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'csv');
 
@@ -231,7 +231,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'INVALIDA', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'INVALIDA', 'is_active' => true,
         ]);
         $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx');
 
@@ -257,7 +257,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'EMPRESA1', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'EMPRESA1', 'is_active' => true,
         ]);
         $path = $this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'csv');
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))
@@ -267,7 +267,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$otherCompany, $otherBranch, $otherUser] = $this->context(['fidelidad.configuracion'], 'Cliente Ambiguo');
         Customer::create([
             'company_id' => $otherCompany->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'EMPRESA2', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'EMPRESA2', 'is_active' => true,
         ]);
         $this->actingAs($otherUser)->withSession($this->activeSession($otherCompany, $otherBranch))
             ->post(route('importaciones.fidelidad-migracion.preview'), ['migrar_file' => $this->upload($path, 'csv')])
@@ -316,7 +316,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $customer] = $this->context([], 'Cliente Snapshot');
         $valid = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Válido Snapshot',
-            'identification_type' => 'national', 'identification' => 'SNAPSHOT-VALIDO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'SNAPSHOT-VALIDO', 'is_active' => true,
         ]);
         LoyaltyAccount::create([
             'company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => '0.0000',
@@ -343,7 +343,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $first] = $this->context([], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'ID-EVIDENCIA', 'phone' => '8888-9999',
+            'identification_type' => '01', 'identification' => 'ID-EVIDENCIA', 'phone' => '8888-9999',
             'email' => 'evidencia@example.test', 'is_active' => true,
         ]);
         $headers = array_merge(LoyaltyMigrationImportService::HEADERS, ['IDENTIFICACION', 'TELEFONO', 'EMAIL']);
@@ -362,7 +362,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company] = $this->context([], 'Cliente Ambiguo');
         Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'OTRO', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'OTRO', 'is_active' => true,
         ]);
         $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
             ['Cliente Ambiguo', '5.0000', '1.0000', '4.0000'],
@@ -421,7 +421,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context([], 'Cliente Ambiguo');
         Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'LOCAL2', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'LOCAL2', 'is_active' => true,
         ]);
         [$otherCompany, $otherBranch, $otherUser, $foreign] = $this->context([], 'Cliente Ambiguo');
         $service = app(LoyaltyMigrationImportService::class);
@@ -439,7 +439,7 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user] = $this->context([], 'Cliente Ambiguo');
         $selected = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente Ambiguo',
-            'identification_type' => 'national', 'identification' => 'CAMBIA', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'CAMBIA', 'is_active' => true,
         ]);
         $service = app(LoyaltyMigrationImportService::class);
         $preview = $service->preview($this->file([['Cliente Ambiguo', '5.0000', '1.0000', '4.0000']], 'xlsx'), $company->id);
@@ -505,11 +505,11 @@ class LoyaltyMigrationP37Test extends TestCase
         [$company, $branch, $user, $bolanos] = $this->context([], 'BOLAÑOS');
         $zuniga = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'ZUÑIGA',
-            'identification_type' => 'national', 'identification' => 'MOJI1', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'MOJI1', 'is_active' => true,
         ]);
         $nunez = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'NUÑEZ',
-            'identification_type' => 'national', 'identification' => 'MOJI2', 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'MOJI2', 'is_active' => true,
         ]);
 
         $preview = app(LoyaltyMigrationImportService::class)->preview($this->file([
@@ -605,7 +605,7 @@ class LoyaltyMigrationP37Test extends TestCase
                 'company_id' => $company->id,
                 'customer_type' => 'individual',
                 'name' => 'Cliente volumen '.$index,
-                'identification_type' => 'national',
+                'identification_type' => '01',
                 'identification' => 'VOL'.$index,
                 'is_active' => true,
                 'created_at' => $now,
@@ -775,7 +775,7 @@ class LoyaltyMigrationP37Test extends TestCase
         $user->branches()->attach($branch->id);
         $customer = Customer::create([
             'company_id' => $company->id, 'customer_type' => 'individual', 'name' => $customerName ?? 'Cliente '.$suffix,
-            'identification_type' => 'national', 'identification' => 'ID'.$suffix, 'is_active' => true,
+            'identification_type' => '01', 'identification' => 'ID'.$suffix, 'is_active' => true,
         ]);
 
         return [$company, $branch, $user, $customer];

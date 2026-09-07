@@ -2,6 +2,16 @@
 
 Este documento registra decisiones importantes que no deben ser revertidas por un agente sin revisar primero el contexto y obtener autorización cuando corresponda.
 
+## Vencimiento P37 — referencia inicial aprobada (2026-09-07)
+
+La referencia de vencimiento tiene precedencia estricta: `last_qualifying_purchase_at` > `effective_at` de un único movimiento positivo P37 `legacy_initial_balance` válido. La migración no es una compra: nunca completar artificialmente `last_qualifying_purchase_at`, usar `last_activity_at` ni hacer backfill. Sin compra ni referencia P37 válida, no existe fecha calculable. Referencias legadas múltiples son ambiguas y se omiten, sin elegir fechas arbitrarias.
+
+`LoyaltyExpirationPolicyService` centraliza referencia, origen, ID del movimiento legado, fecha límite y días restantes para portal y proceso automático. La fecha usa el día local empresarial y meses naturales sin overflow; saldo cero y vencimiento deshabilitado no producen fecha. El vencimiento consume el saldo completo, no lotes separados. La consulta del legado valida empresa, cuenta, cliente, tipo ajuste, puntos positivos, origen `LoyaltyMigration` y metadata `migration=P37`, `kind=legacy_initial_balance`.
+
+Una compra calificadora tiene prioridad incluso si se registra después del límite anterior; no restaura puntos cuyo vencimiento ya fue ejecutado. El proceso resuelve nuevamente la política bajo bloqueo de cuenta antes de descontar, conserva `expiration:{account_id}:{due_date}` y audita el origen real sin llamar compra al legado. No se modifica el importador, el historial ni el esquema de base de datos.
+
+Esta política cambia el tratamiento de saldos antes excluidos por falta de compra. Antes de desplegar, repetir el impacto mediante SELECT y obtener aprobación de producción. La auditoría del 07/09/2026 encontró 4.045 cuentas / 5.213.770 puntos con referencia 02/09/2026 y límite 02/10/2026; es una fotografía, no una garantía para una fecha futura de despliegue.
+
 ## D001 — Plataforma modular
 
 MVS Commerce no se diseña únicamente como POS.

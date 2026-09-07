@@ -8,7 +8,6 @@ use App\Models\LoyaltyMovement;
 use App\Models\LoyaltySetting;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use DateTimeZone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -16,7 +15,7 @@ class LoyaltyExpirationService
 {
     private const SCALE = 4;
 
-    public function __construct(private readonly LoyaltyAccountService $accountService) {}
+    public function __construct(private readonly LoyaltyAccountService $accountService, private readonly LoyaltyExpirationPolicyService $policy) {}
 
     /**
      * Procesa todas las empresas con vencimiento automático habilitado.
@@ -43,7 +42,7 @@ class LoyaltyExpirationService
                         continue;
                     }
 
-                    $timezone = $this->timezone($company);
+                    $timezone = $this->policy->timezone($company);
                     $today = CarbonImmutable::now($timezone)->startOfDay();
 
                     LoyaltyAccount::query()
@@ -96,7 +95,7 @@ class LoyaltyExpirationService
             return null;
         }
 
-        $timezone = $this->timezone($company);
+        $timezone = $this->policy->timezone($company);
         $today = $at instanceof CarbonInterface
             ? CarbonImmutable::instance($at)
             : ($at !== null ? CarbonImmutable::parse($at, $timezone) : CarbonImmutable::now($timezone));
@@ -115,24 +114,20 @@ class LoyaltyExpirationService
         CarbonImmutable $today,
         LoyaltyAccount $account,
     ): ?LoyaltyMovement {
-        return DB::transaction(function () use ($setting, $timezone, $today, $account) {
+        return DB::transaction(function () use ($setting, $today, $account) {
             $locked = LoyaltyAccount::query()->lockForUpdate()->find($account->id);
 
             if ($locked === null
                 || (int) $locked->company_id !== (int) $setting->company_id
-                || bccomp((string) $locked->balance, '0', self::SCALE) <= 0
-                || $locked->last_qualifying_purchase_at === null) {
+                || bccomp((string) $locked->balance, '0', self::SCALE) <= 0) {
                 return null;
             }
 
-            $lastPurchase = CarbonImmutable::instance($locked->last_qualifying_purchase_at)
-                ->setTimezone($timezone)
-                ->startOfDay();
-            $dueDate = $lastPurchase->addMonthsNoOverflow(max(1, (int) $setting->expiration_months));
-
-            if ($today->lt($dueDate)) {
+            $resolution = $this->policy->resolve($setting->company, $setting, $locked, $today);
+            if ($resolution === null || ! $resolution['due']) {
                 return null;
             }
+            $dueDate = $resolution['date'];
 
             return $this->accountService->subtractPoints(
                 $locked,
@@ -146,19 +141,14 @@ class LoyaltyExpirationService
                     'metadata' => [
                         'due_date' => $dueDate->toDateString(),
                         'expiration_months' => (int) $setting->expiration_months,
-                        'last_qualifying_purchase_at' => $lastPurchase->toIso8601String(),
+                        'reference_source' => $resolution['reference_source'],
+                        'reference_date' => $resolution['reference_date']->toIso8601String(),
+                        'legacy_movement_id' => $resolution['legacy_movement_id'],
+                        'last_qualifying_purchase_at' => $resolution['reference_source'] === 'qualifying_purchase'
+                            ? $resolution['reference_date']->toIso8601String() : null,
                     ],
                 ],
             );
         });
-    }
-
-    private function timezone(Company $company): string
-    {
-        $timezone = trim((string) $company->timezone);
-
-        return in_array($timezone, DateTimeZone::listIdentifiers(), true)
-            ? $timezone
-            : config('app.timezone');
     }
 }
