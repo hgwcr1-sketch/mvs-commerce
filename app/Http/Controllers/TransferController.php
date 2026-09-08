@@ -8,6 +8,7 @@ use App\Models\InventoryLot;
 use App\Models\InventoryTransfer;
 use App\Models\InventoryTransferItem;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,11 +18,24 @@ use Illuminate\Validation\ValidationException;
 class TransferController extends Controller
 {
     private const QUANTITY_SCALE = 4;
+
+    private const STATUS_LABELS = [
+        'pending' => 'Pendiente',
+        'prepared' => 'Preparado',
+        'in_transit' => 'En tránsito',
+        'in_review' => 'En revisión',
+        'received' => 'Recibido',
+        'received_with_differences' => 'Recibido con diferencias',
+        'cancelled' => 'Cancelado',
+        'completed' => 'Completado',
+    ];
     /**
      * Listado de transferencias.
      */
     public function index(Request $request)
     {
+        $filters = $request->validate(['status' => ['nullable', Rule::in(InventoryTransfer::STATUSES)]]);
+        $statusLabels = self::STATUS_LABELS;
         $companyId = (int) session('active_company_id');
         $company = Company::query()->findOrFail($companyId);
         $assignedBranchIds = $request->user()->branches()
@@ -42,10 +56,12 @@ class TransferController extends Controller
                         ->orWhereIn('to_branch_id', $assignedBranchIds);
                 }),
             )
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->latest()
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
-        return view('transferencias.index', compact('transfers'));
+        return view('transferencias.index', compact('transfers', 'statusLabels'));
     }
 
     /**
@@ -69,7 +85,29 @@ class TransferController extends Controller
             )
             ->orderBy('name')->get();
 
-        return view('transferencias.create', compact('branches', 'fromBranchId'));
+        $fromBranch = Branch::query()->where('company_id', $companyId)->find($fromBranchId);
+        // Rehydrate only company products; names/stock never come from submitted display fields.
+        $oldLines = collect($request->old('products', []))->filter(fn ($line) => is_array($line));
+        $oldProducts = Product::query()->where('company_id', $companyId)
+            ->whereIn('id', $oldLines->pluck('product_id')->filter(fn ($id) => is_scalar($id)))
+            ->with(['unit', 'branches' => fn ($query) => $query->where('branches.id', $fromBranchId)])
+            ->get()->keyBy('id');
+        $initialProducts = $oldLines->map(function ($line) use ($oldProducts) {
+            $product = $oldProducts->get(is_scalar($line['product_id'] ?? null) ? $line['product_id'] : null);
+            if (! $product) {
+                return null;
+            }
+
+            return [
+                'id' => $product->id, 'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'branch_stock' => $product->branches->first()?->pivot?->stock,
+                'quantity' => is_scalar($line['quantity'] ?? null) ? (string) $line['quantity'] : '',
+            ];
+        })->filter()->unique('id')->values();
+
+        return view('transferencias.create', compact('branches', 'fromBranch', 'initialProducts'));
     }
 
     /**
@@ -309,7 +347,39 @@ class TransferController extends Controller
      */
     public function receive(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
-        $inventory->receiveTransfer($transfer, (int) $request->user()->id, $request->input('notes'), $request->input('received_quantity'));
+        $receivedQuantity = $request->input('received_quantity');
+        if ($request->has('received_products')) {
+            // Phase A adapter: never silently discard per-line differences into the legacy scalar API.
+            $data = $request->validate([
+                'received_products' => ['required', 'array', 'min:1'],
+                'received_products.*.product_id' => ['required', 'integer', 'distinct'],
+                'received_products.*.quantity' => ['required', 'decimal:0,4', 'gte:0'],
+                'notes' => ['nullable', 'string', 'max:1000'],
+            ]);
+            $items = $transfer->items()->get()->keyBy('product_id');
+            $lines = collect($data['received_products'])->keyBy('product_id');
+            if ($items->count() !== $lines->count() || $items->keys()->diff($lines->keys())->isNotEmpty()) {
+                throw ValidationException::withMessages(['received_products' => 'Revise todos los productos de este traslado.']);
+            }
+            $hasDifference = false;
+            foreach ($lines as $productId => $line) {
+                $inputQuantity = (string) $line['quantity'];
+                $sentQuantity = (string) ($items[$productId]->sent_quantity ?? $items[$productId]->quantity);
+
+                if (bccomp($inputQuantity, '0', self::QUANTITY_SCALE) === 0) {
+                    throw ValidationException::withMessages(['received_products' => 'La recepción en cero todavía no está disponible. No se confirmó la recepción.']);
+                }
+
+                if (bccomp($inputQuantity, $sentQuantity, self::QUANTITY_SCALE) !== 0) {
+                    $hasDifference = true;
+                }
+            }
+            if ($items->count() > 1 && $hasDifference) {
+                throw ValidationException::withMessages(['received_products' => 'La recepción con diferencias por producto todavía no está disponible para traslados de varios productos. No se confirmó la recepción.']);
+            }
+            $receivedQuantity = $items->count() === 1 ? (string) $lines->first()['quantity'] : null;
+        }
+        $inventory->receiveTransfer($transfer, (int) $request->user()->id, $request->input('notes'), $receivedQuantity);
 
         return redirect()
             ->route('transferencias.index')
@@ -340,6 +410,10 @@ class TransferController extends Controller
      */
     public function show(Request $request, InventoryTransfer $transfer)
     {
-        return view('transferencias.show', compact('transfer'));
+        $transfer->load(['fromBranch', 'toBranch', 'user', 'preparer', 'receiver', 'confirmer', 'items.product']);
+        $dispatcher = User::query()->find($transfer->dispatched_by);
+        $statusLabels = self::STATUS_LABELS;
+
+        return view('transferencias.show', compact('transfer', 'dispatcher', 'statusLabels'));
     }
 }

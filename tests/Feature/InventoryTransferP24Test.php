@@ -69,12 +69,12 @@ class InventoryTransferP24Test extends TestCase
             'status' => 'in_transit',
         ]);
         
-        // Verificar que se restó del origen
+        // Verificar que se restÃ³ del origen
         $this->assertSame('8.3745', $this->stockValue($from, $product));
-        // Verificar que NO se sumó al destino aún
+        // Verificar que NO se sumÃ³ al destino aÃºn
         $this->assertSame('0.0000', $this->stockValue($to, $product));
 
-        // Iniciar revisión (in_transit -> in_review)
+        // Iniciar revisiÃ³n (in_transit -> in_review)
         $this->actingAs($user)->withSession($this->activeSession($company, $from))
             ->post(route('transferencias.review', $transferId))
             ->assertRedirect(route('transferencias.index'));
@@ -209,13 +209,13 @@ class InventoryTransferP24Test extends TestCase
                 'to_branch_id' => $to->id, 'products' => [['product_id' => $product->id, 'quantity' => '1.0000']],
             ])->assertRedirect(route('transferencias.index'));
 
-        // Store creates pending — stock unchanged
+        // Store creates pending â€” stock unchanged
         $this->assertSame('3.0000', $this->stockValue($from, $product));
         $this->assertSame('0.0000', $this->stockValue($to, $product));
 
         $transferId = DB::table('inventory_transfers')->value('id');
 
-        // Full flow: prepare → dispatch → review → receive
+        // Full flow: prepare â†’ dispatch â†’ review â†’ receive
         $this->actingAs($user)->withSession($this->activeSession($company, $from))
             ->post(route('transferencias.prepare', $transferId))->assertRedirect(route('transferencias.index'));
         $this->actingAs($user)->withSession($this->activeSession($company, $from))
@@ -331,7 +331,7 @@ class InventoryTransferP24Test extends TestCase
             ->post(route('transferencias.review', $transferId))->assertRedirect(route('transferencias.index'));
         $this->assertDatabaseHas('inventory_transfers', ['id' => $transferId, 'status' => 'in_review']);
 
-        // Receive exacto — omitir received_quantity para que cada item use su sent_quantity
+        // Receive exacto â€” omitir received_quantity para que cada item use su sent_quantity
         $this->actingAs($user)->withSession($this->activeSession($company, $from))
             ->post(route('transferencias.receive', $transferId))
             ->assertRedirect(route('transferencias.index'));
@@ -613,6 +613,155 @@ class InventoryTransferP24Test extends TestCase
 
         $this->assertSame('5.0000', $this->stockValue($from, $product));
         $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_phase_a_index_filters_and_keeps_pagination_and_empty_state(): void
+    {
+        [$company, $from, $to, $user] = $this->context(['inventario.transferir']);
+        for ($i = 0; $i < 21; $i++) {
+            InventoryTransfer::create([
+                'company_id' => $company->id, 'from_branch_id' => $from->id, 'to_branch_id' => $to->id,
+                'user_id' => $user->id, 'transfer_number' => 'UI-PENDING-'.$i, 'status' => 'pending',
+            ]);
+        }
+        InventoryTransfer::create([
+            'company_id' => $company->id, 'from_branch_id' => $from->id, 'to_branch_id' => $to->id,
+            'user_id' => $user->id, 'transfer_number' => 'UI-COMPLETED', 'status' => 'completed',
+        ]);
+        $this->actingAs($user)->withSession($this->activeSession($company, $from))
+            ->get(route('transferencias.index', ['status' => 'pending']))
+            ->assertOk()->assertSee('Nuevo traslado')->assertSee('Pendiente')
+            ->assertDontSee('UI-COMPLETED')->assertSee('status=pending')->assertSee('page=2')
+            ->assertViewHas('transfers', fn ($rows) => $rows->total() === 21 && $rows->count() === 20);
+        $this->get(route('transferencias.index', ['status' => 'pending', 'page' => 2]))
+            ->assertOk()->assertViewHas('transfers', fn ($rows) => $rows->count() === 1);
+        $this->get(route('transferencias.index', ['status' => 'cancelled']))
+            ->assertOk()->assertSee('No hay traslados para mostrar');
+        $this->get(route('transferencias.index', ['status' => 'invalid']))->assertSessionHasErrors('status');
+    }
+
+    public function test_phase_a_create_restores_products_and_uses_active_origin(): void
+    {
+        [$company, $from, $to, $user, $product] = $this->context(['inventario.transferir']);
+        $this->stock($from, $product, '10.0000');
+        $this->actingAs($user)->withSession($this->activeSession($company, $from))
+            ->from(route('transferencias.create'))
+            ->post(route('transferencias.store'), [
+                'products' => [['product_id' => $product->id, 'quantity' => '2.1255']],
+                'notes' => 'Conservar observaciones',
+            ])->assertSessionHasErrors('to_branch_id');
+        $this->get(route('transferencias.create'))->assertOk()
+            ->assertSee($from->name)->assertSee('name="to_branch_id"', false)
+            ->assertSee('name="notes"', false)->assertSee('Conservar observaciones')
+            ->assertDontSee('name="from_branch"', false)
+            ->assertViewHas('fromBranch', fn ($branch) => $branch->is($from))
+            ->assertViewHas('initialProducts', fn ($lines) => $lines->count() === 1
+                && $lines[0]['id'] === $product->id && $lines[0]['quantity'] === '2.1255');
+        $this->assertDatabaseCount('inventory_transfers', 0);
+    }
+
+    public function test_phase_a_detail_renders_every_status_and_real_dispatch_metadata(): void
+    {
+        [$company, $from, $to, $user, $product] = $this->context(['inventario.transferir']);
+        $transfer = InventoryTransfer::create([
+            'company_id' => $company->id, 'from_branch_id' => $from->id, 'to_branch_id' => $to->id,
+            'user_id' => $user->id, 'transfer_number' => 'UI-DETAIL', 'status' => 'pending',
+            'dispatched_by' => $user->id, 'dispatched_at' => '2026-09-07 10:15:00',
+        ]);
+        $transfer->items()->create([
+            'product_id' => $product->id, 'quantity' => '3.0000', 'sent_quantity' => '3.0000',
+            'from_previous_stock' => '10', 'from_new_stock' => '7', 'to_previous_stock' => '0', 'to_new_stock' => '0',
+        ]);
+        $this->actingAs($user)->withSession($this->activeSession($company, $from));
+        foreach (InventoryTransfer::STATUSES as $status) {
+            $transfer->update(['status' => $status]);
+            $response = $this->get(route('transferencias.show', $transfer))->assertOk()
+                ->assertSee($product->name)->assertSee($product->internal_code)
+                ->assertSee($user->name)->assertSee('07/09/2026 10:15')
+                ->assertDontSee('data-bs-', false);
+            if ($status === 'in_review') {
+                $response->assertSee('Confirmar recepciÃ³n')
+                    ->assertSee('name="received_products['.$product->id.'][quantity]"', false);
+            } else {
+                $response->assertDontSee('Confirmar recepciÃ³n');
+            }
+        }
+        $transfer->items()->first()->update(['received_quantity' => '3.0000']);
+        $this->get(route('transferencias.show', $transfer))->assertOk()->assertSee('Exacta');
+    }
+
+    public function test_phase_a_receipt_rejects_unsupported_lines_without_mutating_then_accepts_exact(): void
+    {
+        [$company, $from, $to, $user, $productA] = $this->context(['inventario.transferir']);
+        $this->stock($from, $productA, '10.0000');
+        $productB = $this->createProduct($company, $from, '10.0000');
+        $this->actingAs($user)->withSession($this->activeSession($company, $from))
+            ->post(route('transferencias.store'), [
+                'to_branch_id' => $to->id,
+                'products' => [
+                    ['product_id' => $productA->id, 'quantity' => '3'],
+                    ['product_id' => $productB->id, 'quantity' => '5'],
+                ],
+            ])->assertRedirect();
+        $transfer = InventoryTransfer::firstOrFail();
+        foreach (['prepare', 'dispatch', 'review'] as $action) {
+            $this->post(route('transferencias.'.$action, $transfer))->assertRedirect();
+        }
+        $lines = [
+            $productA->id => ['product_id' => $productA->id, 'quantity' => '2'],
+            $productB->id => ['product_id' => $productB->id, 'quantity' => '6'],
+        ];
+$response = $this->from(route('transferencias.show', $transfer))
+    ->followingRedirects()
+    ->post(route('transferencias.receive', $transfer), [
+        'received_products' => $lines,
+    ]);
+
+$response
+    ->assertOk()
+    ->assertSee('No se confirmÃ³ la recepciÃ³n.')
+    ->assertSee('value="2"', false)
+    ->assertSee('value="6"', false);
+
+$response
+    ->assertOk()
+    ->assertSee('No se confirmÃ³ la recepciÃ³n.')
+    ->assertSee('value="2"', false)
+    ->assertSee('value="6"', false);
+     $lines[$productA->id]['quantity'] = '0';
+        $this->post(route('transferencias.receive', $transfer), ['received_products' => $lines])
+            ->assertSessionHasErrors('received_products');
+        $this->post(route('transferencias.receive', $transfer), ['received_products' => [$lines[$productA->id]]])
+            ->assertSessionHasErrors('received_products');
+        $this->assertSame('in_review', $transfer->fresh()->status);
+        $this->assertSame('0.0000', $this->stockValue($to, $productA));
+        $this->assertSame('0.0000', $this->stockValue($to, $productB));
+        $this->assertDatabaseCount('inventory_movements', 2);
+        $lines[$productA->id]['quantity'] = '3.0000';
+        $lines[$productB->id]['quantity'] = '5.0000';
+        $this->post(route('transferencias.receive', $transfer), ['received_products' => $lines])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('received', $transfer->fresh()->status);
+        $this->assertSame('3.0000', $this->stockValue($to, $productA));
+        $this->assertSame('5.0000', $this->stockValue($to, $productB));
+        $this->assertDatabaseCount('inventory_movements', 4);
+    }
+
+    public function test_phase_a_single_product_receipt_forwards_difference_to_existing_service(): void
+    {
+        [$company, $from, $to, $user, $product] = $this->context(['inventario.transferir']);
+        $this->stock($from, $product, '10.0000');
+        $this->postTransfer($user, $company, $from, $to, $product, '3')->assertRedirect();
+        $transfer = InventoryTransfer::firstOrFail();
+        foreach (['prepare', 'dispatch', 'review'] as $action) {
+            $this->post(route('transferencias.'.$action, $transfer))->assertRedirect();
+        }
+        $this->post(route('transferencias.receive', $transfer), [
+            'received_products' => [['product_id' => $product->id, 'quantity' => '2.1255']],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('received_with_differences', $transfer->fresh()->status);
+        $this->assertSame('2.1255', $this->stockValue($to, $product));
+        $this->get(route('transferencias.show', $transfer))->assertOk()->assertSee('Faltante');
     }
 
     private function createProduct(Company $company, Branch $branch, string $initialStock): Product

@@ -7,6 +7,7 @@ import './modules/compras';
 import './navigation';
 import './scanner';
 import './tabs';
+import './transfers';
 
 window.Alpine = Alpine;
 
