@@ -135,6 +135,69 @@ class AdministrativeDashboardTest extends TestCase
         $this->assertDatabaseCount('cash_sessions', 0);
     }
 
+    public function test_global_selector_restores_stock_and_transfer_origin_without_changing_dashboard(): void
+    {
+        [$company, $sanRamon, $user] = $this->context();
+        $sanRamon->update(['name' => 'San Ramón']);
+        $liberia = Branch::create(['company_id' => $company->id, 'name' => 'Liberia', 'code' => 'LIB', 'is_active' => true]);
+        $user->branches()->attach($liberia);
+        $role = Role::findOrFail($user->companies()->first()->pivot->role_id);
+        foreach (['productos.ver', 'inventario.ver', 'inventario.transferir', 'compras.ver'] as $name) {
+            $role->permissions()->attach(Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'Inventario', 'is_active' => true]));
+        }
+        $category = \App\Models\ProductCategory::create(['company_id' => $company->id, 'name' => 'General', 'slug' => 'general', 'is_active' => true]);
+        $unit = \App\Models\Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'unidad', 'is_active' => true]);
+        $product = \App\Models\Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto de prueba', 'internal_code' => 'TEST', 'cost' => 10, 'sale_price' => 20, 'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+        $brand = \App\Models\Brand::create(['company_id' => $company->id, 'name' => 'Marca', 'is_active' => true]);
+        $product->update(['brand_id' => $brand->id]);
+        $product->branches()->attach([$sanRamon->id => ['stock' => 12], $liberia->id => ['stock' => 0]]);
+        $before = \DB::table('branch_product')->orderBy('branch_id')->get()->toJson();
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id]);
+        $this->get(route('dashboard'))->assertOk()->assertSessionMissing('active_branch_id')->assertDontSee('id="header-branch"', false);
+        foreach (['productos.index', 'inventario.index', 'compras.index', 'transferencias.create'] as $route) {
+            $response = $this->get(route($route))->assertOk()->assertSee('id="header-branch"', false);
+            $dom = new \DOMDocument;
+            @$dom->loadHTML('<?xml encoding="UTF-8">'.$response->getContent());
+            $options = (new \DOMXPath($dom))->query('//select[@id="header-branch"]/option');
+            $values = [];
+            foreach ($options as $option) {
+                $values[] = $option->getAttribute('value');
+            }
+            $this->assertEqualsCanonicalizing(['', (string) $sanRamon->id, (string) $liberia->id], $values);
+        }
+        foreach ([[$sanRamon, 12], [$liberia, 0]] as [$branch, $stock]) {
+            $this->from(route('productos.index'))->post(route('branch.active.update'), ['branch_id' => $branch->id])
+                ->assertRedirect(route('productos.index'))->assertSessionHas('active_branch_id', $branch->id);
+            foreach (['productos.index', 'inventario.index'] as $route) {
+                $this->get(route($route))->assertOk()->assertViewHas('products', fn ($products) => $products->count() === 1 && $products->first()->id === $product->id && bccomp((string) $products->first()->branch_stock, (string) $stock, 4) === 0);
+            }
+            $this->get(route('transferencias.create'))->assertOk()
+                ->assertViewHas('fromBranch', fn ($origin) => $origin->id === $branch->id)
+                ->assertViewHas('branches', fn ($destinations) => $destinations->count() === 1 && ! $destinations->contains('id', $branch->id));
+            foreach (['all', $sanRamon->id, $liberia->id] as $filter) {
+                $this->get(route('dashboard', ['branch_id' => $filter]))->assertOk()
+                    ->assertDontSee('id="header-branch"', false)->assertSessionHas('active_branch_id', $branch->id);
+            }
+        }
+        $this->assertSame($before, \DB::table('branch_product')->orderBy('branch_id')->get()->toJson());
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertDatabaseCount('inventory_transfers', 0);
+    }
+
+    public function test_global_selection_rejects_foreign_inactive_and_unassigned_branches(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        [, $foreign] = $this->context();
+        $inactive = Branch::create(['company_id' => $company->id, 'name' => 'Inactiva', 'code' => 'I', 'is_active' => false]);
+        $unassigned = Branch::create(['company_id' => $company->id, 'name' => 'No asignada', 'code' => 'N', 'is_active' => true]);
+        $user->branches()->attach([$inactive->id, $foreign->id]);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        foreach ([$foreign, $inactive, $unassigned] as $invalid) {
+            $this->post(route('branch.active.update'), ['branch_id' => $invalid->id])
+                ->assertNotFound()->assertSessionHas('active_branch_id', $branch->id);
+        }
+    }
+
     private function context(bool $admin = true): array
     {
         $company = Company::create(['trade_name' => 'Empresa '.Str::random(5), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);

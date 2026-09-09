@@ -73,6 +73,42 @@ class PosCashSessionIntegrationTest extends TestCase
         $this->assertDatabaseCount('sales',1); $this->assertDatabaseCount('sale_payments',1);
     }
 
+    public function test_checkout_rejects_previous_tabs_cash_session_after_global_branch_change(): void
+    {
+        [$company, $sanRamon, $user] = $this->context();
+        $sanRamon->update(['name' => 'San Ramón']);
+        $role = Role::findOrFail($user->companies()->first()->pivot->role_id);
+        $role->permissions()->attach(Permission::firstOrCreate(['name' => 'dashboard.admin'], ['label' => 'Admin', 'module' => 'Dashboard', 'is_active' => true]));
+        $liberia = Branch::create(['company_id' => $company->id, 'name' => 'Liberia', 'code' => 'LIB', 'is_active' => true]);
+        $user->branches()->attach($liberia);
+        $session = $this->cashSession($company, $sanRamon, $this->register($company, $sanRamon), $user);
+        $cash = $this->method($company, true, true);
+        $product = $this->product($company, true);
+        $product->branches()->attach([$sanRamon->id => ['stock' => 5], $liberia->id => ['stock' => 5]]);
+        $before = \DB::table('branch_product')->orderBy('branch_id')->get()->toJson();
+        $this->actingAs($user)->withSession($this->ctx($company, $sanRamon));
+        $this->get(route('pos.index'))->assertOk();
+        // Another tab changes the shared session through the real endpoint.
+        $this->post(route('branch.active.update'), ['branch_id' => $liberia->id])
+            ->assertRedirect()->assertSessionHas('active_branch_id', $liberia->id);
+        // Do not use checkout(): that helper would reset the active branch.
+        $payload = ['checkout_token' => (string) Str::uuid(), 'cash_session_id' => $session->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'payments' => [['payment_method_id' => $cash->id, 'amount' => 1000, 'received_amount' => 1000]]];
+        foreach ([false, true] as $hasLocalCashSession) {
+            if ($hasLocalCashSession) {
+                $this->cashSession($company, $liberia, $this->register($company, $liberia), $user);
+            }
+            $this->postJson(route('pos.checkout'), $payload)->assertUnprocessable()
+                ->assertJsonValidationErrors('cash_session_id')->assertSessionHas('active_branch_id', $liberia->id);
+        }
+        $this->assertDatabaseCount('sales', 0);
+        $this->assertDatabaseCount('sale_payments', 0);
+        $this->assertDatabaseCount('inventory_movements', 0);
+        $this->assertSame($before, \DB::table('branch_product')->orderBy('branch_id')->get()->toJson());
+        $this->assertSame('open', $session->fresh()->status);
+    }
+
     public function test_receipt_session_label_and_permissions(): void
     {
         [$c,$b,$u]=$this->context(); $cash=$this->method($c,true,true); $p=$this->product($c); $session=$this->cashSession($c,$b,$this->register($c,$b,'Receipt'),$u);

@@ -86,7 +86,7 @@
             </a>
         @endcan
 
-        @if($headerBranches->isNotEmpty() && (!$canConsolidate || request()->routeIs('pos.*', 'cash.*')))
+        @if($headerBranches->isNotEmpty() && (!$canConsolidate || !request()->routeIs('dashboard')))
 
             <form method="POST" action="{{ route('branch.active.update') }}">
 
