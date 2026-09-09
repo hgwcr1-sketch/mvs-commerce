@@ -24,7 +24,10 @@ class P08CashOpeningGateTest extends TestCase
 
         $this->post(route('login.store'), ['email' => $user->email, 'password' => 'password'])
             ->assertRedirect('/dashboard');
-        $this->get('/dashboard')->assertRedirect(route('cash.open.create'));
+        $this->get('/dashboard')->assertOk();
+
+        // POS without active branch redirects to cash.open.create
+        $this->get(route('pos.index'))->assertRedirect(route('cash.open.create'));
 
         $this->openSession($company, $branch, $user);
         $this->get('/dashboard')->assertOk();

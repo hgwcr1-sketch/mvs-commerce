@@ -201,7 +201,6 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::redirect('/', '/dashboard');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->middleware(['active.branch', 'pos.cash-session:after-login'])
         ->name('dashboard');
 
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
