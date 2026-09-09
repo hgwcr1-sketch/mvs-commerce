@@ -59,13 +59,17 @@ class AdministrativeDashboardTest extends TestCase
         $this->sale($company, $other, $user, now(), '20.20');
         $this->sale($foreign, $foreignBranch, $foreignUser, now(), '99999');
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
-        $this->get(route('dashboard'))->assertOk()->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '10.1000');
-        $this->post(route('branch.active.update'), ['branch_id' => 'all'])->assertRedirect(route('dashboard'))->assertSessionMissing('active_branch_id');
+        $this->get(route('dashboard'))->assertOk()->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '30.3000')
+            ->assertDontSee('Sucursal activa')->assertDontSee('Abrir caja');
+        $this->post(route('branch.active.update'), ['branch_id' => 'all'])->assertRedirect(route('dashboard'))->assertSessionHas('active_branch_id', $branch->id);
         $this->get(route('dashboard'))->assertOk()->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '30.3000' && $s['branch'] === 'Todas las sucursales');
-        $this->get(route('pos.index'))->assertRedirect(route('dashboard'));
+        $this->get(route('dashboard', ['branch_id' => $other->id]))->assertOk()
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '20.2000')
+            ->assertSessionHas('active_branch_id', $branch->id);
         $this->get(route('cash.history.index'))->assertOk();
         $this->post(route('branch.active.update'), ['branch_id' => $other->id])->assertRedirect();
-        $this->get(route('dashboard'))->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '20.2000');
+        $this->get(route('dashboard'))->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '30.3000');
+        $this->get(route('dashboard', ['branch_id' => $foreignBranch->id]))->assertNotFound();
         $this->post(route('branch.active.update'), ['branch_id' => $foreignBranch->id])->assertNotFound();
         $this->get(route('dashboard', ['branch_id' => 'all']))->assertOk()->assertSessionHas('active_branch_id', $other->id);
     }
@@ -76,6 +80,59 @@ class AdministrativeDashboardTest extends TestCase
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
         $this->post(route('branch.active.update'), ['branch_id' => 'all'])->assertForbidden();
         $this->get(route('dashboard'))->assertOk()->assertViewIs('dashboard.seller')->assertDontSee('Resumen administrativo');
+    }
+
+    public function test_admin_without_operational_branch_can_filter_and_then_choose_to_operate(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->post(route('login.store'), ['email' => $user->email, 'password' => 'password'])->assertRedirect('/dashboard');
+        $this->get(route('dashboard'))->assertOk()->assertSessionMissing('active_branch_id')
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['branch'] === 'Todas las sucursales');
+        $this->get(route('dashboard', ['branch_id' => $branch->id]))->assertOk()->assertSessionMissing('active_branch_id');
+        foreach (['pos.index', 'cash.index', 'cash.open.create'] as $route) {
+            $this->get(route($route))->assertOk()->assertViewIs('cash.select-branch')->assertSessionMissing('active_branch_id');
+        }
+        $this->from(route('pos.index'))->post(route('branch.active.update'), ['branch_id' => $branch->id])
+            ->assertRedirect(route('pos.index'))->assertSessionHas('active_branch_id', $branch->id);
+        $this->get(route('pos.index'))->assertRedirect(route('cash.open.create'));
+        $this->get(route('cash.open.create'))->assertOk()->assertViewIs('cash.open');
+        $this->get(route('dashboard'))->assertOk()->assertSessionHas('active_branch_id', $branch->id)
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['branch'] === 'Todas las sucursales');
+    }
+
+    public function test_invalid_operational_branch_is_not_auto_selected_for_admin(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => 999999]);
+        $this->get(route('dashboard'))->assertOk()->assertSessionMissing('active_branch_id');
+        $this->get(route('dashboard', ['branch_id' => 'invalid']))->assertSessionHasErrors('branch_id');
+        $branch->update(['is_active' => false]);
+        $this->get(route('dashboard', ['branch_id' => $branch->id]))->assertNotFound();
+        $this->get(route('dashboard'))->assertOk()->assertSessionMissing('active_branch_id');
+    }
+
+    public function test_dashboard_permission_does_not_grant_operational_permissions(): void
+    {
+        [$company, $branch, $user] = $this->context(false);
+        $role = $user->companies()->first()->pivot->role_id;
+        Role::findOrFail($role)->permissions()->attach(Permission::firstOrCreate(['name' => 'dashboard.admin'], ['label' => 'Admin', 'module' => 'Dashboard', 'is_active' => true]));
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id]);
+        $this->get(route('dashboard'))->assertOk();
+        $this->get(route('pos.index'))->assertForbidden();
+        $this->get(route('cash.index'))->assertForbidden();
+        $this->get(route('cash.open.create'))->assertForbidden();
+    }
+
+    public function test_company_consultation_does_not_grant_assignment_to_an_operational_branch(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $user->branches()->detach($branch);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id]);
+        $this->get(route('dashboard', ['branch_id' => $branch->id]))->assertOk()->assertSessionMissing('active_branch_id');
+        $this->post(route('branch.active.update'), ['branch_id' => $branch->id])->assertNotFound();
+        $this->post(route('cash.open.store'), ['cash_register_id' => 999])
+            ->assertRedirect()->assertSessionHasErrors('cash_register_id');
+        $this->assertDatabaseCount('cash_sessions', 0);
     }
 
     private function context(bool $admin = true): array

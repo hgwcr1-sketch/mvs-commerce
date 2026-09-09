@@ -20,9 +20,8 @@
         ->orderBy('branches.name')
         ->get();
 
-    // Marca para "Todas las sucursales" en sesión
+    // La consulta administrativa no utiliza el selector operativo.
     $canConsolidate = auth()->user()->hasPermission('dashboard.admin', $headerCompany);
-    $showAllBranches = $canConsolidate && !session('active_branch_id');
     $pendingReceptionCount = \Illuminate\Support\Facades\Schema::hasTable('purchase_verifications') && session('active_branch_id')
         ? \App\Models\PurchaseVerification::query()
             ->where('company_id', session('active_company_id'))
@@ -87,7 +86,7 @@
             </a>
         @endcan
 
-        @if($headerBranches->isNotEmpty())
+        @if($headerBranches->isNotEmpty() && (!$canConsolidate || request()->routeIs('pos.*', 'cash.*')))
 
             <form method="POST" action="{{ route('branch.active.update') }}">
 
@@ -101,11 +100,7 @@
                     onchange="this.form.submit()"
                     class="min-h-11 max-w-[8.5rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 sm:max-w-[12rem]">
 
-                    @if($canConsolidate)<option value="all" @selected($showAllBranches)>
-                        Todas las sucursales
-                    </option>@endif
-
-                    <option value="" disabled @selected(!$showAllBranches && !session('active_branch_id'))>
+                    <option value="" disabled @selected(!session('active_branch_id'))>
                         Sucursal
                     </option>
 

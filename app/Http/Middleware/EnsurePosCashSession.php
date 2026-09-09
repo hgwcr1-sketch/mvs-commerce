@@ -32,7 +32,7 @@ class EnsurePosCashSession
 
         // La operación requiere una sucursal concreta, el dashboard no.
         if (! $branchId && $request->routeIs('pos.index')) {
-            return redirect()->route('dashboard')->with('warning', 'Seleccione una sucursal concreta para operar el POS.');
+            return response()->view('cash.select-branch');
         }
 
         if ($mode === 'after-login' && ! $user->hasPermission('pos.acceder', $company)) {

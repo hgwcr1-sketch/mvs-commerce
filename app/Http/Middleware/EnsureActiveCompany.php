@@ -99,8 +99,7 @@ class EnsureActiveCompany
         if (! $activeBranchId) {
 
             $activeCompany = Company::findOrFail($activeCompanyId);
-            if ($user->hasPermission('dashboard.admin', $activeCompany)
-                && $activeCompany->branches()->where('is_active', true)->exists()) {
+            if ($user->hasPermission('dashboard.admin', $activeCompany)) {
                 return $next($request);
             }
 

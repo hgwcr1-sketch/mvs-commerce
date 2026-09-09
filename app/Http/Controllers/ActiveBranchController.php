@@ -13,8 +13,6 @@ class ActiveBranchController extends Controller
             $company = Company::findOrFail(session('active_company_id'));
             abort_unless($request->user()->companies()->whereKey($company->id)->exists()
                 && $request->user()->hasPermission('dashboard.admin', $company), 403);
-            $request->session()->forget('active_branch_id');
-
             return redirect()->route('dashboard', $request->only('period'));
         }
 
@@ -27,6 +25,7 @@ class ActiveBranchController extends Controller
         ]);
 
         $companyId = session('active_company_id');
+        abort_unless($request->user()->companies()->whereKey($companyId)->exists(), 403);
 
         $branch = auth()->user()
             ->branches()

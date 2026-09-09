@@ -13,10 +13,24 @@
             <div><h2 class="text-xl font-semibold">Resumen administrativo</h2><p class="text-sm text-slate-600">{{ $dashboardSummary['branch'] }} · {{ $dashboardSummary['from'] }} – {{ $dashboardSummary['to'] }}</p></div>
             <nav aria-label="Período del dashboard" class="flex gap-2">
                 @foreach(['today'=>'Hoy','week'=>'Semana','month'=>'Mes'] as $period=>$label)
-                    <a href="{{ route('dashboard', ['period'=>$period]) }}" @if($dashboardSummary['period']===$period) aria-current="page" @endif class="inline-flex min-h-11 items-center rounded-xl border px-4 py-2 {{ $dashboardSummary['period']===$period ? 'border-amber-500 bg-amber-100 text-amber-900' : 'border-slate-300 bg-white' }}">{{ $label }}</a>
+                    <a href="{{ route('dashboard', ['period'=>$period, 'branch_id'=>request('branch_id', 'all')]) }}" @if($dashboardSummary['period']===$period) aria-current="page" @endif class="inline-flex min-h-11 items-center rounded-xl border px-4 py-2 {{ $dashboardSummary['period']===$period ? 'border-amber-500 bg-amber-100 text-amber-900' : 'border-slate-300 bg-white' }}">{{ $label }}</a>
                 @endforeach
             </nav>
         </div>
+        <form method="GET" action="{{ route('dashboard') }}" class="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <input type="hidden" name="period" value="{{ $dashboardSummary['period'] }}">
+            <div class="min-w-0">
+                <label for="dashboard-branch" class="block text-sm font-medium">Sucursal para consulta</label>
+                <select id="dashboard-branch" name="branch_id" class="min-h-11 w-full rounded-lg border-slate-300 sm:max-w-xs">
+                    <option value="all">Todas las sucursales</option>
+                    @foreach(\App\Models\Company::findOrFail(session('active_company_id'))->branches()->where('is_active', true)->orderBy('name')->get() as $branch)
+                        <option value="{{ $branch->id }}" @selected(request('branch_id') == $branch->id)>{{ $branch->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <button class="min-h-11 rounded-lg border border-slate-300 px-4 py-2">Consultar</button>
+        </form>
+        <p class="text-sm text-slate-500">Este filtro solo cambia la consulta del Dashboard. La sucursal operativa se selecciona en POS o Caja.</p>
         <p class="text-sm text-slate-500">Ventas emitidas en {{ $dashboardSummary['currency'] }}, incluidos históricos. Excluye anuladas y borradores; los importes son anteriores a devoluciones. Semana de lunes a domingo. Las alertas de cuentas y apartados muestran su estado actual.</p>
         <div class="grid gap-4 sm:grid-cols-3">
             @foreach(['Ventas emitidas'=>$dashboardSummary['sales_count'], 'Importe de ventas'=>number_format($dashboardSummary['sales_total'],2,',','.').' '.$dashboardSummary['currency'], 'Promedio por venta'=>number_format($dashboardSummary['average_sale'],2,',','.').' '.$dashboardSummary['currency']] as $label=>$value)
@@ -26,7 +40,7 @@
         <div class="flex flex-wrap gap-3">
             @can('pos.acceder')<a href="{{ route('pos.index') }}" class="inline-flex min-h-11 items-center rounded-xl bg-amber-500 px-4 py-3">Nueva venta</a>@endcan
             @can('caja.ver')<a href="{{ route('cash.history.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-3">Historial de caja</a>@endcan
-            @can('caja.abrir')<a href="{{ route('cash.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-3">Caja / Abrir caja</a>@endcan
+            @can('caja.abrir')<a href="{{ route('cash.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-3">Ir a Caja</a>@endcan
         </div>
         <div class="rounded-xl border border-slate-200 bg-white">
             <h3 class="p-4 font-semibold">Últimas ventas del período</h3>

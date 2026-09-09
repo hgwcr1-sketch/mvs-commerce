@@ -16,6 +16,13 @@ class DashboardController extends Controller
         $company = Company::find(session('active_company_id'));
         $branchId = session('active_branch_id');
         $request->validate(['period' => ['sometimes', 'in:today,week,month']]);
+        if ($request->user()->hasPermission('dashboard.admin', $company)) {
+            $request->validate(['branch_id' => ['sometimes', 'nullable', 'regex:/^(all|[0-9]+)$/']]);
+            $filter = $request->input('branch_id', 'all');
+            $branchId = $filter && $filter !== 'all'
+                ? $company->branches()->where('is_active', true)->findOrFail($filter)->id
+                : null;
+        }
         $dashboardSummary = $request->user()->hasPermission('dashboard.admin', $company)
             ? $dashboard->summarize($company, $branchId ? (int) $branchId : null, $request->input('period', 'today'))
             : null;

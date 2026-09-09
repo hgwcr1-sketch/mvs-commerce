@@ -1,6 +1,27 @@
 # Dashboard Administrativo + Caja
 
-Estado al 2026-09-09: implementación local terminada en `feature/pos`, preparada para un commit único pendiente de instrucción. Producción no intervenida. No se recuperó ni modificó el stash de notificaciones.
+## Separación administrativa y operativa — 2026-09-09
+
+El bloque anterior se publicó en `feature/pos` como `f40efccf3a614eb88aa56d373ee46da3d5a1a856`. Esta corrección posterior permanece local, sin commit ni intervención de producción.
+
+La consulta administrativa utilizaba `active_branch_id` y el selector compartido escribía esa misma sesión. Ahora `/dashboard` con permiso empresarial `dashboard.admin` consulta todas las sucursales por defecto, aunque exista una sucursal operativa previa. `branch_id` y `period` en la URL son filtros de consulta: se valida empresa y sucursal activa, sin modificar la sesión. Ventas y alertas usan el mismo filtro. La consulta administrativa puede incluir sucursales de la empresa no asignadas para operación; esto no concede su asignación ni permisos POS/Caja.
+
+El encabezado administrativo muestra la empresa. El selector operativo aparece al entrar voluntariamente a POS/Caja; sin sucursal, sus pantallas de entrada solicitan selección explícita. El POST de selección solo acepta sucursales activas asignadas al usuario dentro de la empresa. El valor legado `all` regresa al Dashboard sin borrar la sucursal operativa. POS sigue exigiendo caja y Caja conserva sus permisos y validaciones. Los usuarios operativos mantienen la selección automática y la apertura obligatoria existente. Se corrige también la variable local que retenía un ID inválido en `EnsureActiveBranch`.
+
+No se cambian permisos por nombre de rol ni datos de producción. El bypass de consulta existente depende de `dashboard.admin` para la empresa; no concede permisos operativos. No cambia `documentsBreakdown()`, correo, inventario ni el stash de Notificaciones.
+
+Responsive revisado conceptualmente a 360/768/1280: filtro en columna móvil, controles de 44px, ancho acotado y tablas con scroll propio. Build local correcto. No se realizó validación visual en navegador.
+
+Validación de esta corrección:
+
+- `AdministrativeDashboardTest|P08CashOpeningGateTest|AccountsPayableDashboardAlertsTest|CompanyOnboardingTest`: 22/22, 143 aserciones.
+- Focal final `AdministrativeDashboardTest|CashSessionOpeningTest|CashBlindClosingTest|CashSessionMailNotificationTest`: 56/56, 515 aserciones; incluye el caso adicional de consulta sin asignación operativa.
+- Regresión `Cash|AdministrativeDashboardTest|ResponsiveNavigationTest|AccountsPayableDashboardAlertsTest|PosAccessAndSearchTest|CompanyOnboardingTest`: 213 pruebas, 206 aprobadas, 1274 aserciones. Persisten cinco fallos conocidos (Órdenes/POS 200/302, tres expectativas de payload/vista POS y logo del encabezado) y dos errores de compras por `InventoryPostingService::postPurchase()` ausente. Sin cambios a esos archivos ajenos.
+- `npm.cmd run build`: correcto, 236 módulos. `git diff --check`: correcto. Evidencia JUnit local en `storage/logs/admin-context-{focused,regression,final}.xml`.
+
+## Registro del cierre anterior
+
+Estado previo al commit del 2026-09-09: implementación local terminada en `feature/pos`, preparada para un commit único pendiente de instrucción. Producción no intervenida. No se recuperó ni modificó el stash de notificaciones.
 
 ## Alcance conservado
 

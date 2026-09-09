@@ -41,6 +41,9 @@ class CashSessionController extends Controller
     {
         [$company,$companyId,$branchId,$settings] = $this->context();
         abort_unless($request->user()->hasPermission('caja.ver', $company) || $request->user()->hasPermission('caja.abrir', $company), 403);
+        if (! $branchId) {
+            return view('cash.select-branch');
+        }
         $canView = $request->user()->hasPermission('caja.ver', $company);
         $canViewAll = $request->user()->hasPermission('caja.ver_todas', $company);
         $base = CashSession::forCompany($companyId)->forBranch($branchId);
@@ -57,6 +60,9 @@ class CashSessionController extends Controller
     public function create(Request $request): View|RedirectResponse
     {
         [$company,$companyId,$branchId,$settings] = $this->context();
+        if (! $branchId) {
+            return view('cash.select-branch');
+        }
         if ($settings->session_mode === CompanyCashSetting::SESSION_MODE_INDIVIDUAL && CashSession::forCompany($companyId)->forBranch($branchId)->where('opened_by', $request->user()->id)->whereIn('status', [CashSession::STATUS_OPEN, CashSession::STATUS_CLOSING])->exists()) {
             return redirect()->route('cash.index')->with('info', 'Ya tiene una sesión de caja abierta en esta sucursal.');
         }

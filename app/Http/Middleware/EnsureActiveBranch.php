@@ -48,6 +48,7 @@ class EnsureActiveBranch
             }
 
             session()->forget('active_branch_id');
+            $branchId = null;
         }
 
         /**
