@@ -27,6 +27,18 @@ class CashMovementManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_expected_cash_is_hidden_from_employee_forms_and_visible_to_authorized_admin(): void
+    {
+        [$company,$branch,$user,,$session] = $this->context();
+        $this->getAs($user, $company, $branch, route('cash.movements.create', $session))->assertOk()
+            ->assertDontSee('Efectivo esperado actual')->assertViewHas('expectedCash', null);
+        $admin = $this->user($company, $branch, ['caja.ver', 'caja.ver_todas']);
+        $this->getAs($admin, $company, $branch, route('cash.movements.index', $session))->assertOk()
+            ->assertSee('Efectivo esperado actual')->assertViewHas('expectedCash', 1000.0);
+        $this->postMovement($user, $company, $branch, $session, 'exit', 1001)->assertSessionHasErrors('amount');
+        $this->assertStringNotContainsString('1.000', session('errors')->first('amount'));
+    }
+
     public function test_expected_cash_uses_fund_valid_cash_sales_and_movement_directions(): void
     {
         [$company, $branch, $user, $register, $session] = $this->context();
@@ -163,7 +175,7 @@ class CashMovementManagementTest extends TestCase
         $response->assertOk()
             ->assertSeeInOrder(['Nuevo', 'Antiguo'])
             ->assertSee('14/08/2026 09:30')
-            ->assertSee('Efectivo esperado actual')
+            ->assertDontSee('Efectivo esperado actual')->assertViewHas('expectedCash', null)
             ->assertSee('Volver')
             ->assertSee('bg-amber-500 px-4 py-3 font-normal text-black hover:bg-amber-600', false);
         $this->assertSame($stored, $new->fresh()->getRawOriginal('occurred_at'));

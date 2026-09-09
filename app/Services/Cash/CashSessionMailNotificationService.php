@@ -12,6 +12,9 @@ class CashSessionMailNotificationService
     public function create(CashSession $session, string $type, ?CompanyCashSetting $settings = null): CashSessionMailNotification
     {
         $settings ??= CompanyCashSetting::query()->where('company_id', $session->company_id)->firstOrFail();
+        if ($settings->company_id !== $session->company_id) {
+            throw new \InvalidArgumentException('La configuración de correo no pertenece a la empresa de la sesión.');
+        }
         $recipients = collect($settings->closure_email_recipients ?? [])
             ->filter(fn ($email) => is_string($email))
             ->map(fn (string $email) => mb_strtolower(trim($email)))

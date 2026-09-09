@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    'notifications' => [
+        'from' => [
+            'address' => env('MAIL_NOTIFICATION_FROM_ADDRESS'),
+            'name' => env('MAIL_NOTIFICATION_FROM_NAME'),
+        ],
+    ],
+
+    'reply_to' => [
+        'address' => env('MAIL_REPLY_TO_ADDRESS'),
+        'name' => env('MAIL_REPLY_TO_NAME'),
+    ],
+
 ];

@@ -2,13 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Branch;
+use App\Models\Company;
 use Illuminate\Http\Request;
 
 class ActiveBranchController extends Controller
 {
     public function update(Request $request)
     {
+        if ($request->input('branch_id') === 'all') {
+            $company = Company::findOrFail(session('active_company_id'));
+            abort_unless($request->user()->companies()->whereKey($company->id)->exists()
+                && $request->user()->hasPermission('dashboard.admin', $company), 403);
+            $request->session()->forget('active_branch_id');
+
+            return redirect()->route('dashboard', $request->only('period'));
+        }
+
         $request->validate([
             'branch_id' => [
                 'required',

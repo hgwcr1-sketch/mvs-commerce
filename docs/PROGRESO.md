@@ -192,6 +192,8 @@ Estado: ACTIVO
 
 Incluye vistas y comportamiento según perfil del usuario.
 
+Actualización local 2026-09-09: Dashboard administrativo Hoy/Semana/Mes con empresa/sucursal/Todas y acceso sin caja para `dashboard.admin`. Se reutilizan alertas existentes; sin motores inteligentes. Bloques 11–13 del cronograma maestro completados localmente, sin producción. Evidencia y alcance en `docs/DASHBOARD_ADMINISTRATIVO_CAJA.md`.
+
 ---
 
 ## Inventario
@@ -349,6 +351,8 @@ Elementos conocidos:
 - `CashSessionMailRetryService`
 
 Existe trabajo pendiente o reciente relacionado con reintentos e idempotencia de notificaciones.
+
+Actualización local 2026-09-09: bloques 14–20 del cronograma maestro completados localmente: apertura por denominaciones, cierre ciego, conciliación dinámica, datos administrativos y correo con destinatarios empresariales configurables. Sin destinatarios el cierre no se bloquea ni envía correo; reintentos omiten entregados. `documentsBreakdown()` centraliza venta/CxC/apartado/CxP, excluyendo SalePayment y CashMovement. Focal Dashboard/Caja 52/52 (467 aserciones); filtro Cash 151/154 (974 aserciones), tres problemas ajenos documentados. Sin commit ni producción. Detalle: `docs/DASHBOARD_ADMINISTRATIVO_CAJA.md`.
 
 ---
 

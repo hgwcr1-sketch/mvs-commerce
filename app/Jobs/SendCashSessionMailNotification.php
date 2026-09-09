@@ -24,20 +24,31 @@ class SendCashSessionMailNotification implements ShouldQueue
     {
         $notification = DB::transaction(function () {
             $row = CashSessionMailNotification::query()->lockForUpdate()->find($this->notificationId);
-            if (! $row || $row->status === CashSessionMailNotification::STATUS_SENT || $row->status === CashSessionMailNotification::STATUS_SKIPPED) return null;
-            if ($row->status === CashSessionMailNotification::STATUS_PROCESSING || $row->attempts >= CashSessionMailNotification::MAX_ATTEMPTS || ($row->available_at && $row->available_at->isFuture())) return null;
-            if (! in_array($row->status, [CashSessionMailNotification::STATUS_PENDING, CashSessionMailNotification::STATUS_FAILED], true)) return null;
+            if (! $row || $row->status === CashSessionMailNotification::STATUS_SENT || $row->status === CashSessionMailNotification::STATUS_SKIPPED) {
+                return null;
+            }
+            if ($row->status === CashSessionMailNotification::STATUS_PROCESSING || $row->attempts >= CashSessionMailNotification::MAX_ATTEMPTS || ($row->available_at && $row->available_at->isFuture())) {
+                return null;
+            }
+            if (! in_array($row->status, [CashSessionMailNotification::STATUS_PENDING, CashSessionMailNotification::STATUS_FAILED], true)) {
+                return null;
+            }
             $row->update(['status' => CashSessionMailNotification::STATUS_PROCESSING, 'attempts' => $row->attempts + 1, 'last_error' => null]);
+
             return $row->fresh();
         });
 
-        if (! $notification) return;
+        if (! $notification) {
+            return;
+        }
 
         try {
-            $session = $notification->cashSession()->firstOrFail();
+            $session = $notification->cashSession()->where('company_id', $notification->company_id)->firstOrFail();
             foreach ($notification->recipients as $recipient) {
                 $fresh = $notification->fresh();
-                if (in_array($recipient, $fresh->delivered_recipients ?? [], true)) continue;
+                if (in_array($recipient, $fresh->delivered_recipients ?? [], true)) {
+                    continue;
+                }
                 $mailable = $notification->notification_type === CashSessionMailNotification::TYPE_OPENED
                     ? new CashSessionOpenedMail($session)
                     : new CashSessionClosedMail($session);
@@ -54,7 +65,9 @@ class SendCashSessionMailNotification implements ShouldQueue
             ]);
         } catch (Throwable $exception) {
             $fresh = $notification->fresh();
-            $delay = match ($fresh->attempts) { 1 => 60, 2 => 300, 3 => 900, 4 => 3600, default => null };
+            $delay = match ($fresh->attempts) {
+                1 => 60, 2 => 300, 3 => 900, 4 => 3600, default => null
+            };
             $fresh->update([
                 'status' => CashSessionMailNotification::STATUS_FAILED,
                 'last_error' => $this->sanitize($exception),
@@ -70,6 +83,7 @@ class SendCashSessionMailNotification implements ShouldQueue
         $message = preg_replace('#(https?://)[^\s/@:]+:[^\s/@]+@#iu', '$1[credenciales ocultas]@', (string) $message);
         $message = preg_replace('/\b(password|passwd|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/iu', '$1=[oculto]', (string) $message);
         $message = preg_replace('/\s+/', ' ', (string) $message);
+
         return Str::limit(class_basename($exception).': '.$message, 500, '');
     }
 }

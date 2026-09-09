@@ -26,8 +26,13 @@ class EnsurePosCashSession
         $isGlobalAdmin = $user->isPlatformAdmin()
             || $user->hasPermission('dashboard.admin', $company);
 
-        if ($isGlobalAdmin) {
+        if ($mode === 'after-login' && $isGlobalAdmin) {
             return $next($request);
+        }
+
+        // La operación requiere una sucursal concreta, el dashboard no.
+        if (! $branchId && $request->routeIs('pos.index')) {
+            return redirect()->route('dashboard')->with('warning', 'Seleccione una sucursal concreta para operar el POS.');
         }
 
         if ($mode === 'after-login' && ! $user->hasPermission('pos.acceder', $company)) {

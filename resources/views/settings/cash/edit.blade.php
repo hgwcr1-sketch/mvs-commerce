@@ -7,7 +7,7 @@
 <div class="mx-auto max-w-6xl space-y-6"
      x-data="{
         acceptsUsd: {{ old('accepts_usd', $cashSetting->accepts_usd) ? 'true' : 'false' }},
-        emails: @js(old('closure_email_recipients', $cashSetting->closure_email_recipients ?? [])),
+        emails: @js(old('closure_email_recipients', $cashSetting->closure_email_recipients ?? []) ?? []),
         addEmail() { if (this.emails.length < 10) this.emails.push(''); },
         removeEmail(index) { this.emails.splice(index, 1); }
      }">
@@ -44,7 +44,7 @@
         <x-card>
             <x-slot:header><h3 class="text-lg font-semibold text-slate-800">Cierre</h3></x-slot:header>
             <div class="grid gap-5 lg:grid-cols-2">
-                <label class="flex items-start gap-3"><input type="checkbox" name="blind_closing" value="1" @checked(old('blind_closing', $cashSetting->blind_closing)) class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"><span><span class="block font-medium text-slate-700">Cierre ciego</span><span class="text-sm text-slate-500">El cajero no verá el efectivo esperado antes de confirmar el conteo.</span></span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="blind_closing" value="1" @checked(old('blind_closing', $cashSetting->blind_closing)) class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"><span><span class="block font-medium text-slate-700">Cierre ciego</span><span class="text-sm text-slate-500">El empleado siempre cuenta a ciegas. Esta opción también oculta los esperados durante el conteo de usuarios con permisos administrativos de caja.</span></span></label>
                 <div><label for="difference_tolerance" class="mb-2 block text-sm font-medium text-slate-700">Tolerancia permitida (CRC)</label><input id="difference_tolerance" name="difference_tolerance" type="number" min="0" step="1" value="{{ old('difference_tolerance', number_format((float) $cashSetting->difference_tolerance, 0, '.', '')) }}" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0"></div>
                 <label class="flex items-start gap-3"><input type="checkbox" name="require_difference_authorization" value="1" @checked(old('require_difference_authorization', $cashSetting->require_difference_authorization)) class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"><span><span class="block font-medium text-slate-700">Requerir autorización de diferencia</span><span class="text-sm text-slate-500">Solicita autorización cuando la diferencia supera la tolerancia.</span></span></label>
                 <label class="flex items-start gap-3"><input type="checkbox" name="auto_print_closure" value="1" @checked(old('auto_print_closure', $cashSetting->auto_print_closure)) class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"><span><span class="block font-medium text-slate-700">Imprimir cierre automáticamente</span><span class="text-sm text-slate-500">Quedará preparado para el comprobante de cierre futuro.</span></span></label>
@@ -64,7 +64,7 @@
 
         <x-card>
             <x-slot:header><div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-slate-800">Correos para avisos de apertura y cierre</h3><button type="button" @click="addEmail" :disabled="emails.length >= 10" class="rounded-lg border border-amber-500 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40">+ Agregar correo</button></div></x-slot:header>
-            <p class="mb-4 text-sm text-slate-500">Cada destinatario recibirá avisos independientes al abrir y cerrar definitivamente una sesión de Caja.</p>
+            <p class="mb-4 text-sm text-slate-500">Configure hasta 10 correos administrativos de esta empresa. Cada destinatario recibirá avisos independientes al abrir y cerrar definitivamente una sesión de Caja. Sin destinatarios, la caja cierra normalmente y no se envía correo.</p>
             <div class="space-y-3"><template x-for="(email, index) in emails" :key="index"><div class="flex gap-3"><input type="email" name="closure_email_recipients[]" x-model="emails[index]" maxlength="150" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0" placeholder="correo@empresa.com"><button type="button" @click="removeEmail(index)" class="rounded-xl border border-red-200 px-4 text-sm font-semibold text-red-600 hover:bg-red-50">Quitar</button></div></template><p x-show="emails.length === 0" class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No hay destinatarios configurados.</p></div>
         </x-card>
 

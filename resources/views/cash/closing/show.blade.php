@@ -2,14 +2,33 @@
 @section('title','Resultado del cierre')
 @section('content')
 <div class="mx-auto max-w-5xl space-y-6">
-    <div class="flex items-start justify-between gap-4"><div><h2 class="text-2xl font-semibold">Cierre de Caja</h2><p class="text-sm text-slate-600">{{ $cashSession->session_number }}</p></div><a href="{{ route('cash.index') }}" class="rounded-lg border border-slate-300 px-4 py-2">Volver</a></div>
+    <div class="flex items-start justify-between gap-4"><div><h2 class="text-2xl font-semibold">Cierre de Caja</h2><p class="text-sm text-slate-600">{{ $cashSession->session_number }}</p></div><a href="{{ route('cash.index') }}" class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 py-2">Volver</a></div>
     @if(session('success'))<div class="rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">{{ session('success') }}</div>@endif
     @unless($detailed)
         <x-card><div class="py-8 text-center"><h3 class="text-xl font-semibold">Cierre enviado correctamente</h3><p class="mt-2 text-slate-600">Estado: {{ $cashSession->status==='closed'?'Cerrado':'Pendiente de autorización' }}</p></div></x-card>
     @else
+        <x-card><dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            @foreach(['Sucursal'=>$cashSession->branch?->name,'Caja'=>$cashSession->cashRegister?->name,'Abierta por'=>$cashSession->openedBy?->name,'Conteo iniciado por'=>$cashSession->closingStartedBy?->name,'Cerrada por'=>$cashSession->closedBy?->name,'Apertura'=>$cashSession->opened_at?->timezone($companyTimezone)->format('d/m/Y H:i'),'Cierre'=>$cashSession->closed_at?->timezone($companyTimezone)->format('d/m/Y H:i'),'Fondo inicial'=>'₡'.number_format($cashSession->opening_amount,2,',','.'),'Total documentos'=>$documentsCount ?? $cashSession->documents_count] as $label=>$value)
+                <div><dt class="text-sm text-slate-500">{{ $label }}</dt><dd class="font-semibold">{{ $value ?? 'Pendiente' }}</dd></div>
+            @endforeach
+        </dl></x-card>
+        @if($closingSummary)
+        <x-card class="mt-4"><x-slot:header><h3 class="text-lg font-semibold text-slate-800">Desglose de documentos</h3></x-slot:header>
+        <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt class="text-sm text-slate-500">Ventas completadas</dt><dd class="font-bold">{{ $closingSummary['completed_sales_count'] }}</dd></div>
+            <div><dt class="text-sm text-slate-500">Abonos Cuentas por Cobrar</dt><dd class="font-bold">{{ $closingSummary['account_receivable_payments_count'] }}</dd></div>
+            <div><dt class="text-sm text-slate-500">Abonos Apartados</dt><dd class="font-bold">{{ $closingSummary['layaway_payments_count'] }}</dd></div>
+            <div><dt class="text-sm text-slate-500">Pagos Cuentas por Pagar</dt><dd class="font-bold">{{ $closingSummary['account_payable_payments_count'] }}</dd></div>
+            <div class="lg:col-span-4"><dt class="text-sm text-slate-500"><strong>Total documentos</strong></dt><dd class="font-bold text-lg">{{ $closingSummary['documents_count'] }}</dd></div>
+        </dl></x-card>
+        @endif
+        @include('cash.closing._totals')
         <x-card><div class="grid gap-4 sm:grid-cols-5"><div><span class="text-xs uppercase text-slate-500">Estado</span><strong class="block">{{ $cashSession->status }}</strong></div><div><span class="text-xs uppercase text-slate-500">Esperado</span><strong class="block">₡{{ number_format((float)$cashSession->expected_cash,0,',','.') }}</strong></div><div><span class="text-xs uppercase text-slate-500">Contado</span><strong class="block">₡{{ number_format((float)$cashSession->counted_cash,0,',','.') }}</strong></div><div><span class="text-xs uppercase text-slate-500">Diferencia</span><strong class="block">₡{{ number_format((float)$cashSession->difference_amount,0,',','.') }}</strong></div><div><span class="text-xs uppercase text-slate-500">Enviado</span><strong class="block">{{ $cashSession->closing_submitted_at?->timezone($companyTimezone)->format('d/m/Y H:i') }}</strong></div></div></x-card>
         <x-card><x-slot:header><h3 class="font-semibold">Conteo CRC</h3></x-slot:header><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left">Denominación</th><th class="p-3 text-right">Cantidad</th><th class="p-3 text-right">Subtotal</th></tr></thead><tbody>@foreach($cashSession->countDetails->where('count_type','closing')->sortBy('cashDenomination.sort_order') as $detail)<tr class="border-t"><td class="p-3">{{ $detail->cashDenomination->label }}</td><td class="p-3 text-right">{{ $detail->quantity }}</td><td class="p-3 text-right">₡{{ number_format((float)$detail->total_amount,0,',','.') }}</td></tr>@endforeach</tbody></table></div></x-card>
         <x-card><x-slot:header><h3 class="font-semibold">Conciliaciones</h3></x-slot:header><div class="overflow-x-auto"><table class="min-w-full"><thead><tr><th class="p-3 text-left">Método</th><th class="p-3 text-right">Ventas</th><th class="p-3 text-right">CxC</th><th class="p-3 text-right">Apartados</th><th class="p-3 text-right">CxP</th><th class="p-3 text-right">Esperado</th><th class="p-3 text-right">Reportado</th><th class="p-3 text-right">Diferencia</th></tr></thead><tbody>@foreach($cashSession->paymentReconciliations as $item)<tr class="border-t"><td class="p-3">{{ $item->payment_method_name_snapshot }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->sales_amount,0,',','.') }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->receivables_amount,0,',','.') }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->layaways_amount,0,',','.') }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->payables_amount,0,',','.') }}</td><td class="p-3 text-right font-semibold">₡{{ number_format((float)$item->expected_amount,0,',','.') }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->reported_amount,0,',','.') }}</td><td class="p-3 text-right">₡{{ number_format((float)$item->difference_amount,0,',','.') }}</td></tr>@endforeach</tbody></table></div></x-card>
+        <x-card><x-slot:header><h3 class="font-semibold">Eventos y autorizaciones</h3></x-slot:header>
+            @foreach($cashSession->events->sortBy('occurred_at') as $event)<p class="border-b py-3 text-sm">{{ $event->occurred_at->timezone($companyTimezone)->format('d/m/Y H:i') }} · {{ $event->event_type }} · {{ $event->user?->name }}</p>@endforeach
+        </x-card>
         @if($cashSession->status==='closing'&&$cashSession->closing_submitted_at&&auth()->user()->hasPermission('caja.autorizar_diferencia',$cashSession->company))<div class="flex justify-end"><a href="{{ route('cash.closing.authorize.form',$cashSession) }}" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Revisar autorización</a></div>@endif
     @endunless
 </div>

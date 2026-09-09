@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Company;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -96,6 +97,12 @@ class EnsureActiveCompany
          * sucursal disponible del usuario.
          */
         if (! $activeBranchId) {
+
+            $activeCompany = Company::findOrFail($activeCompanyId);
+            if ($user->hasPermission('dashboard.admin', $activeCompany)
+                && $activeCompany->branches()->where('is_active', true)->exists()) {
+                return $next($request);
+            }
 
             $branch = $user->branches()
                 ->where('branches.company_id', $activeCompanyId)

@@ -12,6 +12,11 @@ class CashExpectedAmountService
 {
     public function calculate(CashSession $session): float
     {
+        return (float) $this->calculateDecimal($session);
+    }
+
+    public function calculateDecimal(CashSession $session): string
+    {
         $cashSales = DB::table('sale_payments as payments')
             ->join('sales', 'sales.id', '=', 'payments.sale_id')
             ->where('payments.cash_session_id', $session->id)
@@ -25,8 +30,8 @@ class CashExpectedAmountService
             ->where('cash_session_id', $session->id)
             ->where('affects_cash_snapshot', true)
             ->sum('cash_effect_amount');
-        $layawayPayments = DB::table('layaway_payments')->where('cash_session_id',$session->id)->where('affects_cash_snapshot',true)->sum('cash_effect_amount');
-        $payablePayments = DB::table('accounts_payable_payments')->where('cash_session_id',$session->id)->where('affects_cash_snapshot',true)->sum('cash_effect_amount');
+        $layawayPayments = DB::table('layaway_payments')->where('cash_session_id', $session->id)->where('affects_cash_snapshot', true)->sum('cash_effect_amount');
+        $payablePayments = DB::table('accounts_payable_payments')->where('cash_session_id', $session->id)->where('affects_cash_snapshot', true)->sum('cash_effect_amount');
 
         $entries = CashMovement::forSession($session->id)
             ->where('direction', CashMovement::DIRECTION_IN)
@@ -36,9 +41,14 @@ class CashExpectedAmountService
             ->where('direction', CashMovement::DIRECTION_OUT)
             ->sum('amount');
 
-        return round(
-            (float) $session->opening_amount + (float) $cashSales + (float) $receivablePayments + (float) $layawayPayments - (float) $payablePayments + (float) $entries - (float) $outputs,
-            4,
-        );
+        $total = $session->opening_amount;
+        foreach ([$cashSales, $receivablePayments, $layawayPayments, $entries] as $amount) {
+            $total = bcadd($total, (string) $amount, 4);
+        }
+        foreach ([$payablePayments, $outputs] as $amount) {
+            $total = bcsub($total, (string) $amount, 4);
+        }
+
+        return $total;
     }
 }

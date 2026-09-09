@@ -9,6 +9,7 @@ Cerrada por: {{ $session->closedBy->name }}
 Apertura: {{ $session->opened_at->copy()->timezone($timezone)->format('d/m/Y H:i:s') }}
 Cierre: {{ $session->closed_at->copy()->timezone($timezone)->format('d/m/Y H:i:s') }}
 Duración: {{ intdiv($durationMinutes,60) }} h {{ $durationMinutes%60 }} min
+Total documentos: {{ $session->documents_count }}
 
 RESUMEN CRC
 Fondo inicial: ₡{{ number_format((float)$session->opening_amount,0,',','.') }}
@@ -16,8 +17,21 @@ Esperado: ₡{{ number_format((float)$session->expected_cash,0,',','.') }}
 Reportado: ₡{{ number_format((float)$session->counted_cash,0,',','.') }}
 Diferencia: ₡{{ number_format((float)$session->difference_amount,0,',','.') }}
 
+TOTAL DE CONCILIACIÓN
+@foreach(['expected'=>'Total esperado','reported'=>'Total declarado','difference'=>'Diferencia general'] as $key=>$label)
+{{ $label }}: ₡{{ number_format($closingSummary[$key],2,',','.') }}
+@endforeach
+Efectivo físico más los demás medios, sin duplicar el efectivo por cobros. Revise cada diferencia aunque el neto sea cero.
+
+DESGLOSE DE DOCUMENTOS
+Ventas completadas: {{ $closingSummary['completed_sales_count'] }}
+Abonos Cuentas por Cobrar: {{ $closingSummary['account_receivable_payments_count'] }}
+Abonos Apartados: {{ $closingSummary['layaway_payments_count'] }}
+Pagos Cuentas por Pagar: {{ $closingSummary['account_payable_payments_count'] }}
+Total documentos: {{ $closingSummary['documents_count'] }}
+
 VENTAS Y PAGOS VÁLIDOS
-Ventas completadas: {{ (int)$sales->quantity }} — ₡{{ number_format((float)$sales->total,0,',','.') }}
+Ventas completadas: {{ $closingSummary['completed_sales_count'] }} — ₡{{ number_format((float)$sales->total,0,',','.') }}
 @forelse($payments as $payment)
 {{ $payment->name }} ({{ $payment->code }}): ₡{{ number_format((float)$payment->amount,0,',','.') }}
 @empty

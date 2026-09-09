@@ -2,10 +2,24 @@
 
 namespace App\Models;
 
+use App\Models\AccountPayablePayment;
+use App\Models\AccountReceivablePayment;
+use App\Models\CashCountDetail;
+use App\Models\CashMovement;
+use App\Models\CashPaymentReconciliation;
+use App\Models\CashRegister;
+use App\Models\CashSessionEvent;
+use App\Models\CashSessionMailNotification;
+use App\Models\Company;
+use App\Models\LayawayPayment;
+use App\Models\Sale;
+use App\Models\SalePayment;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class CashSession extends Model
 {
@@ -40,4 +54,45 @@ class CashSession extends Model
     public function scopeForCompany(Builder $query, int $companyId): Builder { return $query->where('company_id', $companyId); }
     public function scopeForBranch(Builder $query, int $branchId): Builder { return $query->where('branch_id', $branchId); }
     public function scopeOpen(Builder $query): Builder { return $query->where('status', self::STATUS_OPEN); }
+
+    public function getDocumentsCountAttribute(): int
+    {
+        return $this->documentsBreakdown()['documents_count'];
+    }
+
+    /**
+     * Desglose único de documentos comerciales de la sesión.
+     * Reglas:
+     * - Sale completada = 1
+     * - AccountReceivablePayment = 1
+     * - LayawayPayment = 1
+     * - AccountPayablePayment = 1
+     * NO contar: SalePayment, CashMovement
+     */
+    public function documentsBreakdown(): array
+    {
+        $completedSales = $this->sales()->where('status', Sale::STATUS_COMPLETED)->count();
+        $accountReceivablePayments = $this->accountReceivablePayments()->count();
+        $layawayPayments = $this->layawayPayments()->count();
+        $accountPayablePayments = $this->accountPayablePayments()->count();
+        $documentsCount = $completedSales + $accountReceivablePayments + $layawayPayments + $accountPayablePayments;
+
+        return [
+            'completed_sales_count' => $completedSales,
+            'account_receivable_payments_count' => $accountReceivablePayments,
+            'layaway_payments_count' => $layawayPayments,
+            'account_payable_payments_count' => $accountPayablePayments,
+            'documents_count' => $documentsCount,
+        ];
+    }
+
+    public function accountReceivablePayments(): HasMany
+    {
+        return $this->hasMany(AccountReceivablePayment::class);
+    }
+
+    public function layawayPayments(): HasMany
+    {
+        return $this->hasMany(LayawayPayment::class);
+    }
 }

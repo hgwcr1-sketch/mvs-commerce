@@ -6,6 +6,7 @@ use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Services\Cash\CashClosingSummaryService;
 use DateTimeZone;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -22,10 +23,20 @@ class CashSessionClosedMail extends Mailable
 
     public function envelope(): Envelope
     {
-        $session = $this->cashSession->loadMissing('cashRegister:id,name');
-        $difference = (float) $session->difference_amount;
-        $result = $difference === 0.0 ? 'Sin diferencia' : ($difference > 0 ? 'Sobrante' : 'Faltante');
-        return new Envelope(subject: '[MVS] Cierre '.$session->session_number.' — '.$result.' — '.$session->cashRegister->name);
+        $session = $this->cashSession->loadMissing(['cashRegister:id,name', 'branch:id,name']);
+        $summary = app(CashClosingSummaryService::class)->summarize($session);
+        $comparison = bccomp($summary['difference'], '0', 4);
+        $result = $comparison === 0 ? 'Sin diferencia neta' : ($comparison > 0 ? 'Sobrante' : 'Faltante');
+
+        $envelope = new Envelope(subject: '[MVS] Cierre '.$session->session_number.' — '.$result.' — '.$session->branch->name.' / '.$session->cashRegister->name);
+        if (config('mail.notifications.from.address')) {
+            $envelope->from(config('mail.notifications.from.address'), config('mail.notifications.from.name') ?? null);
+        }
+        if (config('mail.reply_to.address')) {
+            $envelope->replyTo(config('mail.reply_to.address'), config('mail.reply_to.name') ?? null);
+        }
+
+        return $envelope;
     }
 
     public function content(): Content
@@ -37,7 +48,7 @@ class CashSessionClosedMail extends Mailable
             'paymentReconciliations' => fn ($query) => $query->orderBy('id'),
         ]);
         $timezone = $this->timezone((string) $session->company->timezone);
-        $sales = Sale::query()->where('cash_session_id', $session->id)->completed()->selectRaw('COUNT(*) as quantity, COALESCE(SUM(total), 0) as total')->first();
+        $sales = Sale::query()->where('cash_session_id', $session->id)->completed()->selectRaw('COALESCE(SUM(total), 0) as total')->first();
         $payments = DB::table('sale_payments as payments')
             ->join('sales', 'sales.id', '=', 'payments.sale_id')
             ->join('payment_methods as methods', 'methods.id', '=', 'payments.payment_method_id')
@@ -54,11 +65,12 @@ class CashSessionClosedMail extends Mailable
             ->orderBy('type')
             ->get();
         $durationMinutes = $session->closed_at ? (int) $session->opened_at->diffInMinutes($session->closed_at) : 0;
+        $closingSummary = app(CashClosingSummaryService::class)->summarize($session);
 
         return new Content(
             view: 'emails.cash.session-closed',
             text: 'emails.cash.session-closed-text',
-            with: compact('session', 'timezone', 'sales', 'payments', 'movements', 'durationMinutes'),
+            with: compact('session', 'timezone', 'sales', 'payments', 'movements', 'durationMinutes', 'closingSummary'),
         );
     }
 

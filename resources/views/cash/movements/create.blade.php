@@ -15,10 +15,10 @@
     @endif
 
     <x-card>
-        <div class="mb-6 rounded-xl bg-slate-900 p-5 text-white">
+        @if($expectedCash !== null)<div class="mb-6 rounded-xl bg-slate-900 p-5 text-white">
             <span class="text-sm text-slate-300">Efectivo esperado actual</span>
             <strong class="block text-3xl">₡{{ number_format($expectedCash, 0, ',', '.') }}</strong>
-        </div>
+        </div>@endif
 
         <form method="POST" action="{{ route('cash.movements.store', $cashSession) }}" class="space-y-5" @submit="processing = true">
             @csrf

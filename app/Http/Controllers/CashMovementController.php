@@ -38,7 +38,7 @@ class CashMovementController extends Controller
         return view('cash.movements.index', [
             'cashSession' => $cashSession->loadMissing('cashRegister:id,name'),
             'movements' => $movements,
-            'expectedCash' => $calculator->calculate($cashSession),
+            'expectedCash' => ($request->user()->hasPermission('caja.administrar', $company) || $request->user()->hasPermission('caja.ver_todas', $company)) ? $calculator->calculate($cashSession) : null,
             'companyTimezone' => $this->companyTimezone($company),
             'canCreate' => $request->user()->hasPermission('caja.movimientos', $company)
                 && ($settings->session_mode === CompanyCashSetting::SESSION_MODE_SHARED
@@ -60,7 +60,7 @@ class CashMovementController extends Controller
 
         return view('cash.movements.create', [
             'cashSession' => $cashSession->loadMissing('cashRegister:id,name'),
-            'expectedCash' => $calculator->calculate($cashSession),
+            'expectedCash' => ($request->user()->hasPermission('caja.administrar', $company) || $request->user()->hasPermission('caja.ver_todas', $company)) ? $calculator->calculate($cashSession) : null,
             'selectedType' => $selectedType,
             'requestToken' => (string) Str::uuid(),
         ]);

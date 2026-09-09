@@ -6,6 +6,7 @@ use App\Http\Requests\IndexCashSessionHistoryRequest;
 use App\Models\CashSession;
 use App\Models\CashSessionMailNotification;
 use App\Models\Company;
+use App\Services\Cash\CashClosingSummaryService;
 use App\Services\Cash\CashSessionHistoryService;
 use App\Services\Cash\CashSessionMailRetryService;
 use DateTimeZone;
@@ -41,6 +42,7 @@ class CashSessionHistoryController extends Controller
             'cashSession' => $service->loadDetail($cashSession, $sensitive),
             'sensitive' => $sensitive,
             'companyTimezone' => $this->companyTimezone($company),
+            'closingSummary' => $sensitive ? app(CashClosingSummaryService::class)->summarize($cashSession) : null,
         ]);
     }
 
@@ -59,20 +61,26 @@ class CashSessionHistoryController extends Controller
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
         $company = Company::query()->where('is_active', true)->findOrFail($companyId);
-        abort_unless($request->user()->companies()->whereKey($companyId)->exists() && $request->user()->branches()->whereKey($branchId)->exists(), 403);
+        abort_unless($request->user()->companies()->whereKey($companyId)->exists(), 403);
+        abort_unless((! $branchId && $request->user()->hasPermission('dashboard.admin', $company) && $request->user()->hasPermission('caja.ver_todas', $company))
+            || $request->user()->branches()->whereKey($branchId)->where('branches.company_id', $companyId)->where('branches.is_active', true)->exists(), 403);
         abort_unless($request->user()->hasPermission('caja.ver', $company), 403);
+
         return [$company, $companyId, $branchId];
     }
 
     private function authorizeSessionScope(Request $request, CashSession $session, Company $company, int $companyId, int $branchId): void
     {
         abort_unless($session->company_id === $companyId, 404);
-        if (! $request->user()->hasPermission('caja.ver_todas', $company)) abort_unless($session->branch_id === $branchId, 404);
+        if (! $request->user()->hasPermission('caja.ver_todas', $company)) {
+            abort_unless($session->branch_id === $branchId, 404);
+        }
     }
 
     private function companyTimezone(Company $company): string
     {
         $timezone = trim((string) $company->timezone);
+
         return in_array($timezone, DateTimeZone::listIdentifiers(), true) ? $timezone : config('app.timezone');
     }
 }

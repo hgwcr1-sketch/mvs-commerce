@@ -16,10 +16,10 @@
 
     <x-card>
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            @if($expectedCash !== null)<div>
                 <span class="text-sm text-slate-500">Efectivo esperado actual</span>
                 <strong class="block text-3xl text-slate-900">₡{{ number_format($expectedCash, 0, ',', '.') }}</strong>
-            </div>
+            </div>@endif
             @if($canCreate)
                 <div class="flex flex-wrap gap-2">
                     <a href="{{ route('cash.movements.create', [$cashSession, 'type' => 'entry']) }}" class="rounded-xl bg-amber-500 px-4 py-3 font-normal text-black hover:bg-amber-600">Entrada</a>

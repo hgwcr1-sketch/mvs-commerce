@@ -14,6 +14,7 @@
     'Apertura' => $session->opened_at->copy()->timezone($timezone)->format('d/m/Y H:i:s'),
     'Cierre' => $session->closed_at->copy()->timezone($timezone)->format('d/m/Y H:i:s'),
     'Duración' => intdiv($durationMinutes,60).' h '.($durationMinutes%60).' min',
+    'Documentos/Transacciones' => $session->documents_count,
 ] as $label => $value)
 <tr><td style="border-bottom:1px solid #e2e8f0;color:#64748b">{{ $label }}</td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $value }}</strong></td></tr>
 @endforeach
@@ -26,8 +27,22 @@
 @endforeach
 </table>
 
+<h2 style="font-size:17px;margin:24px 0 10px">Total de conciliación</h2>
+@foreach(['expected'=>'Total esperado','reported'=>'Total declarado','difference'=>'Diferencia general'] as $key=>$label)
+<p>{{ $label }}: <strong>₡{{ number_format($closingSummary[$key],2,',','.') }}</strong></p>
+@endforeach
+<p>Efectivo físico más los demás medios, sin duplicar el efectivo por cobros. Revise cada diferencia aunque el neto sea cero.</p>
+<h2 style="font-size:17px;margin:24px 0 10px">Desglose de documentos</h2>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="7" style="border-collapse:collapse">
+<tr><td style="border-bottom:1px solid #e2e8f0;color:#64748b">Ventas completadas</td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $closingSummary['completed_sales_count'] }}</strong></td></tr>
+<tr><td style="border-bottom:1px solid #e2e8f0;color:#64748b">Abonos Cuentas por Cobrar</td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $closingSummary['account_receivable_payments_count'] }}</strong></td></tr>
+<tr><td style="border-bottom:1px solid #e2e8f0;color:#64748b">Abonos Apartados</td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $closingSummary['layaway_payments_count'] }}</strong></td></tr>
+<tr><td style="border-bottom:1px solid #e2e8f0;color:#64748b">Pagos Cuentas por Pagar</td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $closingSummary['account_payable_payments_count'] }}</strong></td></tr>
+<tr style="background:#f8fafc"><td style="border-bottom:1px solid #e2e8f0;color:#0f172a"><strong>Total documentos</strong></td><td align="right" style="border-bottom:1px solid #e2e8f0"><strong>{{ $closingSummary['documents_count'] }}</strong></td></tr>
+</table>
+
 <h2 style="font-size:17px;margin:24px 0 10px">Ventas y pagos válidos</h2>
-<p style="margin:0 0 8px">Ventas completadas: <strong>{{ (int)$sales->quantity }}</strong> — <strong>₡{{ number_format((float)$sales->total,0,',','.') }}</strong></p>
+<p style="margin:0 0 8px">Ventas completadas: <strong>{{ $closingSummary['completed_sales_count'] }}</strong> — <strong>₡{{ number_format((float)$sales->total,0,',','.') }}</strong></p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="7" style="border-collapse:collapse">
 @forelse($payments as $payment)<tr><td style="border-bottom:1px solid #e2e8f0">{{ $payment->name }} ({{ $payment->code }})</td><td align="right" style="border-bottom:1px solid #e2e8f0">₡{{ number_format((float)$payment->amount,0,',','.') }}</td></tr>@empty<tr><td style="color:#64748b">Sin pagos.</td></tr>@endforelse
 </table>

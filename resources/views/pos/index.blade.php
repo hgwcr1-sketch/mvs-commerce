@@ -109,8 +109,11 @@
     <div class="grid items-start gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:grid-cols-4">
         <section class="overflow-hidden rounded-xl bg-white shadow-sm lg:col-span-3">
                 <div class="border-b border-slate-200 px-4 py-2.5">
-                    <div class="flex items-center justify-between gap-3">
-                        <h2 class="text-base font-bold text-slate-800">Carrito temporal</h2>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-base font-bold text-slate-800">Carrito temporal</h2>
+                            <span x-show="cart.length" class="text-sm font-semibold text-slate-600 bg-slate-100 rounded-full px-2.5 py-0.5" x-text="`Cantidad de artículos: ${totalItems}`"></span>
+                        </div>
                         <button x-show="cart.length" type="button" @click="clearCart" class="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Limpiar carrito</button>
                     </div>
                     <p x-show="notice" x-text="notice" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800"></p>
@@ -364,6 +367,7 @@
             <div class="leading-tight">
                 <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
                 <p class="text-xl font-black text-slate-900" x-text="money(grandTotal)"></p>
+                <p x-show="totalItems" class="text-xs text-slate-500" x-text="`Cantidad de artículos: ${totalItems}`"></p>
             </div>
             @can('ventas.crear')
                 <button type="button" @click="openCheckout" :disabled="!canCheckout"
@@ -862,6 +866,9 @@ document.addEventListener('alpine:init', () => {
         },
         get grandTotal() {
             return Math.round(this.decimal4(this.subtotal + this.taxTotal));
+        },
+        get totalItems() {
+            return this.cart.reduce((sum, item) => sum + this.numberValue(item.quantity), 0);
         },
         get roundingTotal() {
             return this.decimal4(this.grandTotal - this.decimal4(this.subtotal + this.taxTotal));

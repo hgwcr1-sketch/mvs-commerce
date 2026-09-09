@@ -14,6 +14,9 @@
 @endphp
 
 <div class="mx-auto max-w-6xl space-y-6">
+    @if($sensitive && $cashSession->closing_submitted_at)
+        @include('cash.closing._totals')
+    @endif
 
     <div class="flex items-start justify-between gap-4">
         <div>

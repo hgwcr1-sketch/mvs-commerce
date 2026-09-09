@@ -76,7 +76,7 @@ class CashMovementService
                 $expected = $this->expectedAmountService->calculate($session);
                 if ($amount > $expected) {
                     throw ValidationException::withMessages([
-                        'amount' => 'El monto supera el efectivo esperado disponible de ₡'.number_format($expected, 0, ',', '.'),
+                        'amount' => 'El monto supera el efectivo disponible para este movimiento.',
                     ]);
                 }
             }

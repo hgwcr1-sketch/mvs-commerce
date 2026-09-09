@@ -19,7 +19,14 @@ class CashSessionOpenedMail extends Mailable
     public function envelope(): Envelope
     {
         $this->cashSession->loadMissing('cashRegister:id,name');
-        return new Envelope(subject: '[MVS] Apertura '.$this->cashSession->session_number.' — '.$this->cashSession->cashRegister->name);
+        $envelope = new Envelope(subject: '[MVS] Apertura '.$this->cashSession->session_number.' — '.$this->cashSession->cashRegister->name);
+        if (config('mail.notifications.from.address')) {
+            $envelope->from(config('mail.notifications.from.address'), config('mail.notifications.from.name') ?? null);
+        }
+        if (config('mail.reply_to.address')) {
+            $envelope->replyTo(config('mail.reply_to.address'), config('mail.reply_to.name') ?? null);
+        }
+        return $envelope;
     }
 
     public function content(): Content
