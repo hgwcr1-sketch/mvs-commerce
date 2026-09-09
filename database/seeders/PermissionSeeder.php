@@ -17,6 +17,7 @@ class PermissionSeeder extends Seeder
 
             // Dashboard
             ['name' => 'dashboard.ver', 'label' => 'Ver dashboard', 'module' => 'Dashboard'],
+            ['name' => 'dashboard.admin', 'label' => 'Administrar dashboard', 'module' => 'Dashboard'],
 
             // POS
             ['name' => 'pos.acceder', 'label' => 'Acceder al POS', 'module' => 'POS'],
