@@ -308,7 +308,7 @@
             <section class="rounded-xl bg-white p-3 shadow-sm">
                 <h2 class="text-sm font-bold text-slate-800">Formas de pago disponibles</h2>
                 <div class="mt-2 flex flex-wrap gap-1.5">
-                    @forelse($paymentMethods as $paymentMethod)
+                    @forelse($paymentMethods->where('type', '!=', 'loyalty_points') as $paymentMethod)
                         <span class="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{{ $paymentMethod->name }}</span>
                     @empty
                         <span class="text-sm text-slate-500">No hay formas de pago activas.</span>
@@ -528,17 +528,17 @@
                                 <div class="rounded-2xl border border-[#B9BDC2] p-4">
                                     <div class="flex items-center justify-between"><h3 class="font-black">Pagos aplicados</h3><span x-show="checkout.payments.length > 1" class="rounded-full bg-[#B1922D]/15 px-3 py-1 text-xs font-black text-[#806817]">Pago mixto</span></div>
                                     <p x-show="checkout.payments.length === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
-                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
+                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
                                 </div>
                             </section>
 
                             <section class="space-y-4" aria-label="Monto y formas de pago">
                                 <div class="rounded-2xl border-2 border-[#B1922D] p-5"><div class="flex items-center justify-between gap-3"><label for="checkout-amount" class="font-black text-[#111111]">Monto a aplicar</label><button type="button" @click="usePendingBalance" class="text-sm font-bold text-[#806817] underline">Usar saldo pendiente</button></div><div class="mt-2 flex min-w-0 items-center rounded-xl bg-slate-50 px-4"><span class="shrink-0 text-3xl font-black text-[#806817]">₡</span><input id="checkout-amount" x-ref="checkoutAmount" x-model="checkout.draft.amount" @focus="$event.target.select()" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="min-w-0 w-full border-0 bg-transparent py-4 pl-2 text-right text-3xl font-black text-[#111111] focus:ring-0 sm:text-4xl"></div></div>
-                                <div><div class="flex items-end justify-between"><div><h3 class="text-lg font-black">Formas de pago</h3><p class="text-xs text-slate-500">Seleccione un método para aplicar el monto.</p></div><span class="text-xs font-semibold text-slate-500">Sin apertura de caja</span></div>
-                                    <div x-show="selectedCustomer" x-transition class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
+                                <div><div class="flex items-end justify-between"><div><h3 class="text-lg font-black">Formas de pago</h3><p class="text-xs text-slate-500">Seleccione un método para aplicar el monto.</p></div></div>
+                                    <div x-transition class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
                                         <div class="flex items-center justify-between gap-3"><h4 class="text-sm font-black text-[#111111]">Puntos de fidelización</h4><span x-show="loyalty.loading" class="text-xs font-semibold text-slate-400">Consultando…</span></div>
                                         <p x-show="!loyalty.loading && loyaltyBlockedReason" class="mt-1 text-xs font-medium text-slate-500" x-text="loyaltyBlockedReason"></p>
-                                        <div x-show="!loyalty.loading && loyaltyUsable" class="mt-3 space-y-3">
+                                        <div x-show="!loyalty.loading && loyalty.available" class="mt-3 space-y-3">
                                             <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                                                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Saldo</p><p class="mt-0.5 font-bold text-slate-800"><span x-text="formatPoints(loyalty.available_points)"></span> pts</p></div>
                                                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2"><p class="font-semibold uppercase text-slate-400">Valor</p><p class="mt-0.5 font-bold text-slate-800" x-text="money2(loyalty.available_money)"></p></div>
@@ -547,7 +547,7 @@
                                             </div>
                                             <div class="grid items-start gap-3 sm:grid-cols-2">
                                                 <label class="block text-xs font-semibold uppercase text-slate-500">Usar puntos
-                                                    <input type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0" x-model="loyalty.requested" :disabled="checkout.processing" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-base font-bold text-[#111111] focus:border-[#B1922D] focus:ring-2 focus:ring-amber-500/30 focus:outline-none">
+                                                    <input type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0" x-model="loyalty.requested" :disabled="checkout.processing || !loyaltyUsable" class="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-base font-bold text-[#111111] focus:border-[#B1922D] focus:ring-2 focus:ring-amber-500/30 focus:outline-none">
                                                 </label>
                                                 <div class="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
                                                     <div class="flex justify-between"><span class="text-slate-500">Valor del canje</span><strong class="text-slate-800" x-text="money2(loyaltyRedeemedEstimate)"></strong></div>
@@ -557,13 +557,33 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-black ring-4 ring-amber-500/30 hover:bg-amber-600' : 'border-amber-500 bg-amber-500 text-black hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Próximamente' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-black ring-4 ring-amber-500/30 hover:bg-amber-600' : 'border-amber-500 bg-amber-500 text-black hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
                                 </div>
 
                                 <div x-show="selectedPaymentMethod" x-transition class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4">
                                     <div class="flex items-center justify-between"><strong x-text="selectedPaymentMethod?.name"></strong><span class="font-black text-[#806817]" x-text="money(Number(checkout.draft.amount))"></span></div>
                                     <div x-show="selectedPaymentMethod?.requires_reference" class="mt-3"><label for="checkout-reference" class="text-sm font-bold">Referencia *</label><input id="checkout-reference" x-ref="checkoutReference" x-model="checkout.draft.reference" @keydown.enter.prevent="addPayment" maxlength="150" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 focus:border-[#B1922D] focus:ring-[#B1922D]"></div>
-                                    <div x-show="selectedPaymentMethod?.allows_change" class="mt-3"><label for="checkout-received" class="text-sm font-bold">Monto recibido</label><input id="checkout-received" x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" @focus="$event.target.select()" @keydown.enter.prevent="addPayment" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 text-right text-2xl font-black focus:border-[#B1922D] focus:ring-[#B1922D]"><div class="mt-2 flex flex-wrap gap-2"><template x-for="amount in suggestedAmounts" :key="amount"><button type="button" @click="checkout.draft.receivedAmount = String(amount)" class="rounded-lg border border-[#B9BDC2] bg-white px-3 py-2 text-sm font-bold hover:border-[#B1922D]" x-text="money(amount)"></button></template></div><div class="mt-3 rounded-xl bg-[#111111] px-4 py-3 text-white"><span class="text-sm font-bold text-[#B9BDC2]">Vuelto</span><strong class="mt-1 block text-right text-2xl font-extrabold text-emerald-400 sm:text-3xl" x-text="money(Math.max(0, Number(checkout.draft.receivedAmount) - Number(checkout.draft.amount)))"></strong></div></div>
+                                    <div x-show="selectedPaymentMethod?.allows_change && !usdCashEnabled" class="mt-3"><label for="checkout-received" class="text-sm font-bold">Monto recibido</label><input id="checkout-received" x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" @focus="$event.target.select()" @keydown.enter.prevent="addPayment" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 text-right text-2xl font-black focus:border-[#B1922D] focus:ring-[#B1922D]"><div class="mt-2 flex flex-wrap gap-2"><template x-for="amount in suggestedAmounts" :key="amount"><button type="button" @click="checkout.draft.receivedAmount = String(amount)" class="rounded-lg border border-[#B9BDC2] bg-white px-3 py-2 text-sm font-bold hover:border-[#B1922D]" x-text="money(amount)"></button></template></div><div class="mt-3 rounded-xl bg-[#111111] px-4 py-3 text-white"><span class="text-sm font-bold text-[#B9BDC2]">Vuelto</span><strong class="mt-1 block text-right text-2xl font-extrabold text-emerald-400 sm:text-3xl" x-text="money(Math.max(0, Number(checkout.draft.receivedAmount) - Number(checkout.draft.amount)))"></strong></div></div>
+                                    <template x-if="usdCashEnabled">
+                                        <div class="mt-3 space-y-3 rounded-xl border border-slate-400 bg-white p-3">
+                                            <p class="text-sm">Tipo de cambio de la sesión: US$ 1 = ₡<strong x-text="usdSession.rate"></strong></p>
+                                            <div class="grid gap-3 sm:grid-cols-2">
+                                                <label class="text-sm font-semibold">Monto recibido CRC<input x-model="checkout.draft.receivedAmount" inputmode="numeric" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
+                                                <label class="text-sm font-semibold">Monto recibido USD<input x-model="checkout.draft.receivedUsd" inputmode="decimal" placeholder="0.00" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
+                                            </div>
+                                            <dl class="grid gap-2 text-sm sm:grid-cols-3">
+                                                <div><dt>Equivalente CRC del USD</dt><dd x-text="'₡' + (usdDraft?.equivalent ?? '—')"></dd></div>
+                                                <div><dt>Total cubierto</dt><dd x-text="'₡' + (usdDraft?.covered ?? '—')"></dd></div>
+                                                <div><dt>Restante del monto a aplicar</dt><dd x-text="'₡' + (usdDraft?.remaining ?? '—')"></dd></div>
+                                            </dl>
+                                            <label x-show="usdDraft?.hasUsd && usdDraft?.hasChange && usdSession.policy === 'either'" class="block text-sm font-semibold">Moneda del cambio
+                                                <select x-model="checkout.draft.changeCurrency" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2">
+                                                    <option value="">Seleccione</option><option value="CRC">Cambio en colones</option><option value="USD">Cambio en dólares</option>
+                                                </select>
+                                            </label>
+                                            <p class="rounded-lg bg-slate-900 p-3 text-white">Cambio: <strong x-text="usdDraft?.currency === 'USD' ? 'US$ ' + usdDraft.changeUsd : '₡' + (usdDraft?.changeCrc ?? '0.0000')"></strong></p>
+                                        </div>
+                                    </template>
                                     <div class="mt-4 flex justify-end gap-2"><button type="button" @click="cancelPaymentDraft" class="rounded-xl border border-[#B9BDC2] px-4 py-2 font-bold">Cancelar</button><button type="button" @click="addPayment" :disabled="!canAddPayment || checkout.processing" class="rounded-xl bg-amber-500 px-5 py-2 font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:opacity-40" x-text="selectedPaymentMethod?.allows_change ? 'Agregar efectivo' : 'Agregar pago'"></button></div>
                                 </div>
                                 <p x-show="checkoutError" x-text="checkoutError" class="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700"></p>
@@ -574,7 +594,7 @@
                     <footer class="grid shrink-0 grid-cols-2 gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:flex sm:justify-end sm:px-6"><button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="rounded-xl border border-[#B9BDC2] px-5 py-3 font-bold">Cancelar</button><button type="button" @click="clearPayments" :disabled="checkout.processing || !checkout.payments.length" class="rounded-xl border border-[#B1922D] px-5 py-3 font-bold text-[#806817] disabled:opacity-40">Limpiar pagos</button><button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm" class="col-span-2 rounded-xl bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:bg-slate-300" x-text="checkout.processing ? 'Procesando…' : `Confirmar cobro — ${money(grandTotal)}`"></button></footer>
                 </div>
             </template>
-            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-[#111111] px-5 py-3 font-normal text-white">Imprimir comprobante</a><button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta</button></div></div></template>
+            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)"><template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)" :key="payment.payment_method_id"><p x-text="usdPaymentLabel(payment)"></p></template></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-[#111111] px-5 py-3 font-normal text-white">Imprimir comprobante</a><button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta</button></div></div></template>
         </div>
     </div>
 
@@ -775,8 +795,9 @@ document.addEventListener('alpine:init', () => {
         creatingQuote: false,
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
         cashSessionId: @json($cashSession?->id),
+        usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
-        paymentMethods: @json($paymentMethods->values()),
+        paymentMethods: @json($paymentMethods->where('type', '!=', 'loyalty_points')->values()),
         checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null },
         quickCustomer: {
             open: false,
@@ -800,6 +821,7 @@ document.addEventListener('alpine:init', () => {
             const quoteId = new URLSearchParams(window.location.search).get('quote_id');
             if (quoteId) this.loadQuote(quoteId);
             this.$watch('customerId', () => this.refreshLoyalty());
+            this.$watch('cashSessionId', () => this.clearPayments());
             this.$watch('grandTotal', () => { if (this.customerId) this.refreshLoyalty(); });
             const closeDropdownsOnScroll = () => {
                 if (this.resultsOpen && document.activeElement !== this.$refs.searchInput) this.closeResults();
@@ -907,11 +929,46 @@ document.addEventListener('alpine:init', () => {
         },
         get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
+        get usdSession() { return this.usdSessions.find(session => String(session.id) === String(this.cashSessionId)); },
+        get usdCashEnabled() { return this.selectedPaymentMethod?.type === 'cash' && this.usdSession?.enabled === true; },
+        decimalUnits(value) {
+            const text = String(value ?? '').trim() || '0';
+            if (!/^\d{1,15}(?:\.\d{1,4})?$/.test(text)) return null;
+            const [whole, fraction = ''] = text.split('.');
+            return BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'));
+        },
+        decimalText(units) {
+            const sign = units < 0n ? '-' : '';
+            const absolute = units < 0n ? -units : units;
+            return sign + String(absolute / 10000n) + '.' + String(absolute % 10000n).padStart(4, '0');
+        },
+        get usdDraft() {
+            const crc = this.decimalUnits(this.checkout.draft.receivedAmount);
+            const usd = this.decimalUnits(this.checkout.draft.receivedUsd);
+            const rate = this.decimalUnits(this.usdSession?.rate);
+            const amount = this.decimalUnits(this.checkout.draft.amount);
+            if (crc === null || usd === null || rate === null || amount === null || rate <= 0n) return null;
+            const equivalent = usd * rate / 10000n;
+            const covered = crc + equivalent;
+            const excess = covered > amount ? covered - amount : 0n;
+            const currency = usd === 0n || this.usdSession.policy === 'crc_only' ? 'CRC'
+                : this.usdSession.policy === 'usd_only' ? 'USD' : this.checkout.draft.changeCurrency;
+            const changeUsd = currency === 'USD' ? (excess * 10000n * 2n + rate) / (rate * 2n) : 0n;
+            return { valid: covered >= amount && (excess === 0n || ['CRC', 'USD'].includes(currency)),
+                hasChange: excess > 0n, hasUsd: usd > 0n, currency,
+                equivalent: this.decimalText(equivalent), covered: this.decimalText(covered),
+                remaining: this.decimalText(covered < amount ? amount - covered : 0n),
+                receivedUsd: this.decimalText(usd), receivedCrc: this.decimalText(crc),
+                changeUsd: this.decimalText(changeUsd), changeCrc: this.decimalText(currency === 'CRC' ? excess : 0n) };
+        },
+        usdPaymentLabel(payment) {
+            return `Recibido US$ ${payment.received_amount_usd || '0.0000'} · Cambio US$ ${payment.change_amount_usd || '0.0000'}`;
+        },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, Math.round(this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate)); },
         get loyaltyRequestedPoints() {
             const value = Number(this.loyalty.requested);
-            if (!this.loyalty.available || !Number.isFinite(value) || value <= 0) return 0;
+            if (!this.loyaltyUsable || !Number.isFinite(value) || value <= 0) return 0;
             const max = Number(this.loyalty.max_redeemable_points);
             if (Number.isFinite(max) && max > 0) return Math.min(value, max);
             return value;
@@ -929,6 +986,7 @@ document.addEventListener('alpine:init', () => {
             }
             if (!this.loyalty.offers_allowed) return 'El canje de puntos no está permitido en ofertas.';
             if (!this.loyalty.eligible) return 'El saldo no alcanza el mínimo requerido para canjear.';
+            if (Number(this.loyalty.max_redeemable_points) <= 0) return 'No hay puntos canjeables para el monto actual de la venta.';
             return '';
         },
         get loyaltyFractionalPending() {
@@ -944,6 +1002,7 @@ document.addEventListener('alpine:init', () => {
             if (!method || this.checkout.processing || this.methodUnavailable(method) || !/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) return false;
             if (method.type === 'credit' && !this.creditEligible) return false;
             if (method.requires_reference && !this.checkout.draft.reference.trim()) return false;
+            if (this.usdCashEnabled) return this.usdDraft?.valid === true;
             if (!method.allows_change) return true;
             if (!/^\d+$/.test(String(this.checkout.draft.receivedAmount)) || Number(this.checkout.draft.receivedAmount) < amount) return false;
             return true;
@@ -1245,6 +1304,8 @@ document.addEventListener('alpine:init', () => {
             if (!/^\d+$/.test(String(this.checkout.draft.amount)) || amount <= 0 || amount > this.pendingBalance) { this.checkout.error = 'Indique un monto entero que no supere el saldo pendiente.'; this.$refs.checkoutAmount?.focus(); return; }
             this.checkout.error = '';
             this.checkout.draft.reference = '';
+            this.checkout.draft.receivedUsd = '';
+            this.checkout.draft.changeCurrency = '';
             this.checkout.draft.receivedAmount = String(amount);
             if (!method.requires_reference && !method.allows_change) { this.addPayment(); return; }
             this.$nextTick(() => { const field = method.requires_reference ? this.$refs.checkoutReference : this.$refs.receivedAmount; field?.focus(); field?.select?.(); });
@@ -1259,6 +1320,15 @@ document.addEventListener('alpine:init', () => {
         },
         addPayment() {
             if (!this.canAddPayment) return;
+            if (this.usdCashEnabled && this.usdDraft?.hasUsd) {
+                const draft = this.usdDraft;
+                this.checkout.payments.push({ payment_method_id: this.selectedPaymentMethod.id, method_name: this.selectedPaymentMethod.name,
+                    method_type: 'cash', amount: this.checkout.draft.amount, received_amount: draft.receivedCrc,
+                    received_amount_usd: draft.receivedUsd, change_amount: draft.changeCrc, change_amount_usd: draft.changeUsd,
+                    change_currency: draft.hasChange ? draft.currency : null, reference: this.checkout.draft.reference.trim() || null });
+                this.cancelPaymentDraft();
+                return;
+            }
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount), received = method.allows_change ? Number(this.checkout.draft.receivedAmount) : amount;
             this.checkout.payments.push({ payment_method_id: method.id, method_name: method.name, method_type: method.type, amount, received_amount: received, change_amount: method.allows_change ? received - amount : 0, reference: this.checkout.draft.reference.trim() || null });
             this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' };
@@ -1285,7 +1355,7 @@ document.addEventListener('alpine:init', () => {
                         customer_id: this.customerId,
                         document_type: this.documentType,
                         ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
-                        payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, reference }) => ({ payment_method_id, amount, received_amount, reference })),
+                        payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, received_amount_usd, change_currency, reference }) => ({ payment_method_id, amount, received_amount, ...(received_amount_usd ? { received_amount_usd, change_currency } : {}), reference })),
                         items: this.cart.map(item => ({
                             product_id: item.id,
                             quantity: item.quantity,

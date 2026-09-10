@@ -80,8 +80,20 @@ class StorePosSaleRequest extends FormRequest
             'payments' => ['required', 'array', 'min:1'],
             'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d+$/'],
-            'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', 'regex:/^\d+$/'],
+            'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', function ($attribute, $value, $fail) {
+                $usd = $this->input(str_replace('.received_amount', '.received_amount_usd', $attribute));
+                $pattern = $usd !== null && preg_match('/^\d{1,15}(?:\.\d{1,4})?$/D', (string) $usd) && bccomp((string) $usd, '0', 4) > 0
+                    ? '/^\d{1,15}(?:\.\d{1,4})?$/D' : '/^\d{1,15}$/D';
+                if (! preg_match($pattern, (string) $value)) $fail('El efectivo recibido no tiene un formato válido.');
+            }],
             'payments.*.reference' => ['nullable', 'string', 'max:150'],
+            'payments.*.received_amount_usd' => ['nullable', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/'],
+            'payments.*.change_currency' => ['nullable', 'in:CRC,USD'],
+            'payments.*.exchange_rate_snapshot' => ['prohibited'],
+            'payments.*.usd_exchange_rate' => ['prohibited'],
+            'payments.*.change_amount_usd' => ['prohibited'],
+            'payments.*.cash_effect_amount_usd' => ['prohibited'],
+            'usd_exchange_rate' => ['prohibited'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer'],

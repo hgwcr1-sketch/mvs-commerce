@@ -394,6 +394,7 @@ class PosSaleProcessor
                     $total,
                     null,
                     $requestedPoints === null,
+                    $cashSession,
                 );
                 $isCredit = count($resolvedPayments) === 1 && $resolvedPayments[0]['method']->type === PaymentMethod::TYPE_CREDIT;
                 if ($isCredit && $customer === null) {
@@ -553,8 +554,12 @@ class PosSaleProcessor
                         'received_amount' => $payment['received_amount'],
                         'change_amount' => $payment['change_amount'],
                         'cash_effect_amount' => $payment['method']->affects_cash
-                                ? $payment['amount']
+                                ? ($payment['cash_effect_amount'] ?? $payment['amount'])
                                 : 0,
+                        'received_amount_usd' => $payment['received_amount_usd'] ?? null,
+                        'change_amount_usd' => $payment['change_amount_usd'] ?? null,
+                        'exchange_rate_snapshot' => $payment['exchange_rate_snapshot'] ?? null,
+                        'cash_effect_amount_usd' => $payment['cash_effect_amount_usd'] ?? null,
                         'reference' => $payment['reference'],
                         'status' => SalePayment::STATUS_COMPLETED,
                     ]);
@@ -939,29 +944,34 @@ class PosSaleProcessor
     private function canonicalPayments(
         array $payments,
     ): array {
+        foreach ($payments as $payment) {
+            foreach (['amount', 'received_amount', 'received_amount_usd'] as $field) {
+                if (isset($payment[$field]) && ! preg_match('/^\d{1,15}(?:\.\d{1,4})?$/D', (string) $payment[$field])) {
+                    throw ValidationException::withMessages(['payments' => 'Los montos deben ser decimales no negativos, con hasta cuatro decimales.']);
+                }
+            }
+            if (isset($payment['change_currency']) && ! in_array($payment['change_currency'], ['CRC', 'USD'], true)) {
+                throw ValidationException::withMessages(['payments' => 'La moneda de vuelto no es válida.']);
+            }
+        }
         $canonical = array_map(
             fn (array $payment) => [
                 'payment_method_id' => (int) $payment['payment_method_id'],
 
-                'amount' => number_format(
-                    (float) $payment['amount'],
-                    4,
-                    '.',
-                    '',
-                ),
+                'amount' => bcadd((string) $payment['amount'], '0', 4),
 
                 'received_amount' => array_key_exists(
                     'received_amount',
                     $payment,
                 )
                     && $payment['received_amount'] !== null
-                        ? number_format(
-                            (float) $payment['received_amount'],
-                            4,
-                            '.',
-                            '',
-                        )
+                        ? bcadd((string) $payment['received_amount'], '0', 4)
                         : null,
+
+                // Preserve legacy CRC fingerprints; USD adds its physical amounts and choice.
+                ...(isset($payment['received_amount_usd']) && bccomp((string) $payment['received_amount_usd'], '0', 4) > 0
+                    ? ['received_amount_usd' => bcadd((string) $payment['received_amount_usd'], '0', 4), 'change_currency' => $payment['change_currency'] ?? null]
+                    : []),
 
                 'reference' => isset($payment['reference'])
                     && trim(
@@ -1017,8 +1027,14 @@ class PosSaleProcessor
         float $total,
         ?float $coverageTarget = null,
         bool $enforceCoverage = true,
+        ?\App\Models\CashSession $cashSession = null,
     ): array {
         $creditPayments = array_filter($payments, fn ($payment) => $paymentMethods->get($payment['payment_method_id'])?->type === PaymentMethod::TYPE_CREDIT);
+        foreach ($payments as $payment) {
+            if (isset($payment['received_amount_usd']) && $paymentMethods->get($payment['payment_method_id'])?->type !== PaymentMethod::TYPE_CASH) {
+                throw ValidationException::withMessages(['payments' => 'Los dólares se reciben únicamente dentro de Efectivo.']);
+            }
+        }
         if ($creditPayments !== []) {
             if (count($payments) !== 1 || count($creditPayments) !== 1 || (float) array_values($creditPayments)[0]['amount'] !== $total) {
                 throw ValidationException::withMessages(['payments' => 'En Crédito V1 la venta debe pagarse completamente a crédito; el crédito mixto no está disponible.']);
@@ -1029,9 +1045,9 @@ class PosSaleProcessor
         }
 
         $resolved = [];
-        $applied = 0.0;
+        $applied = '0.0000';
         $changeProducerSeen = false;
-        $coverage = $coverageTarget ?? $total;
+        $coverage = bcadd((string) ($coverageTarget ?? $total), '0', 4);
 
         foreach ($payments as $index => $payment) {
             $method = $paymentMethods->get(
@@ -1061,35 +1077,41 @@ class PosSaleProcessor
                 ]);
             }
 
-            $amount = (float) $payment['amount'];
+            $amount = $payment['amount'];
+            $pending = bcsub($coverage, $applied, 4);
 
-            $pending = $this->decimal4(
-                $coverage - $applied,
-            );
-
-            if ($amount > $pending) {
+            if (bccomp($amount, '0', 4) <= 0 || bccomp($amount, $pending, 4) > 0) {
                 throw ValidationException::withMessages([
                     'payments' => "El monto aplicado con {$method->name} supera el saldo pendiente.",
                 ]);
             }
 
-            if ($method->allows_change) {
+            $usd = [];
+            if (isset($payment['received_amount_usd'])) {
+                $usd = $this->resolveUsdCash($payment, $method, $cashSession);
+                $received = $usd['received_amount'];
+                $change = $usd['change_amount'];
+                if (bccomp($change, '0', 4) > 0 || bccomp($usd['change_amount_usd'], '0', 4) > 0) {
+                    if ($changeProducerSeen || $index !== array_key_last($payments)) {
+                        throw ValidationException::withMessages(['payments' => 'El único pago que produce vuelto debe ser el último.']);
+                    }
+                    $changeProducerSeen = true;
+                }
+            } elseif ($method->allows_change) {
                 $received =
                     $payment['received_amount'] === null
                         ? $amount
-                        : (float) $payment['received_amount'];
+                        : $payment['received_amount'];
 
-                if ($received < $amount) {
+                if (bccomp($received, $amount, 4) < 0) {
                     throw ValidationException::withMessages([
                         'payments' => "El monto recibido con {$method->name} es insuficiente.",
                     ]);
                 }
 
-                $change = $this->decimal4(
-                    $received - $amount,
-                );
+                $change = bcsub($received, $amount, 4);
 
-                if ($change > 0) {
+                if (bccomp($change, '0', 4) > 0) {
                     if (
                         $changeProducerSeen
                         || $index !== array_key_last($payments)
@@ -1103,7 +1125,7 @@ class PosSaleProcessor
                 }
             } else {
                 $received = $amount;
-                $change = 0.0;
+                $change = '0.0000';
             }
 
             $resolved[] = [
@@ -1112,16 +1134,15 @@ class PosSaleProcessor
                 'received_amount' => $received,
                 'change_amount' => $change,
                 'reference' => $payment['reference'],
+                ...$usd,
             ];
 
-            $applied = $this->decimal4(
-                $applied + $amount,
-            );
+            $applied = bcadd($applied, $amount, 4);
         }
 
         if (
             $enforceCoverage
-            && $applied !== $this->decimal4($coverage)
+            && bccomp($applied, $coverage, 4) !== 0
         ) {
             throw ValidationException::withMessages([
                 'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta.',
@@ -1129,6 +1150,51 @@ class PosSaleProcessor
         }
 
         return $resolved;
+    }
+
+    private function resolveUsdCash(array $payment, PaymentMethod $method, ?\App\Models\CashSession $session): array
+    {
+        if ($method->type !== PaymentMethod::TYPE_CASH || ! $method->affects_cash || ! $method->allows_change
+            || ! $session?->accepts_usd_snapshot || ! $session->usd_exchange_rate
+            || bccomp($session->usd_exchange_rate, '0', 4) <= 0) {
+            throw ValidationException::withMessages(['payments' => 'USD requiere Efectivo y una sesión que acepte dólares con tipo de cambio válido.']);
+        }
+        $rate = $session->usd_exchange_rate;
+        $receivedCrc = $payment['received_amount'] ?? '0.0000';
+        $receivedUsd = $payment['received_amount_usd'];
+        $covered = bcadd($receivedCrc, bcmul($receivedUsd, $rate, 4), 4);
+        if (bccomp($covered, '999999999999999.9999', 4) > 0) {
+            throw ValidationException::withMessages(['payments' => 'El efectivo recibido supera el monto máximo admitido.']);
+        }
+        $excess = bcsub($covered, $payment['amount'], 4);
+        if (bccomp($excess, '0', 4) < 0) {
+            throw ValidationException::withMessages(['payments' => 'El efectivo CRC y USD recibido no cubre el monto aplicado.']);
+        }
+        $changeCrc = $changeUsd = '0.0000';
+        if (bccomp($excess, '0', 4) > 0) {
+            $policy = $session->usd_change_policy_snapshot;
+            $currency = $payment['change_currency'] ?? match ($policy) {
+                'crc_only' => 'CRC', 'usd_only' => 'USD', default => null,
+            };
+            if (! in_array($policy, ['crc_only', 'usd_only', 'either'], true)
+                || ! in_array($currency, ['CRC', 'USD'], true)
+                || ($policy === 'crc_only' && $currency !== 'CRC')
+                || ($policy === 'usd_only' && $currency !== 'USD')) {
+                throw ValidationException::withMessages(['payments' => 'Seleccione una moneda de vuelto permitida por la sesión de caja.']);
+            }
+            if ($currency === 'CRC') {
+                $changeCrc = $excess;
+            } else {
+                // Round once, half up, at the persisted four-decimal USD precision.
+                $changeUsd = bcadd(bcdiv($excess, $rate, 8), '0.00005', 4);
+            }
+        }
+
+        return ['received_amount' => $receivedCrc, 'change_amount' => $changeCrc,
+            'received_amount_usd' => $receivedUsd, 'change_amount_usd' => $changeUsd,
+            'exchange_rate_snapshot' => $rate,
+            'cash_effect_amount' => bcsub($receivedCrc, $changeCrc, 4),
+            'cash_effect_amount_usd' => bcsub($receivedUsd, $changeUsd, 4)];
     }
 
     private function fingerprint(

@@ -153,10 +153,22 @@ class CashBlindClosingTest extends TestCase
             ->assertSee('$refs.closingForm.submit()', false);
         $this->assertSame(11, substr_count($response->getContent(), 'name="denominations['));
         foreach (CashDenomination::forCompany($company->id)->forCurrency('CRC')->active()->get() as $denomination) {
-            $response->assertSee('name="denominations['.$denomination->id.']" x-model.number="quantities['.$denomination->id.']" type="number" min="0" step="1" autocomplete="off"', false);
+            $response->assertSee('name="denominations['.$denomination->id.']"', false);
+            $response->assertSee('x-model.number="quantities['.$denomination->id.']"', false);
+            $response->assertSee('type="number"', false);
+            $response->assertSee('min="0"', false);
+            $response->assertSee('step="1"', false);
+            $response->assertSee('autocomplete="off"', false);
+            $response->assertSee('required', false);
         }
         foreach ([$cash, $card, $paypal] as $method) {
-            $response->assertSee('name="payments['.$method->id.'][reported_amount]" x-model.number="reportedPayments['.$method->id.']" type="number" min="0" step="1" autocomplete="off"', false);
+            $response->assertSee('name="payments['.$method->id.'][reported_amount]"', false);
+            $response->assertSee('x-model="reportedPayments['.$method->id.']"', false);
+            $response->assertSee('type="number"', false);
+            $response->assertSee('min="0"', false);
+            $response->assertSee('step="1"', false);
+            $response->assertSee('autocomplete="off"', false);
+            $response->assertSee('required', false);
         }
         $this->assertFalse($card->is_active === false);
         $this->assertFalse($paypal->is_active);

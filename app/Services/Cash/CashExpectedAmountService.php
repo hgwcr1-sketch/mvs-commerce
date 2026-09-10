@@ -51,4 +51,24 @@ class CashExpectedAmountService
 
         return $total;
     }
+
+    public function calculateUsdDecimal(CashSession $session): string
+    {
+        $total = bcadd((string) $session->opening_amount_usd, '0', 4);
+        $amounts = DB::table('sale_payments as payments')
+            ->join('sales', 'sales.id', '=', 'payments.sale_id')
+            ->where('payments.cash_session_id', $session->id)
+            ->where('sales.company_id', $session->company_id)
+            ->where('sales.branch_id', $session->branch_id)
+            ->where('payments.status', SalePayment::STATUS_COMPLETED)
+            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->where('payments.affects_cash_snapshot', true)
+            ->whereNotNull('payments.cash_effect_amount_usd')
+            ->pluck('payments.cash_effect_amount_usd');
+        foreach ($amounts as $amount) {
+            $total = bcadd($total, (string) $amount, 4);
+        }
+
+        return $total;
+    }
 }

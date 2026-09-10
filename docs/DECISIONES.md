@@ -2,6 +2,16 @@
 
 Este documento registra decisiones importantes que no deben ser revertidas por un agente sin revisar primero el contexto y obtener autorización cuando corresponda.
 
+## USD en POS — decisión de arquitectura (2026-09-09)
+
+USD es una moneda de Efectivo, no una forma de pago que el administrador deba crear. La disponibilidad automática dentro de Efectivo requiere `company_cash_settings.accepts_usd = true`, una sesión de caja aplicable con `accepts_usd_snapshot = true` y `usd_exchange_rate` válido y mayor que cero. Con configuración deshabilitada no se ofrece USD. El tipo de cambio utilizado pertenece a la sesión seleccionada; no se toma de un método llamado USD/Dólares ni del cliente sin validación de servidor.
+
+Esta decisión no habilita aún el cobro USD. La implementación debe conservar aislamiento empresa/sucursal, validar nuevamente la sesión al cobrar, usar precisión decimal y registrar moneda, importe original, conversión y vuelto para que Caja pueda conciliar ambas monedas. Debe respetar la política existente `usd_change_policy_snapshot`; no basta convertir visualmente dólares y registrarlos como efectivo CRC.
+
+Los métodos manuales USD/Dólares no son requisito del nuevo flujo y no se eliminan ni modifican automáticamente. Antes de retirarlos se revisan referencias históricas y operaciones pendientes; un método utilizado debe conservar su historial y evaluarse para desactivación, no eliminación.
+
+Auditoría local al registrar la decisión: no se encontraron métodos cuyo nombre/código contenga USD, dólar o dólares; MYM (`company_id=1`) tiene `accepts_usd=false` y no hay sesiones abiertas/en cierre. `sale_payments` aún no tiene campos de moneda/importe original USD; el checkout actual opera en CRC. Sin cambios de datos ni acceso a producción. La disponibilidad automática y el cobro USD completo quedan pendientes de implementación.
+
 ## Vencimiento P37 — referencia inicial aprobada (2026-09-07)
 
 La referencia de vencimiento tiene precedencia estricta: `last_qualifying_purchase_at` > `effective_at` de un único movimiento positivo P37 `legacy_initial_balance` válido. La migración no es una compra: nunca completar artificialmente `last_qualifying_purchase_at`, usar `last_activity_at` ni hacer backfill. Sin compra ni referencia P37 válida, no existe fecha calculable. Referencias legadas múltiples son ambiguas y se omiten, sin elegir fechas arbitrarias.

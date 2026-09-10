@@ -30,6 +30,22 @@
         </x-card>
         <x-card>
             <x-slot:header><h3 class="text-lg font-semibold">Formas de pago</h3></x-slot:header>
+            @if($cashSession->accepts_usd_snapshot)
+                @php($expectedUsd = $blind ? null : app(\App\Services\Cash\CashExpectedAmountService::class)->calculateUsdDecimal($cashSession))
+                <section class="mb-5 space-y-3 rounded-xl border border-slate-400 p-4" x-data="{ countedUsd: @js((string) old('counted_cash_usd', '')) }">
+                    <h3 class="text-lg font-semibold">Efectivo en dólares</h3>
+                    <label for="counted-cash-usd" class="block font-medium">US$ contado físicamente</label>
+                    <input id="counted-cash-usd" name="counted_cash_usd" x-model="countedUsd" type="number" inputmode="decimal" min="0" step="0.0001" required class="min-h-11 w-full rounded-xl border border-slate-400 px-4 py-3 text-right">
+                    <p class="text-sm text-slate-600">Registre 0 si no hay dólares físicos. Este conteo es independiente de las denominaciones CRC.</p>
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <p>Contado US$ <strong x-text="countedUsd || '—'"></strong></p>
+                        @unless($blind)
+                            <p>Esperado US$ <strong>{{ $expectedUsd }}</strong></p>
+                            <p>Diferencia US$ <strong x-text="usdDiff(countedUsd, @js($expectedUsd))"></strong></p>
+                        @endunless
+                    </div>
+                </section>
+            @endif
             <div class="space-y-5">
                 @forelse($methods as $method)
                     @php($source = $expectedBreakdown->get($method->id, ['sales'=>0,'receivables'=>0,'layaways'=>0,'payables'=>0,'total'=>0]))
@@ -46,7 +62,7 @@
                                 </dl>@endunless
                             </div>
                             <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-                                <div><label class="mb-2 block font-medium" for="payment-{{ $method->id }}">Monto reportado</label><input id="payment-{{ $method->id }}" name="payments[{{ $method->id }}][reported_amount]" x-model.number="reportedPayments[{{ $method->id }}]" type="number" min="0" step="1" autocomplete="off" required value="{{ old("payments.$method->id.reported_amount","") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 text-right focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
+                                <div><label class="mb-2 block font-medium" for="payment-{{ $method->id }}">Monto reportado</label><input id="payment-{{ $method->id }}" name="payments[{{ $method->id }}][reported_amount]" x-model="reportedPayments[{{ $method->id }}]" type="number" @if($cashSession->accepts_usd_snapshot && $method->type === 'cash') step="0.0001" @else min="0" step="1" @endif autocomplete="off" required value="{{ old("payments.$method->id.reported_amount","") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 text-right focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
                                 <div><label class="mb-2 block text-sm">Referencia</label><input name="payments[{{ $method->id }}][reference]" maxlength="150" value="{{ old("payments.$method->id.reference") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
                                 <div><label class="mb-2 block text-sm">Notas</label><input name="payments[{{ $method->id }}][notes]" maxlength="5000" value="{{ old("payments.$method->id.notes") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
                             </div>
@@ -102,6 +118,6 @@
     </div>
 </div>
 <script>
-function cashClosing(){return{processing:false,confirmationOpen:false,quantities:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>old("denominations.$d->id","")])),values:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>(float)$d->value])),labels:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>$d->label])),reportedPayments:@js($methods->mapWithKeys(fn($m)=>[$m->id=>old("payments.$m->id.reported_amount","")])),closingNotes:@js((string)old('closing_notes','')),money(value){return new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0}).format(Number(value)||0)},get cashTotal(){return Object.entries(this.values).reduce((sum,[id,value])=>sum+value*(Number(this.quantities[id])||0),0)},get positiveDenominations(){return Object.entries(this.values).map(([id,value])=>({id,quantity:Number(this.quantities[id])||0,value,label:this.labels[id]})).filter(item=>item.quantity>0)},requestConfirmation(){if(this.processing)return;this.confirmationOpen=true},confirmSubmit(){if(this.processing)return;this.processing=true;this.$nextTick(()=>this.$refs.closingForm.submit())}}}
+function cashClosing(){return{usdDiff(counted, expected){const parse=(value)=>{if(!/^\d+(?:\.\d{1,4})?$/.test(String(value)))return null;const [whole, fraction=""]=String(value).split(".");return BigInt(whole)*10000n+BigInt(fraction.padEnd(4,"0"))};const c=parse(counted),e=parse(expected);if(c===null||e===null)return "—";const diff=c-e,absolute=diff<0n?-diff:diff;return (diff<0n?"-":"")+String(absolute/10000n)+"."+String(absolute%10000n).padStart(4,"0")},processing:false,confirmationOpen:false,quantities:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>old("denominations.$d->id","")])),values:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>(float)$d->value])),labels:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>$d->label])),reportedPayments:@js($methods->mapWithKeys(fn($m)=>[$m->id=>old("payments.$m->id.reported_amount","")])),closingNotes:@js((string)old('closing_notes','')),money(value){return new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0}).format(Number(value)||0)},get cashTotal(){return Object.entries(this.values).reduce((sum,[id,value])=>sum+value*(Number(this.quantities[id])||0),0)},get positiveDenominations(){return Object.entries(this.values).map(([id,value])=>({id,quantity:Number(this.quantities[id])||0,value,label:this.labels[id]})).filter(item=>item.quantity>0)},requestConfirmation(){if(this.processing)return;this.confirmationOpen=true},confirmSubmit(){if(this.processing)return;this.processing=true;this.$nextTick(()=>this.$refs.closingForm.submit())}}}
 </script>
 @endsection

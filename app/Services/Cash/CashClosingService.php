@@ -72,6 +72,17 @@ class CashClosingService
 
             $now = now();
             $countedCash = '0.0000';
+            $countedUsd = $expectedUsd = $differenceUsd = null;
+            if ($session->accepts_usd_snapshot) {
+                if (! isset($data['counted_cash_usd']) || ! preg_match('/^\d{1,15}(?:\.\d{1,4})?$/D', (string) $data['counted_cash_usd'])) {
+                    throw ValidationException::withMessages(['counted_cash_usd' => 'Indique los dólares contados físicamente; 0 es válido.']);
+                }
+                $countedUsd = bcadd((string) $data['counted_cash_usd'], '0', 4);
+                $expectedUsd = $this->cashExpected->calculateUsdDecimal($session);
+                $differenceUsd = bcsub($countedUsd, $expectedUsd, 4);
+            } elseif (isset($data['counted_cash_usd']) && bccomp((string) $data['counted_cash_usd'], '0', 4) !== 0) {
+                throw ValidationException::withMessages(['counted_cash_usd' => 'Esta sesión no acepta dólares.']);
+            }
             foreach ($denominations as $denomination) {
                 $quantity = (int) $data['denominations'][$denomination->id];
                 $total = bcmul($denomination->value, (string) $quantity, 4);
@@ -82,9 +93,19 @@ class CashClosingService
             $cashDifference = bcsub($countedCash, $expectedCash, 4);
             $expectedBreakdown = $this->paymentExpected->breakdownDecimal($session);
             $differences = [ltrim($cashDifference, '-')];
+            if ($differenceUsd !== null && bccomp($differenceUsd, '0', 4) !== 0) {
+                // Existing tolerance is CRC, so compare the USD difference at the frozen rate.
+                if (! $session->usd_exchange_rate || bccomp($session->usd_exchange_rate, '0', 4) <= 0) {
+                    throw ValidationException::withMessages(['counted_cash_usd' => 'La sesión no tiene un tipo de cambio válido.']);
+                }
+                $differences[] = bcmul(ltrim($differenceUsd, '-'), $session->usd_exchange_rate, 4);
+            }
             foreach ($methods as $method) {
                 $breakdown = $expectedBreakdown->get($method->id, ['sales' => 0, 'receivables' => 0, 'layaways' => 0, 'payables' => 0, 'total' => 0]);
                 $reported = bcadd((string) $data['payments'][$method->id]['reported_amount'], '0', 4);
+                if (bccomp($reported, '0', 4) < 0 && ($method->type !== 'cash' || ! $session->accepts_usd_snapshot)) {
+                    throw ValidationException::withMessages(['payments' => 'Solo Efectivo admite un efecto físico CRC neto negativo por vuelto.']);
+                }
                 $expected = (string) $breakdown['total'];
                 $difference = bcsub($reported, $expected, 4);
                 $differences[] = ltrim($difference, '-');
@@ -92,6 +113,9 @@ class CashClosingService
             }
             $requiresAuthorization = (bool) $settings->require_difference_authorization && collect($differences)->contains(fn ($difference) => bccomp($difference, $session->tolerance_snapshot, 4) > 0);
             $updates = ['expected_cash' => $expectedCash, 'counted_cash' => $countedCash, 'difference_amount' => $cashDifference, 'closing_confirmation_token' => $data['request_token'], 'closing_submitted_at' => $now, 'closing_notes' => $data['closing_notes'] ?? null];
+            if ($session->accepts_usd_snapshot) {
+                $updates += ['expected_cash_usd' => $expectedUsd, 'counted_cash_usd' => $countedUsd, 'difference_amount_usd' => $differenceUsd];
+            }
             if (! $requiresAuthorization) {
                 $updates += ['status' => CashSession::STATUS_CLOSED, 'open_guard' => null, 'closed_by' => $user->id, 'closed_at' => $now];
             }

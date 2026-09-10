@@ -20,6 +20,10 @@ class SalePayment extends Model
         'received_amount',
         'change_amount',
         'cash_effect_amount',
+        'received_amount_usd',
+        'change_amount_usd',
+        'exchange_rate_snapshot',
+        'cash_effect_amount_usd',
         'reference',
         'status',
         'voided_by',
@@ -35,6 +39,10 @@ class SalePayment extends Model
             'change_amount' => 'decimal:4',
             'affects_cash_snapshot' => 'boolean',
             'cash_effect_amount' => 'decimal:4',
+            'received_amount_usd' => 'decimal:4',
+            'change_amount_usd' => 'decimal:4',
+            'exchange_rate_snapshot' => 'decimal:4',
+            'cash_effect_amount_usd' => 'decimal:4',
             'voided_at' => 'datetime',
         ];
     }

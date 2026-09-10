@@ -32,7 +32,14 @@ class SubmitCashClosingRequest extends FormRequest
             'denominations.*' => ['required', 'integer', 'min:0'],
             'payments' => ['present', 'array'],
             'payments.*' => ['required', 'array'],
-            'payments.*.reported_amount' => ['required', 'integer', 'min:0'],
+            'payments.*.reported_amount' => ['required', function ($attribute, $value, $fail) {
+                $methodId = explode('.', $attribute)[1] ?? null;
+                $usdSession = $this->route('cashSession')?->accepts_usd_snapshot;
+                $cash = \App\Models\PaymentMethod::where('company_id', session('active_company_id'))->whereKey($methodId)->where('type', 'cash')->exists();
+                $pattern = $usdSession && $cash ? '/^-?\d{1,15}(?:\.\d{1,4})?$/D' : '/^\d{1,15}$/D';
+                if (! preg_match($pattern, (string) $value)) $fail('El monto reportado no tiene un formato válido.');
+            }],
+            'counted_cash_usd' => ['nullable', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/'],
             'payments.*.reference' => ['nullable', 'string', 'max:150'],
             'payments.*.notes' => ['nullable', 'string', 'max:5000'],
             'closing_notes' => ['nullable', 'string', 'max:5000'],

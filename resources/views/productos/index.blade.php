@@ -178,7 +178,12 @@
                     <div class="min-w-0 flex-1">
                         <p class="truncate font-semibold text-slate-800">{{ $product->name }}</p>
                         <p class="mt-0.5 text-xs text-slate-500">{{ $product->internal_code }}@if($product->barcode) · {{ $product->barcode }}@endif</p>
-                        <p class="mt-1 text-xs text-slate-500">{{ $product->category->name ?? '-' }}@if($product->brand->name) · {{ $product->brand->name }}@endif</p>
+                        <p class="mt-1 text-xs text-slate-500">
+    {{ $product->category->name ?? '-' }}
+    @if($product->brand?->name)
+        · {{ $product->brand->name }}
+    @endif
+</p>
                     </div>
                     @if($product->is_active)
                         <span class="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Activo</span>
