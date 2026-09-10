@@ -14,6 +14,9 @@
         h2{margin:4px 0 0;font-size:13px;text-align:center;font-weight:700}
         .brand{color:#b7791f;letter-spacing:.08em}
         .center{text-align:center}
+        .loyalty-invitation{text-align:center;page-break-inside:avoid;overflow-wrap:anywhere}
+        .loyalty-invitation p{margin:3px 0;font-size:11px}
+        .loyalty-qr{display:block;width:25mm;height:25mm;max-width:100%;margin:2px auto}
         .muted{color:#475569;font-size:11px}
         .warning{margin:8px 0;border:1px dashed #92400e;padding:7px;color:#92400e;font-size:11px;font-weight:bold;text-align:center}
         .rule{border-top:1px dashed #64748b;margin:8px 0}
@@ -115,15 +118,25 @@
             </tbody>
         </table>
     @endif
-    @if($loyalty ?? null)
+    @if(($loyalty['kind'] ?? null) === 'invitation')
+        <div class="rule"></div>
+        <section class="loyalty-invitation" aria-label="Invitación al programa de fidelidad">
+            <p><strong>Únete a nuestro programa de fidelidad</strong></p>
+            <p>{{ $loyalty['portal_name'] }}</p>
+            <img class="loyalty-qr" src="{{ $loyalty['qr_image'] }}" alt="QR general del Portal de Clientes" width="95" height="95">
+            <p>Escanea para registrarte</p>
+        </section>
+    @elseif($loyalty ?? null)
         <div class="rule"></div>
         <section aria-label="Fidelización">
             <p><strong>Fidelización</strong>@if($loyalty['adjusted']) — saldo ajustado posteriormente @endif</p>
             <table class="{{ $format === '58mm' ? 'loyalty-table' : '' }}">
+                @if($loyalty['kind'] === 'history')
+                    <tr><td>Saldo anterior</td><td>{{ number_format((float) $loyalty['balance_before'], 2, ',', '.') }}</td></tr>
+                @endif
                 <tr><td>Puntos ganados</td><td>+{{ number_format((float) $loyalty['earned'], 2, ',', '.') }}</td></tr>
-                <tr><td>Puntos utilizados</td><td>-{{ number_format((float) $loyalty['redeemed'], 2, ',', '.') }}</td></tr>
-                <tr><td>Saldo anterior</td><td>{{ number_format((float) $loyalty['balance_before'], 2, ',', '.') }}</td></tr>
-                <tr><td>Saldo actual</td><td><strong>{{ number_format((float) $loyalty['balance_after'], 2, ',', '.') }}</strong></td></tr>
+                <tr><td>Puntos canjeados</td><td>-{{ number_format((float) $loyalty['redeemed'], 2, ',', '.') }}</td></tr>
+                <tr><td>{{ $loyalty['kind'] === 'history' ? 'Saldo final' : 'Saldo actual' }}</td><td><strong>{{ number_format((float) $loyalty['balance_after'], 2, ',', '.') }}</strong></td></tr>
             </table>
         </section>
     @endif
