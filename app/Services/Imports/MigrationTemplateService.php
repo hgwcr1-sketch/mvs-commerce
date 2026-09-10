@@ -24,6 +24,7 @@ class MigrationTemplateService
         $data->fromArray([$definition['headers']], null, 'A1');
         $data->freezePane('A2');
         $data->setAutoFilter('A1:'.$data->getHighestColumn().'1');
+        // Column styles apply to added customer rows without materializing millions of cells.
         $data->getStyle('A1:'.$data->getHighestColumn().'1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
         $data->getStyle('A1:'.$data->getHighestColumn().'1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF1E3A5F');
 
@@ -34,6 +35,9 @@ class MigrationTemplateService
                 ? NumberFormat::FORMAT_TEXT
                 : ($field['number_format'] ?? NumberFormat::FORMAT_GENERAL);
             $data->getStyle("{$column}2:{$column}".self::LAST_INPUT_ROW)->getNumberFormat()->setFormatCode($format);
+            if ($type === 'customers') {
+                $data->getStyle($column.':'.$column)->getNumberFormat()->setFormatCode($format);
+            }
         }
 
         $instructions = $spreadsheet->createSheet();
@@ -46,6 +50,10 @@ class MigrationTemplateService
             ]], null, 'A'.($row + 2));
         }
         $instructions->freezePane('A2');
+        if ($type === 'customers') {
+            $instructions->setCellValue('A20', 'Modo seguro: Crear solo clientes nuevos. Existentes y duplicados se ignoran sin modificar datos ni puntos.');
+            $instructions->setCellValue('A21', 'Las 250 filas preparadas no son un límite. Agregue las filas necesarias; puntos_iniciales es opcional y vale 0 por defecto.');
+        }
         $instructions->setAutoFilter('A1:E'.(count($definition['fields']) + 1));
         $instructions->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
         $instructions->getStyle('A1:E1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF1E3A5F');
@@ -80,7 +88,7 @@ class MigrationTemplateService
             $validation->setError('Seleccione un valor de la lista.');
             $validation->setShowDropDown(true);
             $validation->setFormula1("'CATALOGOS'!\${$catalogLetter}\$2:\${$catalogLetter}\$".(count($values) + 1));
-            $validation->setSqref("{$dataColumn}2:{$dataColumn}".self::LAST_INPUT_ROW);
+            $validation->setSqref("{$dataColumn}2:{$dataColumn}".($type === 'customers' ? 1048576 : self::LAST_INPUT_ROW));
             $data->setDataValidation("{$dataColumn}2", $validation);
         }
 
@@ -103,6 +111,7 @@ class MigrationTemplateService
                 'direccion' => ['text', 'Texto', null, 'San José, Costa Rica'], 'limite_credito' => ['number', 'Monto, máximo 2 decimales', null, '150000.00', '#,##0.00'],
                 'dias_credito' => ['number', 'Entero no negativo', null, '30', '0'], 'nivel_precio' => ['text', 'Texto', 'normal, wholesale, a, b, c', 'normal'],
                 'fecha_nacimiento' => ['text', 'Fecha AAAA-MM-DD', null, '1990-05-10'], 'activo' => ['text', 'Texto', 'Sí, No (compatibles: 1/0, true/false, activo/inactivo)', 'Sí'],
+                'puntos_iniciales' => ['number', 'Opcional; 0 por defecto. No negativo, hasta 4 decimales; solo clientes nuevos.', null, '500.2500', '0.0000'],
             ]), 'lists' => ['tipo_cliente' => ['individual', 'company'], 'tipo_identificacion' => ['01', '02', '03', '04', '05'], 'nivel_precio' => ['normal', 'wholesale', 'a', 'b', 'c'], 'activo' => $yesNo]],
             'products' => ['title' => 'Productos', 'headers' => ProductImportService::HEADERS, 'fields' => $this->fields(ProductImportService::HEADERS, [
                 'codigo_interno' => ['text', 'Texto (conservar ceros)', null, '000123'], 'nombre' => ['text', 'Texto', null, 'Producto ejemplo'],

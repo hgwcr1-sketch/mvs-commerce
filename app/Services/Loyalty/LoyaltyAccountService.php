@@ -72,6 +72,124 @@ class LoyaltyAccountService
         return $this->record($account, $points, LoyaltyMovement::TYPE_ADJUSTMENT, $context);
     }
 
+    /** Initialize new import accounts in batches, with the same adjustment totals and decimal rules. */
+    public function initializeImportPoints(Company $company, User $user, array $entries, string $sourceType, int $sourceId): void
+    {
+        if ($entries === []) {
+            return;
+        }
+        DB::transaction(function () use ($company, $user, $entries, $sourceType, $sourceId) {
+            $customerIds = array_column($entries, 'customer_id');
+            if (count(array_unique($customerIds)) !== count($entries)
+                || Customer::where('company_id', $company->id)->whereIn('id', $customerIds)->count() !== count($entries)
+                || ! $user->companies()->where('companies.id', $company->id)->exists()) {
+                throw ValidationException::withMessages(['points' => 'Los clientes y el usuario deben pertenecer a la empresa de importación.']);
+            }
+            $eventKeys = array_column($entries, 'event_key');
+            $existingMovements = LoyaltyMovement::where('company_id', $company->id)
+                ->whereIn('event_key', $eventKeys)->get()->keyBy('event_key');
+            $existingAccounts = LoyaltyAccount::where('company_id', $company->id)
+                ->whereIn('customer_id', $customerIds)->get()->keyBy('customer_id');
+
+            $toCreateAccounts = [];
+            $toCreateMovements = [];
+            $now = now();
+
+            foreach ($entries as $entry) {
+                $entry['points'] = $this->positiveDecimal($entry['points']);
+                $eventKey = $entry['event_key'];
+                $customerId = $entry['customer_id'];
+
+                if ($movement = $existingMovements->get($eventKey)) {
+                    if ((int) $movement->customer_id !== (int) $customerId
+                        || $movement->type !== LoyaltyMovement::TYPE_ADJUSTMENT
+                        || bccomp($movement->points, $entry['points'], self::SCALE) !== 0) {
+                        throw ValidationException::withMessages(['points' => 'La clave de importación ya pertenece a otro ajuste.']);
+                    }
+                    continue;
+                }
+
+                $account = $existingAccounts->get($customerId);
+                if ($account !== null) {
+                    $toCreateMovements[] = [
+                        'company_id' => $company->id,
+                        'customer_id' => $customerId,
+                        'loyalty_account_id' => $account->id,
+                        'user_id' => $user->id,
+                        'type' => LoyaltyMovement::TYPE_ADJUSTMENT,
+                        'points' => $entry['points'],
+                        'balance_before' => $this->decimal($account->balance),
+                        'balance_after' => bcadd($this->decimal($account->balance), $entry['points'], self::SCALE),
+                        'description' => 'Puntos iniciales de importación de clientes P32',
+                        'source_type' => $sourceType,
+                        'source_id' => $sourceId,
+                        'event_key' => $eventKey,
+                        'effective_at' => $now,
+                        'metadata' => json_encode(['import_run_id' => $sourceId, 'source_row' => $entry['source_row']], JSON_THROW_ON_ERROR),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                    $account->balance = bcadd($this->decimal($account->balance), $entry['points'], self::SCALE);
+                    $account->last_activity_at = $now;
+                    $account->updated_at = $now;
+                    $account->save();
+                } else {
+                    $toCreateAccounts[] = [
+                        'company_id' => $company->id,
+                        'customer_id' => $customerId,
+                        'balance' => $entry['points'],
+                        'total_earned' => '0.0000',
+                        'total_redeemed' => '0.0000',
+                        'total_expired' => '0.0000',
+                        'is_active' => true,
+                        'last_activity_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                    $toCreateMovements[] = [
+                        'company_id' => $company->id,
+                        'customer_id' => $customerId,
+                        'loyalty_account_id' => null,
+                        'user_id' => $user->id,
+                        'type' => LoyaltyMovement::TYPE_ADJUSTMENT,
+                        'points' => $entry['points'],
+                        'balance_before' => '0.0000',
+                        'balance_after' => $entry['points'],
+                        'description' => 'Puntos iniciales de importación de clientes P32',
+                        'source_type' => $sourceType,
+                        'source_id' => $sourceId,
+                        'event_key' => $eventKey,
+                        'effective_at' => $now,
+                        'metadata' => json_encode(['import_run_id' => $sourceId, 'source_row' => $entry['source_row']], JSON_THROW_ON_ERROR),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+
+            if ($toCreateAccounts !== []) {
+                foreach (array_chunk($toCreateAccounts, 50) as $chunk) {
+                    LoyaltyAccount::insert($chunk);
+                }
+                $newAccountIds = LoyaltyAccount::where('company_id', $company->id)
+                    ->whereIn('customer_id', array_column($toCreateAccounts, 'customer_id'))
+                    ->pluck('id', 'customer_id');
+                foreach ($toCreateMovements as &$movement) {
+                    if ($movement['loyalty_account_id'] === null) {
+                        $movement['loyalty_account_id'] = $newAccountIds[$movement['customer_id']];
+                    }
+                }
+                unset($movement);
+            }
+
+            if ($toCreateMovements !== []) {
+                foreach (array_chunk($toCreateMovements, 50) as $chunk) {
+                    LoyaltyMovement::insert($chunk);
+                }
+            }
+        });
+    }
+
     /** Registra Kardex legado sin volver a aplicar sus puntos al saldo consolidado. */
     public function recordHistoricalMigrationMovement(LoyaltyAccount $account, string $signedPoints, string $type, array $context = []): LoyaltyMovement
     {

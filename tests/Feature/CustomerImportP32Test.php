@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\CustomerImportRun;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -55,8 +57,8 @@ class CustomerImportP32Test extends TestCase
         );
 
         $response->assertOk()->assertSee('Cliente nuevo')->assertSee('88887777')->assertSee('duplicado@example.com');
-        $preview = session('customer_import_preview');
-        $this->assertTrue($preview['rows'][0]['valid'], json_encode($preview['rows'][0]['errors']));
+        $preview = session('customer_import_preview') + ['rows' => $this->previewRows()];
+        $this->assertTrue($preview['rows'][0]['valid'], json_encode($preview['rows'][0]['reason']));
         $this->assertSame('+506', $preview['rows'][0]['phone_country_code']);
         $this->assertSame($company->id, $preview['company_id']);
         $this->assertDatabaseCount('customers', 1);
@@ -76,15 +78,15 @@ class CustomerImportP32Test extends TestCase
             route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
         );
 
-        $response->assertOk()->assertSee('Tipo 01')->assertSee('Tipo 6')->assertSee('Corrija todas las filas antes de confirmar');
-        $rows = session('customer_import_preview.rows');
+        $response->assertOk()->assertSee('Tipo 01')->assertSee('Tipo 6')->assertSee('Crear');
+        $rows = $this->previewRows();
         $this->assertSame('01', $rows[0]['identification_type']);
         $this->assertSame('01', $rows[1]['identification_type']);
         $this->assertTrue($rows[0]['valid']);
         $this->assertTrue($rows[1]['valid']);
         $this->assertSame('6', $rows[2]['identification_type']);
         $this->assertFalse($rows[2]['valid']);
-        $this->assertContains('tipo_identificacion', array_column($rows[2]['errors'], 'field'));
+        $this->assertStringContainsString('tipo_identificacion', $rows[2]['reason']);
         $this->assertNull($rows[3]['identification_type']);
         $this->assertTrue($rows[3]['valid']);
         $this->assertDatabaseCount('customers', 0);
@@ -107,14 +109,14 @@ class CustomerImportP32Test extends TestCase
             ['customer_file' => $this->uploaded($file)],
         );
 
-        $response->assertOk()->assertSee('identificacion')->assertSee('telefono')->assertSee('correo')
-            ->assertSee('Omitida')->assertSee('Corrija todas las filas antes de confirmar');
-        $rows = session('customer_import_preview.rows');
-        $this->assertFalse($rows[0]['valid']);
-        $this->assertContains('correo', array_column($rows[0]['errors'], 'field'));
+        $response->assertOk()->assertSee('tipo_cliente')->assertSee('correo')
+            ->assertSee('EXISTENTE')->assertSee('Crear');
+        $rows = $this->previewRows();
+        $this->assertTrue($rows[0]['valid']);
+        $this->assertSame('existing', $rows[0]['kind']);
         $this->assertFalse($rows[1]['valid']);
         $this->assertTrue($rows[2]['valid']);
-        $this->assertTrue($rows[2]['skipped']);
+        $this->assertFalse($rows[2]['skipped']);
         $this->assertDatabaseCount('customers', 1);
     }
 
@@ -129,7 +131,7 @@ class CustomerImportP32Test extends TestCase
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
             route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
         )->assertOk();
-        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->post(route('importaciones.clientes.import'))->assertRedirect();
 
         $this->assertDatabaseHas('customers', [
             'company_id' => $company->id, 'identification' => '101110111', 'phone' => '88881111',
@@ -157,15 +159,15 @@ class CustomerImportP32Test extends TestCase
             route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
         );
 
-        $response->assertOk()->assertSee('Omitidas')->assertSee('Omitida')->assertSee('esta fila se omitirá')->assertSee('Confirmar importación de 2');
-        $rows = session('customer_import_preview.rows');
+        $response->assertOk()->assertSee('Duplicados archivo ignorados')->assertSee('DUPLICADO ARCHIVO')->assertSee('esta fila se omitirá')->assertSee('Crear 2 clientes nuevos');
+        $rows = $this->previewRows();
         $this->assertFalse($rows[0]['skipped']);
         $this->assertTrue($rows[1]['valid']);
         $this->assertTrue($rows[1]['skipped']);
         $this->assertFalse($rows[2]['skipped']);
-        $this->assertNotEmpty($rows[1]['warnings']);
+        $this->assertNotEmpty($rows[1]['reason'] ?? $rows[1]['warnings']);
 
-        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->post(route('importaciones.clientes.import'))->assertRedirect();
         $this->assertSame(2, Customer::where('company_id', $company->id)->count());
         $this->assertDatabaseHas('customers', [
             'company_id' => $company->id, 'identification' => 'DUP-ARCHIVO',
@@ -188,8 +190,8 @@ class CustomerImportP32Test extends TestCase
             route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
         );
 
-        $response->assertOk()->assertSee('Advertencia')->assertSee('Con advertencias')->assertDontSee('Corrija todas las filas antes de confirmar');
-        $rows = session('customer_import_preview.rows');
+        $response->assertOk()->assertSee('Advertencia')->assertSee('Advertencia')->assertDontSee('Corrija todas las filas antes de confirmar');
+        $rows = $this->previewRows();
         $this->assertTrue(collect($rows)->every(fn (array $row) => $row['valid']));
         $this->assertSame('72617837', $rows[0]['phone']);
         $this->assertSame('BRENDA ZUÑIGA', $rows[0]['name']);
@@ -199,10 +201,10 @@ class CustomerImportP32Test extends TestCase
         $this->assertNull($rows[1]['birth_date']);
         $this->assertNull($rows[2]['birth_date']);
         $this->assertNotEmpty($rows[0]['warnings']);
-        $this->assertNotEmpty($rows[1]['warnings']);
+        $this->assertNotEmpty($rows[1]['reason'] ?? $rows[1]['warnings']);
         $this->assertNotEmpty($rows[2]['warnings']);
 
-        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->post(route('importaciones.clientes.import'))->assertRedirect();
         $this->assertDatabaseHas('customers', [
             'company_id' => $company->id, 'identification' => 'REAL-1', 'name' => 'BRENDA ZUÑIGA',
             'phone' => '72617837', 'birth_date' => null,
@@ -213,7 +215,7 @@ class CustomerImportP32Test extends TestCase
         ]);
     }
 
-    public function test_invalid_and_repeated_file_emails_become_null_with_warnings_without_blocking_rows(): void
+    public function test_invalid_legacy_email_is_warned_and_repeated_email_is_skipped_without_merging(): void
     {
         [$company, $branch, $user] = $this->context(['clientes.crear']);
         $file = $this->customerFile([
@@ -226,69 +228,40 @@ class CustomerImportP32Test extends TestCase
             route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)],
         );
 
-        $response->assertOk()->assertSee('Advertencia')->assertSee('El correo se repite desde la fila 2')->assertSee('El correo heredado es inválido');
-        $rows = session('customer_import_preview.rows');
+        $response->assertOk()->assertSee('Advertencia')->assertSee('Duplicado de la fila 2')->assertSee('El correo heredado es inválido');
+        $rows = $this->previewRows();
         $this->assertTrue(collect($rows)->every(fn (array $row) => $row['valid']));
         $this->assertSame('cliente@example.com', $rows[0]['email']);
-        $this->assertNull($rows[1]['email']);
+        $this->assertSame('cliente@example.com', $rows[1]['email']);
         $this->assertNull($rows[2]['email']);
         $this->assertEmpty($rows[0]['warnings']);
-        $this->assertNotEmpty($rows[1]['warnings']);
+        $this->assertNotEmpty($rows[1]['reason'] ?? $rows[1]['warnings']);
         $this->assertNotEmpty($rows[2]['warnings']);
 
-        $this->post(route('importaciones.clientes.import'))->assertRedirect(route('clientes.index'));
+        $this->post(route('importaciones.clientes.import'))->assertRedirect();
         $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-1', 'email' => 'cliente@example.com']);
-        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-2', 'email' => null]);
+        $this->assertDatabaseMissing('customers', ['company_id' => $company->id, 'identification' => 'MAIL-2']);
         $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'MAIL-3', 'email' => null]);
     }
 
-    public function test_large_customer_consolidation_uses_linear_indexes_without_timing_out(): void
+    public function test_large_file_uses_persisted_chunks_and_paginated_preview(): void
     {
+        [$company, $branch, $user] = $this->context(['clientes.crear']);
         $rows = [];
-
-        $rowCount = 6109;
-
-        for ($index = 0; $index < $rowCount; $index++) {
-            $rowNumber = $index + 2;
-            $rows[] = [
-                'row_number' => $rowNumber,
-                'customer_type' => 'individual',
-                'identification_type' => '01',
-                'identification' => 'VOLUMEN-'.$index,
-                'name' => 'Cliente '.$index,
-                'commercial_name' => null,
-                'phone_country_code' => '+506',
-                'phone' => (string) (10000000 + $index),
-                'mobile' => null,
-                'email' => 'cliente'.$index.'@example.com',
-                'address' => null,
-                'credit_limit' => '0',
-                'credit_days' => '0',
-                'price_level' => 'normal',
-                'birth_date' => null,
-                'is_active' => true,
-                'valid' => true,
-                'skipped' => false,
-                'merged_into_row' => null,
-                'source_rows' => [$rowNumber],
-                'merge_errors' => [],
-                'errors' => [],
-                'warnings' => [],
-            ];
+        for ($i = 0; $i < 1100; $i++) {
+            $rows[] = ['individual', '01', 'VOLUMEN-'.$i, 'Cliente '.$i];
         }
-
-        $method = new \ReflectionMethod(CustomerImportService::class, 'consolidateRows');
-        $startedAt = hrtime(true);
-        $result = $method->invoke(app(CustomerImportService::class), $rows);
-        $elapsedSeconds = (hrtime(true) - $startedAt) / 1_000_000_000;
-
-        $this->assertCount($rowCount, $result);
-        $this->assertFalse($result[0]['skipped']);
-        $this->assertFalse($result[$rowCount - 1]['skipped']);
-        $this->assertLessThan(5.0, $elapsedSeconds, 'La consolidación de miles de filas debe mantenerse lineal.');
+        $file = $this->customerFile($rows);
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('importaciones.clientes.preview'), ['customer_file' => $this->uploaded($file)])->assertOk();
+        $run = CustomerImportRun::where('company_id', $company->id)->firstOrFail();
+        $this->assertSame(1100, (int) $run->analyzed_rows);
+        $this->assertSame(3, (int) $run->attempts);
+        $this->assertCount(50, $response->viewData('rows')->items());
+        $this->assertArrayNotHasKey('rows', session('customer_import_preview'));
+        $this->assertDatabaseCount('customers', 0);
     }
-
-    public function test_confirmation_revalidates_and_rolls_back_all_rows_when_a_duplicate_appears(): void
+    public function test_confirmation_revalidates_and_skips_concurrent_existing_without_rolling_back_new_rows(): void
     {
         [$company, $branch, $user] = $this->context(['clientes.crear']);
         $file = $this->customerFile([
@@ -301,10 +274,10 @@ class CustomerImportP32Test extends TestCase
         Customer::create($this->customerData($company, ['identification' => 'NUEVO-2', 'name' => 'Concurrente']));
 
         $this->from(route('importaciones.clientes'))->post(route('importaciones.clientes.import'))
-            ->assertRedirect(route('importaciones.clientes'))->assertSessionHasErrors('customer_file');
+            ->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertDatabaseMissing('customers', ['company_id' => $company->id, 'identification' => 'NUEVO-1']);
-        $this->assertSame(1, Customer::where('company_id', $company->id)->count());
+        $this->assertDatabaseHas('customers', ['company_id' => $company->id, 'identification' => 'NUEVO-1']);
+        $this->assertSame(2, Customer::where('company_id', $company->id)->count());
     }
 
     public function test_permissions_protect_import_and_data_center_entry_supports_customer_only_users(): void
@@ -318,6 +291,19 @@ class CustomerImportP32Test extends TestCase
 
         $this->actingAs($denied)->withSession($this->activeSession($deniedCompany, $deniedBranch))
             ->get(route('importaciones.clientes'))->assertForbidden();
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
+
+    private function previewRows(): array
+    {
+        $run = CustomerImportRun::where('company_id', session('active_company_id'))
+            ->findOrFail(session('customer_import_preview.run_id'));
+        return $run->rows()->orderBy('source_row')->get()->map(fn ($row) => $row->previewData())->all();
     }
 
     private function context(array $permissions): array

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\LoyaltyMigrationRun;
+use App\Models\CustomerImportRun;
+use App\Services\Imports\CustomerImportRunService;
 use App\Services\Imports\CustomerImportService;
 use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
@@ -245,7 +247,9 @@ class DataImportController extends Controller
 
     public function customers()
     {
-        return view('importaciones.clientes');
+        $runs = CustomerImportRun::where('company_id', (int) session('active_company_id'))->latest()->paginate(10);
+
+        return view('importaciones.clientes', compact('runs'));
     }
 
     public function customerTemplate(MigrationTemplateService $templates)
@@ -253,32 +257,66 @@ class DataImportController extends Controller
         return $this->templateDownload($templates->make('customers', (int) session('active_company_id')), 'plantilla_importacion_clientes.xlsx');
     }
 
-    public function customerPreview(Request $request, CustomerImportService $import)
+    public function customerPreview(Request $request, CustomerImportRunService $import)
     {
         $data = $request->validate([
             'customer_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
         ]);
         $companyId = (int) session('active_company_id');
-        $rows = $import->preview($request->file('customer_file')->getRealPath(), $companyId);
+        $run = $import->upload($request->file('customer_file'), $companyId, (int) $request->user()->id);
+        session(['customer_import_preview' => ['company_id' => $companyId, 'run_id' => $run->id]]);
 
-        session(['customer_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
-
-        return view('importaciones.clientes-preview', compact('rows'));
+        return $this->customerStatus($run->id);
     }
 
-    public function customerImport(Request $request, CustomerImportService $import)
+    public function customerImport(Request $request, CustomerImportRunService $import)
     {
         $preview = session('customer_import_preview');
-        if (! $preview) {
+        $runId = $request->integer('run_id') ?: (int) ($preview['run_id'] ?? 0);
+        if (! $runId) {
             return redirect()->route('importaciones.clientes')->withErrors([
                 'customer_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
             ]);
         }
 
-        $count = $import->confirm($preview, (int) session('active_company_id'));
+        $run = $import->confirm($runId, (int) session('active_company_id'), (int) $request->user()->id);
         session()->forget('customer_import_preview');
 
-        return redirect()->route('clientes.index')->with('success', "Se importaron {$count} clientes correctamente.");
+        return redirect()->route('importaciones.clientes.status', $run->id);
+    }
+
+    public function customerStatus(int $run)
+    {
+        $run = CustomerImportRun::where('company_id', (int) session('active_company_id'))->findOrFail($run);
+        $rows = $run->rows()->orderBy('source_row')->paginate(50);
+
+        return view('importaciones.clientes-preview', compact('run', 'rows'));
+    }
+
+    public function customerRetry(Request $request, int $run, CustomerImportRunService $import)
+    {
+        $import->retry($run, (int) session('active_company_id'), (int) $request->user()->id);
+
+        return redirect()->route('importaciones.clientes.status', $run);
+    }
+
+    public function customerReport(int $run)
+    {
+        $run = CustomerImportRun::where('company_id', (int) session('active_company_id'))->findOrFail($run);
+
+        return response()->streamDownload(function () use ($run) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['fila', 'estado', 'motivo', 'fila_original', 'cliente_creado'], ',', '"', '');
+            foreach ($run->rows()->orderBy('source_row')->cursor() as $row) {
+                $reason = $row->reason ?? ($run->purged_at ? 'Detalle temporal purgado' : '');
+                if (preg_match('/^[=+@\-\t\r]/', $reason)) {
+                    $reason = "'".$reason;
+                }
+                fputcsv($output, [$row->source_row, $row->kind, $reason, $row->duplicate_of_row, $row->created_customer_id], ',', '"', '');
+            }
+            fclose($output);
+        }, 'resultado-clientes-'.$run->id.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function inventory(Request $request)

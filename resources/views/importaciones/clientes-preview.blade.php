@@ -1,88 +1,82 @@
 @extends('layouts.app')
-
-@section('title', 'Revisar clientes')
-@section('description', 'Vista previa de importación de clientes')
-
+@section('title', 'Importación de clientes')
+@section('description', 'Modo seguro: crear solo clientes nuevos')
 @section('content')
 @php
-    $validCount = collect($rows)->where('valid', true)->where('skipped', false)->count();
-    $skippedCount = collect($rows)->where('skipped', true)->count();
-    $errorCount = collect($rows)->where('valid', false)->count();
-    $warningCount = collect($rows)->filter(fn ($row) => ! empty($row['warnings']))->count();
+    $labels = ['uploaded' => 'Archivo recibido', 'analyzing' => 'Analizando', 'ready' => 'Listo para revisar', 'importing' => 'Importando', 'completed' => 'Completado', 'completed_with_issues' => 'Completado con incidencias', 'failed' => 'Fallido'];
+    $rowLabels = ['new' => 'NUEVO', 'existing' => 'EXISTENTE — SE IGNORARÁ', 'duplicate_file' => 'DUPLICADO ARCHIVO — SE IGNORARÁ', 'conflict' => 'CONFLICTO', 'error' => 'ERROR', 'created' => 'CREADO'];
+    $working = in_array($run->status, ['uploaded', 'analyzing', 'importing'], true);
+    $finished = in_array($run->status, \App\Models\CustomerImportRun::TERMINAL, true);
+    $counts = ['Total analizados' => $run->total_rows, 'Nuevos' => $run->new_count, 'Existentes ignorados' => $run->existing_count, 'Duplicados archivo ignorados' => $run->duplicate_count, 'Conflictos' => $run->conflict_count, 'Errores' => $run->error_count, 'Creados' => $run->created_count, 'Rechazados' => $run->rejected_count];
 @endphp
-<div class="mx-auto max-w-7xl space-y-6" data-customer-import-preview>
-    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-amber-700">P32 · Vista previa</p>
-            <h1 class="mt-1 text-2xl font-bold text-slate-800">Revisar clientes</h1>
-            <p class="mt-2 text-sm text-slate-600">Todavía no se ha creado ningún cliente.</p>
-        </div>
-        <a href="{{ route('importaciones.clientes') }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 sm:w-auto">Cargar otro archivo</a>
+<div class="mx-auto min-w-0 max-w-7xl space-y-5" data-customer-import-preview>
+    <header class="space-y-3">
+        <a href="{{ route('importaciones.clientes') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">Volver a Importar clientes</a>
+        <h1 class="text-2xl font-bold text-slate-800">{{ $labels[$run->status] ?? $run->status }}</h1>
+        <p class="break-words text-sm text-slate-600">{{ $run->original_filename ?? 'Archivo temporal purgado' }} · Importación #{{ $run->id }}</p>
+        <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
+        @if(!$run->confirmed_at)<p class="text-sm">Todavía no se ha creado ningún cliente ni se han aplicado puntos.</p>@endif
     </header>
-
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Filas <strong class="block text-2xl text-slate-900">{{ count($rows) }}</strong></div>
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">Listas <strong class="block text-2xl">{{ $validCount }}</strong></div>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">Omitidas <strong class="block text-2xl">{{ $skippedCount }}</strong></div>
-        <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Con errores <strong class="block text-2xl">{{ $errorCount }}</strong></div>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">Con advertencias <strong class="block text-2xl">{{ $warningCount }}</strong></div>
+    @if($errors->any())<div class="rounded-xl bg-red-50 p-4 text-red-800">{{ $errors->first() }}</div>@endif
+    @if($run->last_error)<p class="rounded-xl bg-red-50 p-4 text-red-800">{{ $run->last_error }}</p>@endif
+    @if($working)
+        <div role="status" aria-live="polite" class="rounded-xl border bg-white p-4">
+            @if($run->status === 'importing')
+                Procesados {{ $run->rows()->whereNotNull('processed_at')->count() }} / {{ $run->total_rows }} · Creados {{ $run->created_count }}
+            @else
+                Analizados {{ $run->analyzed_rows }} clientes · Fila {{ $run->current_row }} / {{ $run->last_source_row ?? 'por determinar' }}
+            @endif
+            <p class="mt-2 text-sm">Puede volver a esta pantalla desde Importar clientes. El trabajo continúa en segundo plano.</p>
+            <a class="mt-2 inline-flex min-h-11 items-center font-semibold text-amber-700" href="{{ route('importaciones.clientes.status', $run->id) }}">Actualizar progreso</a>
+        </div>
+        <script>setTimeout(() => window.location.replace(@json(route('importaciones.clientes.status', $run->id))), 5000);</script>
+    @endif
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        @foreach($counts as $label => $count)
+            <div class="rounded-xl border bg-white p-3 text-sm text-slate-600">{{ $label }}<strong class="block text-2xl text-slate-900">{{ number_format($count, 0, ',', '.') }}</strong></div>
+        @endforeach
     </div>
-
-    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="min-w-[900px] w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600">
-                    <tr><th class="px-4 py-3">Fila</th><th class="px-4 py-3">Tipo / identificación</th><th class="px-4 py-3">Nombre</th><th class="px-4 py-3">Teléfono / móvil</th><th class="px-4 py-3">Correo</th><th class="px-4 py-3">Estado</th></tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @foreach($rows as $row)
-                        <tr class="align-top {{ !$row['valid'] ? 'bg-red-50/50' : ($row['skipped'] ? 'bg-amber-50/50' : '') }}">
-                            <td class="px-4 py-3 font-semibold text-slate-700">{{ $row['row_number'] }}</td>
-                            <td class="px-4 py-3 text-slate-700">
-                                <span class="block">{{ $row['identification'] ?: '—' }}</span>
-                                <span class="mt-1 block text-xs text-slate-500">Tipo {{ $row['identification_type'] ?: '—' }}</span>
-                            </td>
-                            <td class="px-4 py-3 font-medium text-slate-800">{{ $row['name'] ?: '—' }}</td>
-                            <td class="px-4 py-3 text-slate-700">{{ $row['phone'] ?: ($row['mobile'] ?: '—') }}</td>
-                            <td class="px-4 py-3 text-slate-700">{{ $row['email'] ?: '—' }}</td>
-                            <td class="px-4 py-3">
-                                @if($row['skipped'])
-                                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Omitida</span>
-                                @elseif($row['valid'])
-                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ empty($row['warnings']) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">{{ empty($row['warnings']) ? 'Lista' : 'Advertencia' }}</span>
-                                @else
-                                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Error</span>
-                                    <ul class="mt-2 space-y-1 text-xs text-red-700">
-                                        @foreach($row['errors'] as $error)
-                                            <li><strong>{{ $error['field'] }}:</strong> {{ $error['message'] }}</li>
-                                        @endforeach
-                                    </ul>
-                                @endif
-                                @if(! empty($row['warnings']))
-                                    <ul class="mt-2 space-y-1 text-xs text-amber-700">
-                                        @foreach($row['warnings'] as $warning)
-                                            <li><strong>{{ $warning['field'] }}:</strong> {{ $warning['message'] }}</li>
-                                        @endforeach
-                                    </ul>
-                                @endif
+    @if($run->purged_at)
+        <p class="rounded-xl bg-slate-100 p-4">Los detalles temporales expiraron. Se conserva el resultado y la trazabilidad de los clientes creados.</p>
+    @else
+        <section class="overflow-hidden rounded-xl border bg-white">
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1050px] text-left text-sm">
+                    <thead class="bg-slate-100"><tr>@foreach(['Fila', 'Identificación', 'Nombre', 'Teléfono / móvil', 'Correo', 'Puntos iniciales', 'Estado / motivo'] as $label)<th class="p-3">{{ $label }}</th>@endforeach</tr></thead>
+                    <tbody>
+                    @foreach($rows as $record)
+                        @php($row = $record->data ?? [])
+                        <tr class="border-t align-top {{ in_array($record->kind, ['error', 'conflict']) ? 'bg-red-50' : '' }}">
+                            <td class="p-3">{{ $record->source_row }}</td>
+                            <td class="p-3">{{ $row['identification'] ?? '—' }}<span class="block text-xs">Tipo {{ $row['identification_type'] ?? '—' }}</span></td>
+                            <td class="p-3">{{ $row['name'] ?? '—' }}</td>
+                            <td class="p-3">{{ $row['phone'] ?? '—' }}<span class="block">{{ $row['mobile'] ?? '' }}</span></td>
+                            <td class="p-3 break-all">{{ $row['email'] ?? '—' }}</td>
+                            <td class="p-3 text-right">{{ $row['initial_points'] ?? '0' }}</td>
+                            <td class="max-w-sm p-3"><strong>{{ $rowLabels[$record->kind] ?? $record->kind }}</strong><p class="mt-1">{{ $record->reason }}</p>
+                                @foreach($row['warnings'] ?? [] as $warning)<p class="mt-1 text-xs text-amber-800">Advertencia · {{ $warning['field'] }}: {{ $warning['message'] }}</p>@endforeach
                             </td>
                         </tr>
                     @endforeach
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p class="text-sm text-slate-600">La confirmación es transaccional: si una fila deja de ser válida, no se importa ninguna.</p>
-        @if($errorCount === 0 && count($rows) > 0)
-            <form action="{{ route('importaciones.clientes.import') }}" method="POST" onsubmit="return confirm('¿Confirmar la importación de {{ $validCount }} clientes?');">
-                @csrf
-                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white sm:w-auto">Confirmar importación de {{ $validCount }}</button>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{ $rows->withPath(route('importaciones.clientes.status', $run->id))->links() }}
+    @endif
+    @if($run->status === 'ready' && !$run->purged_at)
+        <div class="sticky bottom-20 z-10 space-y-3 rounded-xl border bg-white p-4 shadow-lg md:bottom-4">
+            <p class="text-sm">{{ $run->existing_count }} clientes existentes serán ignorados. {{ $run->duplicate_count }} duplicados serán ignorados. No se modificará ningún cliente existente.</p>
+            <p class="text-sm">Los conflictos y errores se rechazan; las filas nuevas válidas pueden importarse.</p>
+            <form method="POST" action="{{ route('importaciones.clientes.import') }}">@csrf
+                <input type="hidden" name="run_id" value="{{ $run->id }}">
+                <button class="min-h-11 w-full rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white sm:w-auto">Crear {{ $run->new_count }} clientes nuevos</button>
             </form>
-        @else
-            <p class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">Corrija todas las filas antes de confirmar.</p>
-        @endif
-    </div>
+        </div>
+    @endif
+    @if(($run->status === 'failed' || $working) && !$run->purged_at)
+        <form method="POST" action="{{ route('importaciones.clientes.retry', $run->id) }}">@csrf<button class="min-h-11 rounded-xl border bg-white px-4 py-3 font-semibold">Reanudar proceso</button></form>
+    @endif
+    <a href="{{ route('importaciones.clientes.report', $run->id) }}" class="inline-flex min-h-11 items-center rounded-xl border bg-white px-4 py-3 font-semibold">Descargar reporte CSV</a>
 </div>
 @endsection

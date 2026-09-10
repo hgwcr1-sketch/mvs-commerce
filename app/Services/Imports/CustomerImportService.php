@@ -3,20 +3,17 @@
 namespace App\Services\Imports;
 
 use App\Models\Company;
-use App\Models\Customer;
 use App\Services\PhoneNumberService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class CustomerImportService
 {
     public const HEADERS = [
         'tipo_cliente*', 'tipo_identificacion', 'identificacion', 'nombre*', 'nombre_comercial',
         'codigo_pais', 'telefono', 'movil', 'correo', 'direccion', 'limite_credito',
-        'dias_credito', 'nivel_precio', 'fecha_nacimiento', 'activo',
+        'dias_credito', 'nivel_precio', 'fecha_nacimiento', 'activo', 'puntos_iniciales',
     ];
 
     private const HEADER_MAP = [
@@ -35,6 +32,7 @@ class CustomerImportService
         'nivel_precio' => 'price_level',
         'fecha_nacimiento' => 'birth_date',
         'activo' => 'is_active',
+        'puntos_iniciales' => 'initial_points',
     ];
 
     private const FIELD_LABELS = [
@@ -43,77 +41,30 @@ class CustomerImportService
         'phone_country_code' => 'codigo_pais', 'phone' => 'telefono', 'mobile' => 'movil',
         'email' => 'correo', 'address' => 'direccion', 'credit_limit' => 'limite_credito',
         'credit_days' => 'dias_credito', 'price_level' => 'nivel_precio',
-        'birth_date' => 'fecha_nacimiento', 'is_active' => 'activo',
+        'birth_date' => 'fecha_nacimiento', 'is_active' => 'activo', 'initial_points' => 'puntos_iniciales',
     ];
 
     public function __construct(private readonly PhoneNumberService $phones) {}
 
-    public function preview(string $path, int $companyId): array
+    public function readChunk(string $path, Company $company, int $start, int $size): array
     {
-        Company::query()->findOrFail($companyId);
-        $sheetRows = IOFactory::load($path)->getActiveSheet()->toArray(null, true, true, false);
-
-        if (count($sheetRows) < 2) {
-            throw ValidationException::withMessages([
-                'customer_file' => 'El archivo debe incluir encabezados y al menos una fila de clientes.',
-            ]);
-        }
-
-        $headers = $this->resolveHeaders(array_shift($sheetRows));
+        $chunk = app(CustomerImportChunkReader::class)->read($path, $start, $size);
+        $headers = $this->resolveHeaders($chunk['headers']);
         $rows = [];
-
-        foreach ($sheetRows as $offset => $values) {
+        foreach ($chunk['rows'] as $offset => $values) {
             if (collect($values)->every(fn ($value) => trim((string) $value) === '')) {
                 continue;
             }
-
             $data = [];
             foreach ($headers as $column => $field) {
                 if ($field !== null) {
                     $data[$field] = $values[$column] ?? null;
                 }
             }
-
-            $rows[] = $this->normalizeRow($data, $offset + 2, $companyId);
+            $rows[] = $this->normalizeRow($data, $start + $offset, $company);
         }
-
-        if ($rows === []) {
-            throw ValidationException::withMessages([
-                'customer_file' => 'El archivo no contiene filas de clientes para revisar.',
-            ]);
-        }
-
-        return $this->validateRows($this->consolidateRows($this->normalizeRepeatedEmails($rows)), $companyId);
+        return ['rows' => $rows, 'end' => $chunk['end'], 'last_row' => $chunk['last_row']];
     }
-
-    public function confirm(array $preview, int $companyId): int
-    {
-        if ((int) ($preview['company_id'] ?? 0) !== $companyId) {
-            throw ValidationException::withMessages([
-                'customer_file' => 'La vista previa no pertenece a la empresa activa.',
-            ]);
-        }
-
-        $rows = $this->validateRows($preview['rows'] ?? [], $companyId);
-        $invalid = collect($rows)->firstWhere('valid', false);
-
-        if ($invalid !== null) {
-            throw ValidationException::withMessages([
-                'customer_file' => 'La importación cambió o contiene errores. Vuelva a cargar el archivo y revise la fila '.($invalid['row_number'] ?? '?').'.',
-            ]);
-        }
-
-        return DB::transaction(function () use ($rows, $companyId): int {
-            $importableRows = collect($rows)->reject(fn (array $row) => $row['skipped'])->values();
-
-            foreach ($importableRows as $row) {
-                Customer::create(['company_id' => $companyId, ...$this->attributes($row)]);
-            }
-
-            return $importableRows->count();
-        });
-    }
-
     private function resolveHeaders(array $headers): array
     {
         $resolved = [];
@@ -133,9 +84,9 @@ class CustomerImportService
         return $resolved;
     }
 
-    private function normalizeRow(array $data, int $rowNumber, int $companyId): array
+    private function normalizeRow(array $data, int $rowNumber, Company $company): array
     {
-        $companyCode = Company::query()->whereKey($companyId)->value('default_phone_country_code');
+        $companyCode = $company->default_phone_country_code;
         $countryCode = $this->phones->normalizeCountryCode($this->nullable($data['phone_country_code'] ?? null));
         $effectiveCountryCode = $countryCode ?? $this->phones->normalizeCountryCode($companyCode);
         [$phone, $phoneWarning] = $this->normalizeImportedPhone($data['phone'] ?? null, $effectiveCountryCode, 'telefono');
@@ -165,12 +116,7 @@ class CustomerImportService
             'price_level' => Str::lower($this->nullable($data['price_level'] ?? null) ?? 'normal'),
             'birth_date' => $birthDate,
             'is_active' => $this->booleanValue($data['is_active'] ?? null),
-            'valid' => true,
-            'skipped' => false,
-            'merged_into_row' => null,
-            'source_rows' => [$rowNumber],
-            'merge_errors' => [],
-            'errors' => [],
+            'initial_points' => $this->nullable($data['initial_points'] ?? null) ?? '0',
             'warnings' => array_values(array_filter([
                 $phoneWarning, $mobileWarning, $birthDateWarning, $emailWarning,
                 $nameWarning, $commercialNameWarning, $addressWarning,
@@ -178,33 +124,8 @@ class CustomerImportService
         ];
     }
 
-    private function validateRows(array $rows, int $companyId): array
+    public function errors(array $row): array
     {
-        $seen = ['phone' => [], 'email' => []];
-
-        foreach ($rows as $index => $row) {
-            $row['errors'] = $row['merge_errors'] ?? [];
-            $row['warnings'] ??= [];
-
-            if ($row['skipped']) {
-                $row['valid'] = true;
-                $rows[$index] = $row;
-
-                continue;
-            }
-
-            if ($row['email'] !== null) {
-                if (isset($seen['email'][$row['email']])) {
-                    $row['warnings'][] = $this->warning(
-                        'correo',
-                        'El correo se repite desde la fila '.$seen['email'][$row['email']].'; se importará vacío en esta fila.'
-                    );
-                    $row['email'] = null;
-                } else {
-                    $seen['email'][$row['email']] = $row['row_number'];
-                }
-            }
-
             $validator = Validator::make($row, [
                 'customer_type' => ['required', 'in:individual,company'],
                 'identification_type' => ['nullable', 'in:01,02,03,04,05'],
@@ -221,74 +142,24 @@ class CustomerImportService
                 'price_level' => ['required', 'in:normal,wholesale,a,b,c'],
                 'birth_date' => ['nullable', 'date_format:Y-m-d'],
                 'is_active' => ['required', 'boolean'],
+                'initial_points' => ['required', 'regex:/^\d{1,15}(\.\d{1,4})?$/'],
             ], [], self::FIELD_LABELS);
 
-            foreach ($validator->errors()->messages() as $field => $messages) {
-                foreach ($messages as $message) {
-                    $row['errors'][] = ['field' => self::FIELD_LABELS[$field] ?? $field, 'message' => $message];
-                }
+
+        $errors = [];
+        foreach ($validator->errors()->messages() as $field => $messages) {
+            foreach ($messages as $message) {
+                $errors[] = ['field' => self::FIELD_LABELS[$field] ?? $field, 'message' => $message];
             }
-
-            $identities = [
-                'phone' => array_values(array_unique(array_filter([$row['phone'] ?? null, $row['mobile'] ?? null]))),
-            ];
-
-            foreach ($identities as $kind => $values) {
-                foreach ($values as $value) {
-                    if (isset($seen[$kind][$value])) {
-                        $row['errors'][] = ['field' => self::FIELD_LABELS[$kind] ?? $kind, 'message' => 'El valor se repite en la fila '.$seen[$kind][$value].' del archivo.'];
-                    } else {
-                        $seen[$kind][$value] = $row['row_number'];
-                    }
-                }
-            }
-
-            $this->appendExistingErrors($row, $companyId);
-            $row['valid'] = $row['errors'] === [];
-            $rows[$index] = $row;
         }
-
-        return $rows;
+        return $errors;
     }
 
-    private function appendExistingErrors(array &$row, int $companyId): void
+    public function attributes(array $row): array
     {
-        $query = Customer::withTrashed()->where('company_id', $companyId);
-        $matches = [];
-
-        if ($row['identification'] !== null && (clone $query)->where('identification', $row['identification'])->exists()) {
-            $matches[] = ['field' => 'identificacion', 'message' => 'Ya existe un cliente de esta empresa con esa identificación.'];
-        }
-
-        $companyPhones = null;
-        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
-            $companyPhones ??= (clone $query)->get(['phone', 'mobile']);
-            $exists = $companyPhones->contains(fn (Customer $customer) => in_array($phone, array_filter([
-                $this->phones->normalizePhone($customer->phone),
-                $this->phones->normalizePhone($customer->mobile),
-            ]), true));
-            if ($exists) {
-                $matches[] = ['field' => 'telefono', 'message' => 'Ya existe un cliente de esta empresa con ese teléfono o móvil.'];
-            }
-        }
-
-        if ($row['email'] !== null && (clone $query)->whereRaw('LOWER(email) = ?', [$row['email']])->exists()) {
-            $matches[] = ['field' => 'correo', 'message' => 'Ya existe un cliente de esta empresa con ese correo.'];
-        }
-
-        $row['errors'] = [...$row['errors'], ...$matches];
+        return collect($row)->only(array_diff(array_values(self::HEADER_MAP), ['initial_points']))->all()
+            + ['accepts_email_invoice' => true, 'points' => 0];
     }
-
-    private function attributes(array $row): array
-    {
-        return collect($row)->except([
-            'row_number', 'valid', 'skipped', 'merged_into_row', 'source_rows', 'merge_errors', 'errors', 'warnings',
-        ])->all() + [
-            'accepts_email_invoice' => true,
-            'points' => 0,
-        ];
-    }
-
     private function nullable(mixed $value): ?string
     {
         $value = trim((string) ($value ?? ''));
@@ -312,195 +183,6 @@ class CustomerImportService
             : $type;
     }
 
-    private function consolidateRows(array $rows): array
-    {
-        $identificationIndex = [];
-        $contactIndex = ['phone' => [], 'email' => []];
-
-        foreach ($rows as $index => &$row) {
-            $identificationMatches = $row['identification'] === null
-                ? []
-                : array_keys($identificationIndex[$row['identification']] ?? []);
-            $contactMatches = $this->indexedContactMatches($row, $contactIndex);
-            $mutatedCanonical = null;
-
-            if ($identificationMatches !== []) {
-                $candidate = $identificationMatches[0];
-                if (array_diff($contactMatches, [$candidate]) !== []) {
-                    $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'La identificación y los contactos apuntan a clientes distintos dentro del archivo.');
-                } else {
-                    $this->omitRepeatedIdentification($rows[$candidate], $row);
-                    $mutatedCanonical = $candidate;
-                }
-            } elseif (count($contactMatches) > 1) {
-                $row['merge_errors'][] = $this->mergeConflict('contacto', $row, 'El teléfono/móvil o correo coincide con más de un cliente del archivo.');
-            } elseif (count($contactMatches) === 1) {
-                $candidate = $contactMatches[0];
-                $candidateIdentification = $rows[$candidate]['identification'];
-                if ($candidateIdentification !== null && $row['identification'] !== null && $candidateIdentification !== $row['identification']) {
-                    $row['merge_errors'][] = $this->mergeConflict('identificacion', $row, 'El contacto coincide, pero las identificaciones son diferentes.');
-                } else {
-                    $this->mergeRows($rows[$candidate], $row);
-                    $mutatedCanonical = $candidate;
-                }
-            }
-
-            if ($mutatedCanonical !== null) {
-                $this->indexCanonicalRow($rows[$mutatedCanonical], $mutatedCanonical, $identificationIndex, $contactIndex);
-            }
-
-            if (! $row['skipped']) {
-                $this->indexCanonicalRow($row, $index, $identificationIndex, $contactIndex);
-            }
-        }
-        unset($row);
-
-        return $rows;
-    }
-
-    private function indexedContactMatches(array $row, array $contactIndex): array
-    {
-        $matches = [];
-
-        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
-            foreach ($contactIndex['phone'][$phone] ?? [] as $index => $_) {
-                $matches[$index] = true;
-            }
-        }
-
-        if ($row['email'] !== null) {
-            foreach ($contactIndex['email'][$row['email']] ?? [] as $index => $_) {
-                $matches[$index] = true;
-            }
-        }
-
-        $indexes = array_keys($matches);
-        sort($indexes, SORT_NUMERIC);
-
-        return $indexes;
-    }
-
-    private function indexCanonicalRow(array $row, int $index, array &$identificationIndex, array &$contactIndex): void
-    {
-        if ($row['identification'] !== null) {
-            $identificationIndex[$row['identification']][$index] = true;
-        }
-
-        foreach (array_unique(array_filter([$row['phone'], $row['mobile']])) as $phone) {
-            $contactIndex['phone'][$phone][$index] = true;
-        }
-
-        if ($row['email'] !== null) {
-            $contactIndex['email'][$row['email']][$index] = true;
-        }
-    }
-
-    private function normalizeRepeatedEmails(array $rows): array
-    {
-        $seen = [];
-
-        foreach ($rows as &$row) {
-            if ($row['email'] === null) {
-                continue;
-            }
-
-            if (isset($seen[$row['email']])) {
-                $this->appendWarningOnce($row, $this->warning(
-                    'correo',
-                    'El correo se repite desde la fila '.$seen[$row['email']].'; se importará vacío en esta fila.'
-                ));
-                $row['email'] = null;
-
-                continue;
-            }
-
-            $seen[$row['email']] = $row['row_number'];
-        }
-        unset($row);
-
-        return $rows;
-    }
-
-    private function omitRepeatedIdentification(array &$canonical, array &$duplicate): void
-    {
-        $duplicate['skipped'] = true;
-        $duplicate['merged_into_row'] = $canonical['row_number'];
-        $canonical['source_rows'] = array_values(array_unique([...$canonical['source_rows'], ...$duplicate['source_rows']]));
-
-        $this->appendWarningOnce($duplicate, $this->warning(
-            'identificacion',
-            'La identificación ya apareció en la fila '.$canonical['row_number'].'; se conservará la primera aparición y esta fila se omitirá.'
-        ));
-    }
-
-    private function mergeRows(array &$canonical, array &$duplicate): void
-    {
-        $duplicate['skipped'] = true;
-        $duplicate['merged_into_row'] = $canonical['row_number'];
-        $canonical['source_rows'] = array_values(array_unique([...$canonical['source_rows'], ...$duplicate['source_rows']]));
-
-        foreach ([
-            'customer_type', 'identification_type', 'identification', 'name', 'commercial_name',
-            'phone_country_code', 'email', 'address', 'credit_limit', 'credit_days', 'price_level',
-            'birth_date', 'is_active',
-        ] as $field) {
-            $current = $canonical[$field];
-            $incoming = $duplicate[$field];
-
-            if ($this->isEmptyMergeValue($current) && ! $this->isEmptyMergeValue($incoming)) {
-                $canonical[$field] = $incoming;
-            } elseif (! $this->isEmptyMergeValue($current) && ! $this->isEmptyMergeValue($incoming) && ! $this->sameMergeValue($current, $incoming)) {
-                $canonical['merge_errors'][] = $this->mergeConflict(
-                    self::FIELD_LABELS[$field] ?? $field,
-                    $duplicate,
-                    'Las filas '.$canonical['row_number'].' y '.$duplicate['row_number'].' contienen valores incompatibles; requiere revisión manual.'
-                );
-            }
-        }
-
-        $phones = array_values(array_unique(array_filter([
-            $canonical['phone'], $canonical['mobile'], $duplicate['phone'], $duplicate['mobile'],
-        ])));
-        if (count($phones) <= 2) {
-            $canonical['phone'] = $phones[0] ?? null;
-            $canonical['mobile'] = $phones[1] ?? null;
-        } else {
-            $canonical['merge_errors'][] = $this->mergeConflict(
-                'telefono',
-                $duplicate,
-                'Las filas consolidadas contienen más de dos teléfonos diferentes; requiere revisión manual.'
-            );
-        }
-
-        $this->appendWarningOnce($canonical, $this->warning(
-            'consolidacion',
-            'Se consolidaron '.count($canonical['source_rows']).' filas originales en el cliente de la fila '.$canonical['row_number'].'.'
-        ));
-        $this->appendWarningOnce($duplicate, $this->warning(
-            'consolidacion',
-            'Fila consolidada en el cliente de la fila '.$canonical['row_number'].'; no creará otro cliente.'
-        ));
-    }
-
-    private function isEmptyMergeValue(mixed $value): bool
-    {
-        return $value === null || $value === '';
-    }
-
-    private function sameMergeValue(mixed $first, mixed $second): bool
-    {
-        if (is_bool($first) || is_bool($second)) {
-            return (bool) $first === (bool) $second;
-        }
-
-        return mb_strtolower(trim((string) $first)) === mb_strtolower(trim((string) $second));
-    }
-
-    private function mergeConflict(string $field, array $row, string $message): array
-    {
-        return ['field' => $field, 'message' => $message, 'row_number' => $row['row_number']];
-    }
-
     private function normalizeImportedPhone(mixed $value, ?string $countryCode, string $field): array
     {
         $original = $this->nullable($value);
@@ -509,6 +191,9 @@ class CustomerImportService
         }
 
         $normalized = $this->phones->normalizePhone($original);
+        if ($countryCode === '+506' && preg_match('/^\+?506(\d{8})$/', (string) $normalized, $match)) {
+            $normalized = $match[1];
+        }
         if (preg_match('/^\d{4,15}$/', (string) $normalized)) {
             return [$normalized, null];
         }

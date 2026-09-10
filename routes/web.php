@@ -832,6 +832,12 @@ Route::resource('transferencias', TransferController::class)
     Route::post('/importar-datos/clientes/confirmar', [DataImportController::class, 'customerImport'])
         ->middleware('permission:clientes.crear')
         ->name('importaciones.clientes.import');
+    Route::get('/importar-datos/clientes/ejecuciones/{run}', [DataImportController::class, 'customerStatus'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.status');
+    Route::post('/importar-datos/clientes/ejecuciones/{run}/reanudar', [DataImportController::class, 'customerRetry'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.retry');
+    Route::get('/importar-datos/clientes/ejecuciones/{run}/reporte', [DataImportController::class, 'customerReport'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.report');
 
     Route::get('/importar-datos/productos', [DataImportController::class, 'products'])
         ->middleware('permission:productos.crear')

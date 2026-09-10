@@ -23,6 +23,7 @@
         </div>
     @endif
 
+    <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
     <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -37,10 +38,20 @@
             <div>
                 <label for="customer_file" class="mb-2 block text-sm font-semibold text-slate-700">2. Archivo de clientes</label>
                 <input id="customer_file" name="customer_file" type="file" accept=".xlsx,.xls,.csv" required class="block min-h-11 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm">
-                <p class="mt-2 text-xs text-slate-500">Máximo 10 MB. La vista previa no escribe datos.</p>
+                <p class="mt-2 text-xs text-slate-500">Máximo 10 MB por archivo, sin límite de cantidad de clientes. Agregue las filas necesarias a la plantilla. Puntos iniciales: opcionales, solo para nuevos. El análisis guarda progreso técnico, sin crear ni modificar clientes o puntos.</p>
             </div>
             <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white sm:w-auto">Revisar archivo</button>
         </form>
+    </section>
+    <section class="space-y-3">
+        <h2 class="font-bold text-slate-800">Importaciones de esta empresa</h2>
+        @foreach($runs as $run)
+            <a class="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border bg-white p-3 text-sm" href="{{ route('importaciones.clientes.status', $run->id) }}">
+                <span class="min-w-0 break-all">#{{ $run->id }} · {{ $run->original_filename ?? 'Detalles purgados' }}</span>
+                <span>{{ $run->created_count }} creados · {{ $run->analyzed_rows }} analizados</span>
+            </a>
+        @endforeach
+        {{ $runs->links() }}
     </section>
 </div>
 @endsection
