@@ -17,6 +17,7 @@ use App\Http\Controllers\BranchController;
 // Catálogos
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CashClosingController;
+use App\Http\Controllers\CashDrawerController;
 use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CashSessionController;
@@ -243,6 +244,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::post('/caja/abrir', [CashSessionController::class, 'store'])
             ->middleware('permission:caja.abrir')
             ->name('cash.open.store');
+        Route::get('/caja/receipt/{type}', [CashDrawerController::class, 'receipt'])
+            ->name('cash.drawer-receipt');
         Route::get('/caja/historial', [CashSessionHistoryController::class, 'index'])
             ->middleware('permission:caja.ver')
             ->name('cash.history.index');
