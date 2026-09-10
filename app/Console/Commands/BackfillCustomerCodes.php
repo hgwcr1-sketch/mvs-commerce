@@ -22,6 +22,10 @@ class BackfillCustomerCodes extends Command
         $companyId = $this->option('company');
         $dryRun = $this->option('dry-run');
         $chunkSize = (int) $this->option('chunk');
+        if ($chunkSize < 1) {
+            $this->error('El tamaño del lote debe ser positivo.');
+            return self::FAILURE;
+        }
 
         if ($dryRun) {
             $this->warn('MODO DRY-RUN: No se guardarán cambios.');
@@ -39,13 +43,17 @@ class BackfillCustomerCodes extends Command
         foreach ($companies as $company) {
             $this->info("Procesando empresa: {$company->name} (ID: {$company->id})");
 
-            // Obtener el último customer_code usado para esta empresa
-            $lastCode = Customer::where('company_id', $company->id)
-                ->whereNotNull('customer_code')
-                ->orderByRaw('CAST(customer_code AS UNSIGNED) DESC')
-                ->value('customer_code');
-
-            $nextNumber = $lastCode ? (int) $lastCode + 1 : 1;
+            // Comparar en PHP: los códigos manuales no tienen que ser numéricos.
+            $lastCode = $this->lastNumericCode($company->id, $chunkSize);
+            $sequenceValue = CompanySequence::where('company_id', $company->id)
+                ->where('name', CompanySequence::CUSTOMER_CODE)->value('current_value') ?? 0;
+            $maximum = bccomp($lastCode ?? '0', (string) $sequenceValue, 0) > 0
+                ? $lastCode : (string) $sequenceValue;
+            if (bccomp($maximum, (string) PHP_INT_MAX, 0) >= 0) {
+                $this->error('El código numérico excede la capacidad de la secuencia.');
+                return self::FAILURE;
+            }
+            $nextNumber = (int) $maximum + 1;
 
             $this->info("  Último código: " . ($lastCode ?? 'ninguno') . " → Próximo: " . str_pad($nextNumber, 6, '0', STR_PAD_LEFT));
 
@@ -57,6 +65,11 @@ class BackfillCustomerCodes extends Command
 
             $count = $customers->count();
             $this->info("  Clientes sin código: {$count}");
+
+            if (bccomp(bcadd($maximum, (string) $count, 0), (string) (PHP_INT_MAX - 1), 0) > 0) {
+                $this->error('No hay capacidad suficiente en la secuencia para este lote.');
+                return self::FAILURE;
+            }
 
             if ($count === 0) {
                 $this->info("  Sin clientes para procesar.");
@@ -81,7 +94,7 @@ class BackfillCustomerCodes extends Command
                         $code = str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
 
                         // Verificar que no exista (doble check por concurrencia)
-                        $exists = Customer::where('company_id', $company->id)
+                        $exists = Customer::withTrashed()->where('company_id', $company->id)
                             ->where('customer_code', $code)
                             ->exists();
 
@@ -90,7 +103,7 @@ class BackfillCustomerCodes extends Command
                             while ($exists) {
                                 $nextNumber++;
                                 $code = str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-                                $exists = Customer::where('company_id', $company->id)
+                                $exists = Customer::withTrashed()->where('company_id', $company->id)
                                     ->where('customer_code', $code)
                                     ->exists();
                             }
@@ -122,5 +135,24 @@ class BackfillCustomerCodes extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function lastNumericCode(int $companyId, int $chunkSize): ?string
+    {
+        $maximum = null;
+        // Incluye eliminados: el índice único también reserva sus códigos.
+        Customer::withTrashed()->where('company_id', $companyId)
+            ->whereNotNull('customer_code')->select(['id', 'customer_code'])
+            ->chunkById($chunkSize, function ($customers) use (&$maximum) {
+                foreach ($customers as $customer) {
+                    $code = $customer->customer_code;
+                    if (preg_match('/^[0-9]+$/D', $code)
+                        && ($maximum === null || bccomp($code, $maximum, 0) > 0)) {
+                        $maximum = $code;
+                    }
+                }
+            });
+
+        return $maximum;
     }
 }
