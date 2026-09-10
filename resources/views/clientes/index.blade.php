@@ -133,7 +133,7 @@
         type="text"
         id="customer-search"
         value="{{ $search }}"
-        placeholder="Buscar por nombre, cédula, teléfono, celular o correo..."
+        placeholder="Buscar por código, nombre, cédula, teléfono, celular o correo..."
         autocomplete="off"
         class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
     >
@@ -274,6 +274,7 @@ searchInput.addEventListener('input', function () {
 
         <x-table-header>
 
+            <x-th>Código</x-th>
             <x-th>Identificación</x-th>
             <x-th>Nombre</x-th>
             <x-th>Teléfono</x-th>
@@ -289,6 +290,10 @@ searchInput.addEventListener('input', function () {
             @forelse($customers as $customer)
 
                 <tr class="border-t hover:bg-slate-50">
+
+                    <td class="px-4 py-3 font-mono text-sm">
+                        {{ $customer->customer_code ?: '-' }}
+                    </td>
 
                     <td class="px-4 py-3">
                         {{ $customer->identification ?: '-' }}
@@ -389,7 +394,7 @@ searchInput.addEventListener('input', function () {
 
                 <tr>
 
-                    <td colspan="7" class="py-10 text-center text-slate-500">
+                    <td colspan="8" class="py-10 text-center text-slate-500">
 
                         No hay clientes registrados.
 

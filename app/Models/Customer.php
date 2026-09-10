@@ -15,6 +15,7 @@ class Customer extends Model
 
     protected $fillable = [
         'company_id',
+        'customer_code',
         'customer_type',
         'identification_type',
         'identification',
@@ -64,6 +65,10 @@ class Customer extends Model
                     $attempts++;
                 }
             }
+
+            if (empty($customer->customer_code) && !empty($customer->company_id)) {
+                $customer->customer_code = \App\Models\CompanySequence::nextCustomerCode($customer->company_id);
+            }
         });
     }
 
@@ -72,6 +77,11 @@ class Customer extends Model
     | Relaciones
     |--------------------------------------------------------------------------
     */
+
+    public function getFormattedCustomerCodeAttribute(): ?string
+    {
+        return $this->customer_code;
+    }
 
     public function company(): BelongsTo
     {

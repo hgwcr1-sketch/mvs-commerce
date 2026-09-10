@@ -106,6 +106,7 @@ class MigrationTemplateService
                 'tipo_identificacion' => ['text', 'Texto (conservar ceros)', '01, 02, 03, 04, 05; también se aceptan 1–5 heredados', '01'],
                 'identificacion' => ['text', 'Texto (no usar notación científica)', null, '001234567'],
                 'nombre' => ['text', 'Texto', null, 'María Rodríguez'], 'nombre_comercial' => ['text', 'Texto', null, 'Comercial Rodríguez'],
+                'codigo_cliente' => ['text', 'Texto (conservar ceros iniciales; opcional, se genera automático)', null, '000123'],
                 'codigo_pais' => ['text', 'Texto con signo +', null, '+506'], 'telefono' => ['text', 'Texto de 4 a 15 dígitos', null, '22220000'],
                 'movil' => ['text', 'Texto de 4 a 15 dígitos', null, '088881111'], 'correo' => ['text', 'Correo electrónico', null, 'cliente@ejemplo.com'],
                 'direccion' => ['text', 'Texto', null, 'San José, Costa Rica'], 'limite_credito' => ['number', 'Monto, máximo 2 decimales', null, '150000.00', '#,##0.00'],

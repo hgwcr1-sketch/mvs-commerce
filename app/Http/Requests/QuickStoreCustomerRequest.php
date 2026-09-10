@@ -18,7 +18,7 @@ class QuickStoreCustomerRequest extends FormRequest
     {
         $normalized = [];
 
-        foreach (['name', 'identification_type', 'identification', 'phone', 'mobile', 'email', 'customer_type'] as $field) {
+        foreach (['name', 'identification_type', 'identification', 'phone', 'mobile', 'email', 'customer_type', 'customer_code'] as $field) {
             if ($this->has($field)) {
                 $value = trim((string) $this->input($field));
                 $normalized[$field] = $value === '' ? null : $value;
@@ -38,6 +38,13 @@ class QuickStoreCustomerRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:150'],
+            'customer_code' => [
+                'nullable',
+                'string',
+                'max:20',
+                Rule::unique('customers', 'customer_code')
+                    ->where('company_id', session('active_company_id')),
+            ],
             'customer_type' => ['required', Rule::in(['individual', 'company'])],
             'identification_type' => ['nullable', Rule::in(['01', '02', '03', '04', '05'])],
             'identification' => [
@@ -70,6 +77,10 @@ class QuickStoreCustomerRequest extends FormRequest
             'identification_type.in' => 'El tipo de identificación no es válido.',
             'identification.unique' => 'Ya existe un cliente con esta identificación en la empresa.',
             'identification.max' => 'La identificación no puede superar los 50 caracteres.',
+
+            'customer_code.unique' => 'Ya existe un cliente con este código comercial en la empresa.',
+            'customer_code.max' => 'El código comercial no puede superar los 20 caracteres.',
+
             'phone.max' => 'El teléfono no puede superar los 30 caracteres.',
             'mobile.max' => 'El celular no puede superar los 30 caracteres.',
             'email.email' => 'Debe ingresar un correo electrónico válido.',

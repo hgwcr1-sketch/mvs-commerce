@@ -51,6 +51,15 @@ class UpdateCustomerRequest extends FormRequest
 
             'customer_type' => ['required', Rule::in(['individual', 'company'])],
 
+            'customer_code' => [
+                'nullable',
+                'string',
+                'max:20',
+                Rule::unique('customers', 'customer_code')
+                    ->where('company_id', session('active_company_id'))
+                    ->ignore($customer),
+            ],
+
             'identification_type' => ['nullable', Rule::in(['01', '02', '03', '04', '05'])],
 
             'identification' => [
@@ -127,6 +136,9 @@ class UpdateCustomerRequest extends FormRequest
 
             'identification.unique' => 'Ya existe otro cliente con esta identificación.',
             'identification.max' => 'La identificación no puede superar los 50 caracteres.',
+
+            'customer_code.unique' => 'Ya existe otro cliente con este código comercial en la empresa.',
+            'customer_code.max' => 'El código comercial no puede superar los 20 caracteres.',
 
             'name.required' => 'El nombre del cliente es obligatorio.',
             'name.max' => 'El nombre no puede superar los 150 caracteres.',

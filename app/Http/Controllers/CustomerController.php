@@ -41,7 +41,8 @@ class CustomerController extends Controller
                         ->orWhere('identification', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('mobile', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('customer_code', 'like', "%{$search}%");
 
                 });
 
@@ -440,7 +441,8 @@ class CustomerController extends Controller
                     ->orWhere('identification', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('customer_code', 'like', "%{$search}%");
             })
             ->orderBy('name')
             ->limit(8)
@@ -451,6 +453,7 @@ class CustomerController extends Controller
                 'phone',
                 'mobile',
                 'email',
+                'customer_code',
             ]);
 
         return response()->json($customers);

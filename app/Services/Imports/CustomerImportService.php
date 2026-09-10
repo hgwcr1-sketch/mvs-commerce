@@ -10,9 +10,9 @@ use Illuminate\Validation\ValidationException;
 
 class CustomerImportService
 {
-    public const HEADERS = [
+public const HEADERS = [
         'tipo_cliente*', 'tipo_identificacion', 'identificacion', 'nombre*', 'nombre_comercial',
-        'codigo_pais', 'telefono', 'movil', 'correo', 'direccion', 'limite_credito',
+        'codigo_cliente', 'codigo_pais', 'telefono', 'movil', 'correo', 'direccion', 'limite_credito',
         'dias_credito', 'nivel_precio', 'fecha_nacimiento', 'activo', 'puntos_iniciales',
     ];
 
@@ -22,6 +22,7 @@ class CustomerImportService
         'identificacion' => 'identification',
         'nombre' => 'name',
         'nombre_comercial' => 'commercial_name',
+        'codigo_cliente' => 'customer_code',
         'codigo_pais' => 'phone_country_code',
         'telefono' => 'phone',
         'movil' => 'mobile',
@@ -38,7 +39,7 @@ class CustomerImportService
     private const FIELD_LABELS = [
         'customer_type' => 'tipo_cliente', 'identification_type' => 'tipo_identificacion',
         'identification' => 'identificacion', 'name' => 'nombre', 'commercial_name' => 'nombre_comercial',
-        'phone_country_code' => 'codigo_pais', 'phone' => 'telefono', 'mobile' => 'movil',
+        'customer_code' => 'codigo_cliente', 'phone_country_code' => 'codigo_pais', 'phone' => 'telefono', 'mobile' => 'movil',
         'email' => 'correo', 'address' => 'direccion', 'credit_limit' => 'limite_credito',
         'credit_days' => 'dias_credito', 'price_level' => 'nivel_precio',
         'birth_date' => 'fecha_nacimiento', 'is_active' => 'activo', 'initial_points' => 'puntos_iniciales',
@@ -97,13 +98,14 @@ class CustomerImportService
         [$commercialName, $commercialNameWarning] = $this->normalizeLegacyText($this->nullable($data['commercial_name'] ?? null), 'nombre_comercial');
         [$address, $addressWarning] = $this->normalizeLegacyText($this->nullable($data['address'] ?? null), 'direccion');
 
-        return [
+return [
             'row_number' => $rowNumber,
             'customer_type' => Str::lower(trim((string) ($data['customer_type'] ?? ''))),
             'identification_type' => $this->normalizeIdentificationType($data['identification_type'] ?? null),
             'identification' => $this->nullable($data['identification'] ?? null),
             'name' => $name,
             'commercial_name' => $commercialName,
+            'customer_code' => $this->nullable($data['customer_code'] ?? null),
             'phone_country_code' => ($phone !== null || $mobile !== null)
                 ? $effectiveCountryCode
                 : null,
@@ -124,7 +126,7 @@ class CustomerImportService
         ];
     }
 
-    public function errors(array $row): array
+public function errors(array $row): array
     {
             $validator = Validator::make($row, [
                 'customer_type' => ['required', 'in:individual,company'],
@@ -132,6 +134,7 @@ class CustomerImportService
                 'identification' => ['nullable', 'string', 'max:50'],
                 'name' => ['required', 'string', 'max:150'],
                 'commercial_name' => ['nullable', 'string', 'max:150'],
+                'customer_code' => ['nullable', 'string', 'max:20'],
                 'phone_country_code' => ['nullable', 'regex:/^\+[1-9]\d{0,3}$/'],
                 'phone' => ['nullable', 'regex:/^\d{4,15}$/'],
                 'mobile' => ['nullable', 'regex:/^\d{4,15}$/'],

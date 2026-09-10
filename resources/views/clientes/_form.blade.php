@@ -75,6 +75,12 @@
         </x-select>
 
         <x-input
+    name="customer_code"
+    label="Código Comercial"
+    :value="old('customer_code', $customer->customer_code ?? '')"
+    placeholder="000001 (se genera automático si vacío)" />
+
+        <x-input
     name="identification"
     label="Número de Identificación"
     :value="old('identification', $customer->identification ?? '')" />

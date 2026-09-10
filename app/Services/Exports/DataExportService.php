@@ -63,13 +63,13 @@ class DataExportService
     private function customers(int $companyId): array
     {
         $rows = Customer::withTrashed()->where('company_id', $companyId)->orderBy('name')->get()->map(fn (Customer $customer) => [
-            $customer->identification_type, $customer->identification, $customer->name, $customer->commercial_name,
+            $customer->customer_code, $customer->identification_type, $customer->identification, $customer->name, $customer->commercial_name,
             $customer->phone, $customer->mobile, $customer->email, $customer->address,
             $customer->credit_limit, $customer->credit_days, $customer->price_level,
             $customer->birth_date?->format('Y-m-d'), $customer->is_active && $customer->deleted_at === null ? 'Sí' : 'No',
         ])->all();
 
-        return [['Tipo identificación', 'Identificación', 'Nombre', 'Nombre comercial', 'Teléfono', 'Móvil',
+        return [['Código Comercial', 'Tipo identificación', 'Identificación', 'Nombre', 'Nombre comercial', 'Teléfono', 'Móvil',
             'Correo', 'Dirección', 'Límite de crédito', 'Días de crédito', 'Nivel de precio', 'Fecha de nacimiento', 'Activo'], $rows];
     }
 

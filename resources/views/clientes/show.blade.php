@@ -44,6 +44,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
             <div>
+                <label class="text-sm text-slate-500">Código Comercial</label>
+                <p class="font-semibold font-mono">{{ $customer->customer_code ?: '-' }}</p>
+            </div>
+
+            <div>
                 <label class="text-sm text-slate-500">Nombre</label>
                 <p class="font-semibold">{{ $customer->name }}</p>
             </div>

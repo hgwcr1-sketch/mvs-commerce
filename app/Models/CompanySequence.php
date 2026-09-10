@@ -22,6 +22,7 @@ class CompanySequence extends Model
     public const LAYAWAY = 'layaway';
     public const ORDER = 'order';
     public const PURCHASE_ORDER = 'purchase_order';
+    public const CUSTOMER_CODE = 'customer_code';
 
     protected $fillable = [
         'company_id',
@@ -99,5 +100,10 @@ class CompanySequence extends Model
     public static function nextPurchaseOrderNumber(int $companyId): string
     {
         return sprintf('OC-%08d', static::nextValue($companyId, static::PURCHASE_ORDER));
+    }
+
+    public static function nextCustomerCode(int $companyId): string
+    {
+        return sprintf('%06d', static::nextValue($companyId, static::CUSTOMER_CODE));
     }
 }

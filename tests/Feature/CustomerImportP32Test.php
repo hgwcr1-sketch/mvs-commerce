@@ -35,7 +35,7 @@ class CustomerImportP32Test extends TestCase
 
         $export = $this->get(route('data-center.exports.download', ['customers', 'xlsx']))->assertOk();
         $rows = $this->spreadsheetRows($export->streamedContent());
-        $this->assertSame('Cliente exportable', $rows[1][2]);
+        $this->assertSame('Cliente exportable', $rows[1][3]);
         $this->assertContains('permission:clientes.crear', Route::getRoutes()->getByName('importaciones.clientes.import')->gatherMiddleware());
     }
 
@@ -338,7 +338,9 @@ class CustomerImportP32Test extends TestCase
     {
         $path = tempnam(sys_get_temp_dir(), 'customers-').'.xlsx';
         $spreadsheet = new Spreadsheet;
-        $spreadsheet->getActiveSheet()->fromArray(array_merge([CustomerImportService::HEADERS], $dataRows));
+        // These positional fixtures represent files from before codigo_cliente was added.
+        $headers = array_values(array_diff(CustomerImportService::HEADERS, ['codigo_cliente']));
+        $spreadsheet->getActiveSheet()->fromArray(array_merge([$headers], $dataRows));
         (new Xlsx($spreadsheet))->save($path);
 
         return $path;
