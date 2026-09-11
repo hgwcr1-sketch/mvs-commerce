@@ -23,7 +23,7 @@
         </div>
     @endif
 
-    <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
+    <p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
     <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

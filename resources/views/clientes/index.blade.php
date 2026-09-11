@@ -105,7 +105,7 @@
                 Empresas
             </p>
 
-            <h2 class="mt-2 text-4xl font-bold text-blue-600">
+            <h2 class="mt-2 text-4xl font-bold text-[#B1922D]">
                 {{ $stats['companies'] }}
             </h2>
 

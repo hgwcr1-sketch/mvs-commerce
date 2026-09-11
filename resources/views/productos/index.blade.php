@@ -13,7 +13,7 @@
         <h1 class="text-xl font-bold text-slate-800 sm:text-2xl">Productos</h1>
         <div class="grid grid-cols-1 gap-2 sm:flex">
             @can('productos.crear')
-                <a href="{{ route('importaciones.productos') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-600 bg-white px-4 py-2 text-sm font-semibold text-blue-700">Importar</a>
+                <a href="{{ route('importaciones.productos') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-500 bg-white px-4 py-2 text-sm font-semibold text-[#B1922D]">Importar</a>
             @endcan
             @can('reportes.exportar')
                 @can('productos.ver')

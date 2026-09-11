@@ -92,9 +92,9 @@
                     <div class="text-sm text-slate-600">
                         <span x-show="product.controls_inventory && product.available_stock > 0">Stock: <strong x-text="formatQuantity(product.available_stock)"></strong></span>
                         <span x-show="product.controls_inventory && product.available_stock <= 0" class="font-semibold text-red-600">Sin existencia en esta sucursal</span>
-                        <span x-show="!product.controls_inventory" class="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">Servicio / no controlado</span>
+                        <span x-show="!product.controls_inventory" class="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-[#B1922D]">Servicio / no controlado</span>
                         <template x-if="product.other_branch_stock && product.other_branch_stock.length">
-                            <p class="mt-1 text-xs font-medium text-blue-700">
+                            <p class="mt-1 text-xs font-medium text-[#B1922D]">
                                 Disponible en otras sucursales: <span x-text="otherStockLabel(product)"></span>
                             </p>
                         </template>

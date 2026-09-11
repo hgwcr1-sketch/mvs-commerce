@@ -40,19 +40,19 @@
                 </article>
             @endcan
             @can('ventas.crear')
-                <article class="flex flex-col rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
-                    <span class="w-fit rounded-full bg-violet-200 px-3 py-1 text-xs font-semibold text-violet-900">P34/P35 completo</span>
+                <article class="flex flex-col rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                    <span class="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-[#B1922D]">P34/P35 completo</span>
                     <h3 class="mt-3 text-lg font-bold text-slate-800">Ventas históricas</h3>
                     <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">Encabezados y líneas para reportes, sin caja, inventario, pagos, CxC ni fidelización.</p>
-                    <a data-existing-import="historical-sales" href="{{ route('importaciones.ventas-historicas') }}" class="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white">Importar ventas</a>
+                    <a data-existing-import="historical-sales" href="{{ route('importaciones.ventas-historicas') }}" class="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 text-black px-4 py-2 text-sm font-semibold">Importar ventas</a>
                 </article>
             @endcan
             @can('productos.crear')
-                <article class="flex flex-col rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-                    <span class="w-fit rounded-full bg-blue-200 px-3 py-1 text-xs font-semibold text-blue-900">P33 completo</span>
+                <article class="flex flex-col rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                    <span class="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-[#B1922D]">P33 completo</span>
                     <h3 class="mt-3 text-lg font-bold text-slate-800">Productos Excel</h3>
                     <p class="mt-2 flex-1 text-sm leading-6 text-slate-600">Catálogo, precios y códigos con vista previa; no modifica existencias ni Kardex.</p>
-                    <a data-existing-import="products" href="{{ route('importaciones.productos') }}" class="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white">Importar productos</a>
+                    <a data-existing-import="products" href="{{ route('importaciones.productos') }}" class="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 text-black px-4 py-2 text-sm font-semibold">Importar productos</a>
                 </article>
             @endcan
 

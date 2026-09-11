@@ -3,7 +3,7 @@
 @section('content')
 <div class="mx-auto max-w-7xl space-y-5" data-responsive="360 768 1280">
     <header>
-        <p class="text-sm font-semibold text-indigo-600">Productos</p>
+        <p class="text-sm font-semibold text-[#B1922D]">Productos</p>
         <h1 class="text-2xl font-bold text-slate-900">Centro de Etiquetas</h1>
         <p class="mt-1 text-sm text-slate-600">Selecciona productos, define cantidades y revisa el lote antes de imprimir.</p>
     </header>
@@ -32,7 +32,7 @@
         <select name="category_id" class="form-input w-full"><option value="">Todas las categorías</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(request('category_id')==$category->id)>{{ $category->name }}</option>@endforeach</select>
         <select name="brand_id" class="form-input w-full"><option value="">Todas las marcas</option>@foreach($brands as $brand)<option value="{{ $brand->id }}" @selected(request('brand_id')==$brand->id)>{{ $brand->name }}</option>@endforeach</select>
         <select name="prints_label" class="form-input w-full"><option value="">Etiqueta: todos</option><option value="1" @selected(request('prints_label')==='1')>Sí imprime</option><option value="0" @selected(request('prints_label')==='0')>No imprime</option></select>
-        <button class="min-h-11 rounded-xl bg-indigo-600 px-4 font-semibold text-white lg:col-span-5">Filtrar productos</button>
+        <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-semibold lg:col-span-5">Filtrar productos</button>
     </form>
 
     <div class="space-y-4">
@@ -51,7 +51,7 @@
             @csrf
             <select name="template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select>
             <select name="size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select>
-            <button class="min-h-11 rounded-xl bg-indigo-600 px-4 font-bold text-white">Vista previa del lote</button>
+            <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-bold">Vista previa del lote</button>
         </form>
     </div>
 </div>

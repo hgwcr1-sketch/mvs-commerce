@@ -153,7 +153,7 @@
 
                                     <a
                                         href="{{ route('categorias.edit', $category) }}"
-                                        class="rounded-lg bg-blue-500 px-3 py-1 text-sm font-semibold text-white hover:bg-blue-600">
+                                        class="rounded-lg bg-amber-500 px-3 py-1 text-sm font-semibold text-white hover:bg-amber-600">
 
                                         Editar
 

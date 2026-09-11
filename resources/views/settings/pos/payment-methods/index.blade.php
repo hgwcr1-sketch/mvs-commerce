@@ -74,7 +74,7 @@
                             <td class="px-4 py-3">
                                 <div class="flex flex-wrap justify-center gap-2">
                                     <a href="{{ route('settings.pos.payment-methods.edit', $paymentMethod) }}"
-                                       class="rounded-lg bg-blue-500 px-3 py-1 text-sm font-semibold text-white hover:bg-blue-600">
+                                       class="rounded-lg bg-amber-500 px-3 py-1 text-sm font-semibold text-white text-black hover:bg-amber-600">
                                         Editar
                                     </a>
 

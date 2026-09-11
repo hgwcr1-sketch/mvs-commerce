@@ -20,7 +20,7 @@
             @empty<tr><td colspan="8" class="p-8 text-center text-slate-500">No hay cantidades pendientes de preparar.</td></tr>@endforelse
             </tbody>
         </table></div></x-card>
-        @if($lines->isNotEmpty())<label class="block font-semibold">Notas<textarea name="notes" rows="2" maxlength="2000" class="mt-1 w-full rounded border-slate-300"></textarea></label><button class="rounded bg-indigo-600 px-4 py-2 font-bold text-white">Crear pedidos a proveedor</button>@endif
+        @if($lines->isNotEmpty())<label class="block font-semibold">Notas<textarea name="notes" rows="2" maxlength="2000" class="mt-1 w-full rounded border-slate-300"></textarea></label><button class="rounded bg-amber-500 px-4 py-2 font-bold text-black">Crear pedidos a proveedor</button>@endif
     </form>
 </div>
 @endsection

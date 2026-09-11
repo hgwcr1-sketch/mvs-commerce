@@ -46,12 +46,12 @@
     </section>
 
     @if($exportDatasets->isNotEmpty())
-        <section class="flex flex-col gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p class="text-sm text-blue-900">Descargue el conjunto base verificable de D09 para conciliación.</p>
+        <section class="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-amber-900">Descargue el conjunto base verificable de D09 para conciliación.</p>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 @foreach($exportDatasets as $dataset => $label)
-                    <a href="{{ route('data-center.exports.download', [$dataset, 'xlsx']) }}?branch_id={{ $filters['branch_id'] }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white">{{ $label }} XLSX</a>
-                    <a href="{{ route('data-center.exports.download', [$dataset, 'csv']) }}?branch_id={{ $filters['branch_id'] }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-800">{{ $label }} CSV</a>
+                    <a href="{{ route('data-center.exports.download', [$dataset, 'xlsx']) }}?branch_id={{ $filters['branch_id'] }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 text-black px-4 py-2 text-sm font-semibold">{{ $label }} XLSX</a>
+                    <a href="{{ route('data-center.exports.download', [$dataset, 'csv']) }}?branch_id={{ $filters['branch_id'] }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-[#B1922D]">{{ $label }} CSV</a>
                 @endforeach
             </div>
         </section>

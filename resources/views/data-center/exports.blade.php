@@ -17,7 +17,7 @@
     @include('data-center._navigation')
 
     @if($canExportMigrationPackage)
-    <section class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5" data-migration-package>
+    <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5" data-migration-package>
         <h2 class="text-lg font-bold text-slate-800">Paquete completo de migración P38</h2>
         <p class="mt-1 text-sm text-slate-600">ZIP con clientes, productos, facturas y líneas, Kardex, puntos y manifiesto SHA-256.</p>
         <form class="mt-4 flex flex-col gap-3 sm:flex-row" method="GET" action="{{ route('data-center.exports.migration-package') }}">
@@ -26,7 +26,7 @@
                     <option value="{{ $branch->id }}" @selected($branch->id === (int) session('active_branch_id'))>{{ $branch->name }}</option>
                 @endforeach
             </select>
-            <button class="min-h-11 rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white">Descargar paquete ZIP</button>
+            <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 py-2 text-sm font-semibold">Descargar paquete ZIP</button>
         </form>
     </section>
     @endif
@@ -41,10 +41,10 @@
                 <article class="flex min-h-56 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" data-export-dataset="{{ $key }}">
                     <div class="flex items-start justify-between gap-3">
                         <div>
-                            <p class="text-xs font-semibold uppercase tracking-wide text-blue-700">{{ $definition['branch'] ? 'Por sucursal' : 'Toda la empresa' }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-[#B1922D]">{{ $definition['branch'] ? 'Por sucursal' : 'Toda la empresa' }}</p>
                             <h2 class="mt-1 text-lg font-bold text-slate-800">{{ $definition['label'] }}</h2>
                         </div>
-                        <span class="rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700" aria-hidden="true">↓</span>
+                        <span class="rounded-xl bg-amber-100 px-3 py-2 text-sm font-bold text-[#B1922D]" aria-hidden="true">↓</span>
                     </div>
 
                     <form class="mt-auto space-y-3 pt-5" method="GET" action="{{ route('data-center.exports.download', [$key, 'xlsx']) }}">

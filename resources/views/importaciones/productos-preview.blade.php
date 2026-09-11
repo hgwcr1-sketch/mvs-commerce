@@ -68,7 +68,7 @@
         @if($errorCount === 0 && count($rows) > 0)
             <form action="{{ route('importaciones.productos.import') }}" method="POST" onsubmit="return confirm('¿Confirmar la importación de {{ count($rows) }} productos?');">
                 @csrf
-                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white sm:w-auto">Confirmar importación</button>
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white text-black sm:w-auto">Confirmar importación</button>
             </form>
         @else
             <p class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">Corrija todas las filas antes de confirmar.</p>

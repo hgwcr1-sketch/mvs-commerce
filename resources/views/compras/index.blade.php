@@ -36,7 +36,7 @@
 
             <a
                 href="{{ route('compras.import.template') }}"
-                class="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600">
                 ↓ Descargar plantilla
             </a>
 
@@ -80,7 +80,7 @@
 
                 <label
                     for="archivoXml"
-                    class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                    class="cursor-pointer rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600">
                     Importar XML
                 </label>
 

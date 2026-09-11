@@ -58,7 +58,7 @@
                             <td class="px-4 py-3 text-center">{{ $cashRegister->is_default ? 'Sí' : 'No' }}</td>
                             <td class="px-4 py-3 text-center"><span class="rounded-full px-3 py-1 text-xs font-semibold {{ $cashRegister->is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">{{ $cashRegister->is_active ? 'Activa' : 'Inactiva' }}</span></td>
                             <td class="px-4 py-3"><div class="flex flex-wrap justify-center gap-2">
-                                <a href="{{ route('settings.cash-registers.edit', $cashRegister) }}" class="rounded-lg bg-blue-500 px-3 py-1 text-sm font-semibold text-white hover:bg-blue-600">Editar</a>
+                                <a href="{{ route('settings.cash-registers.edit', $cashRegister) }}" class="rounded-lg bg-amber-500 px-3 py-1 text-sm font-semibold text-white text-black hover:bg-amber-600">Editar</a>
                                 <form method="POST" action="{{ route('settings.cash-registers.toggle-status', $cashRegister) }}">@csrf @method('PATCH')
                                     <button class="rounded-lg bg-slate-600 px-3 py-1 text-sm font-semibold text-white hover:bg-slate-700">{{ $cashRegister->is_active ? 'Desactivar' : 'Activar' }}</button>
                                 </form>

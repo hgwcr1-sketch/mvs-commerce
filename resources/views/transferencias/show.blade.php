@@ -109,7 +109,7 @@
             </form>
         </section>
     @elseif($transfer->isInTransit())
-        <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">El traslado estÃ¡ en trÃ¡nsito. Inicie la revisiÃ³n para ingresar las cantidades recibidas.</p>
+        <p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">El traslado estÃ¡ en trÃ¡nsito. Inicie la revisiÃ³n para ingresar las cantidades recibidas.</p>
     @endif
 
     <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

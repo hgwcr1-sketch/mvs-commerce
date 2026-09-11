@@ -14,7 +14,7 @@
         <a href="{{ route('importaciones.clientes') }}" class="inline-flex min-h-11 items-center text-sm font-semibold text-amber-700">Volver a Importar clientes</a>
         <h1 class="text-2xl font-bold text-slate-800">{{ $labels[$run->status] ?? $run->status }}</h1>
         <p class="break-words text-sm text-slate-600">{{ $run->original_filename ?? 'Archivo temporal purgado' }} · Importación #{{ $run->id }}</p>
-        <p class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
+        <p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Modo seguro: Crear solo clientes nuevos. Los clientes que ya existen serán ignorados. No se modificarán sus datos ni sus puntos.</p>
         @if(!$run->confirmed_at)<p class="text-sm">Todavía no se ha creado ningún cliente ni se han aplicado puntos.</p>@endif
     </header>
     @if($errors->any())<div class="rounded-xl bg-red-50 p-4 text-red-800">{{ $errors->first() }}</div>@endif

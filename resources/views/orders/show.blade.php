@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div><h1 class="text-2xl font-bold">{{ $order->number }}</h1><p>{{ $order->branch->name }} · {{ $order->requester->name }}</p></div>
         <div class="flex gap-2">
-            @if($canPrepare && $hasPendingPreparation)<a href="{{ route('pedidos.preparar-compra', ['order_id' => $order->id]) }}" class="rounded bg-indigo-600 px-4 py-2 font-bold text-white">Preparar compra</a>@endif
+            @if($canPrepare && $hasPendingPreparation)<a href="{{ route('pedidos.preparar-compra', ['order_id' => $order->id]) }}" class="rounded bg-amber-500 px-4 py-2 font-bold text-black">Preparar compra</a>@endif
             <a href="{{ route('pedidos.index') }}" class="rounded border px-4 py-2">Volver</a>
         </div>
     </div>
@@ -59,8 +59,8 @@
                                 <div x-show="!associated" class="space-y-2">
                                     <p class="rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-800">Sin proveedor asociado</p>
                                     @if($canAssociateSuppliers)
-                                        <button type="button" @click="open = !open" class="text-sm font-bold text-indigo-700">+ Asociar proveedor</button>
-                                        <div x-show="open" x-cloak class="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                                        <button type="button" @click="open = !open" class="text-sm font-bold text-[#B1922D]">+ Asociar proveedor</button>
+                                        <div x-show="open" x-cloak class="rounded-xl border border-amber-200 bg-amber-50 p-3">
                                             <div x-ref="associationFields" class="space-y-2">
                                                 <label class="block text-xs font-semibold">Proveedor activo
                                                     <select name="supplier_id" required class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2">
@@ -83,7 +83,7 @@
                                                 </label>
                                                 <input type="hidden" name="is_active" value="1">
                                                 <p x-show="error" x-text="error" class="text-xs font-semibold text-red-700"></p>
-                                                <button type="button" @click="submit" :disabled="saving" class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50" x-text="saving ? 'Asociando…' : 'Asociar y seleccionar'"></button>
+                                                <button type="button" @click="submit" :disabled="saving" class="rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-black disabled:opacity-50" x-text="saving ? 'Asociando…' : 'Asociar y seleccionar'"></button>
                                             </div>
                                         </div>
                                     @endif

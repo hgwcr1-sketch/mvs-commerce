@@ -7,7 +7,7 @@
 <div class="mx-auto max-w-4xl space-y-6" data-historical-sale-import>
     <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-violet-700">Centro de Datos · P34/P35</p>
+            <p class="text-sm font-semibold uppercase tracking-wide text-[#B1922D]">Centro de Datos · P34/P35</p>
             <h1 class="mt-1 text-2xl font-bold text-slate-800">Ventas históricas</h1>
             <p class="mt-2 text-sm leading-6 text-slate-600">Cada fila representa una línea; repita los datos del encabezado para todas las líneas del documento.</p>
         </div>
@@ -27,7 +27,7 @@
             @csrf
             <div><label for="sales_file" class="mb-2 block text-sm font-semibold text-slate-700">2. Archivo histórico</label><input id="sales_file" name="sales_file" type="file" accept=".xlsx,.xls,.csv" required class="block min-h-11 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm"><p class="mt-2 text-xs text-slate-500">Máximo 10 MB. El preview no escribe datos.</p></div>
             <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Este flujo no abre caja, no crea pagos/CxC, no modifica inventario o Kardex y no ejecuta fidelización ni comunicaciones. P36 permanece separado.</div>
-            <button class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-violet-700 px-5 py-3 text-sm font-bold text-white sm:w-auto">Revisar archivo</button>
+            <button class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white text-black sm:w-auto">Revisar archivo</button>
         </form>
     </section>
 </div>
