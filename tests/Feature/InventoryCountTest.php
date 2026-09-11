@@ -202,7 +202,7 @@ class InventoryCountTest extends TestCase
 
     public static function invalidTransitions(): array
     {
-        return [['draft', 'review'], ['draft', 'confirm'], ['counting', 'confirm'], ['confirmed', 'cancel'], ['cancelled', 'confirm'], ['cancelled', 'review'], ['confirmed', 'back-to-counting']];
+        return [['draft', 'confirm'], ['counting', 'confirm'], ['confirmed', 'cancel'], ['cancelled', 'confirm'], ['confirmed', 'back-to-counting']];
     }
 
     #[DataProvider('invalidTransitions')]
@@ -213,6 +213,28 @@ class InventoryCountTest extends TestCase
         $this->assertSame($status, $count->fresh()->status);
         $this->assertSame('10.0000', $this->stock());
         $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_draft_review_redirects_with_error_when_uncounted(): void
+    {
+        $count = $this->countDocument();
+        $this->item($count);
+
+        $this->post(route('inventory-counts.review', $count))->assertRedirect()->assertSessionHas('error');
+
+        $this->assertSame('draft', $count->fresh()->status);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_draft_review_succeeds_when_all_items_counted(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '10'])->assertOk();
+
+        $this->post(route('inventory-counts.review', $count))->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame('review', $count->fresh()->status);
     }
 
     public function test_cancel_records_actor_and_time_without_stock_changes(): void
@@ -821,5 +843,92 @@ class InventoryCountTest extends TestCase
         $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
             'counted_quantity' => '5',
         ])->assertStatus(422);
+    }
+
+    public function test_review_blocks_when_one_item_uncounted(): void
+    {
+        $count = $this->countDocument('counting');
+        $item1 = $this->item($count);
+
+        $product2 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P2', 'internal_code' => 'SKU-2', 'barcode' => '744100000002', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $item2 = $count->items()->create(['product_id' => $product2->id, 'theoretical_quantity' => '5.0000', 'difference' => '0.0000']);
+
+        $item1->update(['counted_quantity' => '10', 'final_quantity' => '10', 'difference' => '0.0000']);
+
+        $this->post(route('inventory-counts.review', $count))->assertRedirect()->assertSessionHas('error', 'Debe registrar la cantidad física de 1 producto antes de enviar a revisión.');
+
+        $this->assertSame('counting', $count->fresh()->status);
+    }
+
+    public function test_review_shows_correct_count_of_uncounted_products(): void
+    {
+        $count = $this->countDocument('counting');
+        $this->item($count);
+
+        $product2 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P2', 'internal_code' => 'SKU-2', 'barcode' => '744100000002', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $product3 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P3', 'internal_code' => 'SKU-3', 'barcode' => '744100000003', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $count->items()->create(['product_id' => $product2->id, 'theoretical_quantity' => '5.0000', 'difference' => '0.0000']);
+        $count->items()->create(['product_id' => $product3->id, 'theoretical_quantity' => '3.0000', 'difference' => '0.0000']);
+
+        $this->post(route('inventory-counts.review', $count))->assertRedirect()->assertSessionHas('error', 'Debe registrar la cantidad física de 3 productos antes de enviar a revisión.');
+    }
+
+    public function test_review_error_is_friendly_not_422_page(): void
+    {
+        $count = $this->countDocument();
+
+        $response = $this->post(route('inventory-counts.review', $count));
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+
+        $this->get(route('inventory-counts.edit', $count))->assertOk()->assertSee('error');
+    }
+
+    public function test_newest_product_first_in_edit_view(): void
+    {
+        $count = $this->countDocument();
+        $item1 = $count->items()->create(['product_id' => $this->product->id, 'theoretical_quantity' => '10.0000', 'difference' => '0.0000']);
+
+        $product2 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P2', 'internal_code' => 'SKU-2', 'barcode' => '744100000002', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $item2 = $count->items()->create(['product_id' => $product2->id, 'theoretical_quantity' => '5.0000', 'difference' => '0.0000']);
+
+        $product3 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P3', 'internal_code' => 'SKU-3', 'barcode' => '744100000003', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $item3 = $count->items()->create(['product_id' => $product3->id, 'theoretical_quantity' => '3.0000', 'difference' => '0.0000']);
+
+        $response = $this->get(route('inventory-counts.edit', $count));
+        $response->assertOk();
+
+        $body = $response->getContent();
+        $pos3 = strpos($body, 'data-item-id="'.$item3->id.'"');
+        $pos2 = strpos($body, 'data-item-id="'.$item2->id.'"');
+        $pos1 = strpos($body, 'data-item-id="'.$item1->id.'"');
+
+        $this->assertNotFalse($pos3);
+        $this->assertNotFalse($pos2);
+        $this->assertNotFalse($pos1);
+        $this->assertLessThan($pos2, $pos3, 'Item 3 (newest) should appear before Item 2');
+        $this->assertLessThan($pos1, $pos2, 'Item 2 should appear before Item 1 (oldest)');
+    }
+
+    public function test_newest_product_first_with_three_products(): void
+    {
+        $count = $this->countDocument();
+        $first = $count->items()->create(['product_id' => $this->product->id, 'theoretical_quantity' => '1.0000', 'difference' => '0.0000']);
+
+        $product2 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P2', 'internal_code' => 'SKU-2', 'barcode' => '744100000002', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $second = $count->items()->create(['product_id' => $product2->id, 'theoretical_quantity' => '2.0000', 'difference' => '0.0000']);
+
+        $product3 = Product::create(['company_id' => $this->company->id, 'category_id' => $this->product->category_id, 'unit_id' => $this->product->unit_id, 'name' => 'P3', 'internal_code' => 'SKU-3', 'barcode' => '744100000003', 'cost' => '10', 'sale_price' => '20', 'tax_rate' => '0', 'track_inventory' => true, 'is_active' => true]);
+        $third = $count->items()->create(['product_id' => $product3->id, 'theoretical_quantity' => '3.0000', 'difference' => '0.0000']);
+
+        $response = $this->get(route('inventory-counts.edit', $count));
+        $body = $response->getContent();
+
+        $posThird = strpos($body, 'data-item-id="'.$third->id.'"');
+        $posSecond = strpos($body, 'data-item-id="'.$second->id.'"');
+        $posFirst = strpos($body, 'data-item-id="'.$first->id.'"');
+
+        $this->assertLessThan($posSecond, $posThird);
+        $this->assertLessThan($posFirst, $posSecond);
     }
 }

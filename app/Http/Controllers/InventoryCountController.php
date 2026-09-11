@@ -99,7 +99,7 @@ class InventoryCountController extends Controller
 
         $items = $inventoryCount->items()
             ->with(['product:id,name,internal_code,barcode,track_inventory', 'product.unit:id,abbreviation', 'product.barcodes' => fn ($q) => $q->where('is_active', true)->orderByDesc('is_primary')])
-            ->orderBy('id')
+            ->orderByDesc('id')
             ->get();
 
         return view('inventory-counts.edit', compact('inventoryCount', 'items'));
@@ -312,7 +312,16 @@ class InventoryCountController extends Controller
     {
         abort_unless((int) $inventoryCount->company_id === (int) session('active_company_id'), 404);
         abort_unless((int) $inventoryCount->branch_id === (int) session('active_branch_id'), 404);
-        abort_unless($inventoryCount->canTransitionTo(InventoryCount::STATUS_REVIEW), 422);
+
+        if (! $inventoryCount->canTransitionTo(InventoryCount::STATUS_REVIEW)) {
+            return back()->with('error', 'Esta toma no puede enviarse a revisión en su estado actual.');
+        }
+
+        $uncounted = $inventoryCount->items()->whereNull('counted_quantity')->count();
+        if ($uncounted > 0) {
+            $noun = $uncounted === 1 ? 'producto' : 'productos';
+            return back()->with('error', "Debe registrar la cantidad física de {$uncounted} {$noun} antes de enviar a revisión.");
+        }
 
         $inventoryCount->update([
             'status' => InventoryCount::STATUS_REVIEW,
