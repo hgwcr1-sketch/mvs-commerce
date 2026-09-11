@@ -20,9 +20,26 @@
                 <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="print_destinations[]" value="administrator" @checked(in_array('administrator', $setting->print_destinations ?? []))> Administrador</label>
             </fieldset>
             <label><span class="form-label">Plantilla predeterminada</span><select name="default_template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select></label>
-            <label><span class="form-label">Tamaño predeterminado</span><select name="default_size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select></label>
+            <label><span class="form-label">Tamaño predeterminado (A4)</span><select name="default_size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select></label>
             <label><span class="form-label">Encabezado de plantilla simple</span><input class="form-input w-full" name="custom_heading" maxlength="80" value="{{ $setting->custom_heading }}"></label>
-            <button class="min-h-11 rounded-xl bg-slate-800 px-4 font-semibold text-white md:col-span-2 lg:col-span-4">Guardar configuración</button>
+            <label><span class="form-label">Formato de impresión predeterminado</span>
+                <select name="default_print_mode" class="form-input w-full">
+                    <option value="a4" @selected(($setting->default_print_mode ?? 'a4')==='a4')">Hoja A4</option>
+                    <option value="thermal" @selected(($setting->default_print_mode ?? 'a4')==='thermal')">Impresora térmica</option>
+                </select>
+            </label>
+            <div class="md:col-span-2 lg:col-span-4" id="settingsThermalSection">
+                <label class="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" name="use_custom_size" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($setting->use_custom_size ?? false)>
+                    Tamaño personalizado de etiqueta térmica
+                </label>
+                <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3" id="settingsCustomInputs" style="{{ ($setting->use_custom_size ?? false) ? '' : 'display:none' }}">
+                    <label><span class="form-label">Ancho / Horizontal (mm)</span><input type="number" name="custom_width" min="10" max="200" value="{{ $setting->custom_width ?? 50 }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <label><span class="form-label">Alto / Vertical (mm)</span><input type="number" name="custom_height" min="10" max="200" value="{{ $setting->custom_height ?? 30 }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <div class="flex items-end text-sm text-slate-500">Ej: {{ $setting->custom_width ?? 50 }} × {{ $setting->custom_height ?? 30 }} mm</div>
+                </div>
+            </div>
+            <button class="min-h-11 rounded-xl bg-slate-800 px-4 font-semibold text-white md:col-span-2 lg:col-span-5">Guardar configuración</button>
         </form>
     </details>
     @endcan
@@ -52,19 +69,19 @@
             <select name="template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select>
             <select name="size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select>
             <select name="print_mode" id="printMode" class="form-input w-full">
-                <option value="a4" @selected(old('print_mode','a4')==='a4')">Hoja A4</option>
-                <option value="thermal" @selected(old('print_mode')==='thermal')">Impresora térmica</option>
+                <option value="a4" @selected(($setting->default_print_mode ?? 'a4')==='a4')">Hoja A4</option>
+                <option value="thermal" @selected(($setting->default_print_mode ?? 'a4')==='thermal')">Impresora térmica</option>
             </select>
             <div id="thermalCustom" class="hidden md:col-span-3">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <label class="flex items-center gap-2 text-sm font-medium">
-                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500">
-                        Tamaño personalizado (mm)
+                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($setting->use_custom_size ?? false)>
+                        Tamaño personalizado
                     </label>
-                    <div id="customSizeInputs" class="hidden flex items-center gap-2">
-                        <input type="number" name="custom_width" id="customWidth" min="10" max="200" value="50" class="form-input w-20 text-right" placeholder="Ancho">
+                    <div id="customSizeInputs" class="flex items-center gap-2" style="{{ ($setting->use_custom_size ?? false) ? '' : 'display:none' }}">
+                        <div><label class="text-xs text-slate-500">Ancho / Horizontal (mm)</label><input type="number" name="custom_width" id="customWidth" min="10" max="200" value="{{ $setting->custom_width ?? 50 }}" class="form-input w-20 text-right" inputmode="numeric"></div>
                         <span class="text-sm text-slate-500">×</span>
-                        <input type="number" name="custom_height" id="customHeight" min="10" max="200" value="30" class="form-input w-20 text-right" placeholder="Alto">
+                        <div><label class="text-xs text-slate-500">Alto / Vertical (mm)</label><input type="number" name="custom_height" id="customHeight" min="10" max="200" value="{{ $setting->custom_height ?? 30 }}" class="form-input w-20 text-right" inputmode="numeric"></div>
                         <span class="text-sm text-slate-500">mm</span>
                     </div>
                 </div>
@@ -79,15 +96,31 @@ document.addEventListener('DOMContentLoaded', function () {
     const thermalCustom = document.getElementById('thermalCustom');
     const useCustom = document.getElementById('useCustomSize');
     const customInputs = document.getElementById('customSizeInputs');
+    const settingsMode = document.querySelector('select[name="default_print_mode"]');
+    const settingsCustomSection = document.getElementById('settingsThermalSection');
+    const settingsCustomInputs = document.getElementById('settingsCustomInputs');
+    const settingsUseCustom = settingsCustomSection?.querySelector('input[name="use_custom_size"]');
+
     function toggleThermal() {
         const isThermal = mode.value === 'thermal';
         thermalCustom.classList.toggle('hidden', !isThermal);
-        if (!isThermal) { useCustom.checked = false; customInputs.classList.add('hidden'); }
+        if (!isThermal) { useCustom.checked = false; customInputs.style.display = 'none'; }
     }
-    function toggleCustom() { customInputs.classList.toggle('hidden', !useCustom.checked); }
-    mode.addEventListener('change', toggleThermal);
-    useCustom.addEventListener('change', toggleCustom);
-    toggleThermal();
+    function toggleCustom() { customInputs.style.display = useCustom.checked ? '' : 'none'; }
+    function toggleSettingsThermal() {
+        if (!settingsMode || !settingsCustomSection) return;
+        const isThermal = settingsMode.value === 'thermal';
+        settingsCustomSection.classList.toggle('hidden', !isThermal);
+        if (!isThermal && settingsUseCustom) { settingsUseCustom.checked = false; toggleSettingsCustom(); }
+    }
+    function toggleSettingsCustom() {
+        if (!settingsCustomInputs || !settingsUseCustom) return;
+        settingsCustomInputs.style.display = settingsUseCustom.checked ? '' : 'none';
+    }
+    if (mode) { mode.addEventListener('change', toggleThermal); toggleThermal(); }
+    if (useCustom) { useCustom.addEventListener('change', toggleCustom); toggleCustom(); }
+    if (settingsMode) { settingsMode.addEventListener('change', toggleSettingsThermal); toggleSettingsThermal(); }
+    if (settingsUseCustom) { settingsUseCustom.addEventListener('change', toggleSettingsCustom); }
 });
 </script>
 @endsection

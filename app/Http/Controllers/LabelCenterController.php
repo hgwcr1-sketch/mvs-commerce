@@ -72,13 +72,26 @@ class LabelCenterController extends Controller
             'default_template' => ['required', Rule::in(array_keys(self::TEMPLATES))],
             'default_size' => ['required', Rule::in(array_keys(self::SIZES))],
             'custom_heading' => ['nullable', 'string', 'max:80'],
+            'default_print_mode' => ['required', Rule::in(self::PRINT_MODES)],
+            'use_custom_size' => ['nullable', 'in:0,1'],
+            'custom_width' => ['nullable', 'integer', 'min:10', 'max:200'],
+            'custom_height' => ['nullable', 'integer', 'min:10', 'max:200'],
         ]);
+        $data['use_custom_size'] = ($data['use_custom_size'] ?? '0') === '1';
+        if (!$data['use_custom_size']) {
+            $data['custom_width'] = 50;
+            $data['custom_height'] = 30;
+        }
         BranchLabelSetting::updateOrCreate(['company_id' => session('active_company_id'), 'branch_id' => session('active_branch_id')], $data);
         return back()->with('success', 'Configuración de la sucursal actualizada.');
     }
 
     public function preview(Request $request, Code128Barcode $barcode)
     {
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
+        $setting = BranchLabelSetting::where('company_id', $companyId)->where('branch_id', $branchId)->first();
+
         $data = $request->validate([
             'products' => ['required', 'array', 'min:1', 'max:100'],
             'products.*' => ['required', 'integer', 'distinct'],
@@ -92,16 +105,19 @@ class LabelCenterController extends Controller
             'custom_height' => ['nullable', 'integer', 'min:10', 'max:200'],
         ]);
 
-        $printMode = $data['print_mode'] ?? 'a4';
+        $printMode = $data['print_mode'] ?? $setting?->default_print_mode ?? 'a4';
         $size = $data['size'];
 
-        if ($printMode === 'thermal' && ($data['use_custom_size'] ?? false)) {
-            $w = $data['custom_width'] ?? 50;
-            $h = $data['custom_height'] ?? 30;
+        $useCustom = ($data['use_custom_size'] ?? false)
+            || ($printMode === 'thermal' && $setting?->use_custom_size && empty($data['use_custom_size'] ?? null));
+
+        if ($printMode === 'thermal' && $useCustom) {
+            $w = $data['custom_width'] ?? $setting?->custom_width ?? 50;
+            $h = $data['custom_height'] ?? $setting?->custom_height ?? 30;
             $size = "{$w}x{$h}";
         }
 
-        $products = Product::query()->where('company_id', session('active_company_id'))->whereIn('id', $data['products'])->with(['barcodes' => fn ($q) => $q->where('is_active', true)->orderByDesc('is_primary')])->get()->keyBy('id');
+        $products = Product::query()->where('company_id', $companyId)->whereIn('id', $data['products'])->with(['barcodes' => fn ($q) => $q->where('is_active', true)->orderByDesc('is_primary')])->get()->keyBy('id');
         abort_unless($products->count() === count($data['products']), 422);
         $labels = collect($data['products'])->flatMap(function ($id) use ($data, $products, $barcode) {
             $product = $products[$id];
@@ -109,7 +125,6 @@ class LabelCenterController extends Controller
             $code = $product->barcode ?: $product->barcodes->first()?->barcode;
             return collect(range(1, $quantity))->map(fn () => ['product' => $product, 'barcode' => $code, 'barcode_svg' => $barcode->svg($code)]);
         });
-        $setting = BranchLabelSetting::where('company_id', session('active_company_id'))->where('branch_id', session('active_branch_id'))->first();
         return view('labels.preview', ['labels' => $labels, 'template' => $data['template'], 'size' => $size, 'printMode' => $printMode, 'setting' => $setting]);
     }
 

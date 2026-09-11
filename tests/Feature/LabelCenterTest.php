@@ -134,7 +134,7 @@ class LabelCenterTest extends TestCase
             'print_mode' => 'thermal', 'use_custom_size' => '1',
             'custom_width' => 80, 'custom_height' => 40,
         ]);
-        $response->assertOk()->assertSee('80x40')->assertSee('Térmica');
+        $response->assertOk()->assertSee('80 × 40 mm')->assertSee('Térmica');
     }
 
     public function test_thermal_multiple_products_expands_quantities(): void
@@ -177,6 +177,116 @@ class LabelCenterTest extends TestCase
             ->assertOk()->assertSee('print_mode')->assertSee('Hoja A4')->assertSee('Impresora térmica');
     }
 
+    public function test_thermal_config_persists_and_loads_on_reload(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->asContext($admin, $company, $branch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'thermal',
+            'use_custom_size' => '1',
+            'custom_width' => 42,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $setting = BranchLabelSetting::where('branch_id', $branch->id)->sole();
+        $this->assertTrue($setting->use_custom_size);
+        $this->assertSame(42, $setting->custom_width);
+        $this->assertSame(30, $setting->custom_height);
+        $this->assertSame('thermal', $setting->default_print_mode);
+
+        $this->asContext($admin, $company, $branch)->get(route('labels.index'))
+            ->assertOk()
+            ->assertSee('42')
+            ->assertSee('30')
+            ->assertSee('Impresora térmica');
+    }
+
+    public function test_thermal_config_is_isolated_per_branch(): void
+    {
+        [$company, $branch] = $this->context();
+        $otherBranch = Branch::create(['company_id' => $company->id, 'name' => 'Sucursal B', 'code' => 'SB'.uniqid(), 'is_active' => true]);
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+        $admin->branches()->attach($otherBranch);
+
+        $this->asContext($admin, $company, $branch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'thermal',
+            'use_custom_size' => '1',
+            'custom_width' => 42,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $this->asContext($admin, $company, $otherBranch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['cashier'],
+            'default_template' => 'sku',
+            'default_size' => '40x25',
+            'custom_heading' => null,
+            'default_print_mode' => 'a4',
+            'use_custom_size' => '1',
+            'custom_width' => 80,
+            'custom_height' => 60,
+        ])->assertRedirect();
+
+        $this->assertSame(42, BranchLabelSetting::where('branch_id', $branch->id)->sole()->custom_width);
+        $this->assertSame(30, BranchLabelSetting::where('branch_id', $branch->id)->sole()->custom_height);
+        $this->assertSame('thermal', BranchLabelSetting::where('branch_id', $branch->id)->sole()->default_print_mode);
+
+        $this->assertSame(80, BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->custom_width);
+        $this->assertSame(60, BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->custom_height);
+        $this->assertSame('a4', BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->default_print_mode);
+    }
+
+    public function test_a4_still_works_after_thermal_config_added(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+        $product = $this->product($company, ['barcode' => '744100000001']);
+
+        $this->asContext($admin, $company, $branch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'a4',
+            'use_custom_size' => '0',
+            'custom_width' => 50,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $response = $this->asContext($admin, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id],
+            'quantities' => [$product->id => 1],
+            'template' => 'name_price_barcode',
+            'size' => '50x30',
+            'print_mode' => 'a4',
+        ]);
+        $response->assertOk()->assertSee('1 etiquetas')->assertDontSee('Térmica');
+    }
+
+    public function test_thermal_preview_header_shows_correct_format(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $product = $this->product($company, ['barcode' => '744100000001']);
+
+        $response = $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id],
+            'quantities' => [$product->id => 2],
+            'template' => 'name_price_barcode',
+            'size' => '40x25',
+            'print_mode' => 'thermal',
+        ]);
+        $response->assertOk()->assertSee('2 etiquetas · 40 × 25 mm')->assertSee('Térmica');
+    }
+
     private function context(string $name = 'Empresa'): array
     {
         $company = Company::create(['trade_name' => $name.' '.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
@@ -211,6 +321,6 @@ class LabelCenterTest extends TestCase
 
     private function settings(array $destinations): array
     {
-        return ['print_destinations' => $destinations, 'default_template' => 'name_price_barcode', 'default_size' => '50x30', 'custom_heading' => 'Oferta'];
+        return ['print_destinations' => $destinations, 'default_template' => 'name_price_barcode', 'default_size' => '50x30', 'custom_heading' => 'Oferta', 'default_print_mode' => 'a4', 'use_custom_size' => '0', 'custom_width' => 50, 'custom_height' => 30];
     }
 }
