@@ -163,8 +163,8 @@
             {{ $inventoryCount->isDraft() ? 'Agrega productos para comenzar el conteo.' : 'Sin productos registrados.' }}
         </div>
         @else
-        <div class="overflow-x-auto">
-            <table class="min-w-full hidden md:table">
+        <div class="hidden md:block overflow-x-auto">
+            <table class="min-w-full">
                 <thead class="bg-slate-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-slate-600">Producto</th>
@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ─── Mobile: save per card ───
     document.querySelectorAll('[data-save-qty]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', async function () {
             const itemId = this.dataset.itemId;
             const card = this.closest('[data-item-id]');
             const qtyInput = card.querySelector('.qty-input');
@@ -426,16 +426,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!qty) { qtyInput.focus(); return; }
 
-            const promises = [];
+            try {
+                await saveCountedQuantity(itemId, qty);
 
-            promises.push(
-                saveCountedQuantity(itemId, qty)
-                    .catch(e => { alert(e.message); throw e; })
-            );
-
-            if (notes !== (notesInput.dataset.original || '')) {
-                promises.push(
-                    fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}/notas`, {
+                if (notes !== (notesInput.dataset.original || '')) {
+                    const res = await fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}/notas`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -443,20 +438,24 @@ document.addEventListener('DOMContentLoaded', function () {
                             'X-CSRF-TOKEN': '{{ csrf_token() }}'
                         },
                         body: JSON.stringify({ notes: notes || null })
-                    }).then(r => {
-                        if (!r.ok) throw new Error('Error al guardar notas.');
-                        return r.json();
-                    })
-                );
-            }
+                    });
+                    if (!res.ok) {
+                        let noteMsg = 'Error al guardar notas.';
+                        try { const e = await res.json(); noteMsg = e?.message || noteMsg; } catch (_) {}
+                        throw new Error(noteMsg);
+                    }
+                }
 
-            Promise.all(promises).then(() => location.reload()).catch(() => {});
+                location.reload();
+            } catch (e) {
+                alert(e.message);
+            }
         });
     });
 
     // ─── Desktop: save per row ───
     document.querySelectorAll('[data-save-desktop]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', async function () {
             const itemId = this.dataset.itemId;
             const row = this.closest('tr');
             const qtyInput = row.querySelector('.qty-input-desktop');
@@ -464,9 +463,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!qty) { qtyInput.focus(); return; }
 
-            saveCountedQuantity(itemId, qty)
-                .then(() => location.reload())
-                .catch(e => alert(e.message));
+            try {
+                await saveCountedQuantity(itemId, qty);
+                location.reload();
+            } catch (e) {
+                alert(e.message);
+            }
         });
     });
 

@@ -457,7 +457,7 @@ class InventoryCountTest extends TestCase
         $this->assertStringContainsString('save-qty-btn', $view);
         $this->assertStringContainsString('inputmode="decimal"', $view);
 
-        $this->assertStringContainsString('hidden md:table', $view);
+        $this->assertStringContainsString('hidden md:block', $view);
 
         $this->assertStringContainsString("'Accept': 'application/json'", $view);
         $this->assertStringContainsString('response.ok', $view);
