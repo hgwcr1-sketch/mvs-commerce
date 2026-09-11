@@ -25,6 +25,8 @@ class LabelCenterController extends Controller
 
     public const SIZES = ['32x19' => '32 × 19 mm', '40x25' => '40 × 25 mm', '50x30' => '50 × 30 mm', '60x40' => '60 × 40 mm'];
 
+    public const PRINT_MODES = ['a4', 'thermal'];
+
     public function index(Request $request)
     {
         $companyId = (int) session('active_company_id');
@@ -84,7 +86,21 @@ class LabelCenterController extends Controller
             'quantities.*' => ['nullable', 'integer', 'min:1', 'max:500'],
             'template' => ['required', Rule::in(array_keys(self::TEMPLATES))],
             'size' => ['required', Rule::in(array_keys(self::SIZES))],
+            'print_mode' => ['nullable', Rule::in(self::PRINT_MODES)],
+            'use_custom_size' => ['nullable', 'in:1'],
+            'custom_width' => ['nullable', 'integer', 'min:10', 'max:200'],
+            'custom_height' => ['nullable', 'integer', 'min:10', 'max:200'],
         ]);
+
+        $printMode = $data['print_mode'] ?? 'a4';
+        $size = $data['size'];
+
+        if ($printMode === 'thermal' && ($data['use_custom_size'] ?? false)) {
+            $w = $data['custom_width'] ?? 50;
+            $h = $data['custom_height'] ?? 30;
+            $size = "{$w}x{$h}";
+        }
+
         $products = Product::query()->where('company_id', session('active_company_id'))->whereIn('id', $data['products'])->with(['barcodes' => fn ($q) => $q->where('is_active', true)->orderByDesc('is_primary')])->get()->keyBy('id');
         abort_unless($products->count() === count($data['products']), 422);
         $labels = collect($data['products'])->flatMap(function ($id) use ($data, $products, $barcode) {
@@ -94,7 +110,7 @@ class LabelCenterController extends Controller
             return collect(range(1, $quantity))->map(fn () => ['product' => $product, 'barcode' => $code, 'barcode_svg' => $barcode->svg($code)]);
         });
         $setting = BranchLabelSetting::where('company_id', session('active_company_id'))->where('branch_id', session('active_branch_id'))->first();
-        return view('labels.preview', ['labels' => $labels, 'template' => $data['template'], 'size' => $data['size'], 'setting' => $setting]);
+        return view('labels.preview', ['labels' => $labels, 'template' => $data['template'], 'size' => $size, 'printMode' => $printMode, 'setting' => $setting]);
     }
 
     public function fromVerification(Request $request, PurchaseVerification $purchaseVerification, Code128Barcode $barcode)
@@ -110,6 +126,6 @@ class LabelCenterController extends Controller
             $code = $item->product->barcode ?: $item->product->barcodes->first()?->barcode;
             return collect(range(1, max(1, (int) floor((float) $item->received_quantity))))->map(fn () => ['product' => $item->product, 'barcode' => $code, 'barcode_svg' => $barcode->svg($code)]);
         });
-        return view('labels.preview', ['labels' => $labels, 'template' => $setting->default_template, 'size' => $setting->default_size, 'setting' => $setting]);
+        return view('labels.preview', ['labels' => $labels, 'template' => $setting->default_template, 'size' => $setting->default_size, 'printMode' => 'a4', 'setting' => $setting]);
     }
 }

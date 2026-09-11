@@ -13,6 +13,7 @@ use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class LabelCenterTest extends TestCase
@@ -93,6 +94,87 @@ class LabelCenterTest extends TestCase
         $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
             'products' => [$first->id], 'quantities' => [$first->id => 501], 'template' => 'sku', 'size' => '32x19',
         ])->assertSessionHasErrors('quantities.'.$first->id);
+    }
+
+    public function test_a4_mode_renders_grid_layout(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $product = $this->product($company, ['barcode' => '744100000001']);
+
+        $response = $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id], 'quantities' => [$product->id => 1],
+            'template' => 'name_price', 'size' => '50x30', 'print_mode' => 'a4',
+        ]);
+        $response->assertOk()->assertSee('1 etiquetas')->assertDontSee('Térmica');
+    }
+
+    public function test_thermal_mode_renders_consecutive_labels(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $product = $this->product($company, ['name' => 'Café', 'barcode' => '744100000001']);
+
+        $response = $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id], 'quantities' => [$product->id => 3],
+            'template' => 'name_price_barcode', 'size' => '40x25', 'print_mode' => 'thermal',
+        ]);
+        $response->assertOk()->assertSee('3 etiquetas')->assertSee('Térmica');
+    }
+
+    public function test_thermal_custom_size_overrides_preset(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $product = $this->product($company, ['barcode' => '744100000001']);
+
+        $response = $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id], 'quantities' => [$product->id => 2],
+            'template' => 'sku', 'size' => '50x30',
+            'print_mode' => 'thermal', 'use_custom_size' => '1',
+            'custom_width' => 80, 'custom_height' => 40,
+        ]);
+        $response->assertOk()->assertSee('80x40')->assertSee('Térmica');
+    }
+
+    public function test_thermal_multiple_products_expands_quantities(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $a = $this->product($company, ['name' => 'Producto A', 'barcode' => '744100000001']);
+        $b = $this->product($company, ['name' => 'Producto B', 'barcode' => '744100000002']);
+
+        $response = $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$a->id, $b->id],
+            'quantities' => [$a->id => 3, $b->id => 2],
+            'template' => 'name_price', 'size' => '40x25', 'print_mode' => 'thermal',
+        ]);
+        $response->assertOk()->assertSee('5 etiquetas')->assertSee('Producto A')->assertSee('Producto B');
+    }
+
+    public function test_thermal_does_not_affect_inventory_or_products(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $product = $this->product($company, ['barcode' => '744100000001', 'sale_price' => 2500]);
+        $beforePrice = $product->sale_price;
+        $beforeStock = DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock');
+
+        $this->asContext($user, $company, $branch)->post(route('labels.preview'), [
+            'products' => [$product->id], 'quantities' => [$product->id => 5],
+            'template' => 'name_price_barcode', 'size' => '40x25', 'print_mode' => 'thermal',
+        ])->assertOk();
+
+        $this->assertSame($beforeStock, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $this->assertSame($beforePrice, $product->fresh()->sale_price);
+    }
+
+    public function test_index_shows_print_mode_selector(): void
+    {
+        [$company, $branch] = $this->context();
+        $user = $this->user($company, $branch, ['productos.etiquetas.imprimir']);
+        $this->asContext($user, $company, $branch)->get(route('labels.index'))
+            ->assertOk()->assertSee('print_mode')->assertSee('Hoja A4')->assertSee('Impresora térmica');
     }
 
     private function context(string $name = 'Empresa'): array

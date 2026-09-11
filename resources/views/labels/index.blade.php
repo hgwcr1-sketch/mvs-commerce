@@ -51,8 +51,43 @@
             @csrf
             <select name="template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select>
             <select name="size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select>
-            <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-bold">Vista previa del lote</button>
+            <select name="print_mode" id="printMode" class="form-input w-full">
+                <option value="a4" @selected(old('print_mode','a4')==='a4')">Hoja A4</option>
+                <option value="thermal" @selected(old('print_mode')==='thermal')">Impresora térmica</option>
+            </select>
+            <div id="thermalCustom" class="hidden md:col-span-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label class="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500">
+                        Tamaño personalizado (mm)
+                    </label>
+                    <div id="customSizeInputs" class="hidden flex items-center gap-2">
+                        <input type="number" name="custom_width" id="customWidth" min="10" max="200" value="50" class="form-input w-20 text-right" placeholder="Ancho">
+                        <span class="text-sm text-slate-500">×</span>
+                        <input type="number" name="custom_height" id="customHeight" min="10" max="200" value="30" class="form-input w-20 text-right" placeholder="Alto">
+                        <span class="text-sm text-slate-500">mm</span>
+                    </div>
+                </div>
+            </div>
+            <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-bold md:col-span-3">Vista previa del lote</button>
         </form>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const mode = document.getElementById('printMode');
+    const thermalCustom = document.getElementById('thermalCustom');
+    const useCustom = document.getElementById('useCustomSize');
+    const customInputs = document.getElementById('customSizeInputs');
+    function toggleThermal() {
+        const isThermal = mode.value === 'thermal';
+        thermalCustom.classList.toggle('hidden', !isThermal);
+        if (!isThermal) { useCustom.checked = false; customInputs.classList.add('hidden'); }
+    }
+    function toggleCustom() { customInputs.classList.toggle('hidden', !useCustom.checked); }
+    mode.addEventListener('change', toggleThermal);
+    useCustom.addEventListener('change', toggleCustom);
+    toggleThermal();
+});
+</script>
 @endsection
