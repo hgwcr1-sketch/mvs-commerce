@@ -199,11 +199,40 @@ class LabelCenterTest extends TestCase
         $this->assertSame(30, $setting->custom_height);
         $this->assertSame('thermal', $setting->default_print_mode);
 
-        $this->asContext($admin, $company, $branch)->get(route('labels.index'))
-            ->assertOk()
-            ->assertSee('42')
-            ->assertSee('30')
-            ->assertSee('Impresora térmica');
+        $html = $this->asContext($admin, $company, $branch)->get(route('labels.index'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('value="thermal" selected', $html, 'Settings form: thermal option not selected');
+        $this->assertStringContainsString('value="42"', $html, 'Settings form: custom_width not 42');
+        $this->assertStringContainsString('value="30"', $html, 'Settings form: custom_height not 30');
+
+        $batchSelected = str_contains($html, 'name="print_mode"') && str_contains($html, 'value="thermal" selected');
+        $this->assertTrue($batchSelected, 'Batch form: thermal option not selected');
+
+        $this->assertStringContainsString('name="use_custom_size" id="useCustomSize" value="1"', $html, 'Batch form: custom size checkbox missing');
+        $this->assertStringContainsString('id="useCustomSize"', $html);
+        $this->assertStringContainsString('value="42"', $html, 'Batch form: custom_width not 42');
+        $this->assertStringContainsString('value="30"', $html, 'Batch form: custom_height not 30');
+    }
+
+    public function test_details_opens_after_saving_settings(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->asContext($admin, $company, $branch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'thermal',
+            'use_custom_size' => '0',
+            'custom_width' => 50,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $html = $this->asContext($admin, $company, $branch)->get(route('labels.index'))->assertOk()->getContent();
+        $this->assertStringContainsString('<details', $html);
+        $this->assertMatchesRegularExpression('/<details[^>]*\bopen\b/', $html, 'Details element should be open after save');
     }
 
     public function test_thermal_config_is_isolated_per_branch(): void

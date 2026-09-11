@@ -11,7 +11,7 @@
     @if(session('success'))<div class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</div>@endif
 
     @can('productos.etiquetas.configurar')
-    <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" @if(session('success')) open @endif>
         <summary class="min-h-11 cursor-pointer py-2 font-semibold text-slate-800">Configuración de esta sucursal</summary>
         <form method="POST" action="{{ route('labels.settings.update') }}" class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             @csrf @method('PUT')
