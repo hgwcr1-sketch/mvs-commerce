@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\InventoryCountController;
+
 use App\Http\Controllers\AccountsPayableController;
 /*
 |--------------------------------------------------------------------------
@@ -461,6 +463,26 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::resource('kardex', KardexController::class)
         ->only(['index'])
         ->middleware('permission:inventario.kardex');
+
+    Route::middleware(['active.branch'])->prefix('tomas-inventario')->name('inventory-counts.')->group(function () {
+        Route::get('/', [InventoryCountController::class, 'index'])->middleware('permission:inventario.conteo.ver')->name('index');
+        Route::get('/crear', [InventoryCountController::class, 'create'])->middleware('permission:inventario.conteo.iniciar')->name('create');
+        Route::post('/', [InventoryCountController::class, 'store'])->middleware('permission:inventario.conteo.iniciar')->name('store');
+        Route::get('/{inventoryCount}', [InventoryCountController::class, 'show'])->middleware('permission:inventario.conteo.ver')->name('show');
+        Route::get('/{inventoryCount}/editar', [InventoryCountController::class, 'edit'])->middleware('permission:inventario.conteo.contar')->name('edit');
+        Route::put('/{inventoryCount}', [InventoryCountController::class, 'update'])->middleware('permission:inventario.conteo.contar')->name('update');
+        Route::delete('/{inventoryCount}', [InventoryCountController::class, 'destroy'])->middleware('permission:inventario.conteo.cancelar')->name('destroy');
+
+        Route::post('/{inventoryCount}/productos', [InventoryCountController::class, 'addItem'])->middleware('permission:inventario.conteo.contar')->name('add-item');
+        Route::put('/{inventoryCount}/items/{item}/cantidad', [InventoryCountController::class, 'updateCountedQuantity'])->middleware('permission:inventario.conteo.contar')->name('update-quantity');
+        Route::put('/{inventoryCount}/items/{item}/reconteo', [InventoryCountController::class, 'recount'])->middleware('permission:inventario.conteo.contar')->name('recount');
+        Route::put('/{inventoryCount}/items/{item}/notas', [InventoryCountController::class, 'updateNotes'])->middleware('permission:inventario.conteo.contar')->name('update-notes');
+
+        Route::post('/{inventoryCount}/revisar', [InventoryCountController::class, 'startReview'])->middleware('permission:inventario.conteo.revisar')->name('review');
+        Route::post('/{inventoryCount}/recontar', [InventoryCountController::class, 'backToCounting'])->middleware('permission:inventario.conteo.revisar')->name('back-to-counting');
+        Route::post('/{inventoryCount}/confirmar', [InventoryCountController::class, 'confirm'])->middleware('permission:inventario.conteo.confirmar')->name('confirm');
+        Route::post('/{inventoryCount}/cancelar', [InventoryCountController::class, 'cancel'])->middleware('permission:inventario.conteo.cancelar')->name('cancel');
+    });
 
     Route::prefix('fidelidad/kardex')
         ->name('loyalty.kardex.')

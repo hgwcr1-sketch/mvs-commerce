@@ -184,6 +184,8 @@
 @canany([
     'inventario.ver',
     'inventario.ajustar',
+    'inventario.conteo.ver',
+    'inventario.conteo.iniciar',
     'inventario.kardex',
     'inventario.transferir'
 ])
@@ -196,6 +198,12 @@
             <x-navigation.submenu
                 route="inventario.index"
                 label="Existencias" />
+        @endcan
+
+        @can('inventario.conteo.ver')
+            <x-navigation.submenu
+                route="inventory-counts.index"
+                label="Toma de Inventario" />
         @endcan
 
         @can('inventario.ajustar')
