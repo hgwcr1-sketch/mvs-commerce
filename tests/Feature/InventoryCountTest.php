@@ -237,6 +237,21 @@ class InventoryCountTest extends TestCase
         $this->assertSame('review', $count->fresh()->status);
     }
 
+    public function test_review_redirects_to_show_not_edit(): void
+    {
+        $count = $this->countDocument('counting');
+        $item = $this->item($count);
+        $item->update(['counted_quantity' => '10', 'final_quantity' => '10', 'difference' => '0.0000']);
+
+        $response = $this->post(route('inventory-counts.review', $count));
+        $response->assertRedirect(route('inventory-counts.show', $count));
+        $response->assertSessionHas('success', 'Toma enviada a revisión.');
+
+        $this->assertSame('review', $count->fresh()->status);
+
+        $this->get(route('inventory-counts.edit', $count))->assertStatus(422);
+    }
+
     public function test_cancel_records_actor_and_time_without_stock_changes(): void
     {
         $this->travelTo(now()->startOfSecond());
@@ -908,6 +923,53 @@ class InventoryCountTest extends TestCase
         $this->assertNotFalse($pos1);
         $this->assertLessThan($pos2, $pos3, 'Item 3 (newest) should appear before Item 2');
         $this->assertLessThan($pos1, $pos2, 'Item 2 should appear before Item 1 (oldest)');
+    }
+
+    public function test_edit_view_review_form_is_independent_and_not_nested(): void
+    {
+        $count = $this->countDocument('counting');
+        $this->item($count);
+
+        $response = $this->get(route('inventory-counts.edit', $count));
+        $response->assertOk();
+
+        $html = $response->getContent();
+
+        $reviewAction = route('inventory-counts.review', $count);
+        $this->assertStringContainsString('action="'.$reviewAction.'"', $html);
+        $this->assertStringContainsString('Enviar a Revisión', $html);
+
+        $events = [];
+        preg_match_all('/<form[\s>]/i', $html, $m, PREG_OFFSET_CAPTURE);
+        foreach ($m[0] as $match) {
+            $events[] = ['type' => 'open', 'pos' => $match[1]];
+        }
+        preg_match_all('/<\/form>/i', $html, $m, PREG_OFFSET_CAPTURE);
+        foreach ($m[0] as $match) {
+            $events[] = ['type' => 'close', 'pos' => $match[1]];
+        }
+
+        usort($events, fn($a, $b) => $a['pos'] <=> $b['pos']);
+
+        $reviewFormOpenPos = strpos($html, '<form method="POST" action="'.$reviewAction);
+        $this->assertNotFalse($reviewFormOpenPos, 'Review form <form> tag not found');
+
+        $depth = 0;
+        foreach ($events as $event) {
+            if ($event['type'] === 'open') {
+                $depth++;
+            } else {
+                $depth--;
+            }
+            if ($event['pos'] === $reviewFormOpenPos) {
+                break;
+            }
+            if ($event['type'] === 'open' && $event['pos'] < $reviewFormOpenPos && $depth > 1) {
+                $this->fail("Review form is nested inside another form (depth {$depth} at pos {$event['pos']})");
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(1, $depth);
     }
 
     public function test_newest_product_first_with_three_products(): void

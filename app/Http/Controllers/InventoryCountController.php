@@ -329,7 +329,7 @@ class InventoryCountController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        return back()->with('success', 'Toma enviada a revisión.');
+        return redirect()->route('inventory-counts.show', $inventoryCount)->with('success', 'Toma enviada a revisión.');
     }
 
     public function backToCounting(InventoryCount $inventoryCount)
