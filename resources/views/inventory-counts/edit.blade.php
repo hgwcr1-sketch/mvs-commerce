@@ -189,10 +189,27 @@
                             {{ number_format((float) $item->theoretical_quantity, 4) }}
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @if($item->counted_quantity !== null)
-                                <span class="font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 4) }}</span>
+                            @if($inventoryCount->canBeEdited())
+                            <div class="flex items-center justify-center gap-1">
+                                <input type="text"
+                                       inputmode="decimal"
+                                       value="{{ $item->counted_quantity !== null ? number_format((float) $item->counted_quantity, 4, '.', '') : '' }}"
+                                       data-item-id="{{ $item->id }}"
+                                       class="qty-input-desktop w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm font-semibold text-slate-800 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                       placeholder="0.0000">
+                                <button type="button"
+                                        data-save-desktop
+                                        data-item-id="{{ $item->id }}"
+                                        class="shrink-0 rounded-lg bg-amber-500 px-2 py-1.5 text-xs font-semibold text-black hover:bg-amber-600">
+                                    Guardar
+                                </button>
+                            </div>
                             @else
-                                <span class="text-slate-400">—</span>
+                                @if($item->counted_quantity !== null)
+                                    <span class="font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 4) }}</span>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
                             @endif
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -282,7 +299,6 @@ document.addEventListener('DOMContentLoaded', function () {
         searchInput.focus();
     });
 
-    // Search autocomplete
     searchInput.addEventListener('input', function () {
         clearTimeout(timer);
         selectedProductId = null;
@@ -370,12 +386,35 @@ document.addEventListener('DOMContentLoaded', function () {
         selectedProductId = null;
     });
 
-    // Close results on click outside
     document.addEventListener('click', function (e) {
         if (!results.contains(e.target) && e.target !== searchInput) results.classList.add('hidden');
     });
 
-    // Mobile: save quantity per item via AJAX
+    // ─── Shared: save counted quantity ───
+    async function saveCountedQuantity(itemId, qtyValue) {
+        const response = await fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}/cantidad`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ counted_quantity: qtyValue })
+        });
+
+        if (!response.ok) {
+            let msg = 'Error al guardar cantidad.';
+            try {
+                const errData = await response.json();
+                msg = errData?.message || errData?.errors?.counted_quantity?.[0] || msg;
+            } catch (_) {}
+            throw new Error(msg);
+        }
+
+        return await response.json();
+    }
+
+    // ─── Mobile: save per card ───
     document.querySelectorAll('[data-save-qty]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             const itemId = this.dataset.itemId;
@@ -387,19 +426,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!qty) { qtyInput.focus(); return; }
 
-            const token = '{{ csrf_token() }}';
             const promises = [];
 
             promises.push(
-                fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}/cantidad`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': token
-                    },
-                    body: JSON.stringify({ counted_quantity: qty })
-                }).then(r => r.json())
+                saveCountedQuantity(itemId, qty)
+                    .catch(e => { alert(e.message); throw e; })
             );
 
             if (notes !== (notesInput.dataset.original || '')) {
@@ -409,14 +440,46 @@ document.addEventListener('DOMContentLoaded', function () {
                         headers: {
                             'Content-Type': 'application/json',
                             'Accept': 'application/json',
-                            'X-CSRF-TOKEN': token
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
                         },
                         body: JSON.stringify({ notes: notes || null })
-                    }).then(r => r.json())
+                    }).then(r => {
+                        if (!r.ok) throw new Error('Error al guardar notas.');
+                        return r.json();
+                    })
                 );
             }
 
-            Promise.all(promises).then(() => location.reload()).catch(() => alert('Error al guardar.'));
+            Promise.all(promises).then(() => location.reload()).catch(() => {});
+        });
+    });
+
+    // ─── Desktop: save per row ───
+    document.querySelectorAll('[data-save-desktop]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const itemId = this.dataset.itemId;
+            const row = this.closest('tr');
+            const qtyInput = row.querySelector('.qty-input-desktop');
+            const qty = qtyInput.value.trim();
+
+            if (!qty) { qtyInput.focus(); return; }
+
+            saveCountedQuantity(itemId, qty)
+                .then(() => location.reload())
+                .catch(e => alert(e.message));
+        });
+    });
+
+    // ─── Desktop: save on Enter key ───
+    document.querySelectorAll('.qty-input-desktop').forEach(function (input) {
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const itemId = this.dataset.itemId;
+                const row = this.closest('tr');
+                const saveBtn = row.querySelector('[data-save-desktop]');
+                if (saveBtn) saveBtn.click();
+            }
         });
     });
 

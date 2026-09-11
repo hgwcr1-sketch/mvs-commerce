@@ -461,6 +461,10 @@ class InventoryCountTest extends TestCase
 
         $this->assertStringContainsString("'Accept': 'application/json'", $view);
         $this->assertStringContainsString('response.ok', $view);
+
+        $this->assertStringContainsString('saveCountedQuantity', $view);
+        $this->assertStringContainsString('data-save-desktop', $view);
+        $this->assertStringContainsString('qty-input-desktop', $view);
     }
 
     public function test_add_item_duplicate_returns_existing_item_id(): void
@@ -567,5 +571,83 @@ class InventoryCountTest extends TestCase
             ->assertSessionHas('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
 
         $this->assertDatabaseCount('inventory_counts', 0);
+    }
+
+    public function test_update_quantity_zero_persists_correctly(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '0'])
+            ->assertOk()
+            ->assertJsonPath('difference', '-10.0000')
+            ->assertJsonPath('final_quantity', '0.0000');
+
+        $this->assertSame('0.0000', $item->fresh()->counted_quantity);
+        $this->assertSame('0.0000', $item->fresh()->final_quantity);
+        $this->assertSame('-10.0000', $item->fresh()->difference);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_update_quantity_decimal_persists_correctly(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '2.5000'])
+            ->assertOk()
+            ->assertJsonPath('difference', '-7.5000')
+            ->assertJsonPath('final_quantity', '2.5000');
+
+        $this->assertSame('2.5000', $item->fresh()->counted_quantity);
+        $this->assertSame('2.5000', $item->fresh()->final_quantity);
+        $this->assertSame('-7.5000', $item->fresh()->difference);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_stock_unchanged_after_saving_quantity(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->assertSame('10.0000', $this->stock());
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '5'])->assertOk();
+        $this->assertSame('10.0000', $this->stock());
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '0'])->assertOk();
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_edit_page_renders_desktop_inputs_when_editable(): void
+    {
+        $count = $this->countDocument('counting');
+        $count->items()->create([
+            'product_id' => $this->product->id,
+            'theoretical_quantity' => '10.0000',
+            'counted_quantity' => '5.0000',
+            'final_quantity' => '5.0000',
+            'difference' => '-5.0000',
+        ]);
+
+        $response = $this->get(route('inventory-counts.edit', $count));
+        $response->assertOk();
+        $response->assertSee('qty-input-desktop', false);
+        $response->assertSee('data-save-desktop', false);
+        $response->assertSee('saveCountedQuantity', false);
+    }
+
+    public function test_edit_page_returns_422_for_non_editable_statuses(): void
+    {
+        foreach (['review', 'confirmed', 'cancelled'] as $status) {
+            $count = $this->countDocument($status);
+            $count->items()->create([
+                'product_id' => $this->product->id,
+                'theoretical_quantity' => '10.0000',
+                'counted_quantity' => '5.0000',
+                'final_quantity' => '5.0000',
+                'difference' => '-5.0000',
+            ]);
+
+            $this->get(route('inventory-counts.edit', $count))->assertStatus(422);
+        }
     }
 }
