@@ -397,4 +397,175 @@ class InventoryCountTest extends TestCase
         $this->assertSame('12.0000', $this->stock());
         $this->assertDatabaseCount('inventory_movements', 1);
     }
+
+    public static function autocompleteSearches(): array
+    {
+        return [
+            'partial name' => ['Arroz'],
+            'partial internal_code' => ['SKU'],
+            'partial barcode' => ['7441'],
+        ];
+    }
+
+    #[DataProvider('autocompleteSearches')]
+    public function test_add_item_with_autocomplete_product_id(string $partialSearch): void
+    {
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->postJson($url, ['product_id' => $this->product->id])
+            ->assertOk()
+            ->assertJsonPath('exists', false)
+            ->assertJsonPath('item.product_id', $this->product->id);
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    #[DataProvider('autocompleteSearches')]
+    public function test_add_item_with_partial_search_text(string $partialSearch): void
+    {
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->postJson($url, ['search' => $partialSearch])
+            ->assertOk()
+            ->assertJsonPath('exists', false)
+            ->assertJsonPath('item.product_id', $this->product->id);
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_add_item_empty_search_and_no_product_id(): void
+    {
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->post($url, ['search' => ''])->assertRedirect()->assertSessionHasErrors('search');
+        $this->post($url, ['search' => 'DOESNOTEXIST'])->assertRedirect()->assertSessionHasErrors('search');
+
+        $this->assertDatabaseCount('inventory_count_items', 0);
+    }
+
+    public function test_mobile_cards_and_desktop_table_markers(): void
+    {
+        $view = file_get_contents(resource_path('views/inventory-counts/edit.blade.php'));
+
+        $this->assertStringContainsString('md:hidden', $view);
+        $this->assertStringContainsString('data-item-id', $view);
+        $this->assertStringContainsString('qty-input', $view);
+        $this->assertStringContainsString('notes-input', $view);
+        $this->assertStringContainsString('save-qty-btn', $view);
+        $this->assertStringContainsString('inputmode="decimal"', $view);
+
+        $this->assertStringContainsString('hidden md:table', $view);
+
+        $this->assertStringContainsString("'Accept': 'application/json'", $view);
+        $this->assertStringContainsString('response.ok', $view);
+    }
+
+    public function test_add_item_duplicate_returns_existing_item_id(): void
+    {
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->postJson($url, ['product_id' => $this->product->id])->assertOk()->assertJsonPath('exists', false);
+        $this->postJson($url, ['product_id' => $this->product->id])->assertOk()->assertJsonPath('exists', true)->assertJsonStructure(['item_id']);
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_add_item_by_barcode_partial_match(): void
+    {
+        ProductBarcode::create(['product_id' => $this->product->id, 'barcode' => '744100000099', 'barcode_type' => 'EAN13', 'is_active' => true, 'is_primary' => false]);
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->postJson($url, ['search' => '7441000000'])->assertOk()->assertJsonPath('item.product_id', $this->product->id);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_add_item_by_additional_barcode(): void
+    {
+        ProductBarcode::create(['product_id' => $this->product->id, 'barcode' => 'ADDITIONAL-BC', 'barcode_type' => 'CODE128', 'is_active' => true, 'is_primary' => false]);
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->postJson($url, ['search' => 'ADDITIONAL-BC'])->assertOk()->assertJsonPath('item.product_id', $this->product->id);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_add_item_nonexistent_product_returns_422(): void
+    {
+        $count = $this->countDocument();
+        $url = route('inventory-counts.add-item', $count);
+
+        $this->post($url, ['search' => 'NONEXISTENT'])->assertRedirect()->assertSessionHasErrors('search');
+
+        $this->assertDatabaseCount('inventory_count_items', 0);
+    }
+
+    public function test_clearing_existing_note_persists_null_in_db(): void
+    {
+        $count = $this->countDocument('counting');
+        $item = $count->items()->create([
+            'product_id' => $this->product->id,
+            'theoretical_quantity' => '10.0000',
+            'counted_quantity' => '10.0000',
+            'final_quantity' => '10.0000',
+            'difference' => '0.0000',
+            'notes' => 'Revisión pendiente',
+        ]);
+
+        $this->assertSame('Revisión pendiente', $item->fresh()->notes);
+
+        $this->putJson(route('inventory-counts.update-notes', [$count, $item]), ['notes' => ''])
+            ->assertOk();
+
+        $this->assertNull($item->fresh()->notes);
+
+        $this->putJson(route('inventory-counts.update-notes', [$count, $item]), ['notes' => null])
+            ->assertOk();
+
+        $this->assertNull($item->fresh()->notes);
+    }
+
+    public function test_notes_input_has_data_original_attribute(): void
+    {
+        $count = $this->countDocument('counting');
+        $count->items()->create([
+            'product_id' => $this->product->id,
+            'theoretical_quantity' => '10.0000',
+            'notes' => 'Nota de prueba',
+        ]);
+
+        $response = $this->get(route('inventory-counts.edit', $count));
+        $response->assertOk();
+        $response->assertSee('data-original="Nota de prueba"', false);
+    }
+
+    public function test_create_page_redirects_when_no_branch_selected(): void
+    {
+        $dashAdmin = Permission::firstOrCreate(['name' => 'dashboard.admin'], ['label' => 'Admin Dashboard', 'module' => 'Dashboard', 'is_active' => true]);
+        $this->role->permissions()->attach($dashAdmin);
+        $this->session(['active_branch_id' => null]);
+
+        $this->get(route('inventory-counts.create'))
+            ->assertRedirect(route('inventory-counts.index'))
+            ->assertSessionHas('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
+
+        $this->assertDatabaseCount('inventory_counts', 0);
+    }
+
+    public function test_store_redirects_when_no_branch_selected(): void
+    {
+        $dashAdmin = Permission::firstOrCreate(['name' => 'dashboard.admin'], ['label' => 'Admin Dashboard', 'module' => 'Dashboard', 'is_active' => true]);
+        $this->role->permissions()->attach($dashAdmin);
+        $this->session(['active_branch_id' => null]);
+
+        $this->post(route('inventory-counts.store'), ['reference' => 'NO-BRANCH'])
+            ->assertRedirect(route('inventory-counts.index'))
+            ->assertSessionHas('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
+
+        $this->assertDatabaseCount('inventory_counts', 0);
+    }
 }

@@ -55,7 +55,7 @@
                     Cancelar
                 </a>
                 <button type="submit"
-                        class="rounded-xl bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700">
+                        class="rounded-xl bg-amber-500 px-6 py-3 font-semibold text-black hover:bg-amber-600">
                     Crear Toma (Borrador)
                 </button>
             </div>

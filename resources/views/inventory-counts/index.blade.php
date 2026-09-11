@@ -12,7 +12,7 @@
 
         @can('inventario.conteo.iniciar')
         <a href="{{ route('inventory-counts.create') }}"
-           class="shrink-0 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">
+           class="shrink-0 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black shadow-sm hover:bg-amber-600">
             Nueva Toma
         </a>
         @endcan
@@ -20,6 +20,10 @@
 
     @if(session('success'))
         <div class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</div>
+    @endif
+
+    @if(session('warning'))
+        <div class="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{{ session('warning') }}</div>
     @endif
 
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -64,7 +68,7 @@
                                 $statusColors = [
                                     'draft' => 'bg-slate-100 text-slate-700',
                                     'counting' => 'bg-amber-100 text-amber-700',
-                                    'review' => 'bg-indigo-100 text-indigo-700',
+                                    'review' => 'bg-slate-100 text-slate-700',
                                     'confirmed' => 'bg-emerald-100 text-emerald-700',
                                     'cancelled' => 'bg-red-100 text-red-700',
                                 ];
@@ -98,7 +102,7 @@
                                 @can('inventario.conteo.contar')
                                 @if($count->canBeEdited())
                                 <a href="{{ route('inventory-counts.edit', $count) }}"
-                                   class="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-600">
+                                   class="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-amber-600">
                                     {{ $count->isDraft() ? 'Iniciar Conteo' : 'Continuar' }}
                                 </a>
                                 @endif
@@ -108,7 +112,7 @@
                                 @if($count->isCounting())
                                 <form method="POST" action="{{ route('inventory-counts.review', $count) }}" class="inline">
                                     @csrf
-                                    <button class="rounded-xl bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700">
+                                    <button class="rounded-xl bg-amber-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-amber-600">
                                         Enviar a Revisión
                                     </button>
                                 </form>

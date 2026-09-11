@@ -41,7 +41,7 @@
         <div class="grid grid-cols-2 gap-4 text-sm">
             <div>
                 <p class="font-semibold text-slate-700">Estado</p>
-                <span class="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $inventoryCount->status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : ($inventoryCount->status === 'counting' ? 'bg-amber-100 text-amber-700' : ($inventoryCount->status === 'review' ? 'bg-indigo-100 text-indigo-700' : ($inventoryCount->status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'))) }}">
+                <span class="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold {{ $inventoryCount->status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : ($inventoryCount->status === 'counting' ? 'bg-amber-100 text-amber-700' : ($inventoryCount->status === 'review' ? 'bg-slate-100 text-slate-700' : ($inventoryCount->status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'))) }}">
                     {{ ucfirst($inventoryCount->status) }}
                 </span>
             </div>
@@ -118,7 +118,7 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($item->recount_quantity !== null)
-                                <span class="font-semibold text-indigo-700">{{ number_format((float) $item->recount_quantity, 4) }}</span>
+                                <span class="font-semibold text-[#B1922D]">{{ number_format((float) $item->recount_quantity, 4) }}</span>
                             @else
                                 <span class="text-slate-400">—</span>
                             @endif
@@ -151,13 +151,13 @@
         <form method="POST" action="{{ route('inventory-counts.update', $inventoryCount) }}">
             @csrf @method('PUT')
             <button type="submit"
-                    class="rounded-xl bg-amber-500 px-5 py-2.5 font-semibold text-white hover:bg-amber-600">
+                    class="rounded-xl bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600">
                 Guardar Borrador
             </button>
         </form>
         @elseif($inventoryCount->isCounting())
         <a href="{{ route('inventory-counts.review', $inventoryCount) }}"
-           class="rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-700">
+           class="rounded-xl bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600">
             Enviar a Revisión
         </a>
         @endif
@@ -225,7 +225,7 @@
                     products.forEach(p => {
                         const btn = document.createElement('button');
                         btn.type = 'button';
-                        btn.className = 'block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-indigo-50';
+                        btn.className = 'block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-amber-50';
                         btn.innerHTML = `<div class="font-semibold text-slate-800">${escapeHtml(p.name)}</div><div class="text-xs text-slate-500">${escapeHtml(p.internal_code || '')} · ${escapeHtml(p.barcode || '')}</div>`;
                         btn.addEventListener('click', () => addProduct(p.id, term));
                         resultsDiv.appendChild(btn);

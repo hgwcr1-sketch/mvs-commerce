@@ -39,7 +39,17 @@ class InventoryCountController extends Controller
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
 
-        $branch = Branch::where('company_id', $companyId)->where('id', $branchId)->firstOrFail();
+        if (! $branchId) {
+            return redirect()->route('inventory-counts.index')
+                ->with('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
+        }
+
+        $branch = Branch::where('company_id', $companyId)->where('id', $branchId)->first();
+
+        if (! $branch) {
+            return redirect()->route('inventory-counts.index')
+                ->with('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
+        }
 
         return view('inventory-counts.create', compact('branch'));
     }
@@ -48,6 +58,11 @@ class InventoryCountController extends Controller
     {
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
+
+        if (! $branchId || ! Branch::where('company_id', $companyId)->where('id', $branchId)->exists()) {
+            return redirect()->route('inventory-counts.index')
+                ->with('warning', 'Seleccione una sucursal para iniciar una toma de inventario.');
+        }
 
         $data = $request->validate([
             'reference' => ['nullable', 'string', 'max:80'],
@@ -119,22 +134,40 @@ class InventoryCountController extends Controller
         $branchId = (int) session('active_branch_id');
 
         $data = $request->validate([
-            'search' => ['required', 'string', 'max:255'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'product_id' => ['nullable', 'integer'],
         ]);
 
-        $search = trim($data['search']);
+        $search = trim($data['search'] ?? '');
+        $productId = $data['product_id'] ?? null;
 
-        $product = Product::where('company_id', $companyId)
-            ->where('is_active', true)
-            ->where('track_inventory', true)
-            ->whereHas('branches', fn ($q) => $q->where('branches.id', $branchId))
-            ->where(function ($q) use ($search) {
-                $q->where('barcode', $search)
-                    ->orWhere('internal_code', $search)
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhereHas('barcodes', fn ($q) => $q->where('barcode', $search)->where('is_active', true));
-            })
-            ->first();
+        $product = null;
+
+        // 1) Direct lookup by product ID (from autocomplete selection)
+        if ($productId) {
+            $product = Product::where('id', $productId)
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->where('track_inventory', true)
+                ->whereHas('branches', fn ($q) => $q->where('branches.id', $branchId))
+                ->first();
+        }
+
+        // 2) Text search (scanner / manual typing)
+        if (! $product && $search !== '') {
+            $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $product = Product::where('company_id', $companyId)
+                ->where('is_active', true)
+                ->where('track_inventory', true)
+                ->whereHas('branches', fn ($q) => $q->where('branches.id', $branchId))
+                ->where(function ($q) use ($search, $likeOperator) {
+                    $q->where('barcode', $likeOperator, "%{$search}%")
+                        ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                        ->orWhere('name', $likeOperator, "%{$search}%")
+                        ->orWhereHas('barcodes', fn ($q) => $q->where('barcode', $likeOperator, "%{$search}%")->where('is_active', true));
+                })
+                ->first();
+        }
 
         if (! $product) {
             throw ValidationException::withMessages([
