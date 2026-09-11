@@ -477,6 +477,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::put('/{inventoryCount}/items/{item}/cantidad', [InventoryCountController::class, 'updateCountedQuantity'])->middleware('permission:inventario.conteo.contar')->name('update-quantity');
         Route::put('/{inventoryCount}/items/{item}/reconteo', [InventoryCountController::class, 'recount'])->middleware('permission:inventario.conteo.contar')->name('recount');
         Route::put('/{inventoryCount}/items/{item}/notas', [InventoryCountController::class, 'updateNotes'])->middleware('permission:inventario.conteo.contar')->name('update-notes');
+        Route::delete('/{inventoryCount}/items/{item}', [InventoryCountController::class, 'removeItem'])->middleware('permission:inventario.conteo.contar')->name('remove-item');
 
         Route::post('/{inventoryCount}/revisar', [InventoryCountController::class, 'startReview'])->middleware('permission:inventario.conteo.revisar')->name('review');
         Route::post('/{inventoryCount}/recontar', [InventoryCountController::class, 'backToCounting'])->middleware('permission:inventario.conteo.revisar')->name('back-to-counting');

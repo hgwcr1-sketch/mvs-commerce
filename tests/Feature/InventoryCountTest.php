@@ -139,7 +139,7 @@ class InventoryCountTest extends TestCase
 
     public static function quantities(): array
     {
-        return [['8.8765', '-1.1235'], ['12.1234', '2.1234'], ['10.0000', '0.0000']];
+        return [['8', '-2.0000'], ['12', '2.0000'], ['10', '0.0000']];
     }
 
     #[DataProvider('quantities')]
@@ -149,14 +149,14 @@ class InventoryCountTest extends TestCase
         $item = $this->item($count);
         $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => $physical])->assertOk()->assertJsonPath('difference', $difference);
         $this->assertSame('counting', $count->fresh()->status);
-        $this->assertSame($physical, $item->fresh()->counted_quantity);
-        $this->assertSame($physical, $item->fresh()->final_quantity);
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $item->fresh()->counted_quantity);
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $item->fresh()->final_quantity);
         $this->assertSame($difference, $item->fresh()->difference);
         $this->assertSame('10.0000', $this->stock());
         $this->post(route('inventory-counts.review', $count))->assertRedirect();
         $this->assertSame('review', $count->fresh()->status);
         $this->post(route('inventory-counts.confirm', $count))->assertRedirect(route('inventory-counts.show', $count));
-        $this->assertSame($physical, $this->stock());
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $this->stock());
         $this->assertSame('confirmed', $count->fresh()->status);
         $this->assertEquals($this->user->id, $count->fresh()->confirmed_by);
         $this->assertNotNull($count->fresh()->confirmed_at);
@@ -166,7 +166,7 @@ class InventoryCountTest extends TestCase
             $movement = InventoryMovement::sole();
             $this->assertSame('adjustment', $movement->type);
             $this->assertSame('10.0000', $movement->previous_stock);
-            $this->assertSame($physical, $movement->new_stock);
+            $this->assertSame(number_format((float) $physical, 4, '.', ''), $movement->new_stock);
             $this->assertSame($difference, $movement->quantity);
             $this->assertSame(InventoryCount::class, $movement->reference_type);
             $this->assertEquals($count->id, $movement->reference_id);
@@ -174,7 +174,7 @@ class InventoryCountTest extends TestCase
             $this->assertEquals($this->branch->id, $movement->branch_id);
         }
         $this->postJson(route('inventory-counts.confirm', $count))->assertStatus(422);
-        $this->assertSame($physical, $this->stock());
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $this->stock());
         $this->assertDatabaseCount('inventory_movements', $expected);
     }
 
@@ -182,10 +182,10 @@ class InventoryCountTest extends TestCase
     {
         $count = $this->countDocument();
         $item = $this->item($count);
-        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '8.8765'])->assertOk();
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '8'])->assertOk();
         $this->putJson(route('inventory-counts.recount', [$count, $item]), ['recount_quantity' => '12.0001'])->assertOk()->assertJsonPath('difference', '2.0001');
         $item->refresh();
-        $this->assertSame('8.8765', $item->counted_quantity);
+        $this->assertSame('8.0000', $item->counted_quantity);
         $this->assertSame('12.0001', $item->recount_quantity);
         $this->assertSame('12.0001', $item->final_quantity);
         $this->assertSame('2.0001', $item->difference);
@@ -196,7 +196,7 @@ class InventoryCountTest extends TestCase
         $this->post(route('inventory-counts.review', $count))->assertRedirect();
         $this->post(route('inventory-counts.confirm', $count))->assertRedirect();
         $this->assertSame('12.0001', $this->stock());
-        $this->assertSame('8.8765', $item->fresh()->counted_quantity);
+        $this->assertSame('8.0000', $item->fresh()->counted_quantity);
         $this->assertSame('2.0001', InventoryMovement::sole()->quantity);
     }
 
@@ -314,7 +314,7 @@ class InventoryCountTest extends TestCase
         $saleMovement = DB::transaction(fn () => app(InventoryPostingService::class)->postSale($sale, $this->product, 2));
         $before = $saleMovement->refresh()->getAttributes();
         $this->assertSame('8.0000', $this->stock());
-        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '12.0000'])->assertOk();
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '12'])->assertOk();
         $this->post(route('inventory-counts.review', $count))->assertRedirect();
         $this->post(route('inventory-counts.confirm', $count))->assertRedirect();
         // Physical inventory is authoritative: current 8 becomes physical 12, adjustment +4.
@@ -332,10 +332,9 @@ class InventoryCountTest extends TestCase
     public static function currentStockAdjustments(): array
     {
         return [
-            'shortage' => ['5.0000', '2.0000', '-3.0000'],
-            'zero snapshot difference' => ['8.0000', '10.0000', '2.0000'],
-            'already physical' => ['8.0000', '8.0000', '0.0000'],
-            'four decimals' => ['5.1234', '2.0001', '-3.1233'],
+            'shortage' => ['5.0000', '2', '-3.0000'],
+            'zero snapshot difference' => ['8.0000', '10', '2.0000'],
+            'already physical' => ['8.0000', '8', '0.0000'],
         ];
     }
 
@@ -349,7 +348,7 @@ class InventoryCountTest extends TestCase
         $this->branch->products()->updateExistingPivot($this->product->id, ['stock' => $current]);
         $this->post(route('inventory-counts.review', $count))->assertRedirect();
         $this->post(route('inventory-counts.confirm', $count))->assertRedirect();
-        $this->assertSame($physical, $this->stock());
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $this->stock());
         $this->assertSame($snapshotDifference, $item->fresh()->difference);
         $this->assertSame('10.0000', $item->fresh()->theoretical_quantity);
         $expected = $adjustment === '0.0000' ? 0 : 1;
@@ -357,11 +356,11 @@ class InventoryCountTest extends TestCase
         if ($expected) {
             $movement = InventoryMovement::sole();
             $this->assertSame($current, $movement->previous_stock);
-            $this->assertSame($physical, $movement->new_stock);
+            $this->assertSame(number_format((float) $physical, 4, '.', ''), $movement->new_stock);
             $this->assertSame($adjustment, $movement->quantity);
         }
         $this->postJson(route('inventory-counts.confirm', $count))->assertStatus(422);
-        $this->assertSame($physical, $this->stock());
+        $this->assertSame(number_format((float) $physical, 4, '.', ''), $this->stock());
         $this->assertDatabaseCount('inventory_movements', $expected);
     }
 
@@ -452,15 +451,13 @@ class InventoryCountTest extends TestCase
 
         $this->assertStringContainsString('md:hidden', $view);
         $this->assertStringContainsString('data-item-id', $view);
-        $this->assertStringContainsString('qty-input', $view);
-        $this->assertStringContainsString('notes-input', $view);
-        $this->assertStringContainsString('save-qty-btn', $view);
-        $this->assertStringContainsString('inputmode="decimal"', $view);
+        $this->assertStringContainsString('type="number"', $view);
+        $this->assertStringContainsString('inputmode="numeric"', $view);
+        $this->assertStringContainsString('step="1"', $view);
+        $this->assertStringContainsString('@method(\'PUT\')', $view);
+        $this->assertStringContainsString('counted_quantity', $view);
 
         $this->assertStringContainsString('hidden md:block', $view);
-
-        $this->assertStringContainsString("'Accept': 'application/json'", $view);
-        $this->assertStringContainsString('response.ok', $view);
 
         $this->assertStringContainsString('saveCountedQuantity', $view);
         $this->assertStringContainsString('data-save-desktop', $view);
@@ -544,7 +541,7 @@ class InventoryCountTest extends TestCase
 
         $response = $this->get(route('inventory-counts.edit', $count));
         $response->assertOk();
-        $response->assertSee('data-original="Nota de prueba"', false);
+        $response->assertSee('Nota de prueba');
     }
 
     public function test_create_page_redirects_when_no_branch_selected(): void
@@ -589,19 +586,15 @@ class InventoryCountTest extends TestCase
         $this->assertSame('10.0000', $this->stock());
     }
 
-    public function test_update_quantity_decimal_persists_correctly(): void
+    public function test_update_quantity_rejects_decimal(): void
     {
         $count = $this->countDocument();
         $item = $this->item($count);
 
-        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '2.5000'])
-            ->assertOk()
-            ->assertJsonPath('difference', '-7.5000')
-            ->assertJsonPath('final_quantity', '2.5000');
+        $this->putJson(route('inventory-counts.update-quantity', [$count, $item]), ['counted_quantity' => '2.5'])
+            ->assertStatus(422);
 
-        $this->assertSame('2.5000', $item->fresh()->counted_quantity);
-        $this->assertSame('2.5000', $item->fresh()->final_quantity);
-        $this->assertSame('-7.5000', $item->fresh()->difference);
+        $this->assertNull($item->fresh()->counted_quantity);
         $this->assertSame('10.0000', $this->stock());
     }
 
@@ -649,5 +642,184 @@ class InventoryCountTest extends TestCase
 
             $this->get(route('inventory-counts.edit', $count))->assertStatus(422);
         }
+    }
+
+    public function test_remove_item_in_draft(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+        $this->assertSame('10.0000', $this->stock());
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertOk();
+
+        $this->assertDatabaseCount('inventory_count_items', 0);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_remove_item_in_counting(): void
+    {
+        $count = $this->countDocument('counting');
+        $item = $this->item($count);
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertOk();
+
+        $this->assertDatabaseCount('inventory_count_items', 0);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_remove_item_does_not_change_stock(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->assertSame('10.0000', $this->stock());
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertOk();
+        $this->assertSame('10.0000', $this->stock());
+        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_remove_item_rejected_in_review(): void
+    {
+        $count = $this->countDocument('review');
+        $item = $this->item($count);
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertStatus(422);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_remove_item_rejected_in_confirmed(): void
+    {
+        $count = $this->countDocument('confirmed');
+        $item = $this->item($count);
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertStatus(422);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_remove_item_rejected_in_cancelled(): void
+    {
+        $count = $this->countDocument('cancelled');
+        $item = $this->item($count);
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertStatus(422);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_remove_item_from_other_count_rejected(): void
+    {
+        $count = $this->countDocument();
+        $otherCount = $this->countDocument();
+        $item = $this->item($otherCount);
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertStatus(404);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_remove_item_respects_company_and_branch(): void
+    {
+        $otherCompany = Company::create(['trade_name' => 'Otra', 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
+        $otherBranch = Branch::create(['company_id' => $otherCompany->id, 'name' => 'Sucursal2', 'code' => 'B2', 'is_active' => true]);
+        $otherCount = InventoryCount::create(['company_id' => $otherCompany->id, 'branch_id' => $otherBranch->id, 'status' => 'draft', 'reference' => 'X']);
+        $item = $otherCount->items()->create(['product_id' => $this->product->id, 'theoretical_quantity' => '5.0000', 'difference' => '0.0000']);
+
+        $count = $this->countDocument();
+
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertStatus(404);
+        $this->assertDatabaseCount('inventory_count_items', 1);
+    }
+
+    public function test_mobile_form_submit_saves_five(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '5',
+        ])->assertRedirect();
+
+        $this->assertSame('5.0000', $item->fresh()->counted_quantity);
+        $this->assertSame('5.0000', $item->fresh()->final_quantity);
+        $this->assertSame('-5.0000', $item->fresh()->difference);
+        $this->assertSame('counting', $count->fresh()->status);
+    }
+
+    public function test_mobile_form_submit_saves_zero(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '0',
+        ])->assertRedirect();
+
+        $this->assertSame('0.0000', $item->fresh()->counted_quantity);
+        $this->assertSame('-10.0000', $item->fresh()->difference);
+    }
+
+    public function test_mobile_form_submit_rejects_decimal(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '3.5',
+        ])->assertRedirect()->assertSessionHasErrors('counted_quantity');
+
+        $this->assertNull($item->fresh()->counted_quantity);
+    }
+
+    public function test_mobile_form_persists_on_reload(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '7',
+        ])->assertRedirect();
+
+        $this->get(route('inventory-counts.edit', $count))
+            ->assertOk()
+            ->assertSee('value="7"', false);
+    }
+
+    public function test_mobile_form_does_not_change_stock(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->assertSame('10.0000', $this->stock());
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '3',
+        ])->assertRedirect();
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_mobile_form_delete_still_works(): void
+    {
+        $count = $this->countDocument();
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '5',
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('inventory_count_items', 1);
+        $this->deleteJson(route('inventory-counts.remove-item', [$count, $item]))->assertOk();
+        $this->assertDatabaseCount('inventory_count_items', 0);
+        $this->assertSame('10.0000', $this->stock());
+    }
+
+    public function test_mobile_form_rejected_in_review_status(): void
+    {
+        $count = $this->countDocument('review');
+        $item = $this->item($count);
+
+        $this->put(route('inventory-counts.update-quantity', [$count, $item]), [
+            'counted_quantity' => '5',
+        ])->assertStatus(422);
     }
 }

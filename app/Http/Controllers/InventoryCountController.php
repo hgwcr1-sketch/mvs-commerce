@@ -221,14 +221,16 @@ class InventoryCountController extends Controller
         abort_unless($item->inventory_count_id === $inventoryCount->id, 404);
 
         $data = $request->validate([
-            'counted_quantity' => ['required', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,4})?$/'],
+            'counted_quantity' => ['required', 'integer', 'min:0'],
         ]);
 
+        $qty = (string) $data['counted_quantity'];
+
         $item->update([
-            'counted_quantity' => $data['counted_quantity'],
+            'counted_quantity' => $qty,
             'recount_quantity' => null,
-            'final_quantity' => $data['counted_quantity'],
-            'difference' => bcsub((string) $data['counted_quantity'], (string) $item->theoretical_quantity, 4),
+            'final_quantity' => $qty,
+            'difference' => bcsub($qty, (string) $item->theoretical_quantity, 4),
         ]);
 
         if ($inventoryCount->isDraft()) {
@@ -239,11 +241,20 @@ class InventoryCountController extends Controller
             ]);
         }
 
-        return response()->json([
-            'item_id' => $item->id,
-            'difference' => number_format((float) $item->difference, 4, '.', ''),
-            'final_quantity' => number_format((float) $item->final_quantity, 4, '.', ''),
-        ]);
+        $notes = $request->input('notes');
+        if ($notes !== null) {
+            $item->update(['notes' => $notes !== '' ? $notes : null]);
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'item_id' => $item->id,
+                'difference' => number_format((float) $item->difference, 4, '.', ''),
+                'final_quantity' => number_format((float) $item->final_quantity, 4, '.', ''),
+            ]);
+        }
+
+        return back()->with('success', 'Cantidad guardada.');
     }
 
     public function recount(Request $request, InventoryCount $inventoryCount, InventoryCountItem $item)
@@ -281,6 +292,18 @@ class InventoryCountController extends Controller
         ]);
 
         $item->update(['notes' => $data['notes'] ?? null]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function removeItem(InventoryCount $inventoryCount, InventoryCountItem $item)
+    {
+        abort_unless((int) $inventoryCount->company_id === (int) session('active_company_id'), 404);
+        abort_unless((int) $inventoryCount->branch_id === (int) session('active_branch_id'), 404);
+        abort_unless($item->inventory_count_id === $inventoryCount->id, 404);
+        abort_unless($inventoryCount->canBeEdited(), 422);
+
+        $item->delete();
 
         return response()->json(['success' => true]);
     }

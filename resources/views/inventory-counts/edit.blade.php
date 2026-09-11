@@ -79,12 +79,12 @@
             <div class="grid grid-cols-2 gap-3 text-sm mb-3">
                 <div>
                     <span class="text-slate-500">Sistema:</span>
-                    <span class="ml-1 font-semibold text-slate-700">{{ number_format((float) $item->theoretical_quantity, 4) }}</span>
+                    <span class="ml-1 font-semibold text-slate-700">{{ (int) $item->theoretical_quantity }}</span>
                 </div>
                 <div>
                     <span class="text-slate-500">Contada:</span>
                     @if($item->counted_quantity !== null)
-                        <span class="ml-1 font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 4) }}</span>
+                        <span class="ml-1 font-semibold text-slate-800">{{ (int) $item->counted_quantity }}</span>
                     @else
                         <span class="ml-1 text-slate-400">—</span>
                     @endif
@@ -92,14 +92,14 @@
                 @if($item->recount_quantity !== null)
                 <div>
                     <span class="text-slate-500">Reconteo:</span>
-                    <span class="ml-1 font-semibold text-[#B1922D]">{{ number_format((float) $item->recount_quantity, 4) }}</span>
+                    <span class="ml-1 font-semibold text-[#B1922D]">{{ (int) $item->recount_quantity }}</span>
                 </div>
                 @endif
                 <div>
                     @if($item->difference != 0)
                         <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {{ $item->isShortage() ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700' }}">
                             {{ $item->isShortage() ? 'Faltante' : 'Sobrante' }}
-                            {{ number_format(abs((float) $item->difference), 4) }}
+                            {{ abs((int) $item->difference) }}
                         </span>
                     @else
                         <span class="text-slate-400 text-xs">Sin diferencia</span>
@@ -107,37 +107,46 @@
                 </div>
             </div>
 
-            <div class="space-y-2">
-                <div>
-                    <label class="mb-1 block text-xs font-semibold text-slate-600">Cantidad física</label>
-                    <input type="text"
-                           inputmode="decimal"
-                           value="{{ $item->counted_quantity !== null ? number_format((float) $item->counted_quantity, 4, '.', '') : '' }}"
-                           data-item-id="{{ $item->id }}"
-                           data-theoretical="{{ $item->theoretical_quantity }}"
-                           class="qty-input w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                           placeholder="0.0000">
+            <form method="POST" action="{{ route('inventory-counts.update-quantity', [$inventoryCount, $item]) }}">
+                @csrf
+                @method('PUT')
+                <div class="space-y-2">
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Cantidad física</label>
+                        <input type="number"
+                               name="counted_quantity"
+                               min="0"
+                               step="1"
+                               inputmode="numeric"
+                               required
+                               value="{{ $item->counted_quantity !== null ? (int) $item->counted_quantity : '' }}"
+                               class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-800 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                               placeholder="0">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-semibold text-slate-600">Notas</label>
+                        <input type="text"
+                               name="notes"
+                               maxlength="500"
+                               value="{{ $item->notes ?? '' }}"
+                               class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                               placeholder="Opcional">
+                    </div>
                 </div>
-                <div>
-                    <label class="mb-1 block text-xs font-semibold text-slate-600">Notas</label>
-                    <input type="text"
-                           maxlength="500"
-                           value="{{ $item->notes ?? '' }}"
-                           data-item-id="{{ $item->id }}"
-                           data-original="{{ $item->notes ?? '' }}"
-                           class="notes-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                           placeholder="Opcional">
-                </div>
-            </div>
 
-            <div class="mt-3 flex gap-2">
-                <button type="button"
-                        data-save-qty
-                        data-item-id="{{ $item->id }}"
-                        class="save-qty-btn min-h-11 flex-1 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black hover:bg-amber-600">
-                    Guardar
-                </button>
-            </div>
+                <div class="mt-3 flex gap-2">
+                    <button type="submit"
+                            class="min-h-11 flex-1 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black hover:bg-amber-600">
+                        Guardar
+                    </button>
+                    <button type="button"
+                            data-delete-item
+                            data-item-id="{{ $item->id }}"
+                            class="min-h-11 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
+                        Eliminar
+                    </button>
+                </div>
+            </form>
         </div>
         @endforeach
     </div>
@@ -173,6 +182,9 @@
                         <th class="px-4 py-3 text-center text-sm font-semibold text-slate-600">Reconteo</th>
                         <th class="px-4 py-3 text-center text-sm font-semibold text-slate-600">Diferencia</th>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-slate-600">Notas</th>
+                        @if($inventoryCount->canBeEdited())
+                        <th class="px-4 py-3 text-center text-sm font-semibold text-slate-600"></th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -186,17 +198,19 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-center text-sm text-slate-700">
-                            {{ number_format((float) $item->theoretical_quantity, 4) }}
+                            {{ (int) $item->theoretical_quantity }}
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($inventoryCount->canBeEdited())
                             <div class="flex items-center justify-center gap-1">
-                                <input type="text"
-                                       inputmode="decimal"
-                                       value="{{ $item->counted_quantity !== null ? number_format((float) $item->counted_quantity, 4, '.', '') : '' }}"
+                                <input type="number"
+                                       inputmode="numeric"
+                                       min="0"
+                                       step="1"
+                                       value="{{ $item->counted_quantity !== null ? (int) $item->counted_quantity : '' }}"
                                        data-item-id="{{ $item->id }}"
                                        class="qty-input-desktop w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm font-semibold text-slate-800 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                       placeholder="0.0000">
+                                       placeholder="0">
                                 <button type="button"
                                         data-save-desktop
                                         data-item-id="{{ $item->id }}"
@@ -206,7 +220,7 @@
                             </div>
                             @else
                                 @if($item->counted_quantity !== null)
-                                    <span class="font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 4) }}</span>
+                                    <span class="font-semibold text-slate-800">{{ (int) $item->counted_quantity }}</span>
                                 @else
                                     <span class="text-slate-400">—</span>
                                 @endif
@@ -214,7 +228,7 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($item->recount_quantity !== null)
-                                <span class="font-semibold text-[#B1922D]">{{ number_format((float) $item->recount_quantity, 4) }}</span>
+                                <span class="font-semibold text-[#B1922D]">{{ (int) $item->recount_quantity }}</span>
                             @else
                                 <span class="text-slate-400">—</span>
                             @endif
@@ -223,7 +237,7 @@
                             @if($item->difference != 0)
                                 <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {{ $item->isShortage() ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700' }}">
                                     {{ $item->isShortage() ? 'Faltante' : 'Sobrante' }}
-                                    {{ number_format(abs((float) $item->difference), 4) }}
+                                    {{ abs((int) $item->difference) }}
                                 </span>
                             @else
                                 <span class="text-slate-400">0</span>
@@ -232,6 +246,16 @@
                         <td class="px-4 py-3 text-sm text-slate-600 max-w-24 truncate">
                             {{ $item->notes ?? '—' }}
                         </td>
+                        @if($inventoryCount->canBeEdited())
+                        <td class="px-4 py-3 text-center">
+                            <button type="button"
+                                    data-delete-item
+                                    data-item-id="{{ $item->id }}"
+                                    class="rounded-lg border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">
+                                Eliminar
+                            </button>
+                        </td>
+                        @endif
                     </tr>
                     @endforeach
                 </tbody>
@@ -414,45 +438,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return await response.json();
     }
 
-    // ─── Mobile: save per card ───
-    document.querySelectorAll('[data-save-qty]').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            const itemId = this.dataset.itemId;
-            const card = this.closest('[data-item-id]');
-            const qtyInput = card.querySelector('.qty-input');
-            const notesInput = card.querySelector('.notes-input');
-            const qty = qtyInput.value.trim();
-            const notes = notesInput.value.trim();
-
-            if (!qty) { qtyInput.focus(); return; }
-
-            try {
-                await saveCountedQuantity(itemId, qty);
-
-                if (notes !== (notesInput.dataset.original || '')) {
-                    const res = await fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}/notas`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({ notes: notes || null })
-                    });
-                    if (!res.ok) {
-                        let noteMsg = 'Error al guardar notas.';
-                        try { const e = await res.json(); noteMsg = e?.message || noteMsg; } catch (_) {}
-                        throw new Error(noteMsg);
-                    }
-                }
-
-                location.reload();
-            } catch (e) {
-                alert(e.message);
-            }
-        });
-    });
-
     // ─── Desktop: save per row ───
     document.querySelectorAll('[data-save-desktop]').forEach(function (btn) {
         btn.addEventListener('click', async function () {
@@ -481,6 +466,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 const row = this.closest('tr');
                 const saveBtn = row.querySelector('[data-save-desktop]');
                 if (saveBtn) saveBtn.click();
+            }
+        });
+    });
+
+    // ─── Delete item ───
+    document.querySelectorAll('[data-delete-item]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            const itemId = this.dataset.itemId;
+            if (!confirm('¿Eliminar este producto de la toma?')) return;
+
+            try {
+                const response = await fetch(`{{ url('tomas-inventario') }}/{{ $inventoryCount->id }}/items/${itemId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+
+                if (!response.ok) {
+                    let msg = 'Error al eliminar producto.';
+                    try { const e = await response.json(); msg = e?.message || msg; } catch (_) {}
+                    throw new Error(msg);
+                }
+
+                location.reload();
+            } catch (e) {
+                alert(e.message);
             }
         });
     });
