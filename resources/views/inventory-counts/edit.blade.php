@@ -282,8 +282,8 @@
         @endcan
 
         @can('inventario.conteo.revisar')
-        @if($inventoryCount->isCounting() && $items->whereNotNull('counted_quantity')->count() > 0)
-        <form method="POST" action="{{ route('inventory-counts.review', $inventoryCount) }}">
+        @if($inventoryCount->isCounting())
+        <form method="POST" action="{{ route('inventory-counts.review', $inventoryCount) }}" class="inline">
             @csrf
             <button class="rounded-xl bg-amber-500 px-5 py-2.5 font-semibold text-black hover:bg-amber-600">
                 Enviar a Revisión
