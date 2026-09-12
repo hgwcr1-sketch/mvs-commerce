@@ -20,3 +20,8 @@ Artisan::command('licenses:refresh', function (CompanyLicenseService $licenses) 
 })->purpose('Actualiza estados de licencia según sus fechas');
 
 Schedule::command('licenses:refresh')->daily()->withoutOverlapping();
+
+Schedule::command('demo:company --reset --force')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->onOneServer();
