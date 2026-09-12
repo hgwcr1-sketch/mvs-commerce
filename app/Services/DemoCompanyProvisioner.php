@@ -19,6 +19,7 @@ use App\Models\Style;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -133,6 +134,7 @@ class DemoCompanyProvisioner
             $this->ensurePermanentLicense($company);
             $this->syncDemoAssets($company);
             $this->syncLoyaltyAssets($company);
+            $this->seedTransactions($company);
 
             return $company;
         });
@@ -170,9 +172,12 @@ class DemoCompanyProvisioner
             $this->seedLoyaltyPosts($company);
             $this->seedLabels($company);
             $this->seedCashRegisters($company);
+            app(CashDenominationProvisioner::class)->provision($company);
+            app(CompanyCashSettingsProvisioner::class)->provision($company);
             $this->ensurePermanentLicense($company);
             $this->syncDemoAssets($company);
             $this->syncLoyaltyAssets($company);
+            $this->seedTransactions($company);
 
             return $company;
         });
@@ -207,16 +212,76 @@ class DemoCompanyProvisioner
 
     private function clearTransactionals(Company $company): void
     {
+        $cid = $company->id;
+
+        DB::table('sale_return_items')->whereIn('sale_return_id', fn ($q) => $q->select('id')->from('sale_returns')->where('company_id', $cid))->delete();
+        DB::table('sale_returns')->where('company_id', $cid)->delete();
+
+        DB::table('loyalty_movement_lines')->whereIn('loyalty_movement_id', fn ($q) => $q->select('id')->from('loyalty_movements')->where('company_id', $cid))->delete();
+        DB::table('loyalty_movements')->where('company_id', $cid)->delete();
+        DB::table('loyalty_accounts')->where('company_id', $cid)->delete();
+        DB::table('loyalty_multipliers')->where('company_id', $cid)->delete();
+        DB::table('loyalty_rewards')->where('company_id', $cid)->delete();
+        DB::table('loyalty_reward_redemptions')->where('company_id', $cid)->delete();
+        DB::table('loyalty_registration_incentive_claims')->where('company_id', $cid)->delete();
+        DB::table('loyalty_registration_incentives')->where('company_id', $cid)->delete();
+
+        DB::table('accounts_receivable_payments')->where('company_id', $cid)->delete();
+        DB::table('accounts_receivable')->where('company_id', $cid)->delete();
+        DB::table('layaway_payments')->where('company_id', $cid)->delete();
+        DB::table('layaway_items')->where('company_id', $cid)->delete();
+        DB::table('layaway_alerts')->where('company_id', $cid)->delete();
+        DB::table('layaways')->where('company_id', $cid)->delete();
+
+        DB::table('accounts_payable_payments')->where('company_id', $cid)->delete();
+        DB::table('account_payable_alerts')->whereIn('account_payable_id', fn ($q) => $q->select('id')->from('accounts_payable')->where('company_id', $cid))->delete();
+        DB::table('accounts_payable')->where('company_id', $cid)->delete();
+
+        DB::table('sale_payments')->whereIn('sale_id', fn ($q) => $q->select('id')->from('sales')->where('company_id', $cid))->delete();
+        DB::table('sale_items')->whereIn('sale_id', fn ($q) => $q->select('id')->from('sales')->where('company_id', $cid))->delete();
+        DB::table('sales')->where('company_id', $cid)->delete();
+
+        DB::table('suspended_sale_items')->whereIn('suspended_sale_id', fn ($q) => $q->select('id')->from('suspended_sales')->where('company_id', $cid))->delete();
+        DB::table('suspended_sales')->where('company_id', $cid)->delete();
+
+        DB::table('purchase_verification_items')->whereIn('purchase_verification_id', fn ($q) => $q->select('id')->from('purchase_verifications')->whereIn('purchase_id', fn ($q2) => $q2->select('id')->from('purchases')->where('company_id', $cid)))->delete();
+        DB::table('purchase_verifications')->whereIn('purchase_id', fn ($q) => $q->select('id')->from('purchases')->where('company_id', $cid))->delete();
+        DB::table('purchase_order_source_conversions')->whereIn('purchase_item_id', fn ($q) => $q->select('id')->from('purchase_items')->whereIn('purchase_id', fn ($q2) => $q2->select('id')->from('purchases')->where('company_id', $cid)))->delete();
+        DB::table('purchase_order_item_sources')->whereIn('purchase_order_item_id', fn ($q) => $q->select('id')->from('purchase_order_items')->whereIn('purchase_order_id', fn ($q2) => $q2->select('id')->from('purchase_orders')->where('company_id', $cid)))->delete();
+        DB::table('purchase_order_items')->whereIn('purchase_order_id', fn ($q) => $q->select('id')->from('purchase_orders')->where('company_id', $cid))->delete();
+        DB::table('purchase_orders')->where('company_id', $cid)->delete();
+        DB::table('purchase_items')->whereIn('purchase_id', fn ($q) => $q->select('id')->from('purchases')->where('company_id', $cid))->delete();
+        DB::table('purchases')->where('company_id', $cid)->delete();
+
+        DB::table('inventory_transfer_items')->whereIn('inventory_transfer_id', fn ($q) => $q->select('id')->from('inventory_transfers')->where('company_id', $cid))->delete();
+        DB::table('inventory_transfers')->where('company_id', $cid)->delete();
+        DB::table('inventory_count_items')->whereIn('inventory_count_id', fn ($q) => $q->select('id')->from('inventory_counts')->where('company_id', $cid))->delete();
+        DB::table('inventory_counts')->where('company_id', $cid)->delete();
+        DB::table('inventory_lots')->where('company_id', $cid)->delete();
+        DB::table('inventory_movements')->where('company_id', $cid)->delete();
+
+        DB::table('order_items')->whereIn('order_id', fn ($q) => $q->select('id')->from('orders')->where('company_id', $cid))->delete();
+        DB::table('orders')->where('company_id', $cid)->delete();
+
+        DB::table('cash_count_details')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
+        DB::table('cash_payment_reconciliations')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
+        DB::table('cash_session_events')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
+        DB::table('cash_session_mail_notifications')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
+        DB::table('cash_movements')->where('company_id', $cid)->delete();
         $company->cashSessions()->delete();
         $company->cashDenominations()->delete();
         $company->cashRegisters()->delete();
         $company->cashSetting()->delete();
-        $company->branches()->each(function (Branch $branch) {
-            $branch->products()->detach();
-        });
-        Product::query()->where('company_id', $company->id)->forceDelete();
-        Customer::query()->where('company_id', $company->id)->forceDelete();
-        Supplier::query()->where('company_id', $company->id)->forceDelete();
+
+        DB::table('branch_product')->whereIn('branch_id', fn ($q) => $q->select('id')->from('branches')->where('company_id', $cid))->delete();
+        Product::query()->where('company_id', $cid)->forceDelete();
+        Customer::query()->where('company_id', $cid)->forceDelete();
+        Supplier::query()->where('company_id', $cid)->forceDelete();
+    }
+
+    private function seedTransactions(Company $company): void
+    {
+        app(DemoTransactionalScenario::class)->seed($company);
     }
 
     private function clearCatalogs(Company $company): void
