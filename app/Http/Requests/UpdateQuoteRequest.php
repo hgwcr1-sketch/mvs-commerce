@@ -11,7 +11,7 @@ class UpdateQuoteRequest extends FormRequest
     {
         $company = Company::query()->find((int) session('active_company_id'));
 
-        return $company !== null && $this->user()?->hasPermission('cotizaciones.editar', $company);
+        return $company !== null && ($this->user()?->hasPermission('cotizaciones.editar', $company) || $this->user()?->hasPermission('cotizaciones.crear', $company));
     }
 
     public function rules(): array

@@ -397,6 +397,7 @@
       <button
     type="button"
     @click.prevent.stop="
+        if (quoteMode) leaveQuoteMode();
         documentType = 'electronic_ticket';
         notice = '';
     "
@@ -410,6 +411,7 @@
 <button
     type="button"
     @click="
+        if (quoteMode) leaveQuoteMode();
         if (customerId) {
             documentType = 'electronic_invoice';
         } else {
@@ -831,8 +833,11 @@ document.addEventListener('alpine:init', () => {
 
 
         init() {
-            this.focusSearch();
             this.cameraScannerAvailable = window.mvsScannerAvailable === true;
+            this.$nextTick(() => {
+                this.$refs.searchInput?.focus();
+                setTimeout(() => { if (document.activeElement !== this.$refs.searchInput) this.$refs.searchInput?.focus(); }, 150);
+            });
             const quoteId = new URLSearchParams(window.location.search).get('quote_id');
             if (quoteId) this.loadQuote(quoteId);
             this.$watch('customerId', () => this.refreshLoyalty());
@@ -845,10 +850,10 @@ document.addEventListener('alpine:init', () => {
             window.addEventListener('scroll', closeDropdownsOnScroll, { passive: true, capture: true });
         },
 
-        // R02-A: solo se enfoca el buscador con puntero fino (desktop/lector HID).
-        // En táctil evita abrir el teclado automáticamente al cargar o tras acciones.
+        // R02-A: foco del buscador de producto.
+        // En desktop (hover+pointer:fine) foca directamente.
+        // En otros entornos, foca de todas formas para no perder la oportunidad.
         focusSearch() {
-            if (! window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
             this.$refs.searchInput?.focus();
         },
 
