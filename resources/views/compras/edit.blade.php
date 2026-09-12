@@ -17,6 +17,8 @@ window.purchaseEdit = {
 </script>
 <div
     x-data="purchaseForm()"
+    data-search-suppliers="{{ route('proveedores.search') }}"
+    data-search-products="{{ route('compras.search-products') }}"
     class="space-y-6">
 
     {{-- VOLVER --}}

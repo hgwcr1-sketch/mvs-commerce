@@ -237,6 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!searchInput || !results) return;
 
     let timer;
+    let requestCount = 0;
 
     function escapeHtml(value) {
         const div = document.createElement('div');
@@ -247,6 +248,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function doSearch(term) {
         clearTimeout(timer);
         if (!term) { results.innerHTML = ''; results.classList.add('hidden'); return; }
+        const thisRequest = ++requestCount;
         timer = setTimeout(async function () {
             try {
                 const response = await fetch(
@@ -254,6 +256,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     { headers: { 'Accept': 'application/json' } }
                 );
                 if (!response.ok) throw new Error('Error al buscar');
+                if (thisRequest !== requestCount) return;
                 const products = await response.json();
                 results.innerHTML = '';
                 if (products.length === 0) {
@@ -281,6 +284,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 results.classList.remove('hidden');
             } catch (error) {
                 console.error(error);
+                if (thisRequest !== requestCount) return;
                 results.innerHTML = '<div class="px-4 py-4 text-sm text-red-600">Error al buscar productos.</div>';
                 results.classList.remove('hidden');
             }
@@ -288,6 +292,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     searchInput.addEventListener('input', function () { doSearch(this.value.trim()); });
+
+    searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && this.value.trim()) {
+            e.preventDefault();
+            doSearch(this.value.trim());
+        }
+    });
 
     document.addEventListener('click', function (event) {
         if (event.target !== searchInput && !results.contains(event.target)) {

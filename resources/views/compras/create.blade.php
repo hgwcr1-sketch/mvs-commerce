@@ -9,6 +9,8 @@
 <div
     x-data="purchaseForm()"
     data-purchase-show-url="{{ route('compras.show', ['compra' => '__PURCHASE_ID__']) }}"
+    data-search-suppliers="{{ route('proveedores.search') }}"
+    data-search-products="{{ route('compras.search-products') }}"
     class="space-y-6">
 
     {{-- VOLVER --}}

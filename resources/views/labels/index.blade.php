@@ -52,7 +52,10 @@ $customHeight = $setting->custom_height ?? 30;
     @endcan
 
     <form method="GET" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2 lg:grid-cols-5">
-        <input name="search" value="{{ request('search') }}" class="form-input w-full lg:col-span-2" placeholder="Nombre, código o barcode">
+        <div class="relative lg:col-span-2">
+            <input id="label-search" name="search" value="{{ request('search') }}" class="form-input w-full" placeholder="Nombre, código o barcode" autocomplete="off">
+            <div id="label-search-results" class="absolute left-0 right-0 top-full z-50 mt-1 hidden max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"></div>
+        </div>
         <select name="category_id" class="form-input w-full"><option value="">Todas las categorías</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(request('category_id')==$category->id)>{{ $category->name }}</option>@endforeach</select>
         <select name="brand_id" class="form-input w-full"><option value="">Todas las marcas</option>@foreach($brands as $brand)<option value="{{ $brand->id }}" @selected(request('brand_id')==$brand->id)>{{ $brand->name }}</option>@endforeach</select>
         <select name="prints_label" class="form-input w-full"><option value="">Etiqueta: todos</option><option value="1" @selected(request('prints_label')==='1')>Sí imprime</option><option value="0" @selected(request('prints_label')==='0')>No imprime</option></select>
@@ -128,6 +131,82 @@ document.addEventListener('DOMContentLoaded', function () {
     if (useCustom) { useCustom.addEventListener('change', toggleCustom); toggleCustom(); }
     if (settingsMode) { settingsMode.addEventListener('change', toggleSettingsThermal); toggleSettingsThermal(); }
     if (settingsUseCustom) { settingsUseCustom.addEventListener('change', toggleSettingsCustom); }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('label-search');
+    const resultsBox = document.getElementById('label-search-results');
+    if (!searchInput || !resultsBox) return;
+
+    let timer;
+    let requestCount = 0;
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value ?? '';
+        return div.innerHTML;
+    }
+
+    function doSearch(term) {
+        clearTimeout(timer);
+        if (!term || term.length < 2) {
+            resultsBox.innerHTML = '';
+            resultsBox.classList.add('hidden');
+            return;
+        }
+        const thisRequest = ++requestCount;
+        timer = setTimeout(async function () {
+            try {
+                const response = await fetch(
+                    `{{ route('productos.search') }}?q=${encodeURIComponent(term)}`,
+                    { headers: { 'Accept': 'application/json' } }
+                );
+                if (!response.ok) throw new Error('Error al buscar');
+                if (thisRequest !== requestCount) return;
+                const products = await response.json();
+                resultsBox.innerHTML = '';
+                if (products.length === 0) {
+                    resultsBox.innerHTML = '<div class="px-4 py-3 text-sm text-slate-500">No se encontraron productos.</div>';
+                    resultsBox.classList.remove('hidden');
+                    return;
+                }
+                products.forEach(function (product) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-amber-50';
+                    const stockLabel = product.branch_stock != null ? ' · Stock: ' + Number(product.branch_stock).toLocaleString() : '';
+                    item.innerHTML = `
+                        <div class="font-semibold text-slate-800">${escapeHtml(product.name)}</div>
+                        <div class="mt-1 text-xs text-slate-500">
+                            ${escapeHtml(product.internal_code ?? '')}
+                            ${product.barcode ? ' · ' + escapeHtml(product.barcode) : ''}
+                            ${stockLabel}
+                        </div>`;
+                    item.addEventListener('click', function () {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set('search', product.internal_code);
+                        window.location.href = '{{ route("labels.index") }}?' + params.toString();
+                    });
+                    resultsBox.appendChild(item);
+                });
+                resultsBox.classList.remove('hidden');
+            } catch (error) {
+                console.error(error);
+                if (thisRequest !== requestCount) return;
+                resultsBox.innerHTML = '<div class="px-4 py-3 text-sm text-red-600">Error al buscar productos.</div>';
+                resultsBox.classList.remove('hidden');
+            }
+        }, 250);
+    }
+
+    searchInput.addEventListener('input', function () { doSearch(this.value.trim()); });
+
+    document.addEventListener('click', function (event) {
+        if (event.target !== searchInput && !resultsBox.contains(event.target)) {
+            resultsBox.classList.add('hidden');
+        }
+    });
 });
 </script>
 @endsection

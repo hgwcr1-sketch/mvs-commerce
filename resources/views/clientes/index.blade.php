@@ -127,94 +127,91 @@
 
    {{-- Buscador --}}
 
-<div class="relative">
-
-    <input
-        type="text"
-        id="customer-search"
-        value="{{ $search }}"
-        placeholder="Buscar por código, nombre, cédula, teléfono, celular o correo..."
-        autocomplete="off"
-        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-    >
-
-    <div
-        id="customer-suggestions"
-        class="absolute left-0 right-0 top-full z-50 mt-1 hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <div class="relative">
+        <input
+            type="text"
+            id="customer-search"
+            value="{{ $search }}"
+            placeholder="Buscar por código, nombre, cédula, teléfono, celular o correo..."
+            autocomplete="off"
+            class="w-full rounded-xl border border-slate-300 px-4 py-3 pr-11 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        >
+        <div
+            id="customer-suggestions"
+            class="absolute left-0 right-0 top-full z-50 mt-1 hidden max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+        </div>
     </div>
-
 </div>
 
 <script>
-const searchInput = document.getElementById('customer-search');
-const suggestionsBox = document.getElementById('customer-suggestions');
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('customer-search');
+    const suggestionsBox = document.getElementById('customer-suggestions');
+    if (!searchInput || !suggestionsBox) return;
 
-let searchTimer;
+    let timer;
+    let requestCount = 0;
 
-searchInput.addEventListener('input', function () {
-
-    clearTimeout(searchTimer);
-
-    const search = this.value.trim();
-
-    if (search.length < 2) {
-        suggestionsBox.innerHTML = '';
-        suggestionsBox.classList.add('hidden');
-        return;
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value ?? '';
+        return div.innerHTML;
     }
 
-    searchTimer = setTimeout(function () {
-
-        fetch('/clientes-buscar?search=' + encodeURIComponent(search))
-            .then(response => response.json())
-            .then(customers => {
-
+    function doSearch(term) {
+        clearTimeout(timer);
+        if (!term || term.length < 2) {
+            suggestionsBox.innerHTML = '';
+            suggestionsBox.classList.add('hidden');
+            return;
+        }
+        const thisRequest = ++requestCount;
+        timer = setTimeout(async function () {
+            try {
+                const response = await fetch(
+                    `{{ route('clientes.search') }}?search=${encodeURIComponent(term)}`,
+                    { headers: { 'Accept': 'application/json' } }
+                );
+                if (!response.ok) throw new Error('Error al buscar');
+                if (thisRequest !== requestCount) return;
+                const customers = await response.json();
                 suggestionsBox.innerHTML = '';
-
                 if (customers.length === 0) {
-
-                    suggestionsBox.innerHTML = `
-                        <div class="px-4 py-3 text-sm text-slate-500">
-                            No se encontraron clientes
-                        </div>
-                    `;
-
+                    suggestionsBox.innerHTML = '<div class="px-4 py-3 text-sm text-slate-500">No se encontraron clientes</div>';
                     suggestionsBox.classList.remove('hidden');
-
                     return;
                 }
-
-                customers.forEach(customer => {
-
+                customers.forEach(function (customer) {
                     const link = document.createElement('a');
-
-                    link.href = '/clientes/' + customer.id;
-
-                    link.className =
-                        'block border-b border-slate-100 px-4 py-3 hover:bg-amber-50';
-
+                    link.href = '{{ url('/clientes/') }}/' + customer.id;
+                    link.className = 'block border-b border-slate-100 px-4 py-3 hover:bg-amber-50';
                     link.innerHTML = `
-                        <div class="font-semibold text-slate-800">
-                            ${customer.name}
-                        </div>
-
+                        <div class="font-semibold text-slate-800">${escapeHtml(customer.name)}</div>
                         <div class="mt-1 text-xs text-slate-500">
-                            ${customer.identification ?? 'Sin identificación'}
+                            ${escapeHtml(customer.customer_code ? customer.customer_code + ' · ' : '')}${escapeHtml(customer.identification ?? 'Sin identificación')}
                             ·
-                            ${customer.mobile ?? customer.phone ?? 'Sin teléfono'}
-                        </div>
-                    `;
-
+                            ${escapeHtml(customer.mobile ?? customer.phone ?? 'Sin teléfono')}
+                        </div>`;
                     suggestionsBox.appendChild(link);
-
                 });
-
                 suggestionsBox.classList.remove('hidden');
+            } catch (error) {
+                console.error(error);
+                if (thisRequest !== requestCount) return;
+                suggestionsBox.innerHTML = '<div class="px-4 py-3 text-sm text-red-600">Error al buscar clientes.</div>';
+                suggestionsBox.classList.remove('hidden');
+            }
+        }, 250);
+    }
 
-            });
+    searchInput.addEventListener('input', function () { doSearch(this.value.trim()); });
 
-    }, 250);
-
+    document.addEventListener('click', function (event) {
+        if (event.target !== searchInput && !suggestionsBox.contains(event.target)) {
+            suggestionsBox.classList.add('hidden');
+        }
+    });
 });
 </script>
 

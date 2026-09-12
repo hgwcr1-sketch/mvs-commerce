@@ -61,8 +61,10 @@ items: window.purchaseEdit?.items || [],
 
             try {
 
+                const searchUrl = this.$el.dataset.searchSuppliers || '/proveedores-buscar';
+
                 const response = await fetch(
-                    `/proveedores-buscar?search=${encodeURIComponent(search)}`,
+                    `${searchUrl}?search=${encodeURIComponent(search)}`,
                     {
                         headers: {
                             'Accept': 'application/json'
@@ -216,8 +218,10 @@ const data = JSON.parse(text);
 
             try {
 
+                const searchUrl = this.$el.dataset.searchProducts || '/compras-buscar-productos';
+
                 const response = await fetch(
-                    `/compras-buscar-productos?q=${encodeURIComponent(search)}`,
+                    `${searchUrl}?q=${encodeURIComponent(search)}`,
                     {
                         headers: {
                             'Accept': 'application/json'
