@@ -375,17 +375,15 @@ Debe integrarse con POS sin duplicar lógica.
 
 ## Cotizaciones
 
-Estado: EN DESARROLLO
+Estado: modo cotización del POS implementado localmente (2026-09-12), pendiente de validación visual del usuario.
 
-Existe estructura y trabajo relacionado con:
+- `Cotizar` activa estado Alpine local con carrito vacío o existente; no persiste el modo. Indicador y regreso a venta en la misma pantalla; guardado desde resumen y barra móvil.
+- Búsqueda `quote_mode=1`, bajo `cotizaciones.crear`, elimina solo la prioridad por stock antes del límite de 10. Mantiene productos activos de la empresa, stock de sucursal y `can_add_to_cart` de venta. Alpine permite stock cero/exceso únicamente al cotizar; al volver o cargar una cotización para vender restaura controles.
+- `QuoteController::store()` y `QuoteService::create()` conservan cliente opcional, precios, descuentos, impuestos y snapshots. POST de cotizaciones solicitado como JSON devuelve también errores JSON. Guardado exitoso limpia carrito/estado de venta previo, confirma y refresca búsqueda sin salir del POS.
+- Conversión conserva `pos.checkout` con `quote_id`: stock 2 rechaza cantidad 10, incluso enviando `quote_mode=1` al checkout. No hay endpoint nuevo ni cambios en el servicio de inventario.
+- Pruebas en `QuoteTest` y JavaScript renderizado `tests/js/pos-quote-mode.cjs`: carrito vacío, stock, permisos, aislamiento, errores/reintento/doble clic, búsqueda atrasada, guardado y conversión. Snapshots y query log comprueban cero cambios en ventas/items/pagos, stock, Kardex, caja y fidelización al guardar.
 
-- Quote
-- QuoteItem
-- servicios
-- requests
-- integración con POS
-
-No asumir que todo el flujo está terminado.
+Evidencia final y deuda preexistente: ver el bloque de modo cotización en `docs/ESTADO_ACTUAL.md`. No se modifica el cronograma de producción; sin commit, push ni despliegue.
 
 ---
 

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
@@ -14,9 +16,12 @@ use App\Models\Role;
 use App\Models\Sale;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Sales\QuoteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class QuoteTest extends TestCase
@@ -146,13 +151,17 @@ class QuoteTest extends TestCase
     {
         [$company, $branch, $user, $cash] = $this->context();
         $product = $this->product($company);
-        $this->stock($branch, $product, 1);
-        $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 2])->json('quote_id'));
-        $this->checkoutQuote($user, $company, $branch, $cash, $quote, $product)->assertUnprocessable();
+        $this->stock($branch, $product, 2);
+        $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 10])->json('quote_id'));
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
+            'checkout_token' => (string) Str::uuid(), 'quote_id' => $quote->id, 'quote_mode' => 1,
+            'items' => [['product_id' => $product->id, 'quantity' => 10]],
+            'payments' => [['payment_method_id' => $cash->id, 'amount' => 11300, 'received_amount' => 11300]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items')->assertJsonPath('errors.items.0', "Stock insuficiente para {$product->name}. Disponible: 2.0000");
         $this->assertSame(Quote::STATUS_ACTIVE, $quote->fresh()->status);
         $this->assertDatabaseCount('sales', 0);
         $this->assertDatabaseCount('sale_payments', 0);
-        $this->assertEquals(1, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $this->assertEquals(2, DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
     }
 
     public function test_history_filters_saved_quotes_and_supports_registered_and_final_customers(): void
@@ -186,12 +195,132 @@ class QuoteTest extends TestCase
             ->assertOk()->assertSee('COT-00000001')->assertSee('COT-00000002');
     }
 
+    public function test_quote_mode_executes_frontend_transitions_stock_rules_and_save_contract(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index'))->assertOk()
+            ->assertSee('MODO COTIZACIÓN')->assertSee('Volver a venta')->assertSee('Guardar cotización');
+        $process = new Process(['node', base_path('tests/js/pos-quote-mode.cjs')]);
+        $process->setInput($response->getContent())->mustRun();
+        $this->assertStringContainsString('Quote mode UI OK', $process->getOutput());
+    }
+
+    public function test_quote_mode_actions_require_existing_permission(): void
+    {
+        [$company, $branch, $user] = $this->context('Sin permiso', ['pos.acceder', 'ventas.crear']);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index'))->assertOk()->assertDontSee('>Cotizar</button>', false)
+            ->assertSee('canCreateQuote: false', false)
+            ->assertDontSee('>Guardar cotización</button>', false)->assertDontSee('>Volver a venta</button>', false);
+        $this->postJson(route('cotizaciones.store'), ['items' => []])->assertForbidden();
+    }
+
+    public function test_empty_quote_is_rejected_without_creating_records(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->postJson(route('cotizaciones.store'), ['customer_id' => null, 'items' => []])
+            ->assertUnprocessable()->assertJsonValidationErrors('items');
+        $this->assertDatabaseCount('quotes', 0);
+        $this->assertDatabaseCount('quote_items', 0);
+    }
+
+    public function test_quote_search_finds_zero_stock_within_limit_and_preserves_normal_priority(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $zero = $this->product($company, ['name' => 'A Coincidente', 'barcode' => 'BUSCAR-CERO']);
+        $this->stock($branch, $zero, 0);
+        for ($i = 0; $i < 10; $i++) {
+            $stocked = $this->product($company, ['name' => 'Z Coincidente BUSCAR-CERO '.$i]);
+            $this->stock($branch, $stocked, 3);
+        }
+        $base = $this->actingAs($user)->withSession($this->activeSession($company, $branch));
+        foreach (['Coincidente', 'BUSCAR-CERO'] as $term) {
+            $normal = $base->getJson(route('pos.products.search', ['q' => $term]))->assertOk()->assertJsonCount(10);
+            $this->assertNotContains($zero->id, array_column($normal->json(), 'id'));
+            $base->getJson(route('pos.products.search', ['q' => $term, 'quote_mode' => 1]))->assertOk()
+                ->assertJsonCount(10)->assertJsonPath('0.id', $zero->id)
+                ->assertJsonPath('0.available_stock', 0)->assertJsonPath('0.can_add_to_cart', false);
+        }
+        $withoutPermission = $this->user($company, $branch, ['pos.acceder']);
+        $response = $this->actingAs($withoutPermission)->getJson(route('pos.products.search', ['q' => 'Coincidente', 'quote_mode' => 1]))->assertOk();
+        $this->assertNotContains($zero->id, array_column($response->json(), 'id'));
+    }
+
+    public function test_quote_search_and_store_preserve_company_and_branch_isolation(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        [$foreignCompany, $foreignBranch] = $this->context('Ajena');
+        $local = $this->product($company, ['name' => 'Buscar local']);
+        $inactive = $this->product($company, ['name' => 'Buscar inactivo', 'is_active' => false]);
+        $foreign = $this->product($foreignCompany, ['name' => 'Buscar ajeno']);
+        $otherBranch = $this->branch($company, 'Secundaria');
+        $this->stock($branch, $local, 0);
+        $this->stock($otherBranch, $local, 20);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('pos.products.search', ['q' => 'Buscar', 'quote_mode' => 1]))
+            ->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $local->id)->assertJsonPath('0.available_stock', 0);
+        foreach ([$foreign, $inactive] as $invalid) {
+            $this->createQuote($user, $company, $branch, $invalid)->assertUnprocessable()->assertJsonValidationErrors('items');
+        }
+        $foreignCustomer = Customer::create(['company_id' => $foreignCompany->id, 'name' => 'Ajeno', 'customer_type' => 'individual', 'is_active' => true]);
+        $this->createQuote($user, $company, $branch, $local, [], ['customer_id' => $foreignCustomer->id])
+            ->assertUnprocessable()->assertJsonValidationErrors('customer_id');
+        foreach ([$otherBranch, $foreignBranch] as $unauthorizedBranch) {
+            try {
+                app(QuoteService::class)->create(['items' => [['product_id' => $local->id, 'quantity' => 1]]], $user, $company->id, $unauthorizedBranch->id);
+                $this->fail('An unauthorized branch was accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('branch', $exception->errors());
+            }
+        }
+        $this->assertDatabaseCount('quotes', 0);
+    }
+
+    public function test_zero_stock_and_overstock_quotes_only_write_quote_records_and_sequence(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $zero = $this->product($company);
+        $limited = $this->product($company);
+        $this->stock($branch, $zero, 0);
+        $this->stock($branch, $limited, 2);
+        $customer = Customer::create(['company_id' => $company->id, 'name' => 'Cliente', 'customer_type' => 'individual', 'is_active' => true]);
+        $tables = ['sales', 'sale_items', 'sale_payments', 'branch_product', 'inventory_movements', 'cash_movements', 'cash_sessions', 'loyalty_movements', 'loyalty_accounts'];
+        $before = collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->get()->toJson()]);
+        // Prepare middleware context before measuring the actual save.
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.index'))->assertOk();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->postJson(route('cotizaciones.store'), [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $zero->id, 'quantity' => 10], ['product_id' => $limited->id, 'quantity' => 10]],
+        ])->assertCreated();
+        $writes = collect(DB::getQueryLog())->pluck('query')->filter(fn ($query) => preg_match('/^\s*(insert|update|delete|replace)\b/i', $query));
+        DB::disableQueryLog();
+        foreach ($writes as $query) {
+            $this->assertDoesNotMatchRegularExpression('/\b('.implode('|', $tables).')\b/i', $query);
+        }
+        foreach ($before as $table => $snapshot) {
+            $this->assertSame($snapshot, DB::table($table)->get()->toJson(), $table.' changed');
+        }
+        $this->assertDatabaseCount('quotes', 1);
+        $this->assertDatabaseCount('quote_items', 2);
+        $quote = Quote::with('items')->firstOrFail();
+        $this->assertSame($company->id, $quote->company_id);
+        $this->assertSame($branch->id, $quote->branch_id);
+        $this->assertSame($customer->id, $quote->customer_id);
+        $this->assertSame(['10.0000', '10.0000'], $quote->items->pluck('quantity')->all());
+    }
+
     private function context(string $name = 'Empresa', array $permissions = ['pos.acceder', 'ventas.crear', 'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'pos.cambiar_precio', 'pos.aplicar_descuento']): array
     {
         $company = Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
         $branch = $this->branch($company, 'Principal');
         $user = $this->user($company, $branch, $permissions);
         $cash = PaymentMethod::create(['company_id' => $company->id, 'code' => 'cash-'.uniqid(), 'name' => 'Efectivo', 'type' => 'cash', 'is_active' => true, 'allows_change' => true]);
+        $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'Q', 'name' => 'Caja', 'is_active' => true]);
+        CashSession::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'cash_register_id' => $register->id, 'session_number' => 'Q-1', 'opened_by' => $user->id, 'status' => CashSession::STATUS_OPEN, 'open_guard' => CashSession::OPEN_GUARD, 'currency_code' => 'CRC', 'opening_amount' => '0', 'opened_at' => now()]);
 
         return [$company, $branch, $user, $cash];
     }

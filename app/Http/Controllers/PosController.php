@@ -92,6 +92,10 @@ class PosController extends Controller
         $search = mb_substr($search, 0, 100);
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
+        $quoteMode = $request->boolean('quote_mode') && $request->user()->hasPermission(
+            'cotizaciones.crear',
+            Company::query()->findOrFail($companyId),
+        );
         $like = '%'.$search.'%';
         $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $canViewOtherBranches = $request->user()->hasPermission(
@@ -141,10 +145,10 @@ class PosController extends Controller
                     ->where('branch_product.branch_id', $branchId)
                     ->limit(1),
             ])
-            ->orderByRaw(
+            ->when(! $quoteMode, fn ($query) => $query->orderByRaw(
                 'CASE WHEN products.track_inventory = ? OR COALESCE((SELECT branch_product.stock FROM branch_product WHERE branch_product.product_id = products.id AND branch_product.branch_id = ? LIMIT 1), 0) > 0 THEN 0 ELSE 1 END',
                 [false, $branchId],
-            )
+            ))
             ->orderByRaw(
                 'CASE WHEN products.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes WHERE product_barcodes.product_id = products.id AND product_barcodes.is_active = ? AND product_barcodes.barcode = ?) THEN 0 ELSE 1 END',
                 [$search, true, $search],

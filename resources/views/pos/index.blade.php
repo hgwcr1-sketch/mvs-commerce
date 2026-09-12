@@ -24,6 +24,13 @@
         </div>
     </section>
 
+    @can('cotizaciones.crear')
+        <section x-show="quoteMode" role="status" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-2 text-sky-900">
+            <strong class="text-sm">MODO COTIZACIÓN</strong>
+            <button type="button" @click="leaveQuoteMode()" :disabled="creatingQuote" class="min-h-[44px] rounded-lg border border-sky-400 px-3 py-2 font-semibold disabled:opacity-40">Volver a venta</button>
+        </section>
+    @endcan
+
     @if($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)
         <section class="rounded-2xl border border-amber-300 bg-amber-50 p-4"><label for="cash-session" class="font-semibold text-amber-900">Caja / Sesión para cobrar</label><select id="cash-session" x-model="cashSessionId" class="mt-2 w-full rounded-xl border-amber-300"><option value="">Seleccione una sesión</option>@foreach($cashSessions as $session)<option value="{{ $session->id }}">{{ $session->session_number }} — {{ $session->cashRegister->name }}</option>@endforeach</select></section>
     @endif
@@ -69,7 +76,7 @@
                 <button type="button"
                         @click="addProduct(product)"
                         @mouseenter="selectedIndex = index"
-                        :disabled="!product.can_add_to_cart"
+                        :disabled="!quoteMode && !product.can_add_to_cart"
                         :class="selectedIndex === index ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : 'hover:bg-slate-50'"
                         class="grid w-full gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-0 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-75 md:grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] md:items-center">
                     <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
@@ -345,10 +352,13 @@
                 <div class="my-3 border-t border-slate-700"></div>
                 <div class="flex items-end justify-between"><span class="text-base">Total</span><strong class="text-2xl text-amber-400" x-text="money(grandTotal)"></strong></div>
                 @can('ventas.crear')
-                    <button type="button" @click="openCheckout" :disabled="!canCheckout"
+                    <button type="button" x-show="!quoteMode" @click="openCheckout" :disabled="!canCheckout"
                             class="mt-3 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-base font-normal text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
                         Cobrar
                     </button>
+                @endcan
+                @can('cotizaciones.crear')
+                    <button type="button" x-show="quoteMode" @click="createQuote()" :disabled="!canCreateQuote || cart.length === 0 || !!quoteId || creatingQuote" class="mt-3 min-h-[44px] w-full rounded-xl bg-sky-700 px-4 py-2.5 text-base font-bold text-white hover:bg-sky-800 disabled:opacity-40" x-text="creatingQuote ? 'Guardando…' : 'Guardar cotización'">Guardar cotización</button>
                 @endcan
             </section>
         </aside>
@@ -370,10 +380,13 @@
                 <p x-show="totalItems" class="text-xs text-slate-500" x-text="`Cantidad de artículos: ${totalItems}`"></p>
             </div>
             @can('ventas.crear')
-                <button type="button" @click="openCheckout" :disabled="!canCheckout"
+                <button type="button" x-show="!quoteMode" @click="openCheckout" :disabled="!canCheckout"
                         class="max-w-[16rem] min-h-[48px] flex-1 rounded-xl bg-amber-500 px-6 text-base font-bold text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
                     Cobrar
                 </button>
+            @endcan
+            @can('cotizaciones.crear')
+                <button type="button" x-show="quoteMode" @click="createQuote()" :disabled="!canCreateQuote || cart.length === 0 || !!quoteId || creatingQuote" class="min-h-[48px] min-w-0 max-w-[16rem] flex-1 rounded-xl bg-sky-700 px-3 py-2 text-base font-bold text-white hover:bg-sky-800 disabled:opacity-40" x-text="creatingQuote ? 'Guardando…' : 'Guardar cotización'">Guardar cotización</button>
             @endcan
         </div>
     </div>
@@ -412,7 +425,7 @@
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
-            @can('cotizaciones.crear')<button type="button" @click="createQuote()" :disabled="cart.length === 0 || quoteId || creatingQuote" class="whitespace-nowrap rounded-lg border border-sky-500 px-3 py-2 text-sm font-bold text-sky-700 disabled:opacity-40" x-text="creatingQuote ? 'Cotizando…' : 'Cotizar'">Cotizar</button>@endcan
+            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || !!quoteId || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
             @can('apartados.crear')<a href="{{ route('apartados.create') }}" class="whitespace-nowrap rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">Nuevo apartado</a>@endcan
             @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
             @foreach(['Nota de crédito', 'Nota de débito'] as $option)
@@ -792,6 +805,8 @@ document.addEventListener('alpine:init', () => {
         canOverridePrice: @json($canOverridePrice),
         checkoutToken: generateUUID(),
         quoteId: null,
+        quoteMode: false,
+        canCreateQuote: @json(auth()->user()->hasPermission('cotizaciones.crear', $company)),
         creatingQuote: false,
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
         cashSessionId: @json($cashSession?->id),
@@ -927,7 +942,7 @@ document.addEventListener('alpine:init', () => {
             if (this.creditAvailable < this.grandTotal) return 'El cliente no tiene crédito disponible suficiente.';
             return 'Crédito disponible suficiente para esta venta.';
         },
-        get canCheckout() { return this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get canCheckout() { return !this.quoteMode && this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get usdSession() { return this.usdSessions.find(session => String(session.id) === String(this.cashSessionId)); },
         get usdCashEnabled() { return this.selectedPaymentMethod?.type === 'cash' && this.usdSession?.enabled === true; },
@@ -995,7 +1010,7 @@ document.addEventListener('alpine:init', () => {
             return Math.abs(pending - Math.round(pending)) > 0.000001;
         },
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
-        get checkoutCanConfirm() { return !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
+        get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
@@ -1033,7 +1048,7 @@ document.addEventListener('alpine:init', () => {
             }
             return payload;
         },
-        async searchProducts() {
+        async searchProducts(autoAdd = true) {
             const term = this.query.trim();
             const currentRequest = ++this.requestNumber;
             if (!term) {
@@ -1045,6 +1060,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
+                if (this.quoteMode) url.searchParams.set('quote_mode', '1');
                 const response = await fetch(url, { headers: { Accept: 'application/json' } });
                 if (!response.ok) throw new Error('No fue posible buscar productos.');
                 const products = await response.json();
@@ -1052,7 +1068,7 @@ document.addEventListener('alpine:init', () => {
                 this.results = products;
                 this.selectedIndex = 0;
                 const exactBarcode = products.find(product => product.matched_barcode === term);
-                if (exactBarcode) this.addProduct(exactBarcode);
+                if (autoAdd && exactBarcode) this.addProduct(exactBarcode);
             } catch (error) {
                 if (currentRequest === this.requestNumber) this.results = [];
             } finally {
@@ -1153,13 +1169,13 @@ document.addEventListener('alpine:init', () => {
             if (this.results[this.selectedIndex]) this.addProduct(this.results[this.selectedIndex]);
         },
         addProduct(product) {
-            if (!product.can_add_to_cart) {
+            if (!this.quoteMode && !product.can_add_to_cart) {
                 this.notice = 'Sin existencia en esta sucursal.';
                 return;
             }
             const existing = this.cart.find(item => item.id === product.id);
             if (existing) {
-                if (existing.controls_inventory && existing.quantity >= existing.available_stock) {
+                if (!this.quoteMode && existing.controls_inventory && existing.quantity >= existing.available_stock) {
                     this.showStockLimit(existing);
                     return;
                 }
@@ -1177,7 +1193,7 @@ document.addEventListener('alpine:init', () => {
             this.requestNumber += 1;
         },
         increase(item) {
-            if (item.controls_inventory && item.quantity >= item.available_stock) {
+            if (!this.quoteMode && item.controls_inventory && item.quantity >= item.available_stock) {
                 this.showStockLimit(item);
                 return;
             }
@@ -1186,7 +1202,7 @@ document.addEventListener('alpine:init', () => {
         },
         decrease(item) { if (item.quantity > 1) item.quantity -= 1; },
         remove(item) { this.cart = this.cart.filter(current => current.id !== item.id); },
-        exceedsStock(item) { return item.controls_inventory && item.quantity > item.available_stock; },
+        exceedsStock(item) { return !this.quoteMode && item.controls_inventory && item.quantity > item.available_stock; },
         numberValue(value) {
             const number = Number(value);
             return Number.isFinite(number) ? number : 0;
@@ -1423,7 +1439,23 @@ document.addEventListener('alpine:init', () => {
                 }
             }
         },
+        async enterQuoteMode() {
+            if (!this.canCreateQuote || this.quoteId || this.creatingQuote || this.checkout.open) return;
+            this.quoteMode = true;
+            this.notice = '';
+            this.results = [];
+            await this.searchProducts(false);
+            this.$nextTick(() => this.focusSearch());
+        },
+        async leaveQuoteMode() {
+            if (this.creatingQuote) return;
+            this.quoteMode = false;
+            this.results = [];
+            this.notice = this.cart.some(item => this.exceedsStock(item)) ? 'Revise las cantidades: superan el stock disponible para vender.' : '';
+            await this.searchProducts(false);
+        },
         async createQuote() {
+            if (!this.canCreateQuote || !this.quoteMode) return;
             if (!this.cart.length) { this.notice = 'Agregue al menos un producto antes de crear la cotización.'; return; }
             if (this.quoteId) { this.notice = 'Esta cotización ya está cargada como base editable.'; return; }
             if (this.creatingQuote) return;
@@ -1435,14 +1467,30 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({ customer_id: this.customerId, ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? { discount_total: this.numberValue(this._generalDiscountInput), discount_total_type: this._generalDiscountType } : {}), items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}), ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}) })) }),
                 });
                 const payload = await this.readFetchResponse(response);
-                window.location.assign(payload.show_url);
-            } catch (error) { this.notice = error.message; this.creatingQuote = false; }
+                this.cart = [];
+                this.customerId = null;
+                this.selectedCustomer = null;
+                this.checkout.payments = [];
+                this.documentType = 'electronic_ticket';
+                this.clearSuspendedRecovery();
+                this.checkoutToken = generateUUID();
+                this._generalDiscountInput = '';
+                this._generalDiscountType = 'fixed';
+                this.quoteMode = false;
+                this.results = [];
+                this.notice = payload.message;
+                await this.searchProducts(false);
+                this.$nextTick(() => this.focusSearch());
+            } catch (error) { this.notice = error.message; }
+            finally { this.creatingQuote = false; }
         },
         async loadQuote(id) {
             try {
                 const response = await fetch(`/cotizaciones/${id}/cargar`, { headers: { Accept: 'application/json' } });
                 const payload = await this.readFetchResponse(response);
                 this.quoteId = payload.quote_id;
+                this.quoteMode = false;
+                this.closeResults();
                 this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
                 this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada como base editable. La cotización original no se modificará.`;
             } catch (error) { this.notice = error.message; }

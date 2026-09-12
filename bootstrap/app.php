@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*')
+                || ($request->is('cotizaciones') && $request->isMethod('post') && $request->expectsJson())
                 || ($request->is('tomas-inventario/*') && ($request->expectsJson() || $request->ajax()))
                 || (($request->is('pos') || $request->is('pos/*'))
                     && ($request->expectsJson() || $request->ajax())),
