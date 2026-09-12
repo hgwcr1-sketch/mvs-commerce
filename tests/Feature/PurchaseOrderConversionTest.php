@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductSupplier;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\PurchaseOrder;
 use App\Models\Role;
 use App\Models\Supplier;
@@ -49,9 +50,9 @@ class PurchaseOrderConversionTest extends TestCase
         $this->assertSame('cash', $purchase->payment_type);
         $this->assertSame('6.0000', $purchase->items->sole()->quantity);
         $this->assertSame('275.4321', $purchase->items->sole()->unit_cost);
-        $this->assertSame('275.43', $product->fresh()->cost);
+        $this->assertSame('275.4321', $product->fresh()->cost);
         $this->assertSame(8.0, (float) DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
-        $this->assertDatabaseHas('inventory_movements', ['reference_type' => Purchase::class, 'reference_id' => $purchase->id, 'type' => 'purchase', 'quantity' => 6]);
+        $this->assertDatabaseHas('inventory_movements', ['reference_type' => PurchaseItem::class, 'reference_id' => $purchase->items->sole()->id, 'type' => 'purchase', 'quantity' => 6]);
         $this->assertNull($purchase->accountPayable);
         $this->assertSame(PurchaseOrder::STATUS_RECEIVED, $purchaseOrder->fresh()->status);
         $this->assertSame('275.4321', $relation->fresh()->current_cost);
@@ -232,7 +233,7 @@ class PurchaseOrderConversionTest extends TestCase
         $this->assertSame('posted', $purchase->status);
         $this->assertSame('3.0000', $purchase->items->sole()->quantity);
         $this->assertSame('225.0000', $purchase->items->sole()->unit_cost);
-        $this->assertDatabaseHas('inventory_movements', ['reference_id' => $purchase->id, 'reference_type' => Purchase::class]);
+        $this->assertDatabaseHas('inventory_movements', ['reference_id' => $purchase->items->sole()->id, 'reference_type' => PurchaseItem::class]);
     }
 
     private function context(): array { [$company, $branch] = $this->companyBranch(); return [$company, $branch, $this->user($company, $branch, ['pedidos.preparar_compra', 'compras.ordenes', 'compras.crear'])]; }

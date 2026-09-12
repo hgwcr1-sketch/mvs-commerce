@@ -21,6 +21,106 @@ class InventoryPostingService
 {
     private const QUANTITY_SCALE = 4;
 
+    public function postPurchase(
+        Purchase $purchase,
+        PurchaseItem $purchaseItem,
+        Product $product,
+        PurchaseLineData $line,
+    ): InventoryMovement {
+        $quantity = $this->transferQuantity((string) $line->quantity);
+
+        if ((int) $purchase->company_id !== (int) $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La compra y el producto pertenecen a empresas distintas.',
+            ]);
+        }
+
+        if ((int) $purchaseItem->purchase_id !== (int) $purchase->id) {
+            throw ValidationException::withMessages([
+                'items' => 'El item no pertenece a la compra indicada.',
+            ]);
+        }
+
+        if ((int) $purchaseItem->product_id !== (int) $product->id) {
+            throw ValidationException::withMessages([
+                'items' => 'El item no corresponde al producto indicado.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $purchase->branch_id,
+            'product_id' => $product->id,
+            'stock' => '0.0000',
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $purchase->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        $existingMovement = InventoryMovement::query()
+            ->where('company_id', $purchase->company_id)
+            ->where('branch_id', $purchase->branch_id)
+            ->where('product_id', $product->id)
+            ->where('type', 'purchase')
+            ->where('reference_type', PurchaseItem::class)
+            ->where('reference_id', $purchaseItem->id)
+            ->first();
+
+        if ($existingMovement !== null) {
+            return $existingMovement;
+        }
+
+        $previousStock = $this->inventoryDecimal($branchProduct->stock ?? '0');
+        $newStock = bcadd($previousStock, $quantity, self::QUANTITY_SCALE);
+
+        DB::table('branch_product')
+            ->where('id', $branchProduct->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        $inventoryLotId = null;
+
+        if ($line->lot_number !== null && trim($line->lot_number) !== '') {
+            $lot = InventoryLot::firstOrCreate(
+                ['purchase_item_id' => $purchaseItem->id],
+                [
+                    'company_id' => $purchase->company_id,
+                    'branch_id' => $purchase->branch_id,
+                    'product_id' => $product->id,
+                    'lot_number' => $line->lot_number,
+                    'expires_at' => $line->expires_at,
+                    'initial_quantity' => $quantity,
+                    'current_quantity' => $quantity,
+                ],
+            );
+            $inventoryLotId = $lot->id;
+        }
+
+        return InventoryMovement::create([
+            'company_id' => $purchase->company_id,
+            'branch_id' => $purchase->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => $inventoryLotId,
+            'user_id' => $purchase->user_id,
+            'type' => 'purchase',
+            'quantity' => $quantity,
+            'previous_stock' => $previousStock,
+            'new_stock' => $newStock,
+            'reason' => 'Entrada por compra',
+            'reference_type' => PurchaseItem::class,
+            'reference_id' => $purchaseItem->id,
+            'notes' => 'Compra '.$purchase->number,
+        ]);
+    }
+
     public function postSale(Sale $sale, Product $product, float $quantity): InventoryMovement
     {
         if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
