@@ -205,11 +205,8 @@ class LabelCenterTest extends TestCase
         $this->assertStringContainsString('value="42"', $html, 'Settings form: custom_width not 42');
         $this->assertStringContainsString('value="30"', $html, 'Settings form: custom_height not 30');
 
-        $batchSelected = str_contains($html, 'name="print_mode"') && str_contains($html, 'value="thermal" selected');
-        $this->assertTrue($batchSelected, 'Batch form: thermal option not selected');
-
-        $this->assertStringContainsString('name="use_custom_size" id="useCustomSize" value="1"', $html, 'Batch form: custom size checkbox missing');
-        $this->assertStringContainsString('id="useCustomSize"', $html);
+        $this->assertStringContainsString('value="thermal" selected', $html, 'Batch form: thermal option not selected');
+        $this->assertStringContainsString('id="useCustomSize" value="1" checked', $html, 'Batch form: custom size checkbox not checked');
         $this->assertStringContainsString('value="42"', $html, 'Batch form: custom_width not 42');
         $this->assertStringContainsString('value="30"', $html, 'Batch form: custom_height not 30');
     }
@@ -233,6 +230,9 @@ class LabelCenterTest extends TestCase
         $html = $this->asContext($admin, $company, $branch)->get(route('labels.index'))->assertOk()->getContent();
         $this->assertStringContainsString('<details', $html);
         $this->assertMatchesRegularExpression('/<details[^>]*\bopen\b/', $html, 'Details element should be open after save');
+
+        $this->assertStringContainsString('value="thermal" selected', $html, 'Settings form: thermal not selected after save');
+        $this->assertStringContainsString('value="thermal" selected', $html, 'Batch form: thermal not selected after save');
     }
 
     public function test_thermal_config_is_isolated_per_branch(): void
@@ -300,6 +300,45 @@ class LabelCenterTest extends TestCase
         $response->assertOk()->assertSee('1 etiquetas')->assertDontSee('Térmica');
     }
 
+    public function test_both_forms_render_thermal_custom_42x30(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->asContext($admin, $company, $branch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'thermal',
+            'use_custom_size' => '1',
+            'custom_width' => 42,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $html = $this->asContext($admin, $company, $branch)->get(route('labels.index'))->assertOk()->getContent();
+
+        preg_match_all('/<select[^>]*name="default_print_mode"[^>]*>(.*?)<\/select>/s', $html, $settingsMatches);
+        $this->assertNotEmpty($settingsMatches[1], 'Settings print_mode select not found');
+        $this->assertStringContainsString('value="thermal" selected', $settingsMatches[1][0], 'Settings: thermal not selected');
+
+        preg_match_all('/<select[^>]*name="print_mode"[^>]*>(.*?)<\/select>/s', $html, $batchMatches);
+        $this->assertNotEmpty($batchMatches[1], 'Batch print_mode select not found');
+        $this->assertStringContainsString('value="thermal" selected', $batchMatches[1][0], 'Batch: thermal not selected');
+
+        preg_match_all('/<input[^>]*name="use_custom_size"[^>]*id="useCustomSize"[^>]*/', $html, $checkboxMatches);
+        $this->assertNotEmpty($checkboxMatches[0], 'Batch useCustomSize checkbox not found');
+        $this->assertStringContainsString('checked', $checkboxMatches[0][0], 'Batch: useCustomSize not checked');
+
+        preg_match_all('/<input[^>]*id="customWidth"[^>]*/', $html, $widthMatches);
+        $this->assertNotEmpty($widthMatches[0], 'Batch customWidth not found');
+        $this->assertStringContainsString('value="42"', $widthMatches[0][0], 'Batch: customWidth not 42');
+
+        preg_match_all('/<input[^>]*id="customHeight"[^>]*/', $html, $heightMatches);
+        $this->assertNotEmpty($heightMatches[0], 'Batch customHeight not found');
+        $this->assertStringContainsString('value="30"', $heightMatches[0][0], 'Batch: customHeight not 30');
+    }
+
     public function test_thermal_preview_header_shows_correct_format(): void
     {
         [$company, $branch] = $this->context();
@@ -335,12 +374,130 @@ class LabelCenterTest extends TestCase
         return $user;
     }
 
+    private function platformAdmin(Company $company, Branch $branch, array $permissions): User
+    {
+        $user = User::factory()->create(['is_active' => true, 'is_platform_admin' => true]);
+        $role = Role::create(['company_id' => $company->id, 'name' => 'Rol '.uniqid(), 'is_active' => true]);
+        foreach ($permissions as $name) {
+            $role->permissions()->attach(Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'Productos', 'is_active' => true]));
+        }
+        $user->companies()->attach($company, ['role_id' => $role->id]);
+        $user->branches()->attach($branch);
+        return $user;
+    }
+
+    private function dashboardAdmin(Company $company, Branch $branch, array $permissions): User
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $role = Role::create(['company_id' => $company->id, 'name' => 'Rol '.uniqid(), 'is_active' => true]);
+        $allPermissions = array_unique(array_merge($permissions, ['dashboard.admin']));
+        foreach ($allPermissions as $name) {
+            $role->permissions()->attach(Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'General', 'is_active' => true]));
+        }
+        $user->companies()->attach($company, ['role_id' => $role->id]);
+        $user->branches()->attach($branch);
+        return $user;
+    }
+
     private function product(Company $company, array $attributes = []): Product
     {
         $id = uniqid();
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Categoría '.$id, 'slug' => 'cat-'.$id, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad '.$id, 'abbreviation' => 'U', 'slug' => 'u-'.$id, 'is_active' => true]);
         return Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$id, 'internal_code' => 'P-'.$id, 'cost' => 100, 'sale_price' => 200, 'tax_rate' => 13, 'is_active' => true], $attributes));
+    }
+
+    public function test_global_admin_without_branch_gets_redirect_message(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->dashboardAdmin($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $response = $this->actingAs($admin)->withSession(['active_company_id' => $company->id, 'active_branch_id' => null])
+            ->get(route('labels.index'));
+
+        $response->assertStatus(302)->assertRedirect(route('labels.index'));
+        $this->assertDatabaseCount('branch_label_settings', 0);
+    }
+
+    public function test_global_admin_without_branch_does_not_create_branch_id_zero(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->dashboardAdmin($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->actingAs($admin)->withSession(['active_company_id' => $company->id, 'active_branch_id' => null])
+            ->get(route('labels.index'));
+
+        $this->assertFalse(BranchLabelSetting::where('branch_id', 0)->exists(), 'Should not create setting for branch_id=0');
+    }
+
+    public function test_global_admin_update_settings_without_branch_redirects(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->dashboardAdmin($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->actingAs($admin)->withSession(['active_company_id' => $company->id, 'active_branch_id' => null])
+            ->put(route('labels.settings.update'), $this->settings(['administrator']))
+            ->assertRedirect()->assertSessionHas('warning');
+    }
+
+    public function test_global_admin_preview_without_branch_redirects(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->dashboardAdmin($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+        $product = $this->product($company);
+
+        $this->actingAs($admin)->withSession(['active_company_id' => $company->id, 'active_branch_id' => null])
+            ->post(route('labels.preview'), [
+                'products' => [$product->id], 'quantities' => [$product->id => 1],
+                'template' => 'name_price', 'size' => '50x30',
+            ])
+            ->assertRedirect()->assertSessionHas('warning');
+    }
+
+    public function test_liberia_loads_thermal_42x30_when_branch_selected(): void
+    {
+        [$company, $branch] = $this->context();
+        $otherBranch = Branch::create(['company_id' => $company->id, 'name' => 'Liberia', 'code' => 'LIB'.uniqid(), 'is_active' => true]);
+        $admin = $this->user($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+        $admin->branches()->attach($otherBranch);
+
+        $this->asContext($admin, $company, $otherBranch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'thermal',
+            'use_custom_size' => '1',
+            'custom_width' => 42,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $this->asContext($admin, $company, $otherBranch)->put(route('labels.settings.update'), [
+            'print_destinations' => ['administrator'],
+            'default_template' => 'name_price_barcode',
+            'default_size' => '50x30',
+            'custom_heading' => null,
+            'default_print_mode' => 'a4',
+            'use_custom_size' => '0',
+            'custom_width' => 50,
+            'custom_height' => 30,
+        ])->assertRedirect();
+
+        $this->assertSame('thermal', BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->default_print_mode);
+        $this->assertSame(42, BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->custom_width);
+        $this->assertSame(30, BranchLabelSetting::where('branch_id', $otherBranch->id)->sole()->custom_height);
+    }
+
+    public function test_global_admin_update_settings_without_branch_does_not_create_ghost_setting(): void
+    {
+        [$company, $branch] = $this->context();
+        $admin = $this->dashboardAdmin($company, $branch, ['productos.etiquetas.imprimir', 'productos.etiquetas.configurar']);
+
+        $this->actingAs($admin)->withSession(['active_company_id' => $company->id, 'active_branch_id' => null])
+            ->put(route('labels.settings.update'), $this->settings(['administrator']))
+            ->assertRedirect();
+
+        $this->assertFalse(BranchLabelSetting::where('branch_id', 0)->exists(), 'Should not create ghost setting for branch_id=0');
     }
 
     private function asContext(User $user, Company $company, Branch $branch)

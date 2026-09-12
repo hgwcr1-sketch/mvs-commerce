@@ -1,5 +1,12 @@
 @extends('layouts.app')
 
+@php
+$defaultPrintMode = $setting->default_print_mode ?? 'a4';
+$useCustom = $setting->use_custom_size ?? false;
+$customWidth = $setting->custom_width ?? 50;
+$customHeight = $setting->custom_height ?? 30;
+@endphp
+
 @section('content')
 <div class="mx-auto max-w-7xl space-y-5" data-responsive="360 768 1280">
     <header>
@@ -24,19 +31,19 @@
             <label><span class="form-label">Encabezado de plantilla simple</span><input class="form-input w-full" name="custom_heading" maxlength="80" value="{{ $setting->custom_heading }}"></label>
             <label><span class="form-label">Formato de impresión predeterminado</span>
                 <select name="default_print_mode" class="form-input w-full">
-                    <option value="a4" @selected(($setting->default_print_mode ?? 'a4')==='a4')">Hoja A4</option>
-                    <option value="thermal" @selected(($setting->default_print_mode ?? 'a4')==='thermal')">Impresora térmica</option>
+                    <option value="a4" @selected($defaultPrintMode === 'a4')>Hoja A4</option>
+                    <option value="thermal" @selected($defaultPrintMode === 'thermal')>Impresora térmica</option>
                 </select>
             </label>
             <div class="md:col-span-2 lg:col-span-4" id="settingsThermalSection">
                 <label class="flex items-center gap-2 text-sm font-medium">
-                    <input type="checkbox" name="use_custom_size" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($setting->use_custom_size ?? false)>
+                    <input type="checkbox" name="use_custom_size" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($useCustom)>
                     Tamaño personalizado de etiqueta térmica
                 </label>
-                <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3" id="settingsCustomInputs" style="{{ ($setting->use_custom_size ?? false) ? '' : 'display:none' }}">
-                    <label><span class="form-label">Ancho / Horizontal (mm)</span><input type="number" name="custom_width" min="10" max="200" value="{{ $setting->custom_width ?? 50 }}" class="form-input w-full text-right" inputmode="numeric"></label>
-                    <label><span class="form-label">Alto / Vertical (mm)</span><input type="number" name="custom_height" min="10" max="200" value="{{ $setting->custom_height ?? 30 }}" class="form-input w-full text-right" inputmode="numeric"></label>
-                    <div class="flex items-end text-sm text-slate-500">Ej: {{ $setting->custom_width ?? 50 }} × {{ $setting->custom_height ?? 30 }} mm</div>
+                <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3" id="settingsCustomInputs" style="{{ $useCustom ? '' : 'display:none' }}">
+                    <label><span class="form-label">Ancho / Horizontal (mm)</span><input type="number" name="custom_width" min="10" max="200" value="{{ $customWidth }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <label><span class="form-label">Alto / Vertical (mm)</span><input type="number" name="custom_height" min="10" max="200" value="{{ $customHeight }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <div class="flex items-end text-sm text-slate-500">Ej: {{ $customWidth }} × {{ $customHeight }} mm</div>
                 </div>
             </div>
             <button class="min-h-11 rounded-xl bg-slate-800 px-4 font-semibold text-white md:col-span-2 lg:col-span-5">Guardar configuración</button>
@@ -69,19 +76,19 @@
             <select name="template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select>
             <select name="size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select>
             <select name="print_mode" id="printMode" class="form-input w-full">
-                <option value="a4" @selected(($setting->default_print_mode ?? 'a4')==='a4')">Hoja A4</option>
-                <option value="thermal" @selected(($setting->default_print_mode ?? 'a4')==='thermal')">Impresora térmica</option>
+                <option value="a4" @selected($defaultPrintMode === 'a4')>Hoja A4</option>
+                <option value="thermal" @selected($defaultPrintMode === 'thermal')>Impresora térmica</option>
             </select>
-            <div id="thermalCustom" class="hidden md:col-span-3">
+            <div id="thermalCustom" class="{{ $defaultPrintMode === 'thermal' ? '' : 'hidden' }} md:col-span-3">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <label class="flex items-center gap-2 text-sm font-medium">
-                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($setting->use_custom_size ?? false)>
+                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($useCustom)>
                         Tamaño personalizado
                     </label>
-                    <div id="customSizeInputs" class="flex items-center gap-2" style="{{ ($setting->use_custom_size ?? false) ? '' : 'display:none' }}">
-                        <div><label class="text-xs text-slate-500">Ancho / Horizontal (mm)</label><input type="number" name="custom_width" id="customWidth" min="10" max="200" value="{{ $setting->custom_width ?? 50 }}" class="form-input w-20 text-right" inputmode="numeric"></div>
+                    <div id="customSizeInputs" class="flex items-center gap-2" style="{{ $useCustom ? '' : 'display:none' }}">
+                        <div><label class="text-xs text-slate-500">Ancho / Horizontal (mm)</label><input type="number" name="custom_width" id="customWidth" min="10" max="200" value="{{ $customWidth }}" class="form-input w-20 text-right" inputmode="numeric"></div>
                         <span class="text-sm text-slate-500">×</span>
-                        <div><label class="text-xs text-slate-500">Alto / Vertical (mm)</label><input type="number" name="custom_height" id="customHeight" min="10" max="200" value="{{ $setting->custom_height ?? 30 }}" class="form-input w-20 text-right" inputmode="numeric"></div>
+                        <div><label class="text-xs text-slate-500">Alto / Vertical (mm)</label><input type="number" name="custom_height" id="customHeight" min="10" max="200" value="{{ $customHeight }}" class="form-input w-20 text-right" inputmode="numeric"></div>
                         <span class="text-sm text-slate-500">mm</span>
                     </div>
                 </div>

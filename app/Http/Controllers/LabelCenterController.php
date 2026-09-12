@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\PurchaseVerification;
 use App\Services\Labels\Code128Barcode;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -27,10 +28,22 @@ class LabelCenterController extends Controller
 
     public const PRINT_MODES = ['a4', 'thermal'];
 
+    private function requireBranch(): RedirectResponse|int
+    {
+        $branchId = session('active_branch_id');
+        if (! $branchId) {
+            return redirect()->route('labels.index')->with('warning', 'Seleccione una sucursal para configurar e imprimir etiquetas.');
+        }
+        return (int) $branchId;
+    }
+
     public function index(Request $request)
     {
         $companyId = (int) session('active_company_id');
-        $branchId = (int) session('active_branch_id');
+        $branchId = $this->requireBranch();
+        if ($branchId instanceof RedirectResponse) {
+            return $branchId;
+        }
         $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $query = Product::query()->where('company_id', $companyId)->with(['category:id,name', 'brand:id,name', 'barcodes' => fn ($query) => $query->where('is_active', true)]);
 
@@ -66,6 +79,10 @@ class LabelCenterController extends Controller
 
     public function updateSettings(Request $request)
     {
+        $branchId = $this->requireBranch();
+        if ($branchId instanceof RedirectResponse) {
+            return $branchId;
+        }
         $data = $request->validate([
             'print_destinations' => ['required', 'array', 'min:1'],
             'print_destinations.*' => ['required', Rule::in(['cashier', 'administrator'])],
@@ -82,14 +99,17 @@ class LabelCenterController extends Controller
             $data['custom_width'] = 50;
             $data['custom_height'] = 30;
         }
-        BranchLabelSetting::updateOrCreate(['company_id' => session('active_company_id'), 'branch_id' => session('active_branch_id')], $data);
+        BranchLabelSetting::updateOrCreate(['company_id' => session('active_company_id'), 'branch_id' => $branchId], $data);
         return back()->with('success', 'Configuración de la sucursal actualizada.');
     }
 
     public function preview(Request $request, Code128Barcode $barcode)
     {
         $companyId = (int) session('active_company_id');
-        $branchId = (int) session('active_branch_id');
+        $branchId = $this->requireBranch();
+        if ($branchId instanceof RedirectResponse) {
+            return $branchId;
+        }
         $setting = BranchLabelSetting::where('company_id', $companyId)->where('branch_id', $branchId)->first();
 
         $data = $request->validate([
@@ -130,13 +150,17 @@ class LabelCenterController extends Controller
 
     public function fromVerification(Request $request, PurchaseVerification $purchaseVerification, Code128Barcode $barcode)
     {
-        abort_unless((int) $purchaseVerification->company_id === (int) session('active_company_id') && (int) $purchaseVerification->branch_id === (int) session('active_branch_id'), 404);
+        $branchId = $this->requireBranch();
+        if ($branchId instanceof RedirectResponse) {
+            return $branchId;
+        }
+        abort_unless((int) $purchaseVerification->company_id === (int) session('active_company_id') && (int) $purchaseVerification->branch_id === $branchId, 404);
         abort_unless(in_array($purchaseVerification->status, ['conform', 'closed'], true), 422);
         $items = $purchaseVerification->items()->where('received_quantity', '>', 0)->whereHas('product', fn ($query) => $query->where('company_id', session('active_company_id'))->where('prints_label', true))->with(['product.barcodes' => fn ($query) => $query->where('is_active', true)->orderByDesc('is_primary')])->get();
         if ($items->isEmpty()) {
             throw \Illuminate\Validation\ValidationException::withMessages(['labels' => 'La recepción no contiene productos marcados para imprimir etiqueta.']);
         }
-        $setting = BranchLabelSetting::firstOrCreate(['company_id' => session('active_company_id'), 'branch_id' => session('active_branch_id')], ['print_destinations' => ['administrator']]);
+        $setting = BranchLabelSetting::firstOrCreate(['company_id' => session('active_company_id'), 'branch_id' => $branchId], ['print_destinations' => ['administrator']]);
         $labels = $items->flatMap(function ($item) use ($barcode) {
             $code = $item->product->barcode ?: $item->product->barcodes->first()?->barcode;
             return collect(range(1, max(1, (int) floor((float) $item->received_quantity))))->map(fn () => ['product' => $item->product, 'barcode' => $code, 'barcode_svg' => $barcode->svg($code)]);
