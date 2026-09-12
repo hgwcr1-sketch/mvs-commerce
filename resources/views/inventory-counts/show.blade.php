@@ -67,8 +67,8 @@
                 Productos ({{ $items->count() }})
             </h2>
             <div class="flex gap-2 text-xs">
-                <span class="text-slate-500">Teórica: <strong>{{ number_format($items->sum(fn($i) => $i->theoretical_quantity), 4) }}</strong></span>
-                <span class="text-amber-600">Contada: <strong>{{ $items->whereNotNull('counted_quantity')->sum(fn($i) => $i->counted_quantity) ?? '0.0000' }}</strong></span>
+                <span class="text-slate-500">Teórica: <strong>{{ number_format((float) $items->sum(fn($i) => $i->theoretical_quantity), 2) }}</strong></span>
+                <span class="text-amber-600">Contada: <strong>{{ number_format((float) ($items->whereNotNull('counted_quantity')->sum(fn($i) => $i->counted_quantity)), 2) }}</strong></span>
                 <span class="{{ $items->where('difference', '!=', 0)->count() > 0 ? 'text-red-600' : 'text-slate-500' }}">
                     Diferencia: <strong>{{ $items->where('difference', '!=', 0)->count() }}</strong>
                 </span>
@@ -107,18 +107,18 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-center text-sm text-slate-700">
-                            {{ number_format((float) $item->theoretical_quantity, 4) }}
+                            {{ number_format((float) $item->theoretical_quantity, 2) }}
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($item->counted_quantity !== null)
-                                <span class="font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 4) }}</span>
+                                <span class="font-semibold text-slate-800">{{ number_format((float) $item->counted_quantity, 2) }}</span>
                             @else
                                 <span class="text-slate-400">—</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($item->recount_quantity !== null)
-                                <span class="font-semibold text-[#B1922D]">{{ number_format((float) $item->recount_quantity, 4) }}</span>
+                                <span class="font-semibold text-[#B1922D]">{{ number_format((float) $item->recount_quantity, 2) }}</span>
                             @else
                                 <span class="text-slate-400">—</span>
                             @endif
@@ -127,10 +127,10 @@
                             @if($item->difference != 0)
                                 <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {{ $item->isShortage() ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700' }}">
                                     {{ $item->isShortage() ? 'Faltante' : 'Sobrante' }}
-                                    {{ number_format(abs((float) $item->difference), 4) }}
+                                    {{ number_format(abs((float) $item->difference), 2) }}
                                 </span>
                             @else
-                                <span class="text-slate-400">0</span>
+                                <span class="text-slate-400">0.00</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 max-w-24 truncate">
