@@ -25,7 +25,7 @@ const fresh = () => {
 };
 const product = { id: 1, name: 'Sin stock', sale_price: 1000, tax_rate: 13, controls_inventory: true, available_stock: 0, can_add_to_cart: false };
 const enterButton = html.match(/<button[^>]*@click="enterQuoteMode\(\)"[^>]*>/)[0];
-const saveButtons = [...html.matchAll(/<button[^>]*@click="createQuote\(\)"[^>]*>/g)].map(match => match[0]);
+const saveButtons = [...html.matchAll(/<button[^>]*@click="quoteId \? updateQuote\(\) : createQuote\(\)"[^>]*>/g)].map(match => match[0]);
 const attribute = (button, name) => button.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`))?.[1];
 const evaluate = (button, name, pos) => new Function('scope', `with (scope) { return (${attribute(button, name)}); }`)(pos);
 
@@ -55,7 +55,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     // The rendered action supports empty-cart entry; product button follows the same stock contract.
     assert.ok(!enterButton.includes('cart.length'));
     assert.ok(html.includes(':disabled="!quoteMode && !product.can_add_to_cart"'));
-    assert.equal((html.match(/@click="createQuote\(\)"/g) || []).length, 2);
+    assert.equal((html.match(/@click="quoteId \? updateQuote\(\) : createQuote\(\)"/g) || []).length, 2);
 
     pos.addProduct(product);
     for (const button of saveButtons) assert.equal(evaluate(button, ':disabled', pos), false);
@@ -138,7 +138,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     pos.cart[0]._discountType = 'percentage';
     pos._generalDiscountInput = '50';
     handler = async (_, options) => options.method === 'POST'
-        ? reply({ message: 'Cotización COT-1 creada correctamente.', show_url: '/cotizaciones/1' }, 201)
+        ? reply({ message: 'Cotización COT-1 creada correctamente.', quote_id: 99, show_url: '/cotizaciones/99' }, 201)
         : reply([stocked]);
     const oldToken = pos.checkoutToken;
     await pos.createQuote();
@@ -148,20 +148,32 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
         customer_id: 17, discount_total: 50, discount_total_type: 'fixed',
         items: [{ product_id: 1, quantity: 10, discount: 10, discount_type: 'percentage', unit_price: 900 }],
     });
-    assert.equal(pos.quoteMode, false);
+    assert.equal(pos.quoteMode, true);
     assert.equal(pos.creatingQuote, false);
-    assert.equal(pos.cart.length, 0);
-    assert.equal(pos.customerId, null);
-    assert.equal(pos.selectedCustomer, null);
-    assert.equal(pos.documentType, 'electronic_ticket');
-    assert.equal(pos.suspended.activeId, null);
-    assert.equal(pos.suspended.recoveryToken, null);
-    assert.equal(pos._generalDiscountInput, '');
-    assert.notEqual(pos.checkoutToken, oldToken);
+    assert.equal(pos.cart.length, 1);
+    assert.equal(pos.quoteId, 99);
+    assert.equal(pos.customerId, 17);
     assert.match(pos.notice, /COT-1/);
-    assert.equal(new URL(requests.at(-1).url).searchParams.has('quote_mode'), false);
-    pos.addProduct(product);
-    assert.equal(pos.cart.length, 0);
+
+    // Update quote preserves same quote_id/quote_number and does not create a sale.
+    handler = async (_, options) => options.method === 'PUT'
+        ? reply({ message: 'Cotización COT-1 actualizada correctamente.', quote_id: 99, show_url: '/cotizaciones/99' })
+        : reply([stocked]);
+    await pos.updateQuote();
+    const updated = requests.filter(request => request.options.method === 'PUT');
+    assert.ok(updated.length > 0);
+    assert.ok(updated.at(-1).url.endsWith('/cotizaciones/99'));
+    assert.equal(pos.quoteId, 99);
+    assert.equal(pos.quoteMode, true);
+    assert.equal(pos.cart.length, 1);
+    assert.match(pos.notice, /actualizada/);
+
+    // Leave quote mode preserves cart and customer for sale conversion.
+    await pos.leaveQuoteMode();
+    assert.equal(pos.quoteMode, false);
+    assert.equal(pos.cart.length, 1);
+    assert.equal(pos.customerId, 17);
+    assert.equal(pos.quoteId, 99);
 
     // Failed saves retain editable contents; double clicks and leaving during a save are ignored.
     await pos.enterQuoteMode();
@@ -183,17 +195,20 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     finishSave(reply({ message: 'Guardada' }, 201));
     await pendingSave;
 
-    // Loading an existing quote always restores real sale stock validation.
-    pos.quoteMode = true;
-    handler = async () => reply({ quote_id: 7, quote_number: 'COT-7', customer: null,
+    // Loading an existing quote enters quote mode with editable cart.
+    pos.quoteMode = false;
+    pos.quoteId = null;
+    handler = async () => reply({ quote_id: 7, quote_number: 'COT-7', customer_id: null, customer: null,
         items: [{ product_id: 1, name: 'Producto', quantity: 10, sale_price: 1000, unit_price: 1000,
             tax_rate: 13, discount_total: 0, available_stock: 2, controls_inventory: true }] });
     await pos.loadQuote(7);
-    assert.equal(pos.quoteMode, false);
+    assert.equal(pos.quoteMode, true);
     assert.equal(pos.quoteId, 7);
-    assert.equal(pos.exceedsStock(pos.cart[0]), true);
+    // In quote mode, exceedsStock is false (no stock enforcement while editing).
+    assert.equal(pos.exceedsStock(pos.cart[0]), false);
+    // canCheckout is false in quote mode regardless of stock.
     assert.equal(pos.canCheckout, false);
     await pos.enterQuoteMode();
-    assert.equal(pos.quoteMode, false);
+    assert.equal(pos.quoteMode, true);
     console.log(`Quote mode UI OK (${checks} assertions)`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

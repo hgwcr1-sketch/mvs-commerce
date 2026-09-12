@@ -358,7 +358,7 @@
                     </button>
                 @endcan
                 @can('cotizaciones.crear')
-                    <button type="button" x-show="quoteMode" @click="createQuote()" :disabled="!canCreateQuote || cart.length === 0 || !!quoteId || creatingQuote" class="mt-3 min-h-[44px] w-full rounded-xl bg-sky-700 px-4 py-2.5 text-base font-bold text-white hover:bg-sky-800 disabled:opacity-40" x-text="creatingQuote ? 'Guardando…' : 'Guardar cotización'">Guardar cotización</button>
+                    <button type="button" x-show="quoteMode" @click="quoteId ? updateQuote() : createQuote()" :disabled="!canCreateQuote || cart.length === 0 || creatingQuote" class="mt-3 min-h-[44px] w-full rounded-xl px-4 py-2.5 text-base font-bold text-white disabled:opacity-40" :class="quoteId ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-700 hover:bg-sky-800'" x-text="creatingQuote ? 'Guardando…' : (quoteId ? 'Guardar cambios' : 'Guardar cotización')"></button>
                 @endcan
             </section>
         </aside>
@@ -386,7 +386,7 @@
                 </button>
             @endcan
             @can('cotizaciones.crear')
-                <button type="button" x-show="quoteMode" @click="createQuote()" :disabled="!canCreateQuote || cart.length === 0 || !!quoteId || creatingQuote" class="min-h-[48px] min-w-0 max-w-[16rem] flex-1 rounded-xl bg-sky-700 px-3 py-2 text-base font-bold text-white hover:bg-sky-800 disabled:opacity-40" x-text="creatingQuote ? 'Guardando…' : 'Guardar cotización'">Guardar cotización</button>
+                <button type="button" x-show="quoteMode" @click="quoteId ? updateQuote() : createQuote()" :disabled="!canCreateQuote || cart.length === 0 || creatingQuote" class="min-h-[48px] min-w-0 max-w-[16rem] flex-1 rounded-xl px-3 py-2 text-base font-bold text-white disabled:opacity-40" :class="quoteId ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-700 hover:bg-sky-800'" x-text="creatingQuote ? 'Guardando…' : (quoteId ? 'Guardar cambios' : 'Guardar cotización')"></button>
             @endcan
         </div>
     </div>
@@ -425,7 +425,7 @@
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
-            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || !!quoteId || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
+            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
             @can('apartados.crear')<a href="{{ route('apartados.create') }}" class="whitespace-nowrap rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">Nuevo apartado</a>@endcan
             @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
             @foreach(['Nota de crédito', 'Nota de débito'] as $option)
@@ -1440,7 +1440,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
         async enterQuoteMode() {
-            if (!this.canCreateQuote || this.quoteId || this.creatingQuote || this.checkout.open) return;
+            if (!this.canCreateQuote || this.creatingQuote || this.checkout.open) return;
             this.quoteMode = true;
             this.notice = '';
             this.results = [];
@@ -1453,11 +1453,12 @@ document.addEventListener('alpine:init', () => {
             this.results = [];
             this.notice = this.cart.some(item => this.exceedsStock(item)) ? 'Revise las cantidades: superan el stock disponible para vender.' : '';
             await this.searchProducts(false);
+            this.$nextTick(() => this.focusSearch());
         },
         async createQuote() {
             if (!this.canCreateQuote || !this.quoteMode) return;
             if (!this.cart.length) { this.notice = 'Agregue al menos un producto antes de crear la cotización.'; return; }
-            if (this.quoteId) { this.notice = 'Esta cotización ya está cargada como base editable.'; return; }
+            if (this.quoteId) { return this.updateQuote(); }
             if (this.creatingQuote) return;
             this.creatingQuote = true;
             this.notice = '';
@@ -1467,17 +1468,25 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({ customer_id: this.customerId, ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? { discount_total: this.numberValue(this._generalDiscountInput), discount_total_type: this._generalDiscountType } : {}), items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}), ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}) })) }),
                 });
                 const payload = await this.readFetchResponse(response);
-                this.cart = [];
-                this.customerId = null;
-                this.selectedCustomer = null;
-                this.checkout.payments = [];
-                this.documentType = 'electronic_ticket';
-                this.clearSuspendedRecovery();
-                this.checkoutToken = generateUUID();
-                this._generalDiscountInput = '';
-                this._generalDiscountType = 'fixed';
-                this.quoteMode = false;
-                this.results = [];
+                this.quoteId = payload.quote_id;
+                this.notice = payload.message;
+                await this.searchProducts(false);
+                this.$nextTick(() => this.focusSearch());
+            } catch (error) { this.notice = error.message; }
+            finally { this.creatingQuote = false; }
+        },
+        async updateQuote() {
+            if (!this.canCreateQuote || !this.quoteMode || !this.quoteId) return;
+            if (!this.cart.length) { this.notice = 'Agregue al menos un producto antes de guardar.'; return; }
+            if (this.creatingQuote) return;
+            this.creatingQuote = true;
+            this.notice = '';
+            try {
+                const response = await fetch(`/cotizaciones/${this.quoteId}`, {
+                    method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({ customer_id: this.customerId, ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? { discount_total: this.numberValue(this._generalDiscountInput), discount_total_type: this._generalDiscountType } : {}), items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity, ...(this.canDiscount && this.numberValue(item._discount) > 0 ? { discount: this.numberValue(item._discount), discount_type: item._discountType } : {}), ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}) })) }),
+                });
+                const payload = await this.readFetchResponse(response);
                 this.notice = payload.message;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
@@ -1489,10 +1498,12 @@ document.addEventListener('alpine:init', () => {
                 const response = await fetch(`/cotizaciones/${id}/cargar`, { headers: { Accept: 'application/json' } });
                 const payload = await this.readFetchResponse(response);
                 this.quoteId = payload.quote_id;
-                this.quoteMode = false;
+                this.quoteMode = true;
                 this.closeResults();
                 this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada como base editable. La cotización original no se modificará.`;
+                this.customerId = payload.customer_id || payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada. Puede editar y guardar cambios.`;
+                await this.searchProducts(false);
+                this.$nextTick(() => this.focusSearch());
             } catch (error) { this.notice = error.message; }
         },
         async releaseCurrentRecovery() {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreQuoteRequest;
+use App\Http\Requests\UpdateQuoteRequest;
 use App\Models\Quote;
 use App\Services\Sales\QuoteService;
 use Illuminate\Http\JsonResponse;
@@ -62,6 +63,17 @@ class QuoteController extends Controller
     }
 
     /**
+     * Update the specified resource in storage.
+     */
+    public function update(UpdateQuoteRequest $request, Quote $cotizacione, QuoteService $service): JsonResponse
+    {
+        $quote = $this->scoped($cotizacione);
+        $updated = $service->update($quote, $request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
+
+        return response()->json(['success' => true, 'message' => "Cotización {$updated->quote_number} actualizada correctamente.", 'quote_id' => $updated->id, 'quote_number' => $updated->quote_number, 'show_url' => route('cotizaciones.show', $updated), 'print_url' => route('cotizaciones.print', $updated)]);
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(Quote $cotizacione): View
@@ -95,7 +107,8 @@ class QuoteController extends Controller
             ->whereIn('product_id', $quote->items->pluck('product_id')->filter())
             ->pluck('stock', 'product_id');
 
-        return response()->json(['quote_id' => $quote->id, 'quote_number' => $quote->quote_number, 'customer' => $quote->customer,
+        return response()->json(['quote_id' => $quote->id, 'quote_number' => $quote->quote_number, 'customer' => $quote->customer, 'customer_id' => $quote->customer_id,
+            'expires_at' => $quote->expires_at?->format('Y-m-d'), 'notes' => $quote->notes,
             'items' => $quote->items->map(function ($item) use ($stocks) {
                 $product = $item->product;
 

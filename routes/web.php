@@ -694,6 +694,7 @@ Route::resource('transferencias', TransferController::class)
         Route::get('/cotizaciones', [QuoteController::class, 'index'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.index');
         Route::post('/cotizaciones', [QuoteController::class, 'store'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.store');
         Route::get('/cotizaciones/{cotizacione}', [QuoteController::class, 'show'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.show');
+        Route::put('/cotizaciones/{cotizacione}', [QuoteController::class, 'update'])->middleware('permission:cotizaciones.editar')->name('cotizaciones.actualizar');
         Route::get('/cotizaciones/{quote}/imprimir', [QuoteController::class, 'print'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.print');
         Route::get('/cotizaciones/{quote}/cargar', [QuoteController::class, 'load'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.load');
         Route::post('/cotizaciones/{quote}/cancelar', [QuoteController::class, 'cancel'])->middleware('permission:cotizaciones.editar')->name('cotizaciones.cancel');

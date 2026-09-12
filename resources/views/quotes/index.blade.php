@@ -19,8 +19,8 @@
         </form>
         <div class="overflow-x-auto"><table class="min-w-full divide-y"><thead><tr><th class="p-3 text-left">Número</th><th class="p-3 text-left">Fecha</th><th class="p-3 text-left">Cliente</th><th class="p-3 text-left">Estado</th><th class="p-3 text-right">Total</th><th class="p-3 text-right">Acciones</th></tr></thead><tbody class="divide-y">
         @forelse($quotes as $quote)<tr><td class="p-3 font-semibold">{{ $quote->quote_number }}</td><td class="p-3">{{ $quote->created_at->format('d/m/Y H:i') }}</td><td class="p-3">{{ $quote->customer?->name ?? 'Consumidor Final' }}</td><td class="p-3">{{ $quote->status_label }}</td><td class="p-3 text-right">₡{{ number_format((float)$quote->total, 0, ',', '.') }}</td><td class="p-3"><div class="flex flex-wrap justify-end gap-3"><a class="underline" href="{{ route('cotizaciones.show', $quote) }}">Ver</a><a class="underline" target="_blank" href="{{ route('cotizaciones.print', $quote) }}">Imprimir</a>
-                            @can('cotizaciones.crear')
-                                @if($quote->effective_status === 'active')<a class="font-semibold underline" href="{{ route('pos.index', ['quote_id'=>$quote->id]) }}">Convertir en venta</a>@endif
+                            @can('cotizaciones.editar')
+                                @if($quote->effective_status === 'active')<a class="font-semibold underline" href="{{ route('pos.index', ['quote_id'=>$quote->id, 'edit'=>1]) }}">Retomar en POS</a>@endif
                             @endcan
                             @can('cotizaciones.editar')
                                 @if($quote->status === 'active')<form method="POST" action="{{ route('cotizaciones.cancel',$quote) }}" onsubmit="const reason=prompt('Motivo de anulación:'); if (!reason || reason.trim().length < 3) return false; this.cancellation_reason.value=reason.trim();">@csrf<input type="hidden" name="cancellation_reason"><button class="text-red-700 underline">Anular</button></form>@endif
