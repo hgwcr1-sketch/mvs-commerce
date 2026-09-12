@@ -9,6 +9,7 @@ use App\Models\Color;
 use App\Models\Company;
 use App\Models\CompanyLicense;
 use App\Models\Customer;
+use App\Models\LoyaltyPortalPost;
 use App\Models\LoyaltySetting;
 use App\Models\Permission;
 use App\Models\Product;
@@ -23,6 +24,41 @@ use Illuminate\Support\Str;
 
 class DemoCompanyProvisioner
 {
+    private const DEMO_PRODUCT_IMAGES = [
+        'CAM-CL-001',
+        'CAM-CA-002',
+        'CAM-FM-003',
+        'PAN-SL-001',
+        'PAN-CA-002',
+    ];
+
+    private const DEMO_LOYALTY_POSTS = [
+        [
+            'title' => 'Doble Puntaje',
+            'file' => 'loyalty-double-points.png',
+            'message' => 'Gana el doble de puntos en todas tus compras este mes.',
+            'cta_type' => 'more',
+        ],
+        [
+            'title' => 'Canje de Puntos',
+            'file' => 'loyalty-redeem-points.png',
+            'message' => 'Canjea tus puntos por productos exclusivos.',
+            'cta_type' => 'more',
+        ],
+        [
+            'title' => 'Promoción Especial',
+            'file' => 'promotion-special.png',
+            'message' => 'Ofertas imperdibles para nuestros miembros.',
+            'cta_type' => 'more',
+        ],
+        [
+            'title' => 'Bienvenida al Programa',
+            'file' => 'loyalty-welcome.png',
+            'message' => 'Únete al programa de fidelidad y empieza a ganar puntos.',
+            'cta_type' => 'more',
+        ],
+    ];
+
     private ?Company $demoCompany = null;
 
     public function __construct(
@@ -86,14 +122,17 @@ class DemoCompanyProvisioner
             $this->seedRolesAndUsers($company);
             $this->seedCatalogs($company);
             $this->seedProducts($company);
+            $this->syncProductImages($company);
             $this->seedInventory($company);
             $this->seedCustomers($company);
             $this->seedSuppliers($company);
             $this->seedLoyalty($company);
+            $this->seedLoyaltyPosts($company);
             $this->seedLabels($company);
             $this->seedCashRegisters($company);
             $this->ensurePermanentLicense($company);
             $this->syncDemoAssets($company);
+            $this->syncLoyaltyAssets($company);
 
             return $company;
         });
@@ -123,14 +162,17 @@ class DemoCompanyProvisioner
             $this->seedRolesAndUsers($company);
             $this->seedCatalogs($company);
             $this->seedProducts($company);
+            $this->syncProductImages($company);
             $this->seedInventory($company);
             $this->seedCustomers($company);
             $this->seedSuppliers($company);
             $this->seedLoyalty($company);
+            $this->seedLoyaltyPosts($company);
             $this->seedLabels($company);
             $this->seedCashRegisters($company);
             $this->ensurePermanentLicense($company);
             $this->syncDemoAssets($company);
+            $this->syncLoyaltyAssets($company);
 
             return $company;
         });
@@ -367,11 +409,11 @@ class DemoCompanyProvisioner
         $colorByName = $allColors->keyBy('name');
 
         $products = [
-            ['name' => 'Camisa Clásica Algodón', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 8500, 'sale' => 14900, 'wholesale' => 12500, 'code' => 'CAM-CL-001', 'style' => 'Clásico', 'size' => 'M', 'color' => 'Negro'],
-            ['name' => 'Camisa Casual Linen', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 12000, 'sale' => 21900, 'wholesale' => 18900, 'code' => 'CAM-CA-002', 'style' => 'Casual', 'size' => 'S', 'color' => 'Blanco'],
-            ['name' => 'Camisa Formal Premium', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 15000, 'sale' => 28900, 'wholesale' => 24900, 'code' => 'CAM-FM-003', 'style' => 'Formal', 'size' => 'L', 'color' => 'Azul'],
-            ['name' => 'Pantalón Slim Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 11000, 'sale' => 19900, 'wholesale' => 16900, 'code' => 'PAN-SL-001', 'style' => 'Formal', 'size' => 'M', 'color' => 'Gris'],
-            ['name' => 'Pantalón Clásico Cargo', 'cat' => $pantalonesCat, 'brand' => $brand1, 'cost' => 13000, 'sale' => 23900, 'wholesale' => 19900, 'code' => 'PAN-CA-002', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Verde'],
+            ['name' => 'Camisa Clásica Algodón', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 8500, 'sale' => 14900, 'wholesale' => 12500, 'code' => 'CAM-CL-001', 'style' => 'Clásico', 'size' => 'M', 'color' => 'Negro', 'image' => 'products/CAM-CL-001.png'],
+            ['name' => 'Camisa Casual Linen', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 12000, 'sale' => 21900, 'wholesale' => 18900, 'code' => 'CAM-CA-002', 'style' => 'Casual', 'size' => 'S', 'color' => 'Blanco', 'image' => 'products/CAM-CA-002.png'],
+            ['name' => 'Camisa Formal Premium', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 15000, 'sale' => 28900, 'wholesale' => 24900, 'code' => 'CAM-FM-003', 'style' => 'Formal', 'size' => 'L', 'color' => 'Azul', 'image' => 'products/CAM-FM-003.png'],
+            ['name' => 'Pantalón Slim Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 11000, 'sale' => 19900, 'wholesale' => 16900, 'code' => 'PAN-SL-001', 'style' => 'Formal', 'size' => 'M', 'color' => 'Gris', 'image' => 'products/PAN-SL-001.png'],
+            ['name' => 'Pantalón Clásico Cargo', 'cat' => $pantalonesCat, 'brand' => $brand1, 'cost' => 13000, 'sale' => 23900, 'wholesale' => 19900, 'code' => 'PAN-CA-002', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Verde', 'image' => 'products/PAN-CA-002.png'],
             ['name' => 'Pantalón Jogger Eco', 'cat' => $pantalonesCat, 'brand' => $brand2, 'cost' => 9000, 'sale' => 16900, 'wholesale' => 14500, 'code' => 'PAN-JG-003', 'style' => 'Deportivo', 'size' => 'S', 'color' => 'Negro'],
             ['name' => 'Zapatilla Runner Pro', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 22000, 'sale' => 39900, 'wholesale' => 34900, 'code' => 'ZAP-RN-001', 'style' => 'Deportivo', 'size' => 'XL', 'color' => 'Azul'],
             ['name' => 'Zapatilla Urban Style', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 18000, 'sale' => 32900, 'wholesale' => 28900, 'code' => 'ZAP-UR-002', 'style' => 'Casual', 'size' => 'L', 'color' => 'Gris'],
@@ -419,6 +461,7 @@ class DemoCompanyProvisioner
                     'allow_negative_stock' => false,
                     'is_active' => true,
                     'prints_label' => true,
+                    'image' => $p['image'] ?? null,
                 ],
             );
         }
@@ -557,6 +600,69 @@ class DemoCompanyProvisioner
         }
     }
 
+    private function syncProductImages(Company $company): void
+    {
+        $source = config('demo.assets_source') . '/products';
+        $dest = storage_path('app/public/products');
+        @mkdir($dest, 0755, true);
+
+        foreach (self::DEMO_PRODUCT_IMAGES as $code) {
+            $srcFile = $source . '/' . $code . '.png';
+            $destFile = $dest . '/' . $code . '.png';
+
+            if (file_exists($destFile)) {
+                @unlink($destFile);
+            }
+
+            if (file_exists($srcFile)) {
+                @copy($srcFile, $destFile);
+            }
+        }
+    }
+
+    private function seedLoyaltyPosts(Company $company): void
+    {
+        foreach (self::DEMO_LOYALTY_POSTS as $post) {
+            LoyaltyPortalPost::updateOrCreate(
+                [
+                    'company_id' => $company->id,
+                    'title' => $post['title'],
+                ],
+                [
+                    'type' => 'promotion',
+                    'message' => $post['message'],
+                    'cta_type' => $post['cta_type'],
+                    'image' => 'demo/' . $company->id . '/loyalty/' . $post['file'],
+                    'is_active' => true,
+                    'is_featured' => true,
+                    'sort_order' => 0,
+                ],
+            );
+        }
+    }
+
+    private function syncLoyaltyAssets(Company $company): void
+    {
+        $source = config('demo.assets_source') . '/loyalty';
+        $runtimeBase = config('demo.assets_runtime');
+        $dest = $runtimeBase . '/' . $company->id . '/loyalty';
+
+        if (is_dir($dest)) {
+            $this->removeDirectory($dest);
+        }
+
+        @mkdir($dest, 0755, true);
+
+        foreach (self::DEMO_LOYALTY_POSTS as $post) {
+            $srcFile = $source . '/' . $post['file'];
+            if (file_exists($srcFile)) {
+                @copy($srcFile, $dest . '/' . $post['file']);
+            }
+        }
+
+        @file_put_contents($dest . '/.gitkeep', '');
+    }
+
     private function syncDemoAssets(Company $company): void
     {
         if (! $this->isDemoCompany($company)) {
@@ -621,8 +727,7 @@ class DemoCompanyProvisioner
         );
 
         foreach ($items as $item) {
-            $relativePath = ltrim($item->getPathname(), $source);
-            $relativePath = ltrim($relativePath, DIRECTORY_SEPARATOR);
+            $relativePath = substr($item->getPathname(), strlen($source) + 1);
             $targetPath = $destination . DIRECTORY_SEPARATOR . $relativePath;
 
             if ($item->isDir()) {

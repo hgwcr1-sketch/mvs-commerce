@@ -738,4 +738,110 @@ class DemoCompanyProvisionerTest extends TestCase
             $this->assertNotNull($p->color_id, "{$p->internal_code} missing color_id");
         });
     }
+
+    public function test_exactly_five_products_have_image(): void
+    {
+        $company = $this->provisioner->create();
+        $withImage = Product::where('company_id', $company->id)->whereNotNull('image')->get();
+        $this->assertCount(5, $withImage);
+    }
+
+    public function test_other_products_have_no_image(): void
+    {
+        $company = $this->provisioner->create();
+        $withoutImage = Product::where('company_id', $company->id)->whereNull('image')->get();
+        $this->assertCount(25, $withoutImage);
+    }
+
+    public function test_product_image_paths_start_with_products_prefix(): void
+    {
+        $company = $this->provisioner->create();
+        Product::where('company_id', $company->id)->whereNotNull('image')->each(function ($p) {
+            $this->assertStringStartsWith('products/', $p->image, "{$p->internal_code} image must start with products/");
+        });
+    }
+
+    public function test_five_product_image_files_exist_after_create(): void
+    {
+        $company = $this->provisioner->create();
+        $dest = storage_path('app/public/products');
+        foreach (['CAM-CL-001.png', 'CAM-CA-002.png', 'CAM-FM-003.png', 'PAN-SL-001.png', 'PAN-CA-002.png'] as $file) {
+            $this->assertFileExists($dest . '/' . $file, "Product image {$file} should exist after create");
+        }
+    }
+
+    public function test_reset_restores_product_images(): void
+    {
+        $company = $this->provisioner->create();
+        $dest = storage_path('app/public/products');
+        $file = $dest . '/CAM-CL-001.png';
+        @unlink($file);
+        $this->assertFileDoesNotExist($file);
+        $this->provisioner->reset();
+        $this->assertFileExists($file);
+    }
+
+    public function test_foreign_file_in_products_dir_is_not_deleted(): void
+    {
+        $company = $this->provisioner->create();
+        $dest = storage_path('app/public/products');
+        $foreignFile = $dest . '/FOREIGN-FILE.txt';
+        file_put_contents($foreignFile, 'keep me');
+        $this->provisioner->reset();
+        $this->assertFileExists($foreignFile);
+        @unlink($foreignFile);
+    }
+
+    public function test_four_loyalty_posts_are_created(): void
+    {
+        $company = $this->provisioner->create();
+        $posts = \App\Models\LoyaltyPortalPost::where('company_id', $company->id)->where('type', 'promotion')->get();
+        $this->assertCount(4, $posts);
+    }
+
+    public function test_loyalty_post_image_paths_are_correct(): void
+    {
+        $company = $this->provisioner->create();
+        $posts = \App\Models\LoyaltyPortalPost::where('company_id', $company->id)->where('type', 'promotion')->get();
+        foreach ($posts as $post) {
+            $this->assertStringStartsWith('demo/' . $company->id . '/loyalty/', $post->image, "{$post->title} image path incorrect");
+        }
+    }
+
+    public function test_reset_does_not_duplicate_loyalty_posts(): void
+    {
+        $company = $this->provisioner->create();
+        $this->provisioner->reset();
+        $posts = \App\Models\LoyaltyPortalPost::where('company_id', $company->id)->where('type', 'promotion')->get();
+        $this->assertCount(4, $posts);
+    }
+
+    public function test_loyalty_asset_files_exist_after_create(): void
+    {
+        $company = $this->provisioner->create();
+        $dest = config('demo.assets_runtime') . '/' . $company->id . '/loyalty';
+        foreach (['loyalty-double-points.png', 'loyalty-redeem-points.png', 'promotion-special.png', 'loyalty-welcome.png'] as $file) {
+            $this->assertFileExists($dest . '/' . $file, "Loyalty asset {$file} should exist after create");
+        }
+    }
+
+    public function test_other_company_loyalty_assets_are_intact(): void
+    {
+        $this->provisioner->create();
+
+        $otherCompany = \App\Models\Company::create([
+            'trade_name' => 'Otra Empresa',
+            'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica',
+            'is_active' => true,
+        ]);
+        $destOther = config('demo.assets_runtime') . '/' . $otherCompany->id . '/loyalty';
+        @mkdir($destOther, 0755, true);
+        file_put_contents($destOther . '/FOREIGN.txt', 'keep');
+
+        $this->provisioner->reset();
+
+        $this->assertFileExists($destOther . '/FOREIGN.txt');
+        @unlink($destOther . '/FOREIGN.txt');
+    }
 }
