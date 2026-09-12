@@ -610,12 +610,18 @@ class DemoCompanyProvisioner
             $srcFile = $source . '/' . $code . '.png';
             $destFile = $dest . '/' . $code . '.png';
 
-            if (file_exists($destFile)) {
-                @unlink($destFile);
+            if (! file_exists($srcFile)) {
+                throw new \RuntimeException("Demo product image source not found: {$srcFile}");
             }
 
-            if (file_exists($srcFile)) {
-                @copy($srcFile, $destFile);
+            if (file_exists($destFile)) {
+                if (! @unlink($destFile)) {
+                    throw new \RuntimeException("Failed to remove existing product image: {$destFile}");
+                }
+            }
+
+            if (! @copy($srcFile, $destFile)) {
+                throw new \RuntimeException("Failed to copy product image: {$srcFile} → {$destFile}");
             }
         }
     }
@@ -655,12 +661,17 @@ class DemoCompanyProvisioner
 
         foreach (self::DEMO_LOYALTY_POSTS as $post) {
             $srcFile = $source . '/' . $post['file'];
-            if (file_exists($srcFile)) {
-                @copy($srcFile, $dest . '/' . $post['file']);
+            if (! file_exists($srcFile)) {
+                throw new \RuntimeException("Demo loyalty asset source not found: {$srcFile}");
+            }
+            if (! @copy($srcFile, $dest . '/' . $post['file'])) {
+                throw new \RuntimeException("Failed to copy loyalty asset: {$srcFile} → {$dest}/{$post['file']}");
             }
         }
 
-        @file_put_contents($dest . '/.gitkeep', '');
+        if (@file_put_contents($dest . '/.gitkeep', '') === false) {
+            throw new \RuntimeException("Failed to write .gitkeep in {$dest}");
+        }
     }
 
     private function syncDemoAssets(Company $company): void
@@ -734,7 +745,9 @@ class DemoCompanyProvisioner
                 @mkdir($targetPath, 0755, true);
             } else {
                 @mkdir(dirname($targetPath), 0755, true);
-                @copy($item->getRealPath(), $targetPath);
+                if (! @copy($item->getRealPath(), $targetPath)) {
+                    throw new \RuntimeException("Failed to copy: {$item->getRealPath()} → {$targetPath}");
+                }
             }
         }
     }

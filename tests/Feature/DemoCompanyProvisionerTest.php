@@ -844,4 +844,44 @@ class DemoCompanyProvisionerTest extends TestCase
         $this->assertFileExists($destOther . '/FOREIGN.txt');
         @unlink($destOther . '/FOREIGN.txt');
     }
+
+    public function test_missing_product_image_source_throws(): void
+    {
+        $source = config('demo.assets_source') . '/products';
+        $file = $source . '/CAM-CL-001.png';
+        $backup = $file . '.backup test';
+
+        @copy($file, $backup);
+        @unlink($file);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Demo product image source not found');
+            $this->provisioner->create();
+        } finally {
+            if (file_exists($backup)) {
+                @rename($backup, $file);
+            }
+        }
+    }
+
+    public function test_missing_loyalty_asset_source_throws(): void
+    {
+        $source = config('demo.assets_source') . '/loyalty';
+        $file = $source . '/loyalty-double-points.png';
+        $backup = $file . '.backup test';
+
+        @copy($file, $backup);
+        @unlink($file);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Demo loyalty asset source not found');
+            $this->provisioner->create();
+        } finally {
+            if (file_exists($backup)) {
+                @rename($backup, $file);
+            }
+        }
+    }
 }
