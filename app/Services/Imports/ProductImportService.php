@@ -3,10 +3,13 @@
 namespace App\Services\Imports;
 
 use App\Models\Brand;
+use App\Models\Color;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductCategory;
+use App\Models\Size;
+use App\Models\Style;
 use App\Models\Unit;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +26,15 @@ class ProductImportService
 
     private array $unitCache = [];
 
+    private array $styleCache = [];
+
+    private array $sizeCache = [];
+
+    private array $colorCache = [];
+
     public const HEADERS = [
-        'codigo_interno*', 'nombre*', 'categoria*', 'marca', 'unidad*', 'tipo_producto*',
+        'codigo_interno*', 'nombre*', 'categoria*', 'subcategoria_subrubro', 'marca', 'unidad*', 'tipo_producto*',
+        'estilo', 'talla', 'color',
         'codigo_barras_principal', 'codigos_barras_adicionales', 'cabys', 'descripcion_corta',
         'descripcion', 'costo*', 'precio_venta*', 'precio_mayorista', 'precio_especial',
         'precio_a', 'precio_b', 'precio_c', 'impuesto*', 'controla_inventario',
@@ -33,8 +43,10 @@ class ProductImportService
 
     private const HEADER_MAP = [
         'codigo_interno' => 'internal_code', 'codigo' => 'internal_code', 'nombre' => 'name',
-        'categoria' => 'category', 'marca' => 'brand', 'unidad' => 'unit', 'tipo_producto' => 'product_type',
-        'tipo' => 'product_type', 'codigo_barras_principal' => 'barcode', 'codigo_de_barras_principal' => 'barcode',
+        'categoria' => 'category', 'subcategoria_subrubro' => 'subcategory', 'subcategoria' => 'subcategory',
+        'subrubro' => 'subcategory', 'marca' => 'brand', 'unidad' => 'unit', 'tipo_producto' => 'product_type',
+        'tipo' => 'product_type', 'estilo' => 'style', 'talla' => 'size', 'color' => 'color',
+        'codigo_barras_principal' => 'barcode', 'codigo_de_barras_principal' => 'barcode',
         'codigo_barras' => 'barcode', 'codigos_barras_adicionales' => 'additional_barcodes',
         'codigos_de_barras_adicionales' => 'additional_barcodes', 'cabys' => 'cabys_code',
         'descripcion_corta' => 'short_description', 'descripcion' => 'description', 'costo' => 'cost',
@@ -47,7 +59,9 @@ class ProductImportService
 
     private const FIELD_LABELS = [
         'internal_code' => 'codigo_interno', 'name' => 'nombre', 'category_name' => 'categoria',
-        'brand_name' => 'marca', 'unit_name' => 'unidad', 'product_type' => 'tipo_producto',
+        'subcategory_name' => 'subcategoria_subrubro', 'brand_name' => 'marca', 'unit_name' => 'unidad',
+        'product_type' => 'tipo_producto', 'style_name' => 'estilo', 'size_name' => 'talla',
+        'color_name' => 'color',
         'barcode' => 'codigo_barras_principal', 'additional_barcodes' => 'codigos_barras_adicionales',
         'cabys_code' => 'cabys', 'short_description' => 'descripcion_corta', 'description' => 'descripcion',
         'cost' => 'costo', 'sale_price' => 'precio_venta', 'wholesale_price' => 'precio_mayorista',
@@ -158,22 +172,33 @@ class ProductImportService
     private function normalizeRow(array $data, int $rowNumber, int $companyId): array
     {
         $categoryName = $this->catalogName($data['category'] ?? null);
+        $subcategoryName = $this->catalogName($data['subcategory'] ?? null);
         $brandName = $this->catalogName($data['brand'] ?? null);
         $unitName = $this->catalogName($data['unit'] ?? null);
+        $styleName = $this->catalogName($data['style'] ?? null);
+        $sizeName = $this->catalogName($data['size'] ?? null);
+        $colorName = $this->catalogName($data['color'] ?? null);
         $category = $this->category($companyId, $categoryName);
+        $subcategory = $this->subcategory($companyId, $category, $subcategoryName);
         $brand = $this->brand($companyId, $brandName);
         $unit = $this->unit($companyId, $unitName);
+        $style = $this->style($companyId, $styleName);
+        $size = $this->size($companyId, $sizeName);
+        $color = $this->color($companyId, $colorName);
         $primary = $this->nullable($data['barcode'] ?? null);
         $additional = collect(preg_split('/\s*\|\s*/', $this->nullable($data['additional_barcodes'] ?? null) ?? ''))
             ->map(fn ($barcode) => trim((string) $barcode))->filter()->unique()->values()->all();
         $barcodes = array_values(array_unique(array_filter([$primary, ...$additional])));
+
+        $effectiveCategory = $subcategory ?? $category;
 
         return [
             'row_number' => $rowNumber,
             'internal_code' => $this->nullable($data['internal_code'] ?? null),
             'name' => $this->nullable($data['name'] ?? null),
             'category_name' => $categoryName,
-            'category_id' => $category?->id,
+            'subcategory_name' => $subcategoryName,
+            'category_id' => $effectiveCategory?->id,
             'category_will_create' => $categoryName !== null && $category === null,
             'brand_name' => $brandName,
             'brand_id' => $brand?->id,
@@ -181,6 +206,15 @@ class ProductImportService
             'unit_name' => $unitName,
             'unit_id' => $unit?->id,
             'unit_will_create' => $unitName !== null && $unit === null,
+            'style_name' => $styleName,
+            'style_id' => $style?->id,
+            'style_will_create' => $styleName !== null && $style === null,
+            'size_name' => $sizeName,
+            'size_id' => $size?->id,
+            'size_will_create' => $sizeName !== null && $size === null,
+            'color_name' => $colorName,
+            'color_id' => $color?->id,
+            'color_will_create' => $colorName !== null && $color === null,
             'product_type' => Str::lower($this->nullable($data['product_type'] ?? null) ?? ''),
             'barcode' => $primary,
             'additional_barcodes' => $additional,
@@ -288,7 +322,8 @@ class ProductImportService
     private function attributes(array $row): array
     {
         return Arr::only($row, [
-            'category_id', 'brand_id', 'unit_id', 'name', 'internal_code', 'barcode', 'product_type',
+            'category_id', 'brand_id', 'unit_id', 'style_id', 'size_id', 'color_id',
+            'name', 'internal_code', 'barcode', 'product_type',
             'cabys_code', 'short_description', 'description', 'cost', 'sale_price', 'wholesale_price',
             'special_price', 'price_a', 'price_b', 'price_c', 'track_inventory', 'allow_negative_stock',
             'tax_rate', 'is_active', 'prints_label',
@@ -304,6 +339,19 @@ class ProductImportService
                 'slug' => $this->uniqueSlug(ProductCategory::class, $row['category_name'], $companyId),
                 'is_active' => true,
             ]));
+
+        $subcategory = null;
+        if (! empty($row['subcategory_name'])) {
+            $subcategory = $this->subcategory($companyId, $category, $row['subcategory_name'])
+                ?? $this->rememberCategory(ProductCategory::create([
+                    'company_id' => $companyId,
+                    'parent_id' => $category->id,
+                    'name' => $row['subcategory_name'],
+                    'slug' => $this->uniqueSlug(ProductCategory::class, $row['subcategory_name'], $companyId),
+                    'is_active' => true,
+                ]));
+        }
+
         $unit = $this->unit($companyId, $row['unit_name'])
             ?? $this->rememberUnit(Unit::create([
                 'company_id' => $companyId,
@@ -321,10 +369,42 @@ class ProductImportService
                 'is_active' => true,
             ])));
 
+        $style = $row['style_name'] === null
+            ? null
+            : ($this->style($companyId, $row['style_name']) ?? $this->rememberStyle(Style::create([
+                'company_id' => $companyId,
+                'name' => $row['style_name'],
+                'slug' => $this->uniqueSlug(Style::class, $row['style_name'], $companyId),
+                'is_active' => true,
+            ])));
+
+        $size = $row['size_name'] === null
+            ? null
+            : ($this->size($companyId, $row['size_name']) ?? $this->rememberSize(Size::create([
+                'company_id' => $companyId,
+                'name' => $row['size_name'],
+                'slug' => $this->uniqueSlug(Size::class, $row['size_name'], $companyId),
+                'is_active' => true,
+            ])));
+
+        $color = $row['color_name'] === null
+            ? null
+            : ($this->color($companyId, $row['color_name']) ?? $this->rememberColor(Color::create([
+                'company_id' => $companyId,
+                'name' => $row['color_name'],
+                'slug' => $this->uniqueSlug(Color::class, $row['color_name'], $companyId),
+                'is_active' => true,
+            ])));
+
+        $effectiveCategory = $subcategory ?? $category;
+
         return [...$row,
-            'category_id' => $category->id, 'category_will_create' => false,
+            'category_id' => $effectiveCategory->id, 'category_will_create' => false,
             'unit_id' => $unit->id, 'unit_will_create' => false,
             'brand_id' => $brand?->id, 'brand_will_create' => false,
+            'style_id' => $style?->id, 'style_will_create' => false,
+            'size_id' => $size?->id, 'size_will_create' => false,
+            'color_id' => $color?->id, 'color_will_create' => false,
         ];
     }
 
@@ -348,6 +428,53 @@ class ProductImportService
             ->where('is_active', true)->get()->keyBy(fn (Brand $brand) => $this->catalogKey($brand->name))->all();
 
         return $this->brandCache[$companyId][$this->catalogKey($name)] ?? null;
+    }
+
+    private function subcategory(int $companyId, ?ProductCategory $parent, ?string $name): ?ProductCategory
+    {
+        if ($name === null || $parent === null) {
+            return null;
+        }
+
+        return ProductCategory::query()
+            ->where('company_id', $companyId)
+            ->where('parent_id', $parent->id)
+            ->where('is_active', true)
+            ->whereRaw('LOWER(name) = ?', [Str::lower($name)])
+            ->first();
+    }
+
+    private function style(int $companyId, ?string $name): ?Style
+    {
+        if ($name === null) {
+            return null;
+        }
+        $this->styleCache[$companyId] ??= Style::query()->where('company_id', $companyId)
+            ->where('is_active', true)->get()->keyBy(fn (Style $s) => $this->catalogKey($s->name))->all();
+
+        return $this->styleCache[$companyId][$this->catalogKey($name)] ?? null;
+    }
+
+    private function size(int $companyId, ?string $name): ?Size
+    {
+        if ($name === null) {
+            return null;
+        }
+        $this->sizeCache[$companyId] ??= Size::query()->where('company_id', $companyId)
+            ->where('is_active', true)->get()->keyBy(fn (Size $s) => $this->catalogKey($s->name))->all();
+
+        return $this->sizeCache[$companyId][$this->catalogKey($name)] ?? null;
+    }
+
+    private function color(int $companyId, ?string $name): ?Color
+    {
+        if ($name === null) {
+            return null;
+        }
+        $this->colorCache[$companyId] ??= Color::query()->where('company_id', $companyId)
+            ->where('is_active', true)->get()->keyBy(fn (Color $c) => $this->catalogKey($c->name))->all();
+
+        return $this->colorCache[$companyId][$this->catalogKey($name)] ?? null;
     }
 
     private function unit(int $companyId, ?string $name): ?Unit
@@ -378,6 +505,27 @@ class ProductImportService
         $this->brandCache[$brand->company_id][$this->catalogKey($brand->name)] = $brand;
 
         return $brand;
+    }
+
+    private function rememberStyle(Style $style): Style
+    {
+        $this->styleCache[$style->company_id][$this->catalogKey($style->name)] = $style;
+
+        return $style;
+    }
+
+    private function rememberSize(Size $size): Size
+    {
+        $this->sizeCache[$size->company_id][$this->catalogKey($size->name)] = $size;
+
+        return $size;
+    }
+
+    private function rememberColor(Color $color): Color
+    {
+        $this->colorCache[$color->company_id][$this->catalogKey($color->name)] = $color;
+
+        return $color;
     }
 
     private function rememberUnit(Unit $unit): Unit

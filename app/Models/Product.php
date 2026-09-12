@@ -18,6 +18,9 @@ class Product extends Model
         'category_id',
         'brand_id',
         'unit_id',
+        'style_id',
+        'size_id',
+        'color_id',
         'name',
         'internal_code',
         'barcode',
@@ -88,6 +91,30 @@ class Product extends Model
     public function unit()
     {
         return $this->belongsTo(Unit::class, 'unit_id');
+    }
+
+    /**
+     * Estilo del producto.
+     */
+    public function style()
+    {
+        return $this->belongsTo(Style::class, 'style_id');
+    }
+
+    /**
+     * Talla del producto.
+     */
+    public function size()
+    {
+        return $this->belongsTo(Size::class, 'size_id');
+    }
+
+    /**
+     * Color del producto.
+     */
+    public function color()
+    {
+        return $this->belongsTo(Color::class, 'color_id');
     }
 
     /**

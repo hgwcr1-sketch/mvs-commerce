@@ -77,7 +77,7 @@
 
             <option value="">Seleccione...</option>
 
-            @foreach($categories as $category)
+            @foreach($categories->whereNull('parent_id') as $category)
 
                 <option
                     value="{{ $category->id }}"
@@ -87,6 +87,31 @@
 
                 </option>
 
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="subcategory_id"
+            label="Subcategoría / Subrubro">
+
+            <option value="">Seleccione...</option>
+
+            @php
+                $selectedCategoryId = old('category_id', $product->category_id ?? null);
+                $subcategories = $categories->where('parent_id', '!=', null);
+                if ($selectedCategoryId) {
+                    $subcategories = $categories->where('parent_id', $selectedCategoryId);
+                }
+            @endphp
+
+            @foreach($subcategories as $sub)
+                <option
+                    value="{{ $sub->id }}"
+                    @selected(old('subcategory_id', $product->category_id ?? '')==$sub->id)
+                    data-parent="{{ $sub->parent_id }}">
+                    {{ $sub->name }}
+                </option>
             @endforeach
 
         </x-select>
@@ -125,6 +150,66 @@
                     @selected(old('unit_id',$product->unit_id ?? '')==$unit->id)>
 
                     {{ $unit->name }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="style_id"
+            label="Estilo">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($styles as $style)
+
+                <option
+                    value="{{ $style->id }}"
+                    @selected(old('style_id',$product->style_id ?? '')==$style->id)>
+
+                    {{ $style->name }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="size_id"
+            label="Talla">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($sizes as $size)
+
+                <option
+                    value="{{ $size->id }}"
+                    @selected(old('size_id',$product->size_id ?? '')==$size->id)>
+
+                    {{ $size->name }}{{ $size->abbreviation ? ' ('.$size->abbreviation.')' : '' }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="color_id"
+            label="Color">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($colors as $color)
+
+                <option
+                    value="{{ $color->id }}"
+                    @selected(old('color_id',$product->color_id ?? '')==$color->id)>
+
+                    {{ $color->name }}{{ $color->hex_code ? ' ('.$color->hex_code.')' : '' }}
 
                 </option>
 
@@ -333,6 +418,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     unit.addEventListener('change', syncQuantityStep);
     syncQuantityStep();
+
+    const categorySelect = document.querySelector('[name="category_id"]');
+    const subcategorySelect = document.querySelector('[name="subcategory_id"]');
+    if (!categorySelect || !subcategorySelect) return;
+
+    const allSubOptions = Array.from(subcategorySelect.options).slice(1);
+
+    const filterSubcategories = () => {
+        const parentId = categorySelect.value;
+        subcategorySelect.innerHTML = '<option value="">Seleccione...</option>';
+        allSubOptions.forEach(opt => {
+            if (!parentId || opt.dataset.parent === parentId) {
+                subcategorySelect.appendChild(opt.cloneNode(true));
+            }
+        });
+    };
+
+    categorySelect.addEventListener('change', () => {
+        filterSubcategories();
+    });
+    filterSubcategories();
 });
 </script>
 @endonce

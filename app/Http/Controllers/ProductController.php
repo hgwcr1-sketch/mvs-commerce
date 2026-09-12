@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Brand;
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Size;
+use App\Models\Style;
 use App\Models\Unit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -170,10 +173,29 @@ $lowStockProducts = $statsProducts
             ->orderBy('name')
             ->get();
 
+        $styles = Style::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $sizes = Size::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $colors = Color::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
         return view('productos.create', compact(
             'categories',
             'brands',
-            'units'
+            'units',
+            'styles',
+            'sizes',
+            'colors'
         ));
     }
 
@@ -184,6 +206,11 @@ $lowStockProducts = $statsProducts
     {
         $data = $request->validated();
         $data['company_id'] = session('active_company_id');
+
+        if ($request->has('subcategory_id') && $request->subcategory_id) {
+            $data['category_id'] = $request->subcategory_id;
+        }
+        unset($data['subcategory_id']);
 
         if ($request->hasFile('image')) {
             $data['image'] = $request
@@ -274,6 +301,22 @@ if ($request->expectsJson()) {
         ->orderBy('name')
         ->get();
 
+    $styles = Style::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get();
+
+    $sizes = Size::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->orderBy('name')
+        ->get();
+
+    $colors = Color::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get();
+
     $branch = $producto->branches()
         ->where('branches.id', $branchId)
         ->first();
@@ -296,7 +339,10 @@ if ($request->expectsJson()) {
         'product',
         'categories',
         'brands',
-        'units'
+        'units',
+        'styles',
+        'sizes',
+        'colors'
     ));
 }
 
@@ -307,6 +353,11 @@ if ($request->expectsJson()) {
     {
         $data = $request->validated();
         $data['company_id'] = session('active_company_id');
+
+        if ($request->has('subcategory_id') && $request->subcategory_id) {
+            $data['category_id'] = $request->subcategory_id;
+        }
+        unset($data['subcategory_id']);
 
         if ($request->hasFile('image')) {
             if ($producto->image) {

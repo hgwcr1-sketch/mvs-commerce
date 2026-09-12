@@ -43,6 +43,24 @@ class UpdateProductRequest extends FormRequest
                     ->where('company_id', $companyId),
             ],
 
+            'style_id' => [
+                'nullable',
+                Rule::exists('styles', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
+            'size_id' => [
+                'nullable',
+                Rule::exists('sizes', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
+            'color_id' => [
+                'nullable',
+                Rule::exists('colors', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
             'name' => [
                 'required',
                 'string',
@@ -199,6 +217,15 @@ class UpdateProductRequest extends FormRequest
 
             'unit_id.exists' =>
                 'La unidad seleccionada no pertenece a la empresa activa.',
+
+            'style_id.exists' =>
+                'El estilo seleccionado no pertenece a la empresa activa.',
+
+            'size_id.exists' =>
+                'La talla seleccionada no pertenece a la empresa activa.',
+
+            'color_id.exists' =>
+                'El color seleccionado no pertenece a la empresa activa.',
 
             'cost.required' =>
                 'Debe ingresar el costo.',

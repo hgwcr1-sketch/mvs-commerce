@@ -3,7 +3,10 @@
 namespace App\Services\Imports;
 
 use App\Models\Brand;
+use App\Models\Color;
 use App\Models\ProductCategory;
+use App\Models\Size;
+use App\Models\Style;
 use App\Models\Unit;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -116,8 +119,13 @@ class MigrationTemplateService
             ]), 'lists' => ['tipo_cliente' => ['individual', 'company'], 'tipo_identificacion' => ['01', '02', '03', '04', '05'], 'nivel_precio' => ['normal', 'wholesale', 'a', 'b', 'c'], 'activo' => $yesNo]],
             'products' => ['title' => 'Productos', 'headers' => ProductImportService::HEADERS, 'fields' => $this->fields(ProductImportService::HEADERS, [
                 'codigo_interno' => ['text', 'Texto (conservar ceros)', null, '000123'], 'nombre' => ['text', 'Texto', null, 'Producto ejemplo'],
-                'categoria' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione una categoría activa', 'General'], 'marca' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione una marca activa o deje vacío', 'Marca ejemplo'],
+                'categoria' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione una categoría activa', 'General'],
+                'subcategoria_subrubro' => ['text', 'Texto; subcategoría bajo la categoría padre', 'Seleccione una subcategoría o deje vacío', 'Subcategoría ejemplo'],
+                'marca' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione una marca activa o deje vacío', 'Marca ejemplo'],
                 'unidad' => ['text', 'Texto; nombre o abreviatura activa', 'Seleccione una unidad activa', 'Unidad'], 'tipo_producto' => ['text', 'Texto', 'product, service, combo', 'product'],
+                'estilo' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione un estilo o deje vacío', 'Estilo ejemplo'],
+                'talla' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione una talla o deje vacío', 'M'],
+                'color' => ['text', 'Texto; catálogo activo de la empresa', 'Seleccione un color o deje vacío', 'Negro'],
                 'codigo_barras_principal' => ['text', 'Texto (no usar notación científica)', null, '0012345678905'], 'codigos_barras_adicionales' => ['text', 'Texto; separar con coma, punto y coma o |', null, '0011111111111;0022222222222'],
                 'cabys' => ['text', 'Texto (conservar ceros)', null, '0123456789012'], 'descripcion_corta' => ['text', 'Texto', null, 'Descripción breve'], 'descripcion' => ['text', 'Texto', null, 'Descripción completa'],
                 'costo' => ['number', 'Monto no negativo, máximo 4 decimales', null, '1000.0000', '#,##0.0000'], 'precio_venta' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1500.0000', '#,##0.0000'],
@@ -125,7 +133,17 @@ class MigrationTemplateService
                 'precio_a' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1480.0000', '#,##0.0000'], 'precio_b' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1470.0000', '#,##0.0000'], 'precio_c' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1460.0000', '#,##0.0000'],
                 'impuesto' => ['number', 'Porcentaje 0–100, máximo 2 decimales; no es catálogo cerrado', 'Cualquier tasa entre 0 y 100 admitida por el importador', '13.00', '0.00'],
                 'controla_inventario' => ['text', 'Texto', 'Sí, No', 'Sí'], 'permite_stock_negativo' => ['text', 'Texto', 'Sí, No', 'No'], 'imprime_etiqueta' => ['text', 'Texto', 'Sí, No', 'No'], 'activo' => ['text', 'Texto', 'Sí, No', 'Sí'],
-            ]), 'lists' => ['categoria' => ProductCategory::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'marca' => Brand::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'unidad' => Unit::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(), 'tipo_producto' => ['product', 'service', 'combo'], 'controla_inventario' => $yesNo, 'permite_stock_negativo' => $yesNo, 'imprime_etiqueta' => $yesNo, 'activo' => $yesNo]],
+            ]), 'lists' => [
+                'categoria' => ProductCategory::query()->where('company_id', $companyId)->whereNull('parent_id')->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'subcategoria_subrubro' => ProductCategory::query()->where('company_id', $companyId)->where('parent_id', '!=', null)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'marca' => Brand::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'unidad' => Unit::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'tipo_producto' => ['product', 'service', 'combo'],
+                'estilo' => Style::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'talla' => Size::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'color' => Color::query()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->pluck('name')->all(),
+                'controla_inventario' => $yesNo, 'permite_stock_negativo' => $yesNo, 'imprime_etiqueta' => $yesNo, 'activo' => $yesNo,
+            ]],
             'sales' => $this->genericDefinition('Ventas históricas', HistoricalSaleImportService::HEADERS, ['numero_documento', 'codigo_sucursal', 'identificacion_cliente', 'codigo_producto', 'codigo_barras'], ['tipo_documento' => ['electronic_invoice', 'electronic_ticket'], 'condicion_venta' => ['cash', 'credit']], ['fecha' => 'Fecha y hora (AAAA-MM-DD HH:MM:SS)']),
             'inventory' => $this->genericDefinition('Inventario P36', InventoryMigrationImportService::HEADERS, ['origen_migracion', 'clave_fila', 'codigo_sucursal', 'codigo_producto', 'codigo_barras', 'referencia'], ['tipo_registro' => ['saldo_inicial', 'movimiento_historico'], 'tipo_movimiento' => ['entrada', 'salida']], ['fecha' => 'Fecha y hora (AAAA-MM-DD HH:MM:SS)']),
             'loyalty' => [
