@@ -668,4 +668,74 @@ class DemoCompanyProvisionerTest extends TestCase
 
         $this->assertFileExists($otherDir . '/products/keep_me.txt');
     }
+
+    // =========================================================
+    // P. CATÁLOGO DETERMINISTA
+    // =========================================================
+
+    private function snapshotProducts(Company $company): array
+    {
+        return Product::where('company_id', $company->id)
+            ->with(['style', 'size', 'color'])
+            ->orderBy('internal_code')
+            ->get()
+            ->map(fn ($p) => [
+                'code' => $p->internal_code,
+                'name' => $p->name,
+                'style' => $p->style?->name,
+                'size' => $p->size?->name,
+                'color' => $p->color?->name,
+                'cost' => $p->cost,
+                'sale_price' => $p->sale_price,
+                'wholesale_price' => $p->wholesale_price,
+            ])
+            ->values()
+            ->toArray();
+    }
+
+    public function test_create_produces_deterministic_products(): void
+    {
+        $first = $this->provisioner->create();
+        $snapshot1 = $this->snapshotProducts($first);
+
+        $this->provisioner->reset();
+        $snapshot2 = $this->snapshotProducts($first);
+
+        $this->assertSame(30, count($snapshot1));
+        $this->assertSame($snapshot1, $snapshot2);
+    }
+
+    public function test_reset_produces_identical_catalog(): void
+    {
+        $company = $this->provisioner->create();
+        $beforeReset = $this->snapshotProducts($company);
+
+        $this->provisioner->reset();
+        $afterReset = $this->snapshotProducts($company);
+
+        $this->assertSame($beforeReset, $afterReset);
+    }
+
+    public function test_second_reset_still_identical(): void
+    {
+        $company = $this->provisioner->create();
+        $original = $this->snapshotProducts($company);
+
+        $this->provisioner->reset();
+        $this->provisioner->reset();
+        $final = $this->snapshotProducts($company);
+
+        $this->assertSame($original, $final);
+    }
+
+    public function test_all_products_have_style_size_color(): void
+    {
+        $company = $this->provisioner->create();
+
+        Product::where('company_id', $company->id)->each(function ($p) {
+            $this->assertNotNull($p->style_id, "{$p->internal_code} missing style_id");
+            $this->assertNotNull($p->size_id, "{$p->internal_code} missing size_id");
+            $this->assertNotNull($p->color_id, "{$p->internal_code} missing color_id");
+        });
+    }
 }

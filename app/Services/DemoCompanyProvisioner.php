@@ -362,42 +362,42 @@ class DemoCompanyProvisioner
         $allSizes = Size::where('company_id', $cid)->get();
         $allColors = Color::where('company_id', $cid)->get();
 
-        $products = [
-            ['name' => 'Camisa Clásica Algodón', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 8500, 'sale' => 14900, 'wholesale' => 12500, 'code' => 'CAM-CL-001'],
-            ['name' => 'Camisa Casual Linen', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 12000, 'sale' => 21900, 'wholesale' => 18900, 'code' => 'CAM-CA-002'],
-            ['name' => 'Camisa Formal Premium', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 15000, 'sale' => 28900, 'wholesale' => 24900, 'code' => 'CAM-FM-003'],
-            ['name' => 'Pantalón Slim Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 11000, 'sale' => 19900, 'wholesale' => 16900, 'code' => 'PAN-SL-001'],
-            ['name' => 'Pantalón Clásico Cargo', 'cat' => $pantalonesCat, 'brand' => $brand1, 'cost' => 13000, 'sale' => 23900, 'wholesale' => 19900, 'code' => 'PAN-CA-002'],
-            ['name' => 'Pantalón Jogger Eco', 'cat' => $pantalonesCat, 'brand' => $brand2, 'cost' => 9000, 'sale' => 16900, 'wholesale' => 14500, 'code' => 'PAN-JG-003'],
-            ['name' => 'Zapatilla Runner Pro', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 22000, 'sale' => 39900, 'wholesale' => 34900, 'code' => 'ZAP-RN-001'],
-            ['name' => 'Zapatilla Urban Style', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 18000, 'sale' => 32900, 'wholesale' => 28900, 'code' => 'ZAP-UR-002'],
-            ['name' => 'Bolso Eco Canvas', 'cat' => $accesoriosCat, 'brand' => $brand2, 'cost' => 7000, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'BOL-EC-001'],
-            ['name' => 'Bolso Artisan Leather', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 19000, 'sale' => 35900, 'wholesale' => 30900, 'code' => 'BOL-AL-002'],
-            ['name' => 'Manta Eco Tejida', 'cat' => $hogarCat, 'brand' => $brand2, 'cost' => 14000, 'sale' => 25900, 'wholesale' => 22900, 'code' => 'MAN-EC-001'],
-            ['name' => 'Cojín Artesanal CR', 'cat' => $hogarCat, 'brand' => $brand1, 'cost' => 5500, 'sale' => 9900, 'wholesale' => 8500, 'code' => 'COJ-AR-001'],
-            ['name' => 'Camiseta Básica Unisex', 'cat' => $camisasCat, 'brand' => $brand4, 'cost' => 4500, 'sale' => 8900, 'wholesale' => 7500, 'code' => 'CAM-BA-004'],
-            ['name' => 'Falda Midi Elegante', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 10000, 'sale' => 18900, 'wholesale' => 15900, 'code' => 'FAL-ME-001'],
-            ['name' => 'Short Deportivo Flex', 'cat' => $pantalonesCat, 'brand' => $brand4, 'cost' => 6000, 'sale' => 11900, 'wholesale' => 9900, 'code' => 'SHO-DF-001'],
-            ['name' => 'Chaqueta Impermeable', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 25000, 'sale' => 45900, 'wholesale' => 39900, 'code' => 'CHA-IM-001'],
-            ['name' => 'Vestido Casual Floral', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 14000, 'sale' => 26900, 'wholesale' => 22900, 'code' => 'VES-CF-001'],
-            ['name' => 'Sandalia Playa', 'cat' => $calzadoDepCat, 'brand' => $brand2, 'cost' => 5000, 'sale' => 9900, 'wholesale' => 8500, 'code' => 'SAN-PL-001'],
-            ['name' => 'Cinturón Cuero Artesanal', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 8000, 'sale' => 15900, 'wholesale' => 13500, 'code' => 'CIN-CA-001'],
-            ['name' => 'Sombrero C雕o Tejido', 'cat' => $accesoriosCat, 'brand' => $brand2, 'cost' => 4000, 'sale' => 7900, 'wholesale' => 6500, 'code' => 'SOM-CT-001'],
-            ['name' => 'Toalla Premium Algodón', 'cat' => $hogarCat, 'brand' => $brand4, 'cost' => 8500, 'sale' => 15900, 'wholesale' => 13500, 'code' => 'TOA-PA-001'],
-            ['name' => 'Servilletas Tejidas Pack 6', 'cat' => $hogarCat, 'brand' => $brand1, 'cost' => 3500, 'sale' => 6900, 'wholesale' => 5900, 'code' => 'SER-TJ-001'],
-            ['name' => 'Polo Deportivo DryFit', 'cat' => $camisasCat, 'brand' => $brand4, 'cost' => 7000, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'POL-DF-001'],
-            ['name' => 'Jeans Classic Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 12000, 'sale' => 22900, 'wholesale' => 19900, 'code' => 'JEA-CF-001'],
-            ['name' => 'Abrigo Ligero Cromático', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 20000, 'sale' => 37900, 'wholesale' => 32900, 'code' => 'ABR-LC-001'],
-            ['name' => 'Cartera Mini Cuero', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 9000, 'sale' => 17900, 'wholesale' => 15500, 'code' => 'CAR-MC-001'],
-            ['name' => 'Bermuda Casual', 'cat' => $pantalonesCat, 'brand' => $brand2, 'cost' => 7500, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'BER-CA-001'],
-            ['name' => 'Camisa Polo Clásica', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 9500, 'sale' => 17900, 'wholesale' => 15500, 'code' => 'CAM-PC-005'],
-            ['name' => 'Calcetines Pack 3 Pares', 'cat' => $calzadoDepCat, 'brand' => $brand4, 'cost' => 2000, 'sale' => 3900, 'wholesale' => 3200, 'code' => 'CAL-PK-001'],
-            ['name' => 'Bufanda Artesanal CR', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 6000, 'sale' => 11900, 'wholesale' => 9900, 'code' => 'BUF-AR-001'],
-        ];
+        $styleByName = $allStyles->keyBy('name');
+        $sizeByName = $allSizes->keyBy('name');
+        $colorByName = $allColors->keyBy('name');
 
-        $allStyleIds = $allStyles->pluck('id')->all();
-        $allSizeIds = $allSizes->pluck('id')->all();
-        $allColorIds = $allColors->pluck('id')->all();
+        $products = [
+            ['name' => 'Camisa Clásica Algodón', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 8500, 'sale' => 14900, 'wholesale' => 12500, 'code' => 'CAM-CL-001', 'style' => 'Clásico', 'size' => 'M', 'color' => 'Negro'],
+            ['name' => 'Camisa Casual Linen', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 12000, 'sale' => 21900, 'wholesale' => 18900, 'code' => 'CAM-CA-002', 'style' => 'Casual', 'size' => 'S', 'color' => 'Blanco'],
+            ['name' => 'Camisa Formal Premium', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 15000, 'sale' => 28900, 'wholesale' => 24900, 'code' => 'CAM-FM-003', 'style' => 'Formal', 'size' => 'L', 'color' => 'Azul'],
+            ['name' => 'Pantalón Slim Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 11000, 'sale' => 19900, 'wholesale' => 16900, 'code' => 'PAN-SL-001', 'style' => 'Formal', 'size' => 'M', 'color' => 'Gris'],
+            ['name' => 'Pantalón Clásico Cargo', 'cat' => $pantalonesCat, 'brand' => $brand1, 'cost' => 13000, 'sale' => 23900, 'wholesale' => 19900, 'code' => 'PAN-CA-002', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Verde'],
+            ['name' => 'Pantalón Jogger Eco', 'cat' => $pantalonesCat, 'brand' => $brand2, 'cost' => 9000, 'sale' => 16900, 'wholesale' => 14500, 'code' => 'PAN-JG-003', 'style' => 'Deportivo', 'size' => 'S', 'color' => 'Negro'],
+            ['name' => 'Zapatilla Runner Pro', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 22000, 'sale' => 39900, 'wholesale' => 34900, 'code' => 'ZAP-RN-001', 'style' => 'Deportivo', 'size' => 'XL', 'color' => 'Azul'],
+            ['name' => 'Zapatilla Urban Style', 'cat' => $calzadoDepCat, 'brand' => $brand3, 'cost' => 18000, 'sale' => 32900, 'wholesale' => 28900, 'code' => 'ZAP-UR-002', 'style' => 'Casual', 'size' => 'L', 'color' => 'Gris'],
+            ['name' => 'Bolso Eco Canvas', 'cat' => $accesoriosCat, 'brand' => $brand2, 'cost' => 7000, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'BOL-EC-001', 'style' => 'Casual', 'size' => 'M', 'color' => 'Beige'],
+            ['name' => 'Bolso Artisan Leather', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 19000, 'sale' => 35900, 'wholesale' => 30900, 'code' => 'BOL-AL-002', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Negro'],
+            ['name' => 'Manta Eco Tejida', 'cat' => $hogarCat, 'brand' => $brand2, 'cost' => 14000, 'sale' => 25900, 'wholesale' => 22900, 'code' => 'MAN-EC-001', 'style' => 'Bohemio', 'size' => 'XL', 'color' => 'Blanco'],
+            ['name' => 'Cojín Artesanal CR', 'cat' => $hogarCat, 'brand' => $brand1, 'cost' => 5500, 'sale' => 9900, 'wholesale' => 8500, 'code' => 'COJ-AR-001', 'style' => 'Bohemio', 'size' => 'M', 'color' => 'Rojo'],
+            ['name' => 'Camiseta Básica Unisex', 'cat' => $camisasCat, 'brand' => $brand4, 'cost' => 4500, 'sale' => 8900, 'wholesale' => 7500, 'code' => 'CAM-BA-004', 'style' => 'Casual', 'size' => 'S', 'color' => 'Blanco'],
+            ['name' => 'Falda Midi Elegante', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 10000, 'sale' => 18900, 'wholesale' => 15900, 'code' => 'FAL-ME-001', 'style' => 'Formal', 'size' => 'M', 'color' => 'Rosa'],
+            ['name' => 'Short Deportivo Flex', 'cat' => $pantalonesCat, 'brand' => $brand4, 'cost' => 6000, 'sale' => 11900, 'wholesale' => 9900, 'code' => 'SHO-DF-001', 'style' => 'Deportivo', 'size' => 'S', 'color' => 'Negro'],
+            ['name' => 'Chaqueta Impermeable', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 25000, 'sale' => 45900, 'wholesale' => 39900, 'code' => 'CHA-IM-001', 'style' => 'Deportivo', 'size' => 'XL', 'color' => 'Azul'],
+            ['name' => 'Vestido Casual Floral', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 14000, 'sale' => 26900, 'wholesale' => 22900, 'code' => 'VES-CF-001', 'style' => 'Casual', 'size' => 'S', 'color' => 'Rosa'],
+            ['name' => 'Sandalia Playa', 'cat' => $calzadoDepCat, 'brand' => $brand2, 'cost' => 5000, 'sale' => 9900, 'wholesale' => 8500, 'code' => 'SAN-PL-001', 'style' => 'Casual', 'size' => 'M', 'color' => 'Beige'],
+            ['name' => 'Cinturón Cuero Artesanal', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 8000, 'sale' => 15900, 'wholesale' => 13500, 'code' => 'CIN-CA-001', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Negro'],
+            ['name' => 'Sombrero Caño Tejido', 'cat' => $accesoriosCat, 'brand' => $brand2, 'cost' => 4000, 'sale' => 7900, 'wholesale' => 6500, 'code' => 'SOM-CT-001', 'style' => 'Bohemio', 'size' => 'M', 'color' => 'Gris'],
+            ['name' => 'Toalla Premium Algodón', 'cat' => $hogarCat, 'brand' => $brand4, 'cost' => 8500, 'sale' => 15900, 'wholesale' => 13500, 'code' => 'TOA-PA-001', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Blanco'],
+            ['name' => 'Servilletas Tejidas Pack 6', 'cat' => $hogarCat, 'brand' => $brand1, 'cost' => 3500, 'sale' => 6900, 'wholesale' => 5900, 'code' => 'SER-TJ-001', 'style' => 'Bohemio', 'size' => 'S', 'color' => 'Beige'],
+            ['name' => 'Polo Deportivo DryFit', 'cat' => $camisasCat, 'brand' => $brand4, 'cost' => 7000, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'POL-DF-001', 'style' => 'Deportivo', 'size' => 'M', 'color' => 'Verde'],
+            ['name' => 'Jeans Classic Fit', 'cat' => $pantalonesCat, 'brand' => $brand3, 'cost' => 12000, 'sale' => 22900, 'wholesale' => 19900, 'code' => 'JEA-CF-001', 'style' => 'Casual', 'size' => 'L', 'color' => 'Azul'],
+            ['name' => 'Abrigo Ligero Cromático', 'cat' => $camisasCat, 'brand' => $brand1, 'cost' => 20000, 'sale' => 37900, 'wholesale' => 32900, 'code' => 'ABR-LC-001', 'style' => 'Formal', 'size' => 'XL', 'color' => 'Gris'],
+            ['name' => 'Cartera Mini Cuero', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 9000, 'sale' => 17900, 'wholesale' => 15500, 'code' => 'CAR-MC-001', 'style' => 'Clásico', 'size' => 'S', 'color' => 'Negro'],
+            ['name' => 'Bermuda Casual', 'cat' => $pantalonesCat, 'brand' => $brand2, 'cost' => 7500, 'sale' => 13900, 'wholesale' => 11900, 'code' => 'BER-CA-001', 'style' => 'Casual', 'size' => 'M', 'color' => 'Beige'],
+            ['name' => 'Camisa Polo Clásica', 'cat' => $camisasCat, 'brand' => $brand3, 'cost' => 9500, 'sale' => 17900, 'wholesale' => 15500, 'code' => 'CAM-PC-005', 'style' => 'Clásico', 'size' => 'L', 'color' => 'Rojo'],
+            ['name' => 'Calcetines Pack 3 Pares', 'cat' => $calzadoDepCat, 'brand' => $brand4, 'cost' => 2000, 'sale' => 3900, 'wholesale' => 3200, 'code' => 'CAL-PK-001', 'style' => 'Deportivo', 'size' => 'XS', 'color' => 'Negro'],
+            ['name' => 'Bufanda Artesanal CR', 'cat' => $accesoriosCat, 'brand' => $brand1, 'cost' => 6000, 'sale' => 11900, 'wholesale' => 9900, 'code' => 'BUF-AR-001', 'style' => 'Bohemio', 'size' => 'M', 'color' => 'Rojo'],
+        ];
 
         foreach ($products as $p) {
             Product::firstOrCreate(
@@ -406,9 +406,9 @@ class DemoCompanyProvisioner
                     'category_id' => $p['cat']->id,
                     'brand_id' => $p['brand']->id,
                     'unit_id' => $unit->id,
-                    'style_id' => $allStyleIds[array_rand($allStyleIds)],
-                    'size_id' => $allSizeIds[array_rand($allSizeIds)],
-                    'color_id' => $allColorIds[array_rand($allColorIds)],
+                    'style_id' => $styleByName[$p['style']]->id,
+                    'size_id' => $sizeByName[$p['size']]->id,
+                    'color_id' => $colorByName[$p['color']]->id,
                     'name' => $p['name'],
                     'product_type' => 'product',
                     'cost' => $p['cost'],
