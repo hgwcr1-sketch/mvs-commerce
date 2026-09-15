@@ -16,6 +16,7 @@
     @endif
     <form action="{{ route('transferencias.store') }}" method="POST" class="space-y-6" @submit="submit($event)">
         @csrf
+        <input type="hidden" name="from_branch_id" value="{{ $fromBranch?->id }}">
         <section class="grid min-w-0 gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 md:grid-cols-2">
             <div class="min-w-0">
                 <h2 class="mb-2 text-sm font-semibold text-slate-700">Sucursal origen</h2>
@@ -27,7 +28,7 @@
                 <select name="to_branch_id" id="to_branch_id" required class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500" @disabled(!$fromBranch || $branches->isEmpty()) aria-invalid="{{ $errors->has('to_branch_id') ? 'true' : 'false' }}">
                     <option value="">Seleccione una sucursal</option>
                     @foreach($branches as $branch)
-                        <option value="{{ $branch->id }}" @selected((string) old('to_branch_id') === (string) $branch->id)>{{ $branch->name }} ({{ $branch->code }})</option>
+                        <option value="{{ $branch->id }}" @selected((string) old('to_branch_id', $toBranchId ?? '') === (string) $branch->id)>{{ $branch->name }} ({{ $branch->code }})</option>
                     @endforeach
                 </select>
                 @error('to_branch_id')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror

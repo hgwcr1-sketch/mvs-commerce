@@ -75,6 +75,15 @@ class TransferController extends Controller
         $company = Company::query()->findOrFail($companyId);
         $branchId = (int) session('active_branch_id');
 
+        // Allow prefill to override the source branch (e.g. from Centro de Control)
+        $prefill = null;
+        if ($prefillJson = $request->query('prefill')) {
+            $prefill = is_string($prefillJson) ? json_decode($prefillJson, true) : $prefillJson;
+            if (is_array($prefill) && ! empty($prefill['from_branch_id'])) {
+                $fromBranchId = (int) $prefill['from_branch_id'];
+            }
+        }
+
         $branches = Branch::query()
             ->where('company_id', $companyId)
             ->where('is_active', true)
@@ -107,7 +116,34 @@ class TransferController extends Controller
             ];
         })->filter()->unique('id')->values();
 
-        return view('transferencias.create', compact('branches', 'fromBranch', 'initialProducts'));
+        // Prefill from Control Center
+        if ($prefill && ! empty($prefill['products'])) {
+            $prefillProductIds = array_column($prefill['products'], 'product_id');
+            $prefillProducts = Product::query()->where('company_id', $companyId)
+                ->whereIn('id', $prefillProductIds)
+                ->with(['unit', 'branches' => fn ($q) => $q->where('branches.id', $fromBranchId)])
+                ->get()->keyBy('id');
+
+            foreach ($prefill['products'] as $pf) {
+                $pid = $pf['product_id'] ?? null;
+                $product = $prefillProducts->get($pid);
+                if (! $product) {
+                    continue;
+                }
+                $initialProducts->push([
+                    'id' => $product->id, 'name' => $product->name,
+                    'internal_code' => $product->internal_code,
+                    'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                    'branch_stock' => $product->branches->first()?->pivot?->stock,
+                    'quantity' => is_scalar($pf['quantity'] ?? null) ? (string) $pf['quantity'] : '',
+                ]);
+            }
+            $initialProducts = $initialProducts->unique('id')->values();
+        }
+
+        $toBranchId = $prefill['to_branch_id'] ?? null;
+
+        return view('transferencias.create', compact('branches', 'fromBranch', 'initialProducts', 'toBranchId'));
     }
 
     /**
@@ -166,17 +202,19 @@ class TransferController extends Controller
     public function store(Request $request, InventoryPostingService $inventory)
     {
         $companyId = (int) session('active_company_id');
-        $fromBranchId = (int) session('active_branch_id');
+        $fromBranchId = (int) $request->input('from_branch_id', session('active_branch_id'));
         $company = Company::query()->findOrFail($companyId);
 
         $data = $request->validate([
-            'to_branch_id' => ['required', 'integer'],
+            'from_branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'to_branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('company_id', $companyId)],
             'products' => ['required', 'array'],
             'products.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'products.*.quantity' => ['required', 'decimal:0,4', 'gt:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $fromBranchId = (int) $data['from_branch_id'];
         $fromBranch = Branch::query()->where('company_id', $companyId)->findOrFail($fromBranchId);
         $toBranch = Branch::query()->where('company_id', $companyId)->where('is_active', true)->findOrFail($data['to_branch_id']);
 

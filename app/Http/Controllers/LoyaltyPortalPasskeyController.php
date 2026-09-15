@@ -115,7 +115,11 @@ class LoyaltyPortalPasskeyController extends Controller
             'loyalty_portal_company_id' => $company->id,
             'loyalty_portal_customer_id' => $result['customer']->id,
         ]);
-        $result['credential']->update(['last_login_at' => now()]);
+        $update = ['last_login_at' => now()];
+        if (is_null($result['credential']->first_login_at)) {
+            $update['first_login_at'] = now();
+        }
+        $result['credential']->update($update);
         RateLimiter::clear($rateKey);
 
         if ($request->wantsJson() && ! $request->header('X-Portal-Form')) {

@@ -27,6 +27,7 @@ use App\Http\Controllers\CashSessionHistoryController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
+use App\Http\Controllers\ControlCenterController;
 use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 use App\Http\Controllers\CustomerAddressController;
 // Inventario
@@ -208,6 +209,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
+
+    Route::get('/centro-de-control', [ControlCenterController::class, 'index'])
+        ->middleware(['active.branch', 'permission:dashboard.admin'])
+        ->name('control-center.index');
 
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
         Route::get('/pos', [PosController::class, 'index'])->middleware('pos.cash-session')->name('pos.index');
@@ -963,6 +968,8 @@ Route::resource('transferencias', TransferController::class)
             // Firma QZ oficial: qz.security llama aquí con el mensaje crudo "toSign"
             // (sin contexto de terminal), por lo que el endpoint es global.
             Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
+            // Certificado X509 público para modo firmado silencioso (qz.security.setCertificatePromise)
+            Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
             Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
             Route::get('/descargar', MvsPrintDownloadController::class)->name('download');
         });

@@ -6,6 +6,15 @@
 
 @section('content')
 
+@if(!empty($prefill))
+<script>
+window.purchaseEdit = {
+    supplier: @json(!empty($prefill['supplier_id']) ? ['id' => $prefill['supplier_id'], 'name' => $prefill['supplier_name'] ?? '', 'commercial_name' => $prefill['supplier_name'] ?? ''] : null),
+    items: @json($prefill['items'] ?? [])
+};
+</script>
+@endif
+
 <div
     x-data="purchaseForm()"
     data-purchase-show-url="{{ route('compras.show', ['compra' => '__PURCHASE_ID__']) }}"

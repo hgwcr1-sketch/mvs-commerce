@@ -48,7 +48,7 @@ class PurchaseController extends Controller
     /**
      * Formulario para registrar una nueva compra.
      */
-    public function create()
+    public function create(Request $request)
 {
     $companyId = session('active_company_id');
 
@@ -67,10 +67,19 @@ class PurchaseController extends Controller
         ->orderBy('name')
         ->get();
 
+    $prefill = null;
+    if ($prefillJson = $request->query('prefill')) {
+        $decoded = is_string($prefillJson) ? json_decode($prefillJson, true) : $prefillJson;
+        if (is_array($decoded)) {
+            $prefill = $decoded;
+        }
+    }
+
     return view('compras.create', compact(
         'categories',
         'brands',
-        'units'
+        'units',
+        'prefill'
     ));
 }
 

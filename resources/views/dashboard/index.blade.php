@@ -42,6 +42,26 @@
             @can('caja.ver')<a href="{{ route('cash.history.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-3">Historial de caja</a>@endcan
             @can('caja.abrir')<a href="{{ route('cash.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 px-4 py-3">Ir a Caja</a>@endcan
         </div>
+@php
+    $ccCompany = \App\Models\Company::find(session('active_company_id'));
+    $ccIsAdmin = $ccCompany && auth()->user()->hasPermission('dashboard.admin', $ccCompany);
+@endphp
+@if($ccIsAdmin)
+        <a href="{{ route('control-center.index') }}" class="group block rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-amber-300 hover:shadow-md sm:p-6">
+            <div class="flex items-start gap-4">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </span>
+                <div class="min-w-0 flex-1">
+                    <h3 class="text-base font-bold text-slate-800">Centro de Control Inteligente</h3>
+                    <p class="mt-1 text-sm text-slate-500">Compras, traslados y clientes que requieren atención.</p>
+                </div>
+                <span class="mt-1 text-sm font-semibold text-amber-700 group-hover:text-amber-800 shrink-0">Abrir →</span>
+            </div>
+        </a>
+@endif
         <div class="rounded-xl border border-slate-200 bg-white">
             <h3 class="p-4 font-semibold">Últimas ventas del período</h3>
             <div class="overflow-x-auto"><table class="min-w-full text-sm">

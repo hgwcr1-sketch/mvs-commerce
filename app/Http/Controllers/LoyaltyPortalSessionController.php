@@ -162,7 +162,7 @@ class LoyaltyPortalSessionController extends Controller
         RateLimiter::clear($rateKey);
         $request->session()->regenerate();
         $this->putPortalSession($request, $company->id, $result['customer']->id);
-        $result['credential']->update(['last_login_at' => now()]);
+        $result['credential']->update(['last_login_at' => now(), 'first_login_at' => now()]);
 
         return redirect()->route('loyalty.customer.home', $company)->with('success', 'Cuenta creada correctamente.');
     }
@@ -185,7 +185,11 @@ class LoyaltyPortalSessionController extends Controller
         RateLimiter::clear($rateKey);
         $request->session()->regenerate();
         $this->putPortalSession($request, $credential->company_id, $credential->customer_id);
-        $credential->update(['last_login_at' => now()]);
+        $update = ['last_login_at' => now()];
+        if (is_null($credential->first_login_at)) {
+            $update['first_login_at'] = now();
+        }
+        $credential->update($update);
 
         if ($credential->must_change_password) {
             return redirect()->route('loyalty.customer.password.force', $company);
