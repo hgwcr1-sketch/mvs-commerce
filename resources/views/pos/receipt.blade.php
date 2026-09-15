@@ -72,31 +72,47 @@
     @if($format === '80mm')<style>@media print{@page{size:80mm auto;margin:0} html,body{width:80mm;margin:0;padding:0} .receipt{width:80mm;margin:0} }</style>@endif
 </head>
 <body>
+@php
+    // Usar receiptData si está disponible (fuente única), sino fallback a variables individuales
+    $data = $receiptData ?? null;
+    $companyData = $data?->company ?? ['trade_name' => $company->trade_name ?? 'MVS', 'legal_name' => $company->legal_name ?? '', 'identification_number' => $company->identification_number ?? null, 'address' => $company->address ?? null];
+    $branchData = $data?->branch ?? ['name' => $sale->branch->name ?? '', 'phone' => $sale->branch->phone ?? null, 'address' => $sale->branch->address ?? $company->address ?? null];
+    $documentData = $data?->document ?? ['type' => $sale->document_type === 'electronic_invoice' ? 'FACTURA ELECTRÓNICA' : ($sale->document_type === 'electronic_ticket' ? 'TICKET ELECTRÓNICO' : 'COMPROBANTE'), 'sale_number' => $sale->sale_number, 'completed_at' => $sale->completed_at?->timezone($company->timezone)->format('d/m/Y H:i') ?? $sale->created_at->timezone($company->timezone)->format('d/m/Y H:i'), 'is_voided' => $sale->status === \App\Models\Sale::STATUS_VOIDED];
+    $cashierData = $data?->cashier ?? ['name' => $sale->user->name ?? ''];
+    $customerData = $data?->customer ?? ['name' => $sale->customer?->name ?? 'Consumidor Final', 'identification' => $sale->customer?->identification ?? null];
+    $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 0, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 0, ',', '.'), 'total' => number_format((float) $item->total, 0, ',', '.')])->toArray();
+    $totalsData = $data?->totals ?? ['subtotal' => number_format((float) $sale->subtotal, 0, ',', '.'), 'discount_total' => number_format((float) $sale->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $sale->tax_total, 0, ',', '.'), 'rounding_total' => number_format((float) $sale->rounding_total, 0, ',', '.'), 'total' => number_format((float) $sale->total, 0, ',', '.')];
+    $paymentsData = $data?->payments ?? $sale->payments->map(fn($payment) => ['method' => $payment->paymentMethod->name ?? 'Pago', 'amount' => number_format((float) $payment->amount, 0, ',', '.'), 'reference' => $payment->reference ?? null, 'received_amount' => (float) $payment->received_amount > 0 ? number_format((float) $payment->received_amount, 0, ',', '.') : null, 'change_amount' => (float) $payment->change_amount > 0 ? number_format((float) $payment->change_amount, 0, ',', '.') : null, 'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false])->toArray();
+    $paymentSummaryData = $data?->payment_summary ?? ['is_mixed' => $sale->payments->count() >= 2];
+    $loyaltyData = $data?->loyalty ?? $loyalty;
+    $cashSessionData = $data?->cash_session ?? ($sale->cashSession ? ['session_number' => $sale->cashSession->session_number, 'cash_register_name' => $sale->cashSession->cashRegister->name] : null);
+    $footerMessage = $data?->footer_message ?? 'Gracias por su compra';
+@endphp
 <main class="receipt format-{{ $format }}" data-receipt-format="{{ $format }}">
     <header>
-        <h1 class="brand">MVS COMMERCE</h1>
-        <h2 class="center">{{ $company->trade_name }}</h2>
-        <p class="center muted">{{ $company->legal_name }}<br>{{ $company->identification_number }}<br>{{ $sale->branch->name }} · {{ $sale->branch->phone }}<br>{{ $sale->branch->address ?: $company->address }}</p>
+        <h1 class="brand">{{ $companyData['trade_name'] }}</h1>
+        <p class="center muted">{{ $companyData['legal_name'] }}<br>{{ $companyData['identification_number'] }}<br>{{ $branchData['name'] }} · {{ $branchData['phone'] }}<br>{{ $branchData['address'] }}</p>
+        <p class="center muted" style="font-size:9px;letter-spacing:.06em;margin-top:4px;">MVS Commerce</p>
     </header>
-    <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">TICKET ELECTRÓNICO</div>
-    @if($sale->status === \App\Models\Sale::STATUS_VOIDED)
+    <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">{{ $documentData['type'] }}</div>
+    @if($documentData['is_voided'])
         <div class="warning">VENTA ANULADA</div>
     @endif
     <section class="details">
-        <span><strong>Comprobante:</strong> {{ $sale->sale_number }}</span>
-        <span><strong>Fecha:</strong> {{ $sale->completed_at?->timezone($company->timezone)->format('d/m/Y H:i') }}</span>
-        <span><strong>Cajero:</strong> {{ $sale->user->name }}</span>
-        <span><strong>Cliente:</strong> {{ $sale->customer?->name ?? 'Consumidor Final' }}</span>
+        <span><strong>Comprobante:</strong> {{ $documentData['sale_number'] }}</span>
+        <span><strong>Fecha:</strong> {{ $documentData['completed_at'] }}</span>
+        <span><strong>Cajero:</strong> {{ $cashierData['name'] }}</span>
+        <span><strong>Cliente:</strong> {{ $customerData['name'] }}</span>
     </section>
     <div class="rule"></div>
     @if($format === '58mm')
         <div class="items58">
-        @foreach($sale->items as $item)
+        @foreach($itemsData as $item)
             <div class="item58">
-                <div class="item58-name">{{ $item->description }} @if($item->product_code)<span class="muted">{{ $item->product_code }}</span>@endif</div>
+                <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="muted">{{ $item['product_code'] }}</span>@endif</div>
                 <div class="item58-line">
-                    <span class="left">{{ rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ',') }} x ₡{{ number_format((float) $item->unit_price, 0, ',', '.') }}@if((float) $item->discount_total > 0) -₡{{ number_format((float) $item->discount_total, 0, ',', '.') }}@endif @if((float) $item->tax_total > 0) +₡{{ number_format((float) $item->tax_total, 0, ',', '.') }}@endif</span>
-                    <span class="right">₡{{ number_format((float) $item->total, 0, ',', '.') }}</span>
+                    <span class="left">{{ $item['quantity'] }} x ₡{{ $item['unit_price'] }}@if((float) $item['discount_total'] > 0) -₡{{ $item['discount_total'] }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $item['tax_total'] }}@endif</span>
+                    <span class="right">₡{{ $item['total'] }}</span>
                 </div>
             </div>
         @endforeach
@@ -105,69 +121,69 @@
         <table>
             <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Imp.</th><th>Total</th></tr></thead>
             <tbody>
-            @foreach($sale->items as $item)
+            @foreach($itemsData as $item)
                 <tr>
-                    <td>{{ $item->description }}<br><span class="muted">{{ $item->product_code }}</span></td>
-                    <td>{{ rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ',') }}</td>
-                    <td>₡{{ number_format((float) $item->unit_price, 0, ',', '.') }}</td>
-                    <td>₡{{ number_format((float) $item->discount_total, 0, ',', '.') }}</td>
-                    <td>₡{{ number_format((float) $item->tax_total, 0, ',', '.') }}</td>
-                    <td>₡{{ number_format((float) $item->total, 0, ',', '.') }}</td>
+                    <td>{{ $item['description'] }}<br><span class="muted">{{ $item['product_code'] }}</span></td>
+                    <td>{{ $item['quantity'] }}</td>
+                    <td>₡{{ $item['unit_price'] }}</td>
+                    <td>₡{{ $item['discount_total'] }}</td>
+                    <td>₡{{ $item['tax_total'] }}</td>
+                    <td>₡{{ $item['total'] }}</td>
                 </tr>
             @endforeach
             </tbody>
         </table>
     @endif
-    @if(($loyalty['kind'] ?? null) === 'invitation')
+    @if(($loyaltyData['kind'] ?? null) === 'invitation')
         <div class="rule"></div>
         <section class="loyalty-invitation" aria-label="Invitación al programa de fidelidad">
             <p><strong>Únete a nuestro programa de fidelidad</strong></p>
-            <p>{{ $loyalty['portal_name'] }}</p>
-            <img class="loyalty-qr" src="{{ $loyalty['qr_image'] }}" alt="QR general del Portal de Clientes" width="95" height="95">
+            <p>{{ $loyaltyData['portal_name'] }}</p>
+            <img class="loyalty-qr" src="{{ $loyaltyData['qr_image'] ?? $loyaltyData['registration_url'] }}" alt="QR general del Portal de Clientes" width="95" height="95">
             <p>Escanea para registrarte</p>
         </section>
-    @elseif($loyalty ?? null)
+    @elseif($loyaltyData ?? null)
         <div class="rule"></div>
         <section aria-label="Fidelización">
-            <p><strong>Fidelización</strong>@if($loyalty['adjusted']) — saldo ajustado posteriormente @endif</p>
+            <p><strong>Fidelización</strong>@if($loyaltyData['adjusted']) — saldo ajustado posteriormente @endif</p>
             <table class="{{ $format === '58mm' ? 'loyalty-table' : '' }}">
-                @if($loyalty['kind'] === 'history')
-                    <tr><td>Saldo anterior</td><td>{{ number_format((float) $loyalty['balance_before'], 2, ',', '.') }}</td></tr>
+                @if($loyaltyData['kind'] === 'history')
+                    <tr><td>Saldo anterior</td><td>{{ number_format((float) $loyaltyData['balance_before'], 2, ',', '.') }}</td></tr>
                 @endif
-                <tr><td>Puntos ganados</td><td>+{{ number_format((float) $loyalty['earned'], 2, ',', '.') }}</td></tr>
-                <tr><td>Puntos canjeados</td><td>-{{ number_format((float) $loyalty['redeemed'], 2, ',', '.') }}</td></tr>
-                <tr><td>{{ $loyalty['kind'] === 'history' ? 'Saldo final' : 'Saldo actual' }}</td><td><strong>{{ number_format((float) $loyalty['balance_after'], 2, ',', '.') }}</strong></td></tr>
+                <tr><td>Puntos ganados</td><td>+{{ number_format((float) $loyaltyData['earned'], 2, ',', '.') }}</td></tr>
+                <tr><td>Puntos canjeados</td><td>-{{ number_format((float) $loyaltyData['redeemed'], 2, ',', '.') }}</td></tr>
+                <tr><td>{{ $loyaltyData['kind'] === 'history' ? 'Saldo final' : 'Saldo actual' }}</td><td><strong>{{ number_format((float) $loyaltyData['balance_after'], 2, ',', '.') }}</strong></td></tr>
             </table>
         </section>
     @endif
     <div class="rule"></div>
     <table class="totals">
-        <tr><td>Subtotal</td><td>₡{{ number_format((float) $sale->subtotal, 0, ',', '.') }}</td></tr>
-        @if((float) $sale->discount_total > 0)
-            <tr><td>Descuento</td><td>-₡{{ number_format((float) $sale->discount_total, 0, ',', '.') }}</td></tr>
+        <tr><td>Subtotal</td><td>₡{{ $totalsData['subtotal'] }}</td></tr>
+        @if((float) $totalsData['discount_total'] > 0)
+            <tr><td>Descuento</td><td>-₡{{ $totalsData['discount_total'] }}</td></tr>
         @endif
-        <tr><td>Impuesto</td><td>₡{{ number_format((float) $sale->tax_total, 0, ',', '.') }}</td></tr>
-        @if((float) $sale->rounding_total !== 0.0)
-            <tr><td>Redondeo</td><td>₡{{ number_format((float) $sale->rounding_total, 0, ',', '.') }}</td></tr>
+        <tr><td>Impuesto</td><td>₡{{ $totalsData['tax_total'] }}</td></tr>
+        @if((float) $totalsData['rounding_total'] !== 0.0)
+            <tr><td>Redondeo</td><td>₡{{ $totalsData['rounding_total'] }}</td></tr>
         @endif
-        <tr class="grand"><td>TOTAL</td><td>₡{{ number_format((float) $sale->total, 0, ',', '.') }}</td></tr>
+        <tr class="grand"><td>TOTAL</td><td>₡{{ $totalsData['total'] }}</td></tr>
     </table>
     <div class="rule"></div>
-    <p><strong>Formas de pago</strong>@if($sale->payments->count() >= 2) — Pago mixto @endif</p>
+    <p><strong>Formas de pago</strong>@if($paymentSummaryData['is_mixed']) — Pago mixto @endif</p>
     <table class="{{ $format === '58mm' ? 'pay-table' : '' }}">
-        @foreach($sale->payments as $payment)
-            <tr><td>{{ $payment->paymentMethod->name }}</td><td>₡{{ number_format((float) $payment->amount, 0, ',', '.') }}</td></tr>
-            @if($payment->reference)
-                <tr><td class="muted">Referencia</td><td class="muted">{{ $payment->reference }}</td></tr>
+        @foreach($paymentsData as $payment)
+            <tr><td>{{ $payment['method'] }}</td><td>₡{{ $payment['amount'] }}</td></tr>
+            @if($payment['reference'])
+                <tr><td class="muted">Referencia</td><td class="muted">{{ $payment['reference'] }}</td></tr>
             @endif
-            @if($payment->paymentMethod->allows_change)
-                <tr><td class="muted">Recibido / vuelto</td><td class="muted">₡{{ number_format((float) $payment->received_amount, 0, ',', '.') }} / ₡{{ number_format((float) $payment->change_amount, 0, ',', '.') }}</td></tr>
+            @if($payment['allows_change'] && $payment['received_amount'] !== null && $payment['change_amount'] !== null)
+                <tr><td class="muted">Recibido / vuelto</td><td class="muted">₡{{ $payment['received_amount'] }} / ₡{{ $payment['change_amount'] }}</td></tr>
             @endif
         @endforeach
     </table>
     <div class="rule"></div>
-    <p class="center"><strong>{{ $sale->cashSession ? $sale->cashSession->session_number.' — '.$sale->cashSession->cashRegister->name : 'Sin sesión de caja' }}</strong></p>
-    <p class="center muted thanks">Gracias por su compra</p>
+    <p class="center"><strong>{{ $cashSessionData ? $cashSessionData['session_number'].' — '.$cashSessionData['cash_register_name'] : 'Sin sesión de caja' }}</strong></p>
+    <p class="center muted thanks">{{ $footerMessage }}</p>
     @if(in_array($format, ['58mm','80mm'], true))<div class="cut-tail"></div>@endif
 </main>
 @unless($pdfMode ?? false)

@@ -50,6 +50,11 @@ class MvsPrintConfigController extends Controller
                 'auto_cut' => $terminal->auto_cut,
                 'open_drawer' => $terminal->open_drawer,
             ],
+            'qz' => [
+                'signature_url' => route('mvs.print.signature'),
+                'certificate_url' => route('mvs.print.certificate'),
+                'signed_mode' => true,
+            ],
         ]);
     }
 }

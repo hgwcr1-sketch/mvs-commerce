@@ -32,15 +32,27 @@ class SaleReceiptService
         return in_array($requested, self::FORMATS, true) ? $requested : ($sale->branch->receipt_format ?: '80mm');
     }
 
+    /**
+     * Construye el DTO normalizado con todos los datos del comprobante.
+     */
+    public function buildReceiptData(Sale $sale): SaleReceiptData
+    {
+        return SaleReceiptData::fromSale($sale);
+    }
+
     public function pdf(Sale $sale, Company $company, string $format = 'letter'): DomPdf
     {
+        $receiptData = $this->buildReceiptData($sale);
+        $loyalty = $this->loyalty->forSale($sale);
+
         $viewData = [
             'sale' => $sale,
             'company' => $company,
             'format' => $format,
             'autoPrint' => false,
             'pdfMode' => true,
-            'loyalty' => $this->loyalty->forSale($sale),
+            'receiptData' => $receiptData,
+            'loyalty' => $loyalty,
         ];
 
         if ($format === 'letter') {
@@ -58,7 +70,7 @@ class SaleReceiptService
 
         $items = $sale->items->count();
         $payments = $sale->payments->count();
-        $hasLoyalty = $this->loyalty->forSale($sale) !== null;
+        $hasLoyalty = $loyalty !== null;
 
         // Estimación generosa afinada por formato (58mm 2 líneas necesita más alto por item)
         if ($format === '58mm') {

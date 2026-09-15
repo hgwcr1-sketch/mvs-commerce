@@ -4,7 +4,7 @@
 @section('description', 'Configura terminales POS y su impresión local.')
 
 @section('content')
-<div class="space-y-6" x-data="mvsPrintQz({ testUrl: '{{ str_replace(route('mvs.print.terminals.test-print', 0), '/0/', '/__ID__/') }}', drawerUrl: '{{ str_replace(route('mvs.print.terminals.open-drawer', 0), '/0/', '/__ID__/') }}', signatureUrl: '{{ route('mvs.print.signature') }}', signedMode: {{ $qzSignedMode ? 'true' : 'false' }} })">
+<div class="space-y-6" x-data="mvsPrintQz({ testUrl: '{{ str_replace(route('mvs.print.terminals.test-print', 0), '/0/', '/__ID__/') }}', drawerUrl: '{{ str_replace(route('mvs.print.terminals.open-drawer', 0), '/0/', '/__ID__/') }}', signatureUrl: '{{ route('mvs.print.signature') }}', certificateUrl: '{{ route('mvs.print.certificate') }}', signedMode: {{ $qzSignedMode ? 'true' : 'false' }} })">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h2 class="text-xl font-semibold text-slate-800">Impresión (MVS Print)</h2>

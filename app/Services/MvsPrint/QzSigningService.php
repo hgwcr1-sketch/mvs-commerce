@@ -228,4 +228,98 @@ class QzSigningService
 
         return base64_encode($signature);
     }
+
+    /**
+     * Genera un certificado X509 autofirmado para QZ Tray (modo silencioso).
+     *
+     * El certificado se deriva de la clave privada existente y se guarda
+     * en storage/app/private/mvs-print/qz-signing-certificate.txt
+     * Idempotente: si ya existe no lo regenera.
+     */
+    public function ensureCertificate(): void
+    {
+        if ($this->certificateConfigured()) {
+            return;
+        }
+
+        $this->generateCertificate();
+    }
+
+    /**
+     * Genera un certificado X509 autofirmado válido por 10 años.
+     *
+     * Usa la clave privada RSA existente. El certificado es público
+     * y se entrega al navegador vía certificatePromise.
+     */
+    public function generateCertificate(): string
+    {
+        $this->ensureKeyPair();
+
+        $privateKey = openssl_pkey_get_private(file_get_contents($this->privateKeyPath()));
+
+        if ($privateKey === false) {
+            throw new Exception('No se pudo cargar la clave privada para generar certificado: '.(openssl_error_string() ?: 'error desconocido'));
+        }
+
+        $details = openssl_pkey_get_details($privateKey);
+        $publicKey = $details['key'] ?? null;
+
+        if (! is_string($publicKey) || $publicKey === '') {
+            throw new Exception('No se pudo obtener la clave pública para certificado: '.(openssl_error_string() ?: 'error desconocido'));
+        }
+
+        $dn = [
+            'commonName' => 'MVS Print Local',
+            'organizationName' => 'MVS Commerce',
+            'organizationalUnitName' => 'QZ Tray Signing',
+        ];
+
+        $config = [
+            'digest_alg' => 'sha512',
+            'private_key_bits' => 2048,
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'encrypt_key' => false,
+        ];
+
+        $csr = openssl_csr_new($dn, $privateKey, $config);
+
+        if ($csr === false) {
+            throw new Exception('No se pudo crear CSR para certificado QZ: '.(openssl_error_string() ?: 'error desconocido'));
+        }
+
+        $x509 = openssl_csr_sign($csr, null, $privateKey, 3650, $config);
+
+        if ($x509 === false) {
+            throw new Exception('No se pudo firmar certificado X509: '.(openssl_error_string() ?: 'error desconocido'));
+        }
+
+        $certPem = null;
+        $exported = openssl_x509_export($x509, $certPem);
+
+        if ($exported === false || ! is_string($certPem) || $certPem === '') {
+            throw new Exception('No se pudo exportar certificado X509: '.(openssl_error_string() ?: 'error desconocido'));
+        }
+
+        $path = $this->certificatePath();
+        @mkdir(dirname($path), 0755, true);
+        @file_put_contents($path, $certPem);
+
+        return $certPem;
+    }
+
+    /**
+     * Devuelve el PEM del certificado X509 público para entregar al navegador.
+     */
+    public function certificatePem(): string
+    {
+        $path = $this->certificatePath();
+
+        if (file_exists($path)) {
+            return file_get_contents($path);
+        }
+
+        $this->ensureCertificate();
+
+        return file_get_contents($this->certificatePath());
+    }
 }

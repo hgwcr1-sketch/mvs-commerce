@@ -179,7 +179,7 @@ class PosCheckoutTest extends TestCase
         $cashSession = CashSession::findOrFail(Sale::findOrFail($saleId)->cash_session_id);
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))
-            ->assertOk()->assertSee('Comprobante interno — pendiente de integración con Hacienda')->assertSee($cashSession->session_number);
+            ->assertOk()->assertSee('TICKET ELECTRÓNICO')->assertSee($cashSession->session_number)->assertSee(Sale::findOrFail($saleId)->sale_number);
 
         $viewer = $this->user($company, $branch, ['pos.acceder', 'ventas.ver']);
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))->assertOk();

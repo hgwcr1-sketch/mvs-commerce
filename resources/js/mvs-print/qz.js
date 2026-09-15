@@ -57,6 +57,7 @@ document.addEventListener('alpine:init', () => {
         testUrl: initialState.testUrl || null,
         drawerUrl: initialState.drawerUrl || null,
         signatureUrl: initialState.signatureUrl || null,
+        certificateUrl: initialState.certificateUrl || null,
         signedMode: initialState.signedMode || false,
 
         init() {
@@ -201,10 +202,28 @@ document.addEventListener('alpine:init', () => {
          * (modo firmado); sin él, QZ Tray usa sus diálogos estándar de confirmación.
          */
         configureSecurity() {
-            if (!this.signedMode || !this.signatureUrl) {
+            if (!this.signedMode || !this.signatureUrl || !this.certificateUrl) {
                 return;
             }
             window.qz.security.setSignatureAlgorithm('SHA512');
+
+            // Certificate promise: devuelve el certificado X509 público
+            window.qz.security.setCertificatePromise(() => {
+                return fetch(this.certificateUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/plain',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                }).then((response) => {
+                    if (!response.ok) {
+                        return Promise.reject(new Error('HTTP ' + response.status));
+                    }
+                    return response.text();
+                });
+            });
+
+            // Signature promise: firma el mensaje crudo "toSign" en el servidor
             window.qz.security.setSignaturePromise((toSign) => {
                 return (resolve, reject) => {
                     fetch(this.signatureUrl, {
@@ -258,19 +277,42 @@ document.addEventListener('alpine:init', () => {
                     bytes.push(0x1B, 0x64, 0x01); // ESC d 1 (feed)
                     continue;
                 }
+                if (line.type === 'separator') {
+                    const w = parseInt(payload.paper_width, 10) || 80;
+                    const sep = w === 58 ? '-'.repeat(16) : '-'.repeat(32);
+                    this.pushText(bytes, sep);
+                    bytes.push(0x0A);
+                    continue;
+                }
                 if (line.type === 'text') {
+                    const isDouble = line.size === 'double';
                     if (line.emphasized) {
                         bytes.push(0x1B, 0x45, 0x01); // ESC E 1 (emphasized)
                     }
+                    if (isDouble) {
+                        bytes.push(0x1D, 0x21, 0x11); // GS ! 0x11 double width+height
+                    }
                     if (line.align === 'center') {
                         bytes.push(0x1B, 0x61, 0x01); // ESC a 1 (center)
+                    } else if (line.align === 'right') {
+                        bytes.push(0x1B, 0x61, 0x02); // ESC a 2 (right)
                     } else {
                         bytes.push(0x1B, 0x61, 0x00); // ESC a 0 (left)
                     }
                     this.pushText(bytes, line.value ?? '');
                     bytes.push(0x0A);
+                    if (isDouble) {
+                        bytes.push(0x1D, 0x21, 0x00); // GS ! 0x00 reset
+                    }
                     if (line.emphasized) {
                         bytes.push(0x1B, 0x45, 0x00); // ESC E 0 (desactivar)
+                    }
+                }
+                if (line.type === 'qr') {
+                    const qrData = line.value ?? '';
+                    const isDataUrl = qrData.startsWith('data:');
+                    if (qrData && !isDataUrl) {
+                        this.addQrCode(bytes, qrData, line.size ?? 'medium', line.align ?? 'center');
                     }
                 }
             }
@@ -286,6 +328,49 @@ document.addEventListener('alpine:init', () => {
             }
 
             return bytes;
+        },
+
+        /**
+         * Agrega comando QR Code ESC/POS (GS ( k)
+         * Compatible con impresoras térmicas estándar (Epson, Star, etc.)
+         */
+        addQrCode(bytes, data, size = 'medium', align = 'center') {
+            // Modelos de QR:
+            // 49 (Model 1), 50 (Model 2 - default), 51 (Micro QR)
+            // Tamaño: 1-16 (dots per module)
+            const model = 50; // Model 2
+            const sizeMap = { small: 3, medium: 4, large: 6 };
+            const moduleSize = sizeMap[size] ?? 4;
+            const errorCorrection = 48; // 48=L (7%), 49=M (15%), 50=Q (25%), 51=H (30%)
+
+            const encoded = new TextEncoder().encode(data);
+            const dataLen = encoded.length;
+            const pL = dataLen & 0xFF;
+            const pH = (dataLen >> 8) & 0xFF;
+
+            // Alineación
+            if (align === 'center') {
+                bytes.push(0x1B, 0x61, 0x01); // ESC a 1 (center)
+            } else if (align === 'right') {
+                bytes.push(0x1B, 0x61, 0x02); // ESC a 2 (right)
+            } else {
+                bytes.push(0x1B, 0x61, 0x00); // ESC a 0 (left)
+            }
+
+            // GS ( k - Set QR code model
+            bytes.push(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x00, model);
+            // GS ( k - Set QR code size
+            bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, moduleSize);
+            // GS ( k - Set QR code error correction
+            bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, errorCorrection);
+            // GS ( k - Store QR code data
+            bytes.push(0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30);
+            bytes.push(...encoded);
+            // GS ( k - Print QR code
+            bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30);
+
+            // Feed después del QR
+            bytes.push(0x1B, 0x64, 0x03); // ESC d 3
         },
 
         pushText(bytes, text) {
@@ -400,15 +485,6 @@ window.MvsPrint = {
             return { success: false, error: 'MVS Print no disponible' };
         }
 
-        try {
-            // QZ connect() resuelve sin valor y rechaza si ya existe conexión.
-            if (!window.qz.websocket.isActive()) {
-                await window.qz.websocket.connect();
-            }
-        } catch {
-            return { success: false, error: 'MVS Print no responde' };
-        }
-
         const ticketData = await this.fetchTicket(ticketUrl, saleId, options);
         if (!ticketData || !ticketData.success || !ticketData.payload) {
             return { success: false, error: 'No se pudo obtener el ticket' };
@@ -417,6 +493,21 @@ window.MvsPrint = {
         const printer = ticketData.printer || (!options.reprint && options.printerName);
         if (!printer) {
             return { success: false, error: 'No hay impresora configurada' };
+        }
+
+        // Configurar seguridad QZ con certificado y firma si está disponible
+        const qzConfig = ticketData.qz;
+        if (qzConfig?.signed_mode && qzConfig?.certificate_url && qzConfig?.signature_url) {
+            this.configureQzSecurity(qzConfig.certificate_url, qzConfig.signature_url);
+        }
+
+        try {
+            // QZ connect() resuelve sin valor y rechaza si ya existe conexión.
+            if (!window.qz.websocket.isActive()) {
+                await window.qz.websocket.connect();
+            }
+        } catch {
+            return { success: false, error: 'MVS Print no responde' };
         }
 
         try {
@@ -455,8 +546,12 @@ window.MvsPrint = {
                 continue;
             }
             if (line.type === 'text') {
+                const isDouble = line.size === 'double';
                 if (line.emphasized) {
                     bytes.push(0x1B, 0x45, 0x01);
+                }
+                if (isDouble) {
+                    bytes.push(0x1D, 0x21, 0x11);
                 }
                 if (line.align === 'center') {
                     bytes.push(0x1B, 0x61, 0x01);
@@ -467,8 +562,20 @@ window.MvsPrint = {
                 }
                 this.pushText(bytes, line.value ?? '');
                 bytes.push(0x0A);
+                if (isDouble) {
+                    bytes.push(0x1D, 0x21, 0x00);
+                }
                 if (line.emphasized) {
                     bytes.push(0x1B, 0x45, 0x00);
+                }
+            }
+            if (line.type === 'qr') {
+                // QR Code ESC/POS
+                const qrData = line.value ?? '';
+                // Filtrar data:image/... no imprimible como QR; usar solo URL plana
+                const isDataUrl = qrData.startsWith('data:');
+                if (qrData && !isDataUrl) {
+                    this.addQrCode(bytes, qrData, line.size ?? 'medium', line.align ?? 'center');
                 }
             }
         }
@@ -484,6 +591,39 @@ window.MvsPrint = {
         }
 
         return bytes;
+    },
+
+    /**
+     * Agrega comando QR Code ESC/POS (GS ( k)
+     * Compatible con impresoras térmicas estándar (Epson, Star, etc.)
+     */
+    addQrCode(bytes, data, size = 'medium', align = 'center') {
+        const model = 50; // Model 2
+        const sizeMap = { small: 3, medium: 4, large: 6 };
+        const moduleSize = sizeMap[size] ?? 4;
+        const errorCorrection = 48; // L (7%)
+
+        const encoded = new TextEncoder().encode(data);
+        const dataLen = encoded.length;
+        const pL = dataLen & 0xFF;
+        const pH = (dataLen >> 8) & 0xFF;
+
+        if (align === 'center') {
+            bytes.push(0x1B, 0x61, 0x01);
+        } else if (align === 'right') {
+            bytes.push(0x1B, 0x61, 0x02);
+        } else {
+            bytes.push(0x1B, 0x61, 0x00);
+        }
+
+        bytes.push(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x00, model);
+        bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, moduleSize);
+        bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, errorCorrection);
+        bytes.push(0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30);
+        bytes.push(...encoded);
+        bytes.push(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30);
+
+        bytes.push(0x1B, 0x64, 0x03); // ESC d 3
     },
 
     pushText(bytes, text) {
@@ -506,5 +646,51 @@ window.MvsPrint = {
             binary += String.fromCharCode(byte);
         }
         return btoa(binary);
+    },
+
+    /**
+     * Configura la seguridad QZ (certificado + firma) para impresión silenciosa.
+     * Debe llamarse antes de window.qz.print().
+     */
+    configureQzSecurity(certificateUrl, signatureUrl) {
+        if (typeof window.qz === 'undefined' || !window.qz?.security) {
+            return;
+        }
+        window.qz.security.setSignatureAlgorithm('SHA512');
+
+        // Certificate promise: devuelve el certificado X509 público
+        window.qz.security.setCertificatePromise(() => {
+            return fetch(certificateUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/plain',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            }).then((response) => {
+                if (!response.ok) {
+                    return Promise.reject(new Error('HTTP ' + response.status));
+                }
+                return response.text();
+            });
+        });
+
+        // Signature promise: firma el mensaje crudo "toSign" en el servidor
+        window.qz.security.setSignaturePromise((toSign) => {
+            return fetch(signatureUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/plain',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ request: toSign }),
+            }).then((response) => {
+                if (!response.ok) {
+                    return Promise.reject(new Error('HTTP ' + response.status));
+                }
+                return response.text();
+            });
+        });
     },
 };

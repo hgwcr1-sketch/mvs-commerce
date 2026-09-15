@@ -271,8 +271,9 @@ class MvsPrintAutoPrintTest extends TestCase
         $lines = collect($response->json('payload.lines'));
         $textLines = $lines->where('type', 'text')->pluck('value')->implode("\n");
 
-        $this->assertStringContainsString(number_format((float) $sale->total, 2, ',', '.'), $textLines);
-        $this->assertStringContainsString(number_format((float) $sale->subtotal, 2, ',', '.'), $textLines);
+        // Formato CRC: 0 decimales con separador de miles
+        $this->assertStringContainsString(number_format((float) $sale->total, 0, ',', '.'), $textLines);
+        $this->assertStringContainsString(number_format((float) $sale->subtotal, 0, ',', '.'), $textLines);
     }
 
     public function test_duplicate_sale_does_not_auto_print(): void
@@ -301,9 +302,10 @@ class MvsPrintAutoPrintTest extends TestCase
         $sale = $this->completedSale($company, $branch, $user);
 
         $service = $this->app->make(EscPosSaleTicket::class);
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
 
-        $payload = $service->build($sale, '58');
+        $payload = $service->build($receiptData, '58');
 
         $this->assertSame('58', $payload['paper_width']);
         $separators = collect($payload['lines'])->filter(fn ($l) => $l['type'] === 'separator');
@@ -317,9 +319,10 @@ class MvsPrintAutoPrintTest extends TestCase
         $sale = $this->completedSale($company, $branch, $user);
 
         $service = $this->app->make(EscPosSaleTicket::class);
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
 
-        $payload = $service->build($sale, '80');
+        $payload = $service->build($receiptData, '80');
 
         $this->assertSame('80', $payload['paper_width']);
         $this->assertTrue($payload['auto_cut']);
@@ -332,9 +335,10 @@ class MvsPrintAutoPrintTest extends TestCase
         $sale = $this->completedSale($company, $branch, $user);
 
         $service = $this->app->make(EscPosSaleTicket::class);
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
 
-        $payload = $service->build($sale, '80');
+        $payload = $service->build($receiptData, '80');
         $textLines = collect($payload['lines'])->where('type', 'text')->pluck('value')->implode("\n");
 
         $this->assertStringContainsString('Gracias por su compra', $textLines);
@@ -347,9 +351,10 @@ class MvsPrintAutoPrintTest extends TestCase
         $sale = $this->completedSale($company, $branch, $user);
 
         $service = $this->app->make(EscPosSaleTicket::class);
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
 
-        $payload = $service->build($sale, '80');
+        $payload = $service->build($receiptData, '80');
         $payloadJson = json_encode($payload);
 
         $this->assertStringNotContainsString('PRIVATE KEY', $payloadJson);
@@ -408,9 +413,10 @@ class MvsPrintAutoPrintTest extends TestCase
         $sale = $this->completedSale($company, $branch, $user);
 
         $service = $this->app->make(EscPosSaleTicket::class);
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
 
-        $payload = $service->build($sale, '80');
+        $payload = $service->build($receiptData, '80');
 
         $this->assertArrayHasKey('lines', $payload);
         $this->assertIsArray($payload['lines']);
@@ -448,8 +454,9 @@ class MvsPrintAutoPrintTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('/^\s*(insert|update|delete|replace|alter|create|drop|truncate)\b/i', $query['query']);
         }
         $this->assertSame($before, $snapshot(), 'Reimprimir debe preservar todas las tablas, incluyendo venta, pagos, inventario y fidelización.');
-        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
-        $expected = app(EscPosSaleTicket::class)->build($sale, '58', true, false, $terminal->drawer_command);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+        $expected = app(EscPosSaleTicket::class)->build($receiptData, '58', true, false, $terminal->drawer_command);
         $this->assertSame($expected, $response->json('payload'));
         $terminal->update(['auto_cut' => false]);
         $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1]))

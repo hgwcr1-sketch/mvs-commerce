@@ -174,6 +174,21 @@ class MvsPrintTerminalsController extends Controller
     }
 
     /**
+     * Devuelve el certificado X509 público para QZ Tray (modo firmado silencioso).
+     *
+     * El navegador usa este certificado vía qz.security.setCertificatePromise()
+     * para validar las firmas generadas por el servidor.
+     * Solo expone el certificado público; la clave privada nunca sale del servidor.
+     */
+    public function certificate(QzSigningService $signing): Response
+    {
+        $signing->ensureCertificate();
+
+        return response($signing->certificatePem(), 200)
+            ->header('Content-Type', 'text/plain; charset=UTF-8');
+    }
+
+    /**
      * Marca la terminal como visible recientemente (latido del frontend).
      */
     public function heartbeat(MvsPrintTerminal $terminal): JsonResponse

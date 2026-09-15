@@ -59,6 +59,8 @@ class MvsPrintTicketController extends Controller
             'customer',
             'items.product',
             'payments.paymentMethod',
+            'cashSession.cashRegister',
+            'user',
         ]);
 
         $paperWidth = $terminal?->paper_width ?? '80';
@@ -66,8 +68,11 @@ class MvsPrintTicketController extends Controller
         $openDrawer = ! $reprint && ($terminal?->open_drawer ?? false);
         $drawerCommand = $terminal?->drawer_command;
 
+        // Usar SaleReceiptData como fuente única
+        $receiptData = $receipts->buildReceiptData($sale);
+
         $payload = $ticketService->build(
-            $sale,
+            $receiptData,
             $paperWidth,
             $autoCut,
             $openDrawer,
@@ -80,6 +85,11 @@ class MvsPrintTicketController extends Controller
             'sale_number' => $sale->sale_number,
             'printer' => $terminal?->printer_name,
             'payload' => $payload,
+            'qz' => [
+                'signature_url' => route('mvs.print.signature'),
+                'certificate_url' => route('mvs.print.certificate'),
+                'signed_mode' => true,
+            ],
         ]);
     }
 }
