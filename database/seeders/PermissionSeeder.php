@@ -192,6 +192,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'fidelidad.portal.configurar', 'label' => 'Configurar Portal de Clientes', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.portal.contenido', 'label' => 'Gestionar contenido del Portal de Clientes', 'module' => 'Fidelidad'],
             ['name' => 'fidelidad.portal.enlaces', 'label' => 'Gestionar enlaces del Portal de Clientes', 'module' => 'Fidelidad'],
+
+            // MVS Print (impresión local por terminal)
+            ['name' => 'mvs.print.configurar', 'label' => 'Configurar terminales de impresión local', 'module' => 'MVS Print'],
+            ['name' => 'mvs.print.imprimir', 'label' => 'Imprimir por terminal local (QZ Tray)', 'module' => 'MVS Print'],
         ];
 
         foreach ($permissions as $permission) {

@@ -58,6 +58,8 @@ use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
+use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
+// MVS Print
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
 // Finanzas
@@ -935,5 +937,32 @@ Route::resource('transferencias', TransferController::class)
         ->middleware('permission:inventario.ajustar')
         ->name('importaciones.inventario.import');
     Route::resource('reportes', ReportController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | MVS Print — Impresión local por terminal (QZ Tray)
+    |--------------------------------------------------------------------------
+    |
+    | Infraestructura aislada de configuración de terminales de impresión.
+    | El backend solo valida, guarda configuración y firma peticiones QZ;
+    | la impresión física la ejecuta el navegador mediante QZ Tray local.
+    | Aún no conectada al checkout del POS (fase posterior).
+    */
+    Route::middleware(['active.branch', 'permission:mvs.print.configurar'])
+        ->prefix('mvs/print')
+        ->name('mvs.print.')
+        ->group(function () {
+            Route::get('/', [MvsPrintTerminalsController::class, 'index'])->name('index');
+            Route::post('/terminals', [MvsPrintTerminalsController::class, 'store'])->name('terminals.store');
+            Route::patch('/terminals/{terminal}', [MvsPrintTerminalsController::class, 'update'])->name('terminals.update');
+            Route::patch('/terminals/{terminal}/toggle', [MvsPrintTerminalsController::class, 'toggleStatus'])->name('terminals.toggle');
+            Route::delete('/terminals/{terminal}', [MvsPrintTerminalsController::class, 'destroy'])->name('terminals.destroy');
+            Route::get('/terminals/{terminal}/test-print', [MvsPrintTerminalsController::class, 'testPrintPayload'])->name('terminals.test-print');
+            Route::get('/terminals/{terminal}/open-drawer', [MvsPrintTerminalsController::class, 'openDrawerPayload'])->name('terminals.open-drawer');
+            // Firma QZ oficial: qz.security llama aquí con el mensaje crudo "toSign"
+            // (sin contexto de terminal), por lo que el endpoint es global.
+            Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
+            Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
+        });
 
 });

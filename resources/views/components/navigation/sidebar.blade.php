@@ -413,6 +413,9 @@
         @can('formas_pago.administrar')
             <a href="{{ route('settings.pos.payment-methods.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.pos.payment-methods.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Formas de pago</a>
         @endcan
+        @can('mvs.print.configurar')
+            <a href="{{ route('mvs.print.index') }}" class="block py-1 text-xs {{ request()->routeIs('mvs.print.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Impresión (MVS Print)</a>
+        @endcan
     </div>
 </div>
 @endcanany
