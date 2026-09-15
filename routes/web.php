@@ -965,4 +965,24 @@ Route::resource('transferencias', TransferController::class)
             Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
         });
 
+    /*
+    |--------------------------------------------------------------------------
+    | MVS Print — Ticket + Config para auto_print desde el POS
+    |--------------------------------------------------------------------------
+    |
+    | Endpoints read-only accesibles desde el POS (solo active.branch).
+    | El endpoint de ticket retorna payload ESC/POS de una venta existente.
+    | El endpoint de config retorna la configuración de la terminal para
+    | que el frontend resuelva auto_print, auto_cut, open_drawer y paper_width.
+    */
+    Route::middleware(['active.branch'])
+        ->prefix('mvs/print')
+        ->name('mvs.print.')
+        ->group(function () {
+            Route::get('/ticket/{sale}', \App\Http\Controllers\MvsPrint\MvsPrintTicketController::class)
+                ->name('ticket');
+            Route::get('/config', [\App\Http\Controllers\MvsPrint\MvsPrintConfigController::class, 'show'])
+                ->name('config');
+        });
+
 });
