@@ -97,6 +97,93 @@ class MvsPrintTerminalsTest extends TestCase
         $this->assertSame('80', $terminal->paper_width);
     }
 
+    public function test_store_persists_printer_name(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa printer');
+        $user = $this->userWithPermission($company);
+
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->post(route('mvs.print.terminals.store'), [
+                'name' => 'Caja con impresora',
+                'branch_id' => $branch->id,
+                'printer_name' => 'EPSON TM-T20',
+                'paper_width' => '80',
+                'auto_print' => false,
+                'auto_cut' => true,
+                'open_drawer' => false,
+                'enabled' => true,
+            ])
+            ->assertRedirect(route('mvs.print.index'));
+
+        $terminal = MvsPrintTerminal::query()
+            ->forCompany($company->id)
+            ->firstOrFail();
+
+        $this->assertSame('EPSON TM-T20', $terminal->printer_name);
+        $this->assertSame('80', $terminal->paper_width);
+        $this->assertTrue($terminal->auto_cut);
+        $this->assertFalse($terminal->auto_print);
+        $this->assertFalse($terminal->open_drawer);
+        $this->assertTrue($terminal->enabled);
+    }
+
+    public function test_store_persists_null_printer_name_when_empty(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa sin printer');
+        $user = $this->userWithPermission($company);
+
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->post(route('mvs.print.terminals.store'), [
+                'name' => 'Caja sin impresora',
+                'branch_id' => $branch->id,
+                'printer_name' => '',
+                'paper_width' => '58',
+                'auto_print' => false,
+                'auto_cut' => true,
+                'open_drawer' => false,
+                'enabled' => true,
+            ])
+            ->assertRedirect(route('mvs.print.index'));
+
+        $terminal = MvsPrintTerminal::query()
+            ->forCompany($company->id)
+            ->firstOrFail();
+
+        $this->assertNull($terminal->printer_name);
+    }
+
+    public function test_update_persists_printer_name(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa update');
+        $user = $this->userWithPermission($company);
+
+        $terminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'printer_name' => 'OLD PRINTER',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->patch(route('mvs.print.terminals.update', $terminal), [
+                'name' => $terminal->name,
+                'printer_name' => 'EPSON TM-T88VII',
+                'paper_width' => '80',
+                'auto_print' => true,
+                'auto_cut' => true,
+                'open_drawer' => true,
+                'enabled' => true,
+                'drawer_command' => [],
+            ])
+            ->assertRedirect(route('mvs.print.index'));
+
+        $terminal->refresh();
+        $this->assertSame('EPSON TM-T88VII', $terminal->printer_name);
+        $this->assertTrue($terminal->auto_print);
+    }
+
     public function test_store_rejects_branch_from_another_company(): void
     {
         [$company] = $this->companyContext('Empresa uno');

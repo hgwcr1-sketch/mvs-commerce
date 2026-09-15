@@ -109,7 +109,9 @@
 
                 <div>
                     <label for="printer_name" class="mb-1 block text-sm font-semibold text-slate-700">Impresora (opcional)</label>
-                    <input id="printer_name" name="printer_name" type="text" maxlength="255" placeholder="Selecciónela desde QZ Tray"
+                    <input id="printer_name" name="printer_name" type="text" maxlength="255"
+                           x-model="printerName"
+                           placeholder="Seleccionada desde QZ Tray"
                            class="w-full rounded-xl border border-slate-300 px-4 py-3">
                 </div>
             </div>
