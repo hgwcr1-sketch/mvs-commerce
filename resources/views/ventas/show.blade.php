@@ -40,12 +40,7 @@
                 Volver
             </a>
 
-            <a
-                href="{{ route('pos.receipt', $sale) }}"
-                target="_blank"
-                class="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-800">
-                Reimprimir comprobante
-            </a>
+            <x-mvs-print.reprint :sale="$sale" />
 
             @can('devoluciones.crear')
             @if(

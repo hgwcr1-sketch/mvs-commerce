@@ -24,6 +24,30 @@
  */
 
 document.addEventListener('alpine:init', () => {
+    Alpine.data('mvsReprint', (ticketUrl, saleId) => ({
+        busy: false,
+        failed: false,
+        message: '',
+        async reprint() {
+            if (this.busy) return;
+            this.busy = true;
+            this.failed = false;
+            this.message = 'Enviando factura…';
+            try {
+                const result = await window.MvsPrint.printSale(ticketUrl, saleId, { reprint: true });
+                this.failed = !result.success;
+                this.message = result.success
+                    ? 'Factura enviada a ' + result.printer
+                    : 'No fue posible imprimir directamente.';
+            } catch {
+                this.failed = true;
+                this.message = 'No fue posible imprimir directamente.';
+            } finally {
+                this.busy = false;
+            }
+        },
+    }));
+
     Alpine.data('mvsPrintQz', (initialState = {}) => ({
         connected: null,
         message: '',
@@ -349,9 +373,12 @@ window.MvsPrint = {
      * Obtiene el payload ESC/POS de una venta ya completada.
      * Retorna { success, sale_id, sale_number, printer, payload }
      */
-    async fetchTicket(ticketUrl, saleId) {
+    async fetchTicket(ticketUrl, saleId, options = {}) {
         const terminalUuid = this.getTerminalUuid();
-        const params = terminalUuid ? `?terminal_uuid=${encodeURIComponent(terminalUuid)}` : '';
+        const query = new URLSearchParams();
+        if (terminalUuid) query.set('terminal_uuid', terminalUuid);
+        if (options.reprint) query.set('reprint', '1');
+        const params = query.size ? `?${query}` : '';
         try {
             const response = await fetch(ticketUrl.replace('{sale}', saleId) + params, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -369,47 +396,42 @@ window.MvsPrint = {
      * NUNCA lanza excepción — el caller siempre recibe un resultado.
      */
     async printSale(ticketUrl, saleId, options = {}) {
-        const timeout = options.timeout || 5000;
-
         if (typeof window.qz === 'undefined' || !window.qz?.websocket) {
             return { success: false, error: 'MVS Print no disponible' };
         }
 
         try {
-            const connected = await Promise.race([
-                window.qz.websocket.connect(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
-            ]);
-            if (!connected) {
-                return { success: false, error: 'MVS Print no responde' };
+            // QZ connect() resuelve sin valor y rechaza si ya existe conexión.
+            if (!window.qz.websocket.isActive()) {
+                await window.qz.websocket.connect();
             }
         } catch {
             return { success: false, error: 'MVS Print no responde' };
         }
 
-        const ticketData = await this.fetchTicket(ticketUrl, saleId);
+        const ticketData = await this.fetchTicket(ticketUrl, saleId, options);
         if (!ticketData || !ticketData.success || !ticketData.payload) {
             return { success: false, error: 'No se pudo obtener el ticket' };
         }
 
-        const printer = ticketData.printer || options.printerName;
+        const printer = ticketData.printer || (!options.reprint && options.printerName);
         if (!printer) {
             return { success: false, error: 'No hay impresora configurada' };
         }
 
         try {
-            const payload = ticketData.payload;
+            const payload = options.reprint
+                ? { ...ticketData.payload, open_drawer: false }
+                : ticketData.payload;
             const commands = this.buildEscPosFromPayload(payload);
             const base64 = this.toBase64(commands);
             const config = window.qz.configs.create(printer, { copies: 1 });
             const printData = [{ type: 'raw', format: 'command', flavor: 'base64', data: base64 }];
 
-            await Promise.race([
-                window.qz.print(config, printData),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
-            ]);
+            // No declarar fallo mientras QZ espera autorización y aún puede imprimir.
+            await window.qz.print(config, printData);
 
-            return { success: true };
+            return { success: true, printer };
         } catch (err) {
             return { success: false, error: err.message || 'Error al imprimir' };
         }

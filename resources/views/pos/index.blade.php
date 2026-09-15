@@ -610,7 +610,7 @@
                     <footer class="grid shrink-0 grid-cols-2 gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:flex sm:justify-end sm:px-6"><button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="rounded-xl border border-[#B9BDC2] px-5 py-3 font-bold">Cancelar</button><button type="button" @click="clearPayments" :disabled="checkout.processing || !checkout.payments.length" class="rounded-xl border border-[#B1922D] px-5 py-3 font-bold text-[#806817] disabled:opacity-40">Limpiar pagos</button><button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm" class="col-span-2 rounded-xl bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:bg-slate-300" x-text="checkout.processing ? 'Procesando…' : `Confirmar cobro — ${money(grandTotal)}`"></button></footer>
                 </div>
             </template>
-            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)"><template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)" :key="payment.payment_method_id"><p x-text="usdPaymentLabel(payment)"></p></template></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div x-show="checkout.printStatus === 'failed'" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Venta registrada correctamente. No fue posible imprimir automáticamente.</div><div x-show="checkout.printStatus === 'printing'" class="mx-auto mt-3 max-w-md rounded-lg bg-blue-50 p-3 text-sm text-blue-700">Imprimiendo ticket…</div><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><a :href="checkout.result.receipt_url" target="_blank" class="rounded-xl bg-[#111111] px-5 py-3 font-normal text-white">Imprimir comprobante</a><button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta</button></div></div></template>
+            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)"><template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)" :key="payment.payment_method_id"><p x-text="usdPaymentLabel(payment)"></p></template></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div x-show="checkout.printStatus === 'failed'" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No fue posible imprimir directamente.</div><div x-show="checkout.printStatus === 'printing'" class="mx-auto mt-3 max-w-md rounded-lg bg-blue-50 p-3 text-sm text-blue-700">Imprimiendo ticket…</div><p x-show="checkout.printMessage" x-text="checkout.printMessage" role="status" aria-live="polite" class="mt-3 break-words text-sm text-slate-700"></p><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><button type="button" @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl bg-[#111111] px-5 py-3 font-normal text-white disabled:opacity-50">Imprimir comprobante</button><a x-show="checkout.printStatus === 'failed'" x-cloak :href="checkout.result.receipt_url" target="_blank" rel="noopener" class="min-h-11 rounded-xl border border-slate-300 px-5 py-3 font-semibold">Usar impresión del navegador</a><button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta</button></div></div></template>
         </div>
     </div>
 
@@ -816,7 +816,7 @@ document.addEventListener('alpine:init', () => {
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->where('type', '!=', 'loyalty_points')->values()),
-        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null },
+        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' },
         quickCustomer: {
             open: false,
             saving: false,
@@ -1420,26 +1420,48 @@ document.addEventListener('alpine:init', () => {
             }
         },
         async attemptAutoPrint(saleId) {
-            if (!window.MvsPrint) return;
+            const checkout = this.checkout;
+            if (['checking', 'printing'].includes(checkout.printStatus)) return;
+            checkout.printStatus = 'checking';
+            checkout.printMessage = '';
             try {
+                if (!window.MvsPrint) throw new Error('MVS Print no disponible');
                 const configUrl = {{ Illuminate\Support\Js::from(route('mvs.print.config', [], false)) }};
-                const ticketUrl = {{ Illuminate\Support\Js::from(route('mvs.print.ticket', ['__SALE_ID__'], false)) }};
                 const config = await window.MvsPrint.fetchConfig(configUrl);
-                if (!config.auto_print || !config.terminal) return;
-                this.checkout.printStatus = 'printing';
+                if (checkout !== this.checkout) return;
+                if (!config.terminal || !config.terminal.printer_name) {
+                    checkout.printStatus = 'failed';
+                    checkout.printMessage = 'No se pudo resolver una terminal MVS Print con impresora para esta empresa y sucursal.';
+                    return;
+                }
+                checkout.printStatus = null;
+                if (!config.auto_print) return;
+                await this.printCompletedSale(saleId, false);
+            } catch {
+                checkout.printStatus = 'failed';
+            }
+        },
+        async printCompletedSale(saleId, reprint = true) {
+            const checkout = this.checkout;
+            if (['checking', 'printing'].includes(checkout.printStatus)) return;
+            checkout.printStatus = 'printing';
+            checkout.printMessage = '';
+            try {
+                const ticketUrl = {{ Illuminate\Support\Js::from(route('mvs.print.ticket', ['__SALE_ID__'], false)) }};
                 const result = await window.MvsPrint.printSale(
                     ticketUrl.replace('__SALE_ID__', saleId),
                     saleId,
-                    { printerName: config.terminal.printer_name, timeout: 5000 },
+                    { reprint },
                 );
-                this.checkout.printStatus = result.success ? 'success' : 'failed';
+                checkout.printStatus = result.success ? 'success' : 'failed';
+                checkout.printMessage = result.success ? 'Factura enviada a ' + result.printer : '';
             } catch {
-                this.checkout.printStatus = 'failed';
+                checkout.printStatus = 'failed';
             }
         },
         newSale() {
             this.checkoutToken = generateUUID();
-            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null };
+            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' };
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
             this.successMessage = '';

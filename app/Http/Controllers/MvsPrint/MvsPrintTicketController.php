@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\MvsPrint;
 
 use App\Http\Controllers\Controller;
-use App\Models\MvsPrint\MvsPrintTerminal;
 use App\Models\Sale;
 use App\Services\MvsPrint\EscPosSaleTicket;
+use App\Services\MvsPrint\MvsPrintTerminalResolver;
+use App\Services\Sales\SaleReceiptService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +31,8 @@ class MvsPrintTicketController extends Controller
         Request $request,
         Sale $sale,
         EscPosSaleTicket $ticketService,
+        MvsPrintTerminalResolver $resolver,
+        SaleReceiptService $receipts,
     ): JsonResponse {
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
@@ -43,14 +46,11 @@ class MvsPrintTicketController extends Controller
 
         $terminalUuid = $request->query('terminal_uuid');
 
-        $terminal = null;
-        if ($terminalUuid) {
-            $terminal = MvsPrintTerminal::query()
-                ->forCompany($companyId)
-                ->forBranch($branchId)
-                ->where('terminal_uuid', $terminalUuid)
-                ->where('enabled', true)
-                ->first();
+        $terminal = $resolver->resolve($companyId, $branchId, $terminalUuid);
+        $reprint = $request->boolean('reprint');
+        if ($reprint) {
+            $receipts->authorizedSale($sale, $request->user(), $companyId, $branchId);
+            abort_unless($terminal && filled($terminal->printer_name), 422, 'No hay terminal de impresión disponible.');
         }
 
         $sale->loadMissing([
@@ -63,7 +63,7 @@ class MvsPrintTicketController extends Controller
 
         $paperWidth = $terminal?->paper_width ?? '80';
         $autoCut = $terminal?->auto_cut ?? true;
-        $openDrawer = $terminal?->open_drawer ?? false;
+        $openDrawer = ! $reprint && ($terminal?->open_drawer ?? false);
         $drawerCommand = $terminal?->drawer_command;
 
         $payload = $ticketService->build(

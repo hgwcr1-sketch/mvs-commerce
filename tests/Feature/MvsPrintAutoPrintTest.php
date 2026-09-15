@@ -417,8 +417,128 @@ class MvsPrintAutoPrintTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Helpers
+    // Reimpresión
     // ---------------------------------------------------------------
+
+    public function test_reprint_reuses_sale_ticket_with_58mm_cut_and_no_drawer_without_database_writes(): void
+    {
+        [$company, $branch] = $this->companyContext('Reprint');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $terminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'printer_name' => 'POS-58-Series', 'paper_width' => '58',
+            'auto_cut' => true, 'open_drawer' => true, 'enabled' => true,
+        ]);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        // Preparar licencia/middleware antes de medir el GET de reimpresión.
+        $this->getJson(route('mvs.print.config'))->assertOk();
+        $snapshot = fn () => collect(\Illuminate\Support\Facades\Schema::getTables())
+            ->mapWithKeys(fn ($table) => [$table['name'] => \Illuminate\Support\Facades\DB::table($table['name'])->get()->toJson()])->all();
+        $before = $snapshot();
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        $response = $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1]))
+            ->assertOk()->assertJsonPath('printer', 'POS-58-Series')
+            ->assertJsonPath('payload.paper_width', '58')->assertJsonPath('payload.auto_cut', true)
+            ->assertJsonPath('payload.open_drawer', false);
+        $queries = \Illuminate\Support\Facades\DB::getQueryLog();
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+        foreach ($queries as $query) {
+            $this->assertDoesNotMatchRegularExpression('/^\s*(insert|update|delete|replace|alter|create|drop|truncate)\b/i', $query['query']);
+        }
+        $this->assertSame($before, $snapshot(), 'Reimprimir debe preservar todas las tablas, incluyendo venta, pagos, inventario y fidelización.');
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod']);
+        $expected = app(EscPosSaleTicket::class)->build($sale, '58', true, false, $terminal->drawer_command);
+        $this->assertSame($expected, $response->json('payload'));
+        $terminal->update(['auto_cut' => false]);
+        $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1]))
+            ->assertOk()->assertJsonPath('payload.auto_cut', false)->assertJsonPath('payload.open_drawer', false);
+    }
+
+    public function test_terminal_resolution_requires_unique_terminal_or_matching_local_uuid(): void
+    {
+        [$company, $branch] = $this->companyContext('Resolve');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $first = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'printer_name' => 'POS-58-Series', 'auto_print' => true, 'enabled' => true,
+        ]);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $this->getJson(route('mvs.print.config'))->assertOk()->assertJsonPath('auto_print', true)
+            ->assertJsonPath('terminal.printer_name', 'POS-58-Series');
+        MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'printer_name' => 'OTHER', 'enabled' => true,
+        ]);
+        $this->getJson(route('mvs.print.config'))->assertOk()->assertJsonPath('terminal', null);
+        $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1]))->assertStatus(422);
+        $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1, 'terminal_uuid' => $first->terminal_uuid]))
+            ->assertOk()->assertJsonPath('printer', 'POS-58-Series');
+        $first->update(['enabled' => false]);
+        $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1, 'terminal_uuid' => $first->terminal_uuid]))->assertStatus(422);
+    }
+
+    public function test_reprint_cannot_use_terminal_or_sale_from_another_branch_or_company(): void
+    {
+        [$company, $branch] = $this->companyContext('Own');
+        [$otherCompany, $otherBranch] = $this->companyContext('Other');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        foreach ([[$otherCompany, $otherBranch], [$company, $this->branch($company)]] as [$owner, $location]) {
+            $terminal = MvsPrintTerminal::factory()->create([
+                'company_id' => $owner->id, 'branch_id' => $location->id,
+                'printer_name' => 'OTHER', 'enabled' => true,
+            ]);
+            $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1, 'terminal_uuid' => $terminal->terminal_uuid]))->assertStatus(422);
+            $foreignSale = $this->completedSale($owner, $location, $user);
+            $this->getJson(route('mvs.print.ticket', ['sale' => $foreignSale, 'reprint' => 1]))->assertNotFound();
+        }
+    }
+
+    public function test_reprint_component_renders_direct_action_and_explicit_manual_fallback(): void
+    {
+        [$company, $branch] = $this->companyContext('Component');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->blade('<x-mvs-print.reprint :sale="$sale" />', ['sale' => $sale])
+            ->assertSee('mvsReprint', false)->assertSee('reprint()', false)
+            ->assertSee('Usar impresión del navegador')->assertSee('x-show="failed"', false);
+    }
+
+    public function test_reprint_preserves_receipt_permission_for_another_users_sale(): void
+    {
+        [$company, $branch] = $this->companyContext('Permission');
+        $creator = $this->posUser($company, $branch);
+        $viewer = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $creator);
+        MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'printer_name' => 'POS-58-Series', 'enabled' => true,
+        ]);
+        $this->actingAs($viewer)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1]))->assertForbidden();
+    }
+
+    public function test_demo_without_terminal_never_resolves_another_companys_printer(): void
+    {
+        [$mym, $mymBranch] = $this->companyContext('MYM');
+        [$demo, $demoBranch] = $this->companyContext('Demo');
+        $mymTerminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $mym->id, 'branch_id' => $mymBranch->id,
+            'printer_name' => 'POS-58-Series', 'auto_print' => true, 'enabled' => true,
+        ]);
+        $user = $this->posUser($demo, $demoBranch);
+        $sale = $this->completedSale($demo, $demoBranch, $user);
+        $this->actingAs($user)->withSession(['active_company_id' => $demo->id, 'active_branch_id' => $demoBranch->id]);
+        foreach ([[], ['terminal_uuid' => $mymTerminal->terminal_uuid]] as $params) {
+            $this->getJson(route('mvs.print.config', $params))->assertOk()
+                ->assertJsonPath('auto_print', false)->assertJsonPath('terminal', null);
+            $this->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1] + $params))->assertStatus(422);
+        }
+    }
 
     private function company(string $name): Company
     {

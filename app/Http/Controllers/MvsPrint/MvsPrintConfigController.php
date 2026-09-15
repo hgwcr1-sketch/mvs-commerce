@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\MvsPrint;
 
 use App\Http\Controllers\Controller;
-use App\Models\MvsPrint\MvsPrintTerminal;
+use App\Services\MvsPrint\MvsPrintTerminalResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,28 +20,16 @@ class MvsPrintConfigController extends Controller
      *
      * GET /mvs/print/config?terminal_uuid=...
      *
-     * Si no se provee terminal_uuid o no se encuentra, retorna auto_print=false.
+     * Sin UUID usa únicamente una terminal inequívoca de la empresa/sucursal.
+     * Un UUID inválido o múltiples terminales sin vínculo no se resuelven.
      */
-    public function show(Request $request): JsonResponse
+    public function show(Request $request, MvsPrintTerminalResolver $resolver): JsonResponse
     {
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
         $terminalUuid = $request->query('terminal_uuid');
 
-        if (! $terminalUuid) {
-            return response()->json([
-                'success' => true,
-                'auto_print' => false,
-                'terminal' => null,
-            ]);
-        }
-
-        $terminal = MvsPrintTerminal::query()
-            ->forCompany($companyId)
-            ->forBranch($branchId)
-            ->where('terminal_uuid', $terminalUuid)
-            ->where('enabled', true)
-            ->first();
+        $terminal = $resolver->resolve($companyId, $branchId, $terminalUuid);
 
         if (! $terminal) {
             return response()->json([
