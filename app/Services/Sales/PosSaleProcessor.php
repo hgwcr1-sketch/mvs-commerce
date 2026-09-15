@@ -461,6 +461,7 @@ class PosSaleProcessor
                     }
                 }
 
+                $redeemedAmount = '0.0000';
                 if ($requestedPoints !== null) {
                     if ($customer === null) {
                         throw ValidationException::withMessages([
@@ -512,6 +513,7 @@ class PosSaleProcessor
                         ],
                     );
 
+                    $redeemedAmount = $redemption['redeemed_amount'];
                     $cashApplied = '0.0000';
                     foreach ($resolvedPayments as $payment) {
                         $cashApplied = bcadd($cashApplied, (string) $payment['amount'], 4);
@@ -581,7 +583,7 @@ class PosSaleProcessor
                 }
 
                 $this->awardReturningCustomerLoyalty($sale, $customer, $company, $branch, $user);
-                $this->accrueLoyalty($sale, $customer, $company, $branch, $user);
+                $this->accrueLoyalty($sale, $customer, $company, $branch, $user, $redeemedAmount);
                 $this->awardBirthdayLoyalty($sale, $customer, $company, $branch, $user);
                 $this->loyaltyRegistrationIncentiveService->tryAwardAfterPurchase($sale);
 
@@ -618,7 +620,7 @@ class PosSaleProcessor
         ];
     }
 
-    private function accrueLoyalty(Sale $sale, ?Customer $customer, Company $company, Branch $branch, User $user): void
+    private function accrueLoyalty(Sale $sale, ?Customer $customer, Company $company, Branch $branch, User $user, string $redeemedAmount): void
     {
         if ($customer === null || $sale->status !== Sale::STATUS_COMPLETED) {
             return;
@@ -627,10 +629,24 @@ class PosSaleProcessor
         try {
             $setting = LoyaltySetting::query()->where('company_id', $company->id)->first();
             $offerEligibility = $this->loyaltyOfferEligibilityService->forSale($sale, (bool) $setting?->earn_on_offers);
+            // Net eligible line subtotals already exclude taxes and ineligible offers.
+            // A common invoice funding ratio distributes proportionally across all lines;
+            // summing eligible bases first avoids rounding each line's allocation separately.
+            $eligibleBasePaidWithPoints = '0.0000';
+            if (bccomp($redeemedAmount, '0', 4) > 0) {
+                $eligibleBasePaidWithPoints = bccomp($redeemedAmount, (string) $sale->total, 4) >= 0
+                    ? $offerEligibility['eligible_amount']
+                    : bcadd(bcdiv(
+                        bcmul($offerEligibility['eligible_amount'], $redeemedAmount, 8),
+                        (string) $sale->total,
+                        8,
+                    ), '0.00005', 4);
+            }
+            $earningBase = bcsub($offerEligibility['eligible_amount'], $eligibleBasePaidWithPoints, 4);
             $this->loyaltyEarningService->earnFromEligibleAmount(
                 $customer,
                 $company,
-                $offerEligibility['eligible_amount'],
+                $earningBase,
                 [
                     'branch' => $branch,
                     'user' => $user,
@@ -643,6 +659,12 @@ class PosSaleProcessor
                         'sale_number' => $sale->sale_number,
                         'document_type' => $sale->document_type,
                         'offer_eligibility' => $offerEligibility,
+                        ...(bccomp($redeemedAmount, '0', 4) > 0 ? [
+                            'redeemed_amount' => $redeemedAmount,
+                            'redemption_allocation_total' => (string) $sale->total,
+                            'eligible_base_paid_with_points' => $eligibleBasePaidWithPoints,
+                            'earning_base_after_redemption' => $earningBase,
+                        ] : []),
                     ],
                 ],
             );

@@ -83,9 +83,9 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         $this->assertSame($customer->id, $movement->customer_id);
 
         $this->assertSame(2, DB::table('loyalty_movements')->count());
-        $this->assertSame('4550.0000', $account->fresh()->balance);
+        $this->assertSame('4525.0000', $account->fresh()->balance);
         $this->assertSame('500.0000', $account->fresh()->total_redeemed);
-        $this->assertSame('50.0000', $account->fresh()->total_earned);
+        $this->assertSame('25.0000', $account->fresh()->total_earned);
 
         $cashPayment = SalePayment::query()->where('payment_method_id', '!=', $loyaltyMethod->id)->firstOrFail();
         $this->assertSame('500.0000', $cashPayment->amount);
@@ -164,7 +164,7 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->assertSame(2, DB::table('loyalty_movements')->count());
         $this->assertSame(1, DB::table('loyalty_movements')->where('type', 'redemption')->count());
-        $this->assertSame('4550.0000', $account->fresh()->balance);
+        $this->assertSame('4525.0000', $account->fresh()->balance);
     }
 
     public function test_two_sales_produce_distinct_event_keys_and_consistent_balance(): void
@@ -180,7 +180,7 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         foreach ($saleIds as $id) {
             $this->assertTrue($movements->contains(fn ($movement) => $movement->event_key === "sale:{$id}:loyalty:redemption"));
         }
-        $this->assertSame('4300.0000', $account->fresh()->balance);
+        $this->assertSame('4260.0000', $account->fresh()->balance);
         $this->assertSame('800.0000', $account->fresh()->total_redeemed);
     }
 
@@ -209,6 +209,174 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         $loyaltyPayment = $sale->payments()->where('payment_method_id', $loyaltyMethod->id)->firstOrFail();
         $this->assertSame('200.0000', $loyaltyPayment->amount);
         $this->assertSame('0.0000', $loyaltyPayment->cash_effect_amount);
+    }
+
+    public function test_earning_base_excludes_real_redemption_for_cash_card_sinpe_and_full_payment(): void
+    {
+        [$company, $branch, $user, $product, , $customer, $account] = $this->context('50000.0000');
+        $product->update(['sale_price' => 10000]);
+        LoyaltySetting::where('company_id', $company->id)->update(['point_value' => '2.0000']);
+        [$otherCompany, , , , , , $otherAccount] = $this->context('1234.0000');
+        $otherBefore = $otherAccount->fresh()->getAttributes();
+
+        foreach ([['cash', null, '10000.0000', '500.0000'], ['cash', '1000', '8000.0000', '400.0000'], ['card', '1000', '8000.0000', '400.0000'], ['sinpe', '1000', '8000.0000', '400.0000'], ['cash', '5000', '0.0000', '0.0000']] as [$type, $points, $base, $earned]) {
+            $method = PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
+            $payments = $base === '0.0000' ? [] : [['payment_method_id' => $method->id, 'amount' => (int) $base, 'reference' => 'REF']];
+            $token = (string) Str::uuid();
+            $before = $account->fresh()->balance;
+            $first = $this->checkout($user, $company, $branch, $payments, $customer->id, $token, $points)->assertOk();
+            $this->checkout($user, $company, $branch, $payments, $customer->id, $token, $points)->assertOk()->assertJsonPath('duplicate', true);
+            $movements = LoyaltyMovement::where('source_type', Sale::class)->where('source_id', $first->json('sale_id'))->get();
+            $earning = $movements->where('type', LoyaltyMovement::TYPE_PURCHASE);
+            if ($base === '0.0000') {
+                $this->assertCount(0, $earning);
+            } else {
+                $this->assertCount(1, $earning);
+                $this->assertSame($base, $earning->first()->base_amount);
+                $this->assertSame($earned, $earning->first()->points);
+                if ($points !== null) {
+                    $this->assertSame(bcmul($points, '2', 4), $earning->first()->metadata['redeemed_amount']);
+                    $this->assertSame($base, $earning->first()->metadata['earning_base_after_redemption']);
+                }
+            }
+            $redemptions = $movements->where('type', LoyaltyMovement::TYPE_REDEMPTION);
+            $this->assertCount($points === null ? 0 : 1, $redemptions);
+            if ($points !== null) {
+                $this->assertSame(bcsub('0', $points, 4), $redemptions->first()->points);
+                $this->assertSame(bcmul($points, '2', 4), $redemptions->first()->base_amount);
+                $this->assertSame('2.0000', $redemptions->first()->point_value);
+            }
+            $this->assertSame(bcadd(bcsub($before, $points ?? '0', 4), $earned, 4), $account->fresh()->balance);
+        }
+        $this->assertSame($otherBefore, $otherAccount->fresh()->getAttributes());
+        $this->assertSame(0, LoyaltyMovement::where('company_id', $otherCompany->id)->count());
+        $this->assertSame(5, Sale::where('company_id', $company->id)->count());
+    }
+
+    public function test_earning_reduction_preserves_offer_filter_taxes_discounts_and_multiplier(): void
+    {
+        [$company, $branch, $user, $product, , $customer] = $this->context('50000.0000');
+        $product->update(['sale_price' => 6000, 'tax_rate' => 13]);
+        $offer = $product->replicate();
+        $offer->fill(['internal_code' => 'OFFER-'.uniqid(), 'sale_price' => 5500, 'special_price' => 5000, 'track_inventory' => false])->save();
+        $role = $user->companies()->whereKey($company->id)->first()->pivot->role_id;
+        $permission = Permission::firstOrCreate(['name' => 'pos.aplicar_descuento'], ['label' => 'Descuento', 'module' => 'POS', 'is_active' => true]);
+        Role::findOrFail($role)->permissions()->syncWithoutDetaching($permission);
+        $multiplier = \App\Models\LoyaltyMultiplier::create(['company_id' => $company->id, 'name' => 'Doble', 'multiplier' => '2.0000', 'starts_at' => now()->subDay(), 'ends_at' => now()->addDay(), 'is_active' => true]);
+        $session = $this->ensureCashSession($company, $branch, $user);
+        $cash = PaymentMethod::forCompany($company->id)->where('type', 'cash')->firstOrFail();
+        foreach ([[false, '2260', '4800.0000', '480.0000'], [true, '2260', '8000.0000', '800.0000'], [false, '11300', '0.0000', '0.0000']] as [$earnOffers, $points, $base, $expected]) {
+            LoyaltySetting::where('company_id', $company->id)->update(['earn_on_offers' => $earnOffers, 'redeem_on_offers' => true]);
+            $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
+                'checkout_token' => (string) Str::uuid(), 'cash_session_id' => $session->id, 'customer_id' => $customer->id,
+                'items' => [['product_id' => $product->id, 'quantity' => 1], ['product_id' => $offer->id, 'quantity' => 1, 'discount' => 1000, 'discount_type' => 'fixed']],
+                'requested_points' => $points, 'payments' => $points === '11300' ? [] : [['payment_method_id' => $cash->id, 'amount' => 11300 - (int) $points]],
+            ])->assertOk();
+            $sale = Sale::findOrFail($response->json('sale_id'));
+            $this->assertSame('10000.0000', $sale->subtotal);
+            $this->assertSame('1300.0000', $sale->tax_total);
+            $this->assertSame('11300.0000', $sale->total);
+            $movement = LoyaltyMovement::where('source_id', $sale->id)->where('source_type', Sale::class)->where('type', LoyaltyMovement::TYPE_PURCHASE)->first();
+            if ($base === '0.0000') {
+                $this->assertNull($movement);
+            } else {
+                $this->assertSame($base, $movement->base_amount);
+                $this->assertSame($expected, $movement->points);
+                $this->assertSame($multiplier->id, $movement->metadata['multiplier_id']);
+                $this->assertSame('6000.0000', $movement->metadata['offer_eligibility']['normal_amount']);
+                $this->assertSame('4000.0000', $movement->metadata['offer_eligibility']['offer_amount']);
+            }
+        }
+    }
+
+    public function test_taxed_sale_without_redemption_earns_only_on_pre_tax_base(): void
+    {
+        $this->assertTaxedEarning(null, '10000.0000', '500.0000');
+    }
+
+    public function test_taxed_sale_with_partial_redemption_excludes_tax_and_redeemed_amount(): void
+    {
+        $this->assertTaxedEarning('2260', '8000.0000', '400.0000');
+    }
+
+    public function test_taxed_sale_fully_paid_with_points_earns_nothing(): void
+    {
+        $this->assertTaxedEarning('11300', '0.0000', '0.0000');
+    }
+
+    public function test_non_terminating_allocation_rounds_once_at_four_decimals(): void
+    {
+        $this->assertTaxedEarning('1', '9999.1150', '499.9558');
+    }
+
+    public function test_mixed_tax_rates_and_exempt_lines_use_actual_invoice_funding_ratio(): void
+    {
+        [$company, $branch, $user, $product, , $customer] = $this->context('30000.0000');
+        $product->update(['sale_price' => 6000, 'tax_rate' => 13]);
+        $second = $product->replicate();
+        $second->fill(['internal_code' => 'MIX-'.uniqid(), 'sale_price' => 4000, 'tax_rate' => 4, 'track_inventory' => false])->save();
+        $session = $this->ensureCashSession($company, $branch, $user);
+        $cash = PaymentMethod::forCompany($company->id)->where('type', 'cash')->firstOrFail();
+        foreach ([[4, 10940, 2188, 940], [0, 10780, 2156, 780]] as [$rate, $total, $points, $tax]) {
+            $second->update(['tax_rate' => $rate]);
+            $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
+                'checkout_token' => (string) Str::uuid(), 'cash_session_id' => $session->id, 'customer_id' => $customer->id,
+                'items' => [['product_id' => $product->id, 'quantity' => 1], ['product_id' => $second->id, 'quantity' => 1]],
+                'requested_points' => (string) $points, 'payments' => [['payment_method_id' => $cash->id, 'amount' => $total - $points]],
+            ])->assertOk();
+            $sale = Sale::findOrFail($response->json('sale_id'));
+            $this->assertSame('10000.0000', $sale->subtotal);
+            $this->assertSame(bcadd((string) $tax, '0', 4), $sale->tax_total);
+            $this->assertSame(bcadd((string) $total, '0', 4), $sale->total);
+            $movement = LoyaltyMovement::where('source_id', $sale->id)->where('source_type', Sale::class)->where('type', LoyaltyMovement::TYPE_PURCHASE)->sole();
+            $this->assertSame('8000.0000', $movement->base_amount);
+            $this->assertSame('400.0000', $movement->points);
+            $this->assertSame('2000.0000', $movement->metadata['eligible_base_paid_with_points']);
+            $this->assertSame($sale->total, $movement->metadata['redemption_allocation_total']);
+        }
+    }
+
+    private function assertTaxedEarning(?string $requestedPoints, string $expectedBase, string $expectedPoints): void
+    {
+        [$company, $branch, $user, $product, , $customer, $account] = $this->context('30000.0000');
+        $product->update(['sale_price' => '10000.0000', 'tax_rate' => '13.0000']);
+        $remaining = bcsub('11300', $requestedPoints ?? '0', 4);
+        $payments = bccomp($remaining, '0', 4) === 0 ? [] : [$this->cashPayload($company, (float) $remaining, (float) $remaining)];
+        $response = $this->checkout($user, $company, $branch, $payments, $customer->id, null, $requestedPoints)->assertOk();
+        $sale = Sale::findOrFail($response->json('sale_id'));
+        $this->assertSame('10000.0000', $sale->subtotal);
+        $this->assertSame('1300.0000', $sale->tax_total);
+        $this->assertSame('11300.0000', $sale->total);
+        $earning = LoyaltyMovement::where('source_type', Sale::class)->where('source_id', $sale->id)->where('type', LoyaltyMovement::TYPE_PURCHASE)->get();
+        if ($expectedBase === '0.0000') {
+            $this->assertCount(0, $earning);
+        } else {
+            $this->assertCount(1, $earning);
+            $this->assertSame($expectedBase, $earning->sole()->base_amount);
+            $this->assertSame($expectedPoints, $earning->sole()->points);
+            $this->assertSame('10000.0000', $earning->sole()->metadata['offer_eligibility']['eligible_amount']);
+            if ($requestedPoints !== null) {
+                $this->assertSame(bcsub('10000', $expectedBase, 4), $earning->sole()->metadata['eligible_base_paid_with_points']);
+            }
+        }
+        $redemptions = LoyaltyMovement::where('source_type', Sale::class)->where('source_id', $sale->id)->where('type', LoyaltyMovement::TYPE_REDEMPTION)->get();
+        $this->assertCount($requestedPoints === null ? 0 : 1, $redemptions);
+        if ($requestedPoints !== null) {
+            $this->assertSame(bcadd($requestedPoints, '0', 4), $redemptions->sole()->base_amount);
+        }
+        $this->assertSame(bcadd(bcsub('30000', $requestedPoints ?? '0', 4), $expectedPoints, 4), $account->fresh()->balance);
+    }
+
+    public function test_full_redemption_never_earns_from_rounding_remainder(): void
+    {
+        [$company, $branch, $user, $product, , $customer, $account] = $this->context('20000.0000');
+        $product->update(['sale_price' => '10000.4000']);
+        $response = $this->checkout($user, $company, $branch, [], $customer->id, null, '10000')->assertOk();
+        $sale = Sale::findOrFail($response->json('sale_id'));
+        $this->assertSame('10000.4000', $sale->subtotal);
+        $this->assertSame('10000.0000', $sale->total);
+        $this->assertSame(0, LoyaltyMovement::where('type', LoyaltyMovement::TYPE_PURCHASE)->count());
+        $this->assertSame('10000.0000', $account->fresh()->balance);
     }
 
     private function context(string $balance = '5000.0000'): array
@@ -263,8 +431,8 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         $movement = LoyaltyMovement::where('type', 'redemption')->sole();
         $this->assertSame('-500.0000', $movement->points);
         $this->assertSame('2.0000', $movement->point_value);
-        $earned = LoyaltyMovement::where('type', LoyaltyMovement::TYPE_PURCHASE)->sole();
-        $this->assertSame(bcadd(bcsub($before, '500', 4), $earned->points, 4), $account->fresh()->balance);
+        $this->assertSame(0, LoyaltyMovement::where('type', LoyaltyMovement::TYPE_PURCHASE)->count());
+        $this->assertSame(bcsub($before, '500', 4), $account->fresh()->balance);
     }
 
     public function test_empty_payments_require_full_valid_redemption_and_rollback_otherwise(): void

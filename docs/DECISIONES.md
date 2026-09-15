@@ -2,6 +2,14 @@
 
 Este documento registra decisiones importantes que no deben ser revertidas por un agente sin revisar primero el contexto y obtener autorización cuando corresponda.
 
+## POS — el canje no genera nueva acumulación (2026-09-15)
+
+Regla definitiva corregida por el usuario: el canje se aplica al total con impuestos; solo su proporción de base elegible reduce la acumulación. Porción elegible financiada con puntos = base elegible antes de impuestos × redeemed_amount / Sale.total. Base de acumulación = base elegible menos esa porción. Ejemplo: base 10000 + IVA 1300, canje 2260 → porción de base 2000 → earning sobre 8000. Pago total con puntos genera cero acumulación, incluso con redondeo del total. Sin canje se conserva exactamente la base anterior.
+
+La base normal procede de `LoyaltyOfferEligibilityService`: suma de subtotales de líneas después de descuentos y sin impuestos, excluyendo ofertas cuando `earn_on_offers` es falso. El earning aplica un único multiplicador empresarial/de sucursal sobre esa suma, no multiplicadores por producto. Una proporción común de financiación de factura equivale a distribuirla entre todas las líneas y sumar solo la base elegible; agregar primero evita redondeos por línea. Se usan Sale.total realmente cobrado y el redeemed_amount real devuelto por LoyaltyRedemptionService, nunca datos monetarios del navegador ni una tasa fiscal fija. BCMath: producto y división con escala 8, redondeo half-up de la porción una sola vez a escala 4 y resta a escala 4; no truncar el ratio previamente. Metadata: elegibilidad original, canje, total utilizado, porción elegible financiada y base reducida. Multiplicador aplicado después. No cambia líneas, descuentos ni impuestos.
+
+Alcance de esta corrección: POS. No cambia canje, bonos independientes, multiplicadores, premios, devoluciones/anulaciones ni canales online; no modifica movimientos históricos ni requiere migración.
+
 ## USD en POS — decisión de arquitectura (2026-09-09)
 
 USD es una moneda de Efectivo, no una forma de pago que el administrador deba crear. La disponibilidad automática dentro de Efectivo requiere `company_cash_settings.accepts_usd = true`, una sesión de caja aplicable con `accepts_usd_snapshot = true` y `usd_exchange_rate` válido y mayor que cero. Con configuración deshabilitada no se ofrece USD. El tipo de cambio utilizado pertenece a la sesión seleccionada; no se toma de un método llamado USD/Dólares ni del cliente sin validación de servidor.

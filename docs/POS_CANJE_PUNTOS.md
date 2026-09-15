@@ -2,6 +2,30 @@
 
 Base: `feature/pos`, `57dd07d`, árbol limpio al iniciar. Paso 32 pausado por instrucción del usuario.
 
+## Corrección posterior — base elegible financiada con puntos (2026-09-15)
+
+Base comprobada: `8cf8714`, árbol limpio al iniciar la corrección. El flujo crea Sale e items, ejecuta redemption, registra pagos y llama a accrueLoyalty. Antes entregaba la base elegible completa. Ahora calcula la porción financiada con puntos como `eligible_pre_tax_base * redeemed_amount / Sale.total` y la resta de la base elegible. Se sustituye la resta íntegra del canje, que era incorrecta al mezclar un importe bruto con una base neta.
+
+La base elegible procede de los subtotales reales de SaleItem después de descuentos, sin impuestos y filtrados por earn_on_offers. El canje tiene la misma proporción sobre toda la factura: sumar las bases elegibles y aplicar esa proporción equivale a la distribución por líneas sin redondeos individuales. No se asume tasa fiscal fija; Sale.total es el importe final realmente cobrado, incluido su redondeo. El multiplicador existente se aplica después a la base reducida.
+
+BCMath: multiplicar base por canje y dividir por total con escala 8, redondear la porción una sola vez half-up a escala 4 y restarla a escala 4. No truncar el ratio antes de multiplicar. Sin canje, base intacta; canje total, porción igual a toda la base y cero puntos de compra. El servicio existente no escribe movimientos purchase de cero puntos. La metadata permite auditar canje, total de asignación, porción elegible financiada y base resultante. Redemption, point_value e impuestos no cambian.
+
+Ejemplos probados con acumulación del 5%:
+
+| Base | Impuesto | Total | Canje | Base earning | Puntos |
+|---|---|---|---|---|---|
+| 10000 | 1300 | 11300 | 0 | 10000 | 500 |
+| 10000 | 1300 | 11300 | 2260 | 8000 | 400 |
+| 10000 | 1300 | 11300 | 11300 | 0 | 0 |
+| 10000 | 940 (13% y 4%) | 10940 | 2188 | 8000 | 400 |
+| 10000 | 780 (13% y exento) | 10780 | 2156 | 8000 | 400 |
+
+Pruebas adicionales: descuentos en líneas, earn_on_offers on/off, multiplicador después del prorrateo, efectivo/tarjeta/SINPE, retry, otra empresa intacta, punto valor 2, fracción periódica y total redondeado. Validación final: **86/86, 679 aserciones, cero fallos** con filtro `PosCheckoutLoyalty|PosLoyalty|LoyaltyPosIntegrationTest|LoyaltyEarningServiceTest|LoyaltyMultiplierTest|LoyaltyPointValueTest|LoyaltyRedemptionMinimumTest|LoyaltyRedemptionLimitTest`. SQLite en memoria, APP_KEY temporal de proceso. Lint PHP y diff-check correctos.
+
+Sin migración, commit, push ni producción. Devoluciones/anulaciones/premios/comprobante fuera de alcance y no reejecutados. Listo para auditoría focal. La sección siguiente conserva el cierre histórico de pago con puntos anterior a esta corrección.
+
+## Entrega del cierre anterior
+
 EXISTING_REDEEM_ARCHITECTURE: se reutilizan LoyaltyAccount, LoyaltyMovement, LoyaltyPosSummaryService, LoyaltyPointValueService, elegibilidad, límites y LoyaltyRedemptionService; PaymentMethod de tipo loyalty_points y SalePayment ya existen.
 
 IMPLEMENTATION: se permite `payments: []` con intención de canje; el backend exige cobertura exacta. El checkout permite confirmar solo con puntos y bloquea entradas inválidas/excesivas sin reducir silenciosamente la cantidad solicitada. Total aplicado incluye puntos.

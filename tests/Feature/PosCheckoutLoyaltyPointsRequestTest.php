@@ -58,7 +58,7 @@ class PosCheckoutLoyaltyPointsRequestTest extends TestCase
         $this->assertSame(2, DB::table('sale_payments')->count());
         $this->assertSame(PaymentMethod::TYPE_LOYALTY_POINTS, $sale->payments->first()->paymentMethod->type);
         $this->assertSame(1, DB::table('loyalty_movements')->where('type', 'redemption')->count());
-        $this->assertSame('5000.0000', $account->fresh()->balance);
+        $this->assertSame('4997.5000', $account->fresh()->balance);
         $this->assertSame('50.0000', $account->fresh()->total_redeemed);
     }
 
@@ -150,7 +150,7 @@ class PosCheckoutLoyaltyPointsRequestTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 1);
         $this->assertSame(2, DB::table('loyalty_movements')->count());
         $this->assertSame(1, DB::table('loyalty_movements')->where('type', 'redemption')->count());
-        $this->assertSame('5000.0000', $account->fresh()->balance);
+        $this->assertSame('4997.5000', $account->fresh()->balance);
     }
 
     public function test_same_token_with_different_requested_points_conflicts(): void
@@ -169,7 +169,7 @@ class PosCheckoutLoyaltyPointsRequestTest extends TestCase
 
         $this->assertDatabaseCount('sales', 1);
         $this->assertSame(1, DB::table('loyalty_movements')->where('type', 'redemption')->count());
-        $this->assertSame('5000.0000', $account->fresh()->balance);
+        $this->assertSame('4997.5000', $account->fresh()->balance);
     }
 
     public function test_removing_requested_points_with_same_token_conflicts(): void
@@ -188,7 +188,7 @@ class PosCheckoutLoyaltyPointsRequestTest extends TestCase
 
         $this->assertDatabaseCount('sales', 1);
         $this->assertSame(1, DB::table('loyalty_movements')->where('type', 'redemption')->count());
-        $this->assertSame('5000.0000', $account->fresh()->balance);
+        $this->assertSame('4997.5000', $account->fresh()->balance);
     }
 
     private function context(string $name = 'Empresa'): array
