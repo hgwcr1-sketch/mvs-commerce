@@ -27,6 +27,7 @@ use App\Http\Controllers\CashSessionHistoryController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
+use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 use App\Http\Controllers\CustomerAddressController;
 // Inventario
 use App\Http\Controllers\CustomerContactController;
@@ -963,6 +964,7 @@ Route::resource('transferencias', TransferController::class)
             // (sin contexto de terminal), por lo que el endpoint es global.
             Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
             Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
+            Route::get('/descargar', MvsPrintDownloadController::class)->name('download');
         });
 
     /*

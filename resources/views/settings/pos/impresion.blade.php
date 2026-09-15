@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Impresión (MVS Print)')
-@section('description', 'Configura terminales POS y su impresión local mediante QZ Tray.')
+@section('description', 'Configura terminales POS y su impresión local.')
 
 @section('content')
 <div class="space-y-6" x-data="mvsPrintQz({ testUrl: '{{ str_replace(route('mvs.print.terminals.test-print', 0), '/0/', '/__ID__/') }}', drawerUrl: '{{ str_replace(route('mvs.print.terminals.open-drawer', 0), '/0/', '/__ID__/') }}', signatureUrl: '{{ route('mvs.print.signature') }}', signedMode: {{ $qzSignedMode ? 'true' : 'false' }} })">
@@ -223,15 +223,32 @@
     <x-card>
         <x-slot:header><h3 class="text-lg font-semibold text-slate-800">Descargar MVS Print</h3></x-slot:header>
         <div class="space-y-3">
-            <p class="text-sm text-slate-600">MVS Print utiliza QZ Tray como motor de impresión local. El instalador incluye QZ Tray v2.2.6 y se ejecuta de forma independiente en cada equipo POS.</p>
-            <div class="flex flex-wrap gap-3">
-                <button type="button" disabled
-                        class="min-h-11 cursor-not-allowed rounded-lg bg-slate-300 px-5 py-2.5 font-semibold text-slate-500">
-                    Descargar MVS Print para Windows
-                </button>
-                <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Próximamente disponible</span>
-            </div>
-            <p class="text-xs text-slate-500">El instalador se distribuirá cuando la fase de pruebas físicas con impresora y cajón esté completada.</p>
+            <p class="text-sm text-slate-600">
+                Instale MVS Print una sola vez en cada computadora que utilice para facturar e imprimir.
+            </p>
+            @if(config('mvsprint.installer.download_url'))
+                <div class="flex flex-wrap items-center gap-3">
+                    <a href="{{ route('mvs.print.download') }}"
+                       class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Descargar MVS Print para Windows
+                    </a>
+                    @if(config('mvsprint.installer.version'))
+                        <span class="text-xs text-slate-500">Versión {{ config('mvsprint.installer.version') }}</span>
+                    @endif
+                </div>
+            @else
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-slate-200 px-5 py-2.5 font-semibold text-slate-500 cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Descarga no disponible temporalmente
+                    </span>
+                </div>
+            @endif
         </div>
     </x-card>
 </div>
