@@ -245,6 +245,42 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         return $user;
     }
 
+    public function test_full_redemption_uses_configured_value_and_retries_without_duplicate_effects(): void
+    {
+        [$company, $branch, $user, , , $customer, $account] = $this->context();
+        LoyaltySetting::where('company_id', $company->id)->update(['point_value' => '2.0000']);
+        $before = $account->balance;
+        $token = (string) Str::uuid();
+        $first = $this->checkout($user, $company, $branch, [], $customer->id, $token, '500')->assertOk();
+        $this->checkout($user, $company, $branch, [], $customer->id, $token, '500.0000')
+            ->assertOk()->assertJsonPath('duplicate', true)->assertJsonPath('sale_id', $first->json('sale_id'));
+        $this->assertDatabaseCount('sales', 1);
+        $this->assertDatabaseCount('sale_payments', 1);
+        $payment = SalePayment::firstOrFail();
+        $this->assertSame('1000.0000', $payment->amount);
+        $this->assertSame('0.0000', $payment->change_amount);
+        $this->assertFalse($payment->affects_cash_snapshot);
+        $movement = LoyaltyMovement::where('type', 'redemption')->sole();
+        $this->assertSame('-500.0000', $movement->points);
+        $this->assertSame('2.0000', $movement->point_value);
+        $earned = LoyaltyMovement::where('type', LoyaltyMovement::TYPE_PURCHASE)->sole();
+        $this->assertSame(bcadd(bcsub($before, '500', 4), $earned->points, 4), $account->fresh()->balance);
+    }
+
+    public function test_empty_payments_require_full_valid_redemption_and_rollback_otherwise(): void
+    {
+        [$company, $branch, $user, , , $customer, $account] = $this->context();
+        $before = $account->balance;
+        foreach ([null, '0', '-1', '500', '1001', '999999'] as $points) {
+            $this->checkout($user, $company, $branch, [], $customer->id, null, $points)->assertUnprocessable();
+        }
+        $this->checkout($user, $company, $branch, [], null, null, '1000')->assertUnprocessable();
+        $this->assertDatabaseCount('sales', 0);
+        $this->assertDatabaseCount('sale_payments', 0);
+        $this->assertDatabaseCount('loyalty_movements', 0);
+        $this->assertSame($before, $account->fresh()->balance);
+    }
+
     private function cashPayload(Company $company, float $amount, float $received): array
     {
         $cash = PaymentMethod::forCompany($company->id)->where('type', 'cash')->firstOrFail();

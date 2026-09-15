@@ -512,14 +512,13 @@ class PosSaleProcessor
                         ],
                     );
 
-                    $cashApplied = $this->decimal4(
-                        array_sum(array_map(
-                            fn (array $payment) => $payment['amount'],
-                            $resolvedPayments,
-                        )),
-                    );
+                    $cashApplied = '0.0000';
+                    foreach ($resolvedPayments as $payment) {
+                        $cashApplied = bcadd($cashApplied, (string) $payment['amount'], 4);
+                    }
+                    $remaining = bcsub((string) $sale->total, $redemption['redeemed_amount'], 4);
 
-                    if ($cashApplied !== $this->decimal4($total - (float) $redemption['redeemed_amount'])) {
+                    if (bccomp($remaining, '0', 4) < 0 || bccomp($cashApplied, $remaining, 4) !== 0) {
                         throw ValidationException::withMessages([
                             'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta menos el monto canjeado con puntos.',
                         ]);
@@ -1013,12 +1012,12 @@ class PosSaleProcessor
             return null;
         }
 
-        return number_format(
-            (float) $data['requested_points'],
-            4,
-            '.',
-            '',
-        );
+        $points = trim((string) $data['requested_points']);
+        if (! preg_match('/^\d{1,15}(?:\.\d{1,4})?$/D', $points) || bccomp($points, '0', 4) <= 0) {
+            throw ValidationException::withMessages(['requested_points' => 'Los puntos deben ser positivos, con hasta cuatro decimales.']);
+        }
+
+        return bcadd($points, '0', 4);
     }
 
     private function resolvePayments(

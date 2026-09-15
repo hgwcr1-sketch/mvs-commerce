@@ -159,6 +159,18 @@ class PosLoyaltyInterfaceTest extends TestCase
             ->assertJsonValidationErrors(['redeemed_amount', 'point_value']);
     }
 
+    public function test_rendered_checkout_accepts_full_points_and_blocks_invalid_or_excess_redemption(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('pos.index'))->assertOk();
+        $process = new \Symfony\Component\Process\Process(['node', base_path('tests/js/pos-loyalty.cjs')]);
+        $process->setInput($response->getContent());
+        $process->mustRun();
+        $this->assertStringContainsString('Loyalty UI OK', $process->getOutput());
+    }
+
     private function context(string $percentage = '100.0000', string $name = 'Empresa'): array
     {
         $company = Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);

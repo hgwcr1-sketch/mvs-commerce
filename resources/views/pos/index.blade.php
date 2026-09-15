@@ -539,10 +539,10 @@
                                     <dl class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><dt>Subtotal</dt><dd class="font-bold" x-text="money(subtotal)"></dd></div><div class="flex justify-between"><dt>Descuento</dt><dd class="font-bold" x-text="money(totalDiscount)"></dd></div><div class="flex justify-between"><dt>Impuesto</dt><dd class="font-bold" x-text="money(taxTotal)"></dd></div><div x-show="roundingTotal !== 0" class="flex justify-between"><dt>Ajuste de redondeo</dt><dd class="font-bold" x-text="money(roundingTotal)"></dd></div></dl>
                                     <div class="mt-4 flex items-end justify-between border-t border-[#B9BDC2] pt-4"><span class="font-bold">Total</span><strong class="text-3xl text-[#111111]" x-text="money(grandTotal)"></strong></div>
                                 </div>
-                                <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money(appliedTotal)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
+                                <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money2(appliedTotal + loyaltyRedeemedEstimate)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
                                 <div class="rounded-2xl border border-[#B9BDC2] p-4">
                                     <div class="flex items-center justify-between"><h3 class="font-black">Pagos aplicados</h3><span x-show="checkout.payments.length > 1" class="rounded-full bg-[#B1922D]/15 px-3 py-1 text-xs font-black text-[#806817]">Pago mixto</span></div>
-                                    <p x-show="checkout.payments.length === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
+                                    <p x-show="checkout.payments.length === 0 && loyaltyRequestedPoints === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
                                     <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
                                 </div>
                             </section>
@@ -563,6 +563,7 @@
                                             <div class="grid items-start gap-3 sm:grid-cols-2">
                                                 <label class="block text-xs font-semibold uppercase text-slate-500">Usar puntos
                                                     <input type="number" min="0" step="0.0001" inputmode="decimal" placeholder="0" x-model="loyalty.requested" :disabled="checkout.processing || !loyaltyUsable" class="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-base font-bold text-[#111111] focus:border-[#B1922D] focus:ring-2 focus:ring-amber-500/30 focus:outline-none">
+                                                    <p x-show="loyaltyInputError" x-text="loyaltyInputError" class="mt-1 text-xs font-semibold text-red-600" role="alert"></p>
                                                 </label>
                                                 <div class="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
                                                     <div class="flex justify-between"><span class="text-slate-500">Valor del canje</span><strong class="text-slate-800" x-text="money2(loyaltyRedeemedEstimate)"></strong></div>
@@ -989,12 +990,19 @@ document.addEventListener('alpine:init', () => {
         get loyaltyRequestedPoints() {
             const value = Number(this.loyalty.requested);
             if (!this.loyaltyUsable || !Number.isFinite(value) || value <= 0) return 0;
-            const max = Number(this.loyalty.max_redeemable_points);
-            if (Number.isFinite(max) && max > 0) return Math.min(value, max);
             return value;
         },
+        get loyaltyInputError() {
+            const raw = String(this.loyalty.requested).trim();
+            if (!raw) return '';
+            if (!/^\d+(?:\.\d{1,4})?$/.test(raw) || Number(raw) <= 0) return 'Ingrese puntos mayores que cero, con hasta cuatro decimales.';
+            if (!this.loyaltyUsable) return this.loyaltyBlockedReason || 'Espere la consulta de puntos.';
+            if (Number(raw) > Number(this.loyalty.max_redeemable_points)) return 'Los puntos superan el saldo o el máximo permitido para esta venta.';
+            if (this.loyaltyRedeemedEstimate > this.decimal4(this.grandTotal - this.appliedTotal)) return 'El valor de los puntos supera el saldo pendiente de la venta.';
+            return '';
+        },
         get loyaltyRedeemedEstimate() { return this.decimal4(this.loyaltyRequestedPoints * this.numberValue(this.loyalty.point_value)); },
-        get loyaltyUsable() { return this.loyalty.available && this.loyalty.eligible && this.loyalty.offers_allowed && Number(this.loyalty.max_redeemable_points) > 0; },
+        get loyaltyUsable() { return !!this.selectedCustomer && !this.loyalty.loading && this.loyalty.available && this.loyalty.eligible && this.loyalty.offers_allowed && Number(this.loyalty.max_redeemable_points) > 0; },
         get loyaltyBlockedReason() {
             if (!this.selectedCustomer) return 'Seleccione un cliente para consultar sus puntos.';
             if (this.loyalty.loading) return '';
@@ -1015,7 +1023,7 @@ document.addEventListener('alpine:init', () => {
             return Math.abs(pending - Math.round(pending)) > 0.000001;
         },
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
-        get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && this.checkout.payments.length > 0 && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
+        get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && !this.loyalty.loading && !this.loyaltyInputError && (this.checkout.payments.length > 0 || this.loyaltyRequestedPoints > 0) && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);

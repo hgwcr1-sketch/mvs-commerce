@@ -77,7 +77,7 @@ class StorePosSaleRequest extends FormRequest
                 'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
             ],
 
-            'payments' => ['required', 'array', 'min:1'],
+            'payments' => ['present', 'array', $this->filled('requested_points') ? 'min:0' : 'min:1'],
             'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d+$/'],
             'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', function ($attribute, $value, $fail) {
