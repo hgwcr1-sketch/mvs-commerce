@@ -495,14 +495,19 @@ window.MvsPrint = {
             return { success: false, error: 'No hay impresora configurada' };
         }
 
-        // Configurar seguridad QZ con certificado y firma si está disponible
+        // Configurar seguridad QZ ANTES de conectar - debe preceder a websocket.connect()
         const qzConfig = ticketData.qz;
-        if (qzConfig?.signed_mode && qzConfig?.certificate_url && qzConfig?.signature_url) {
+        const hasSignedMode = qzConfig?.signed_mode && qzConfig?.certificate_url && qzConfig?.signature_url;
+        if (hasSignedMode) {
+            const key = qzConfig.certificate_url + '|' + qzConfig.signature_url;
+            const needsReconnect = window.qz.websocket.isActive() && (!this._qzSigned || this._qzSignedUrls !== key);
+            if (needsReconnect) {
+                try { await window.qz.websocket.disconnect(); } catch {}
+            }
             this.configureQzSecurity(qzConfig.certificate_url, qzConfig.signature_url);
         }
 
         try {
-            // QZ connect() resuelve sin valor y rechaza si ya existe conexión.
             if (!window.qz.websocket.isActive()) {
                 await window.qz.websocket.connect();
             }
@@ -648,6 +653,9 @@ window.MvsPrint = {
         return btoa(binary);
     },
 
+    _qzSigned: false,
+    _qzSignedUrls: null,
+
     /**
      * Configura la seguridad QZ (certificado + firma) para impresión silenciosa.
      * Debe llamarse antes de window.qz.print().
@@ -656,6 +664,12 @@ window.MvsPrint = {
         if (typeof window.qz === 'undefined' || !window.qz?.security) {
             return;
         }
+        // Evitar reconexión innecesaria si ya estamos firmados con mismas URLs
+        const key = certificateUrl + '|' + signatureUrl;
+        if (this._qzSigned && this._qzSignedUrls === key && window.qz.websocket.isActive()) {
+            return;
+        }
+        this._qzSignedUrls = key;
         window.qz.security.setSignatureAlgorithm('SHA512');
 
         // Certificate promise: devuelve el certificado X509 público
@@ -692,5 +706,6 @@ window.MvsPrint = {
                 return response.text();
             });
         });
+        this._qzSigned = true;
     },
 };

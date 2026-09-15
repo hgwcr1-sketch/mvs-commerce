@@ -163,6 +163,7 @@ class MvsPrintTerminalsController extends Controller
      */
     public function signature(Request $request, QzSigningService $signing): Response
     {
+        $this->ensurePrintAccess();
         $data = $request->validate([
             'request' => ['required', 'string', 'max:65536'],
         ]);
@@ -180,12 +181,26 @@ class MvsPrintTerminalsController extends Controller
      * para validar las firmas generadas por el servidor.
      * Solo expone el certificado público; la clave privada nunca sale del servidor.
      */
-    public function certificate(QzSigningService $signing): Response
+    public function certificate(Request $request, QzSigningService $signing): Response
     {
+        $this->ensurePrintAccess();
         $signing->ensureCertificate();
 
         return response($signing->certificatePem(), 200)
             ->header('Content-Type', 'text/plain; charset=UTF-8');
+    }
+
+    private function ensurePrintAccess(): void
+    {
+        $companyId = $this->activeCompanyId();
+        $company = \App\Models\Company::query()->findOrFail($companyId);
+        $user = request()->user();
+        abort_unless($user, 401);
+        // Mínimo: pos.acceder o mvs.print.imprimir/configurar
+        $allowed = $user->hasPermission('pos.acceder', $company)
+            || $user->hasPermission('mvs.print.imprimir', $company)
+            || $user->hasPermission('mvs.print.configurar', $company);
+        abort_unless($allowed, 403);
     }
 
     /**

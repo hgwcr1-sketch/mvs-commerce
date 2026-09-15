@@ -965,11 +965,6 @@ Route::resource('transferencias', TransferController::class)
             Route::delete('/terminals/{terminal}', [MvsPrintTerminalsController::class, 'destroy'])->name('terminals.destroy');
             Route::get('/terminals/{terminal}/test-print', [MvsPrintTerminalsController::class, 'testPrintPayload'])->name('terminals.test-print');
             Route::get('/terminals/{terminal}/open-drawer', [MvsPrintTerminalsController::class, 'openDrawerPayload'])->name('terminals.open-drawer');
-            // Firma QZ oficial: qz.security llama aquí con el mensaje crudo "toSign"
-            // (sin contexto de terminal), por lo que el endpoint es global.
-            Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
-            // Certificado X509 público para modo firmado silencioso (qz.security.setCertificatePromise)
-            Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
             Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
             Route::get('/descargar', MvsPrintDownloadController::class)->name('download');
         });
@@ -992,6 +987,9 @@ Route::resource('transferencias', TransferController::class)
                 ->name('ticket');
             Route::get('/config', [\App\Http\Controllers\MvsPrint\MvsPrintConfigController::class, 'show'])
                 ->name('config');
+            // QZ security - accesible desde POS (pos.acceder) sin requerir mvs.print.configurar
+            Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
+            Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
         });
 
 });

@@ -281,7 +281,19 @@ class QzSigningService
             'encrypt_key' => false,
         ];
 
+        $configFile = $this->detectOpenSslConfig();
+        if ($configFile !== null) {
+            $config['config'] = $configFile;
+        }
+
         $csr = openssl_csr_new($dn, $privateKey, $config);
+
+        if ($csr === false && $configFile !== null) {
+            // Reintentar sin config explícito si el detectado no es compatible
+            $fallback = $config;
+            unset($fallback['config']);
+            $csr = openssl_csr_new($dn, $privateKey, $fallback);
+        }
 
         if ($csr === false) {
             throw new Exception('No se pudo crear CSR para certificado QZ: '.(openssl_error_string() ?: 'error desconocido'));

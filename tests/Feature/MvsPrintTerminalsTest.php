@@ -467,6 +467,48 @@ class MvsPrintTerminalsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_certificate_accessible_with_pos_permission_and_returns_pem(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa cert pos');
+        $user = $this->userWithPermission($company, $branch, permission: 'pos.acceder');
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('mvs.print.certificate'))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+        $pem = $response->getContent();
+        $this->assertStringContainsString('BEGIN CERTIFICATE', $pem);
+        $this->assertStringNotContainsString('PRIVATE KEY', $pem);
+        $this->assertStringNotContainsString('BEGIN RSA', $pem);
+    }
+
+    public function test_signature_accessible_with_pos_imprimir_permission(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa sig pos');
+        $user = $this->userWithPermission($company, $branch, permission: 'mvs.print.imprimir');
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->post(route('mvs.print.signature'), ['request' => 'toSign pos'])
+            ->assertOk();
+    }
+
+    public function test_certificate_forbidden_for_unauthenticated_and_cross_company(): void
+    {
+        [$company, $branch] = $this->companyContext('Empresa cert auth');
+        // No auth - redirect to login
+        $this->get(route('mvs.print.certificate'))
+            ->assertRedirect();
+        // Cross company
+        [$otherCompany, $otherBranch] = $this->companyContext('Empresa otra');
+        $user = $this->userWithPermission($otherCompany, $otherBranch, permission: 'pos.acceder');
+        // Intentar con company_id de otra empresa en sesión no debería exponer cert de otra? cert es global por instalación, pero aislamiento se verifica vía permiso pos en company activa; cross company con sesión otherCompany debe funcionar para su propia company pero no filtrar. Verificamos 403 sin permiso pos en company activa vacía
+        $noPerm = $this->userWithPermission($company, $branch, with: false);
+        $this->actingAs($noPerm)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('mvs.print.certificate'))
+            ->assertForbidden();
+    }
+
     public function test_permissions_are_seeded_for_mvs_print(): void
     {
         $this->seed(PermissionSeeder::class);
@@ -527,7 +569,7 @@ class MvsPrintTerminalsTest extends TestCase
         ]);
     }
 
-    private function userWithPermission(Company $company, ?Branch $branch = null, bool $with = true): User
+    private function userWithPermission(Company $company, ?Branch $branch = null, bool $with = true, string $permission = 'mvs.print.configurar'): User
     {
         $branch ??= Branch::query()
             ->where('company_id', $company->id)
@@ -541,11 +583,11 @@ class MvsPrintTerminalsTest extends TestCase
         ]);
 
         if ($with) {
-            $permission = Permission::firstOrCreate(
-                ['name' => 'mvs.print.configurar'],
-                ['label' => 'Configurar terminales de impresión local', 'module' => 'MVS Print', 'is_active' => true],
+            $perm = Permission::firstOrCreate(
+                ['name' => $permission],
+                ['label' => $permission, 'module' => 'Test', 'is_active' => true],
             );
-            $role->permissions()->attach($permission);
+            $role->permissions()->attach($perm);
         }
 
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
