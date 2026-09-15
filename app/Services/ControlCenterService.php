@@ -285,7 +285,7 @@ class ControlCenterService
                 DB::raw('COALESCE(bp.stock, 0) as stock'),
                 DB::raw('COALESCE(bp.minimum_stock, p.minimum_stock, 0) as minimum_stock'),
                 DB::raw('COALESCE(bp.maximum_stock, p.maximum_stock) as maximum_stock'),
-                DB::raw('COALESCE(u.allows_decimals, 1) as allows_decimals'),
+                DB::raw('COALESCE(u.allows_decimals, true) as allows_decimals'),
             ])
             ->keyBy(fn ($row) => $row->branch_id.'_'.$row->product_id);
     }
@@ -352,7 +352,7 @@ class ControlCenterService
                 DB::raw('COALESCE(bp.stock, 0) as stock'),
                 DB::raw('COALESCE(bp.minimum_stock, p.minimum_stock, 0) as minimum_stock'),
                 DB::raw('COALESCE(bp.maximum_stock, p.maximum_stock) as maximum_stock'),
-                DB::raw('COALESCE(u.allows_decimals, 1) as allows_decimals'),
+                DB::raw('COALESCE(u.allows_decimals, true) as allows_decimals'),
             ])
             ->keyBy('product_id');
     }

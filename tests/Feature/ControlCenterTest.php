@@ -762,6 +762,86 @@ class ControlCenterTest extends TestCase
         $this->assertStringNotContainsString('null', $prefill);
     }
 
+    // ── 9. POSTGRESQL BOOLEAN COALESCE REGRESSION ─────────────────
+
+    public function test_shortages_query_does_not_coalesce_boolean_with_integer(): void
+    {
+        [$company, $branch] = $this->ctxBranch('PgBool');
+
+        $cat = ProductCategory::create(['company_id' => $company->id, 'name' => 'C', 'slug' => 'c', 'is_active' => true]);
+        $unit = Unit::create(['company_id' => $company->id, 'name' => 'U', 'abbreviation' => 'U', 'slug' => 'u', 'allows_decimals' => true, 'is_active' => true]);
+        $product = Product::create([
+            'company_id' => $company->id, 'category_id' => $cat->id, 'unit_id' => $unit->id,
+            'name' => 'PgBool', 'internal_code' => 'PB', 'cost' => 10, 'sale_price' => 20,
+            'tax_rate' => 13, 'track_inventory' => true, 'minimum_stock' => 10, 'is_active' => true,
+        ]);
+        $this->stock($branch, $product, '2');
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+
+        $svc = app(ControlCenterService::class);
+        $svc->forCompany($company, $branch->id);
+
+        $coalesces = array_filter($queries, fn ($sql) => str_contains($sql, 'COALESCE(u.allows_decimals'));
+
+        $this->assertNotEmpty($coalesces, 'Expected at least one query with COALESCE(u.allows_decimals, ...)');
+
+        foreach ($coalesces as $sql) {
+            $this->assertStringNotContainsString(
+                'COALESCE(u.allows_decimals, 1)',
+                $sql,
+                'COALESCE(boolean, integer) is incompatible with PostgreSQL — use COALESCE(u.allows_decimals, true)',
+            );
+            $this->assertStringContainsString(
+                'COALESCE(u.allows_decimals, true)',
+                $sql,
+                'Fallback for allows_decimals must use boolean literal true, not integer 1',
+            );
+        }
+    }
+
+    public function test_shortages_global_query_does_not_coalesce_boolean_with_integer(): void
+    {
+        [$company, $branch] = $this->ctxBranch('PgBoolGlobal');
+
+        $cat = ProductCategory::create(['company_id' => $company->id, 'name' => 'C', 'slug' => 'c', 'is_active' => true]);
+        $unit = Unit::create(['company_id' => $company->id, 'name' => 'U', 'abbreviation' => 'U', 'slug' => 'u', 'allows_decimals' => true, 'is_active' => true]);
+        $product = Product::create([
+            'company_id' => $company->id, 'category_id' => $cat->id, 'unit_id' => $unit->id,
+            'name' => 'PgBoolGlobal', 'internal_code' => 'PBG', 'cost' => 10, 'sale_price' => 20,
+            'tax_rate' => 13, 'track_inventory' => true, 'minimum_stock' => 10, 'is_active' => true,
+        ]);
+        $this->stock($branch, $product, '2');
+
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+
+        $svc = app(ControlCenterService::class);
+        $svc->forCompany($company, null);
+
+        $coalesces = array_filter($queries, fn ($sql) => str_contains($sql, 'COALESCE(u.allows_decimals'));
+
+        $this->assertNotEmpty($coalesces, 'Expected at least one query with COALESCE(u.allows_decimals, ...)');
+
+        foreach ($coalesces as $sql) {
+            $this->assertStringNotContainsString(
+                'COALESCE(u.allows_decimals, 1)',
+                $sql,
+                'COALESCE(boolean, integer) is incompatible with PostgreSQL — use COALESCE(u.allows_decimals, true)',
+            );
+            $this->assertStringContainsString(
+                'COALESCE(u.allows_decimals, true)',
+                $sql,
+                'Fallback for allows_decimals must use boolean literal true, not integer 1',
+            );
+        }
+    }
+
     // ── HELPERS ───────────────────────────────────────────────────
 
     private function ctx(array $permissions): array
