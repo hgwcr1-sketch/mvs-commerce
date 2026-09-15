@@ -13,13 +13,11 @@
  *  - Firma las peticiones de QZ Tray vía /mvs/print/signature
  *    (clave privada jamás sale del servidor).
  *
- * Carga de qz-tray.js (v2.2.6):
- *  QZ Tray instala localmente el archivo qz-tray.js que expone el objeto
- *  global `window.qz`. Cuando QZ Tray está corriendo, el archivo se sirve
- *  desde https://localhost:8181/qz-tray.js (WebSocket seguro). La página
- *  debe incluir una etiqueta <script> apuntando a esa URL o copiar el archivo
- *  desde el directorio de instalación de QZ Tray (C:\Program Files\QZ Tray\js\).
- *  NO se sirve desde el servidor Laravel ni desde Vite.
+ * Librería QZ:
+ *  La librería cliente qz-tray.js (v2.2.6) se incluye como dependencia npm
+ *  y se bundea con Vite. Queda disponible como window.qz.
+ *  QZ Tray instalado localmente es el puente WebSocket que recibe los
+ *  comandos RAW e impacta la impresora.
  *
  * Fallback: si QZ Tray no está disponible, el flujo actual de impresión del
  * navegador (window.print) sigue intacto; esta vista solo muestra el estado.
@@ -43,7 +41,7 @@ document.addEventListener('alpine:init', () => {
 
         check() {
             this.connected = null;
-            this.message = 'Consultando el puente local de QZ Tray…';
+            this.message = 'Verificando MVS Print…';
 
             try {
                 if (typeof window.qz !== 'undefined' && window.qz?.websocket) {
@@ -51,25 +49,25 @@ document.addEventListener('alpine:init', () => {
                     window.qz.websocket.connect()
                         .then(() => {
                             this.connected = true;
-                            this.message = 'QZ Tray conectado en este equipo.';
+                            this.message = 'MVS Print conectado en este equipo.';
                         })
                         .catch(() => {
                             this.connected = false;
-                            this.message = 'QZ Tray está instalado pero no responde. Verifique que la aplicación esté abierta.';
+                            this.message = 'MVS Print está instalado pero no responde. Verifique que la aplicación esté abierta.';
                         });
                 } else {
                     this.connected = false;
-                    this.message = 'QZ Tray no está instalado o la librería local no está cargada. La impresión del navegador sigue funcionando.';
+                    this.message = 'MVS Print no está disponible. La impresión del navegador sigue funcionando.';
                 }
             } catch (error) {
                 this.connected = false;
-                this.message = 'No se pudo comprobar QZ Tray: ' + error.message;
+                this.message = 'No se pudo comprobar MVS Print: ' + error.message;
             }
         },
 
         listPrinters() {
             if (!this.connected || typeof window.qz === 'undefined') {
-                this.message = 'QZ Tray no está conectado.';
+                this.message = 'MVS Print no está conectado.';
                 return;
             }
             this.message = 'Consultando impresoras del sistema…';
@@ -94,7 +92,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             if (!this.connected || typeof window.qz === 'undefined') {
-                this.message = 'QZ Tray no está conectado. No se puede imprimir la prueba.';
+                this.message = 'MVS Print no está conectado. No se puede imprimir la prueba.';
                 return;
             }
             if (!this.testUrl) {
@@ -138,7 +136,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             if (!this.connected || typeof window.qz === 'undefined') {
-                this.message = 'QZ Tray no está conectado. No se puede abrir el cajón.';
+                this.message = 'MVS Print no está conectado. No se puede abrir el cajón.';
                 return;
             }
             if (!this.drawerUrl) {
@@ -224,7 +222,7 @@ document.addEventListener('alpine:init', () => {
                     this.message = 'No se pudo imprimir: ' + error.message;
                 });
             } catch (error) {
-                this.message = 'Fallo al enviar a QZ Tray: ' + error.message;
+                this.message = 'Error al enviar a impresión: ' + error.message;
             }
         },
 
@@ -374,7 +372,7 @@ window.MvsPrint = {
         const timeout = options.timeout || 5000;
 
         if (typeof window.qz === 'undefined' || !window.qz?.websocket) {
-            return { success: false, error: 'QZ Tray no disponible' };
+            return { success: false, error: 'MVS Print no disponible' };
         }
 
         try {
@@ -383,10 +381,10 @@ window.MvsPrint = {
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
             ]);
             if (!connected) {
-                return { success: false, error: 'QZ Tray no responde' };
+                return { success: false, error: 'MVS Print no responde' };
             }
         } catch {
-            return { success: false, error: 'QZ Tray no responde' };
+            return { success: false, error: 'MVS Print no responde' };
         }
 
         const ticketData = await this.fetchTicket(ticketUrl, saleId);

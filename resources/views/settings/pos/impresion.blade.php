@@ -8,7 +8,7 @@
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h2 class="text-xl font-semibold text-slate-800">Impresión (MVS Print)</h2>
-            <p class="mt-1 text-sm text-slate-600">Terminales de impresión local por sucursal con QZ Tray. La impresión ocurre en este equipo; el servidor solo valida y firma.</p>
+            <p class="mt-1 text-sm text-slate-600">Terminales de impresión local por sucursal. La impresión ocurre en este equipo; el servidor solo valida y firma.</p>
         </div>
 
         <div class="flex justify-end gap-3">
@@ -26,11 +26,11 @@
         <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{{ session('error') }}</div>
     @endif
 
-    {{-- Conexión QZ Tray --}}
+    {{-- Conexión MVS Print --}}
     <x-card>
         <x-slot:header>
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-slate-800">MVS Print (impresora local)</h3>
+                <h3 class="text-lg font-semibold text-slate-800">MVS Print</h3>
                 <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
                       :class="connected === true ? 'bg-green-100 text-green-700' : (connected === false ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')">
                     <span class="h-2 w-2 rounded-full" :class="connected === true ? 'bg-green-500' : (connected === false ? 'bg-red-500' : 'bg-slate-400')"></span>
@@ -41,7 +41,7 @@
 
         <div class="grid gap-4 md:grid-cols-2">
             <div>
-                <p class="text-sm text-slate-600">Estado del puente local entre el navegador y la impresora/cajón.</p>
+                <p class="text-sm text-slate-600">Estado del servicio de impresión local en este equipo.</p>
                 <div class="mt-3 flex flex-wrap gap-3">
                     <button type="button" @click="check()"
                             class="min-h-11 rounded-lg bg-amber-500 px-4 py-2.5 font-semibold text-white hover:bg-amber-600">
@@ -66,17 +66,8 @@
                         <option :value="printer" x-text="printer"></option>
                     </template>
                 </select>
-                <p class="mt-2 text-sm text-slate-500">MVS Print entrega el nombre del driver instalado en este equipo. Guárdelo en una terminal para fijar la salida.</p>
+                <p class="mt-2 text-sm text-slate-500">Nombre del driver de impresión instalado en este equipo. Asigne una impresora a cada terminal.</p>
             </div>
-        </div>
-
-        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p class="text-sm font-semibold text-slate-700">Requisitos</p>
-            <ul class="mt-2 list-inside list-disc space-y-1 text-sm text-slate-600">
-                <li>QZ Tray debe estar instalado y ejecutándose en este equipo.</li>
-                <li>El archivo <code class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs">qz-tray.js</code> se carga desde <code class="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-xs">https://localhost:8181/qz-tray.js</code> (servido por QZ Tray).</li>
-                <li>En producción se requiere HTTPS para WebSocket seguro.</li>
-            </ul>
         </div>
     </x-card>
 
@@ -129,7 +120,7 @@
                     <input type="checkbox" name="auto_print" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500">
                     <span class="block">
                         <span class="font-semibold text-slate-800">Impresión automática</span>
-                        <span class="text-sm text-slate-500">Imprimir automáticamente al completar operaciones (fase posterior de integración).</span>
+                        <span class="text-sm text-slate-500">Imprimir automáticamente al completar una venta.</span>
                     </span>
                 </label>
                 <label class="flex min-h-11 items-start gap-3">
