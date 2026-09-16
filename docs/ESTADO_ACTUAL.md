@@ -2,6 +2,10 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## MVS Print — CIERRE COMPLETO (2026-09-16, producción desplegada)
+
+Producción desplegada en `192.81.208.39` (`/var/www/mvscommerce`), branch `feature/pos`, HEAD `c05c444`. Deploy fast-forward desde `9edcb92` → `c05c444` (3 commits: PurchaseExcelImport, QZ fix, merge). npm ci + build + optimize:clear + optimize ejecutados. Config cache con `MVS_PRINT_DOWNLOAD_URL`, `MVS_PRINT_VERSION=1.0.0`, `MVS_PRINT_SHA256=57E2644F...`. Instalador `MVS-Print-Setup.exe` (102,632,513 bytes, SHA256 verificado) en `storage/app/mvs-print/` con symlink en `public/mvs-print/`. Botón descarga activo en Configuración → MVS Print. HTTP 200 + Content-Length + SHA256 match verificados. QZ 2.2.6 embebido en installer NSIS. Prueba física pendiente en Liberia.
+
 ## MVS Print — AUTO_PRINT, Imprimir postventa y Reimprimir (2026-09-15, cierre aprobado)
 
 Base `21d5329`, `feature/pos`. Listado y detalle de Ventas reutilizan `EscPosSaleTicket` mediante el endpoint existente y QZ; fallback del navegador exclusivamente manual tras error. Terminal por UUID local o única terminal configurada en empresa/sucursal; no resolver ambigüedad silenciosamente. Reprint conserva ancho/corte, desactiva cajón y reutiliza autorización del comprobante. `auto_print` corrige conexión QZ ya activa y resolución `undefined`; venta nueva conserva cajón configurado. Diagnóstico temporal retirado. Botón Imprimir postventa integrado en el mismo canal MvsPrint.printSale; fallback manual tras error y mensaje si no se resuelve terminal. JS ejecuta confirmCheckout y el botón reales con QZ/HTTP simulados. Demo sin terminal nunca reutiliza MYM (test); configuración física de Demo no consultada. PHP MvsPrint **56/56, 226 aserciones**; JS **14/14**; build y diff-check correctos. Snapshot de todas las tablas y SQL prueban cero escrituras del GET de reprint. Prueba física y visual pendiente. Commit y push de esta corrección autorizados; producción no autorizada. Detalle: [MVS_PRINT_TEST_PRINT_AUDIT.md](MVS_PRINT_TEST_PRINT_AUDIT.md). Cambios locales ajenos preservados.

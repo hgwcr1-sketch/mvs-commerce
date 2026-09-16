@@ -74,10 +74,8 @@ scroll horizontal contenido. Revisión conceptual 360/768/1280; navegador físic
 
 ## Validación y entrega
 
-Ver resultados finales en docs/ESTADO_ACTUAL.md. Pruebas HTTP comparan todas las
-tablas antes/después y registran SQL para demostrar cero escrituras durante reprint
-(tras preparar middleware/licencia). JS simula QZ; no acredita salida física.
-
-Pendiente prueba física autorizada: POS-58-Series, 58 mm, corte según terminal,
-sin cajón al reimprimir; error QZ muestra fallback manual. Si hay varias terminales,
-se requiere vínculo UUID local existente para escoger la correcta. Sin deploy.
+Producción desplegada 2026-09-16: `192.81.208.39`, branch `feature/pos`, HEAD `c05c444`.
+Instalador: `MVS-Print-Setup.exe` (102,632,513 bytes, SHA256 `57E2644F1120B1994E69CDB1F1392B07AA0D018D94304E2FCA9B159BCA648F91`).
+URL descarga: `https://app.mvscommerce.com/mvs-print/MVS-Print-Setup.exe` (HTTP 200, Content-Length verificado).
+QZ 2.2.6 embebido en wrapper NSIS. Botón activo en Configuración → MVS Print.
+Pruebas PHP 67/67, JS 39/39, npm build PASS. Prueba física pendiente en Liberia.

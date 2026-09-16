@@ -2,6 +2,10 @@
 
 Este documento registra decisiones importantes que no deben ser revertidas por un agente sin revisar primero el contexto y obtener autorización cuando corresponda.
 
+## MVS Print — producción desplegada (2026-09-16)
+
+Deploy a producción `192.81.208.39` (`/var/www/mvscommerce`) via fast-forward SSH (`mvsadmin`). Commits desplegados: `4d3ab7b` (PurchaseExcelImport), `05e228b` (QZ 2.2.6 fix), `c05c444` (merge). Servidor: Ubuntu 24.04 LTS / DigitalOcean. Instalador `MVS-Print-Setup.exe` (102,632,513 bytes, SHA256 `57E2644F...`) subido a `storage/app/mvs-print/` con symlink público. Variables de entorno `MVS_PRINT_DOWNLOAD_URL`, `MVS_PRINT_VERSION`, `MVS_PRINT_SHA256` configuradas. Config cache regenerada. QZ 2.2.6 embebido en wrapper NSIS. Prueba física pendiente en Liberia. NO revertir este deploy sin autorización explícita.
+
 ## POS — el canje no genera nueva acumulación (2026-09-15)
 
 Regla definitiva corregida por el usuario: el canje se aplica al total con impuestos; solo su proporción de base elegible reduce la acumulación. Porción elegible financiada con puntos = base elegible antes de impuestos × redeemed_amount / Sale.total. Base de acumulación = base elegible menos esa porción. Ejemplo: base 10000 + IVA 1300, canje 2260 → porción de base 2000 → earning sobre 8000. Pago total con puntos genera cero acumulación, incluso con redondeo del total. Sin canje se conserva exactamente la base anterior.
