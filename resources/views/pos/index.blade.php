@@ -1763,4 +1763,37 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 </script>
+
+<script>
+(function () {
+    // Inject public key meta tag for offline signature verification
+    @if (config('offline.keys.public') && \Illuminate\Support\Facades\File::exists(storage_path(config('offline.keys.public'))))
+        const publicKey = @json(\Illuminate\Support\Facades\File::get(storage_path(config('offline.keys.public'))));
+        if (publicKey) {
+            const meta = document.createElement('meta');
+            meta.name = 'mvsoffline-public-key';
+            meta.content = publicKey;
+            document.head.appendChild(meta);
+        }
+    @endif
+})();
+</script>
+
+<script>
+(function () {
+    // Register Service Worker for offline POS app shell
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(function (registration) {
+                    console.log('[POS] Service Worker registered:', registration.scope);
+                })
+                .catch(function (error) {
+                    console.warn('[POS] Service Worker registration failed:', error);
+                });
+        });
+    }
+})();
+</script>
+
 @endpush
