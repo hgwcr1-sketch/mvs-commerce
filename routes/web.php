@@ -991,5 +991,38 @@ Route::resource('transferencias', TransferController::class)
             Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
             Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
         });
+    | Offline Authorization
+    |--------------------------------------------------------------------------
+    */
+
+    Route::post('/mvs/offline/authorize', [\App\Http\Controllers\OfflineAuthorizationController::class, 'authorize'])
+        ->middleware('permission:configuracion.editar')
+        ->name('offline.authorize');
+    Route::post('/mvs/offline/verify', [\App\Http\Controllers\OfflineAuthorizationController::class, 'verify'])
+        ->middleware('permission:configuracion.editar')
+        ->name('offline.verify');
+    Route::get('/mvs/offline/public-key', [\App\Http\Controllers\OfflineAuthorizationController::class, 'publicKey'])
+        ->middleware('permission:configuracion.editar')
+        ->name('offline.public-key');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Offline Snapshot
+    |--------------------------------------------------------------------------
+    */
+
+    Route::post('/mvs/offline/snapshot', [\App\Http\Controllers\OfflineSnapshotController::class, 'show'])
+        ->middleware('permission:configuracion.editar')
+        ->name('offline.snapshot');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Offline Sync
+    |--------------------------------------------------------------------------
+    */
+
+    Route::post('/mvs/offline/sync', [\App\Http\Controllers\OfflineSyncController::class, 'sync'])
+        ->middleware('permission:ventas.crear')
+        ->name('offline.sync');
 
 });

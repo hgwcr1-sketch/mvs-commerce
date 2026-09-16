@@ -66,4 +66,9 @@ class Branch extends Model
     {
         return $this->hasMany(PurchaseOrder::class);
     }
+
+    public function offlineTerminals(): HasMany
+    {
+        return $this->hasMany(OfflineTerminal::class);
+    }
 }

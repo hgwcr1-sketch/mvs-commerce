@@ -175,4 +175,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(CashMovement::class, 'created_by');
     }
+
+    public function offlineAuthorizations()
+    {
+        return $this->hasMany(OfflineAuthorization::class);
+    }
 }

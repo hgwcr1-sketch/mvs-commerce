@@ -171,4 +171,9 @@ class Company extends Model
     {
         return $this->hasMany(CashDenomination::class);
     }
+
+    public function offlineTerminals()
+    {
+        return $this->hasMany(OfflineTerminal::class);
+    }
 }
