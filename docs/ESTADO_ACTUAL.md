@@ -25,6 +25,53 @@ Validación final: **86/86 pruebas focales, 679 aserciones, cero fallos**; cubre
 Auditoría final del usuario aprobada: canje, pago parcial/total/mixto, autoridad backend, atomicidad, idempotencia y multitenant correctos. Commit y push a feature/pos autorizados; producción no autorizada. Los problemas consignados abajo se confirman preexistentes y fuera del alcance de este commit, por lo que no bloquean el cierre del pago con puntos. El párrafo siguiente conserva la evidencia de la implementación local anterior al cierre.
 
 Paso 32 pausado por el usuario. Reutilizada fidelización existente; habilitado pago total con puntos sin pago normal, validación de cantidades en checkout y BCMath para puntos/restante. Focal final: 51/51, 373 aserciones; canje total, retry y JavaScript renderizado probados. Regresión POS/Loyalty/USD: 75/76, 590 aserciones; fallo de texto esperado del comprobante fuera del parche. Bloqueo: devoluciones/anulaciones llaman a métodos de inventario ausentes (`saleReturn`, `voidSale`), 13 errores; sin ampliar alcance. Multisucursal añade error de premio por `postRewardRedemption` ausente. Detalle y entrega: [POS_CANJE_PUNTOS.md](POS_CANJE_PUNTOS.md). Sin migración, commit, push ni producción; validación visual pendiente.
+## Offline Fases 1–4B — INTEGRADAS LOCALMENTE sobre feature/pos (2026-09-16, post-recuperación)
+
+Fases 1, 1B, 2, 3A, 3B, 4A y 4B del módulo Offline **protegidas por 6 commits locales** sobre `feature/pos` (incluida la sincronización real de operaciones offline pendientes hacia el servidor, con ACK, idempotencia server-side y cola FIFO controlada en el cliente). **NO PUSH. NO PRODUCCIÓN. FASE 4C NO INICIADA.**
+
+Arquitectura:
+- `POST /mvs/offline/sync` (`offline.sync`), con `permission:ventas.crear`, dentro del grupo `company.licensed`.
+- Una operación por request (sin lotes).
+- `OfflineSyncService`: reserva FIFO, validación de terminal/empresa/sucursal, ventana de sincronización tardía (token vencido aceptado dentro de la ventana), procesamiento y ACK idempotente.
+- **Reutiliza `PosSaleProcessor::process($data, $user, $companyId, $branchId)` — NO existe una segunda implementación de ventas.**
+- Idempotencia server-side mediante `UNIQUE(operation_uuid)` (sin `if (!exists)`), manejando la violación de unicidad ante concurrencia.
+- SHA-256 del payload canónico del lado del servidor (constante de tiempo con `hash_equals`).
+- Mismo UUID + mismo payload = misma venta / `already_processed` (se reenvía el mismo `sale_id`; recupera ACK perdido).
+- Mismo UUID + payload diferente = 409 conflicto (registro `conflict` conservado).
+- FIFO client-side; `MAX_CONCURRENT = 1` (bloqueo anti-carrera, sin `Promise.all`).
+- Pausa 300ms entre operaciones (backpressure).
+- Backoff 2s → 60s en errores transitorios.
+- 401/403 detienen toda la sincronización (`auth_revoked`); 409/422 y los errores de negocio se conservan como `failed` e **incrementan contadores, nunca entran en loop**.
+- Operaciones fallidas nunca se borran (`markFailed` preserva la operación; transitorias quedan `pending` reintentables).
+- Estados servidor: `received` / `processing` / `synced` / `conflict` / `failed`; respuestas 200 `processed|already_processed`, 202 `in_progress`, 409, 422, 503.
+- CSS Worker de la fase anterior intacto; el tag `X-CSRF-TOKEN` se lee del `<meta>` y en tests se omite por `runningUnitTests()`.
+
+Bugs corregidos durante 4B:
+- `OfflineSyncOperation` → `public $timestamps = false;` (la migración no tiene columnas timestamps; Eloquet causaba QueryException → 503 en cada `create()`).
+- `OfflineSyncService::reserveOperation()` ahora devuelve `[OfflineSyncOperation, bool $wasCreatedNow]`; el branch `in_progress` (202) solo aplica a un registro preexistente en `processing`, no a uno recién creado.
+- `stringifyNumber()` corregido: dejaba de deshacerse de los ceros finales de enteros (`'1130'`→`'113'`, `'0'`→`''`); el strip de ceros solo aplica tras punto decimal.
+- `OfflineSyncController`: `$request->validate()` movido dentro del `try` para que toda validación devuelva 422 JSON sin depender del header Accept.
+
+Validación:
+- JS: **105/105** (`offline-phase4a.cjs` + `offline-storage.cjs` + `offline-phase4b.cjs`).
+- PHP: **91/92** (OfflineAuthorization + OfflineSnapshot + OfflineSync + PosCheckout).
+- Único fallo reportado como preexistente / ambiental (no causado por 4B): `PosCheckoutTest::test_receipt_is_visible_to_creator_or_sales_viewer_and_cross_company_is_hidden` — afirma “Comprobante interno — pendiente de integración con Hacienda”, texto que solo existe en el test y no en ninguna vista del comprobante.
+- `npm run build` OK (`vite build`, 236 módulos).
+- `git diff --check` limpio.
+
+Estado del trabajo:
+- WORKTREE: `C:\Users\USER000\MVS Commerce\mvs-commerce-paralelo-2`
+- BRANCH: `dummy-branch-1` (local, sin upstream)
+- HEAD BASE ORIGINAL: `26249ab`
+- FEATURE POS TARGET: `0c06e39` (`origin/feature/pos` actual)
+- **COMMIT LOCAL: SÍ (6 commits offline). NO PUSH. NO PRODUCCIÓN.**
+
+Archivos 4B: `app/Services/OfflineSyncService.php`, `app/Http/Controllers/OfflineSyncController.php`, `app/Models/OfflineSyncOperation.php`, migración `database/migrations/2026_09_16_152029_create_offline_sync_operations_table.php`, `resources/js/offline/sync-worker.js`, `resources/js/offline/sale.js` (payload canónico v1), `resources/js/offline/pending-operations.js` (`markSyncing`/`markSynced`/`markTransientError`/`markFailed`), `resources/js/offline/index.js` (re-exports), ruta del apartado Offline Sync en `routes/web.php`, `tests/Feature/OfflineSyncTest.php` (20 pruebas PHP) y `tests/js/offline-phase4b.cjs` (33 pruebas JS).
+
+Siguiente fase:
+**FASE 4C — IMPRESIÓN DE VENTA OFFLINE.** NO INICIARLA.
+
+> **ADVERTENCIA EXPLÍCITA:** la Fase 4C NO puede cambiar el diseño actual del ticket. Debe reutilizar exactamente la arquitectura/formato existente de impresión MVS Print/QZ una vez se audite el estado actual. No cambiar `receipt`, colores, la estructura 58mm/80mm ni el formato visual sin autorización.
 
 ## Modo cotización en POS — implementación local (2026-09-12)
 
