@@ -11,12 +11,31 @@ use App\Services\Sales\SaleReceiptData;
  * con el recibo HTML. El backend solo prepara comandos de alto nivel
  * (líneas, corte y cajón); el navegador (qz.js) los convierte en bytes
  * ESC/POS y los envía a QZ Tray.
+ *
+ * Notas visuales 1.0.2:
+ * - La moneda se entrega como símbolo colón (₡, U+20A1); qz.js lo traduce a
+ *   un byte de una sola página de códigos (CP850/CP437, nunca UTF-8 crudo)
+ *   para que la POS-58-Series nunca muestre mojibake.
+ * - Todo texto libre pasa por word-wrap consciente de espacios: ninguna
+ *   palabra normal se corta a mitad si cabe completa en la siguiente línea;
+ *   solo se divide una palabra si supera el ancho total disponible. 58mm usa
+ *   un máximo más angosto que 80mm (fuente A).
  */
 class EscPosSaleTicket
 {
     private const ALIGN_CENTER = 'center';
+
     private const ALIGN_LEFT = 'left';
+
     private const ALIGN_RIGHT = 'right';
+
+    /** Moneda visual del comprobante: colón costarricense (₡). */
+    private const CURRENCY = '₡';
+
+    /** Ancho aproximado en caracteres de fuente A para cada papel. */
+    private const WIDTH_58 = 32;
+
+    private const WIDTH_80 = 48;
 
     /**
      * Construye el descriptor del ticket de venta para la impresora ESC/POS.
@@ -35,14 +54,14 @@ class EscPosSaleTicket
         ?array $drawerCommand = null,
     ): array {
         $lines = [];
-        $lines = array_merge($lines, $this->headerLines($data));
+        $lines = array_merge($lines, $this->headerLines($data, $paperWidth));
         $lines = array_merge($lines, $this->detailLines($data, $paperWidth));
         $lines = array_merge($lines, $this->totalsLines($data, $paperWidth));
         $lines = array_merge($lines, $this->paymentLines($data, $paperWidth));
         $lines = array_merge($lines, $this->loyaltyLines($data, $paperWidth));
-        $lines = array_merge($lines, $this->cashSessionLines($data));
+        $lines = array_merge($lines, $this->cashSessionLines($data, $paperWidth));
         $lines[] = ['type' => 'empty'];
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->footer_message, 'emphasized' => true];
+        $this->addText($lines, $data->footer_message ?? '', self::ALIGN_CENTER, $this->textWidth($paperWidth), true);
         $lines[] = ['type' => 'empty'];
 
         return [
@@ -54,72 +73,150 @@ class EscPosSaleTicket
         ];
     }
 
-    private function headerLines(SaleReceiptData $data): array
+    private function textWidth(string $paperWidth, ?string $size = null): int
+    {
+        $base = $paperWidth === '58' ? self::WIDTH_58 : self::WIDTH_80;
+
+        return $size === 'double' ? (int) floor($base / 2) : $base;
+    }
+
+    /**
+     * Agrega una línea de texto ya ajustada al ancho (word-wrap).
+     */
+    private function addText(
+        array &$lines,
+        string $value,
+        string $align,
+        int $width,
+        bool $emphasized = false,
+        ?string $size = null,
+    ): void {
+        foreach ($this->wrapValue($value, $width) as $line) {
+            $row = ['type' => 'text', 'align' => $align, 'value' => $line];
+            if ($emphasized) {
+                $row['emphasized'] = true;
+            }
+            if ($size !== null) {
+                $row['size'] = $size;
+            }
+            $lines[] = $row;
+        }
+    }
+
+    /**
+     * Word-wrap: corta en espacios y nunca divide una palabra normal.
+     * Solo divide una palabra si supera el ancho disponible completo.
+     */
+    private function wrapValue(string $value, int $width): array
+    {
+        if ($value === '') {
+            return [];
+        }
+
+        if (mb_strlen($value) <= $width) {
+            return [$value];
+        }
+
+        $words = preg_split('/\s+/u', trim($value)) ?: [];
+        $lines = [];
+        $current = '';
+
+        foreach ($words as $word) {
+            // Palabra más ancha que toda la línea: se divide sin perder datos.
+            while (mb_strlen($word) > $width) {
+                if ($current !== '') {
+                    $lines[] = $current;
+                    $current = '';
+                }
+                $lines[] = mb_substr($word, 0, $width);
+                $word = mb_substr($word, $width);
+            }
+
+            if ($current === '') {
+                $current = $word;
+            } elseif (mb_strlen($current) + 1 + mb_strlen($word) <= $width) {
+                $current .= ' '.$word;
+            } else {
+                $lines[] = $current;
+                $current = $word;
+            }
+        }
+
+        if ($current !== '') {
+            $lines[] = $current;
+        }
+
+        return $lines;
+    }
+
+    private function headerLines(SaleReceiptData $data, string $paperWidth): array
     {
         $lines = [];
+        $width = $this->textWidth($paperWidth);
 
         // Empresa vendedora - protagonista visual (trade_name)
         if ($data->company['trade_name']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->company['trade_name'], 'emphasized' => true, 'size' => 'double'];
+            $this->addText($lines, $data->company['trade_name'], self::ALIGN_CENTER, $this->textWidth($paperWidth, 'double'), true, 'double');
         }
 
         // Branding secundario plataforma (conserva diseño aprobado, tamaño normal)
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'MVS Commerce'];
+        $this->addText($lines, 'MVS Commerce', self::ALIGN_CENTER, $width);
 
         // Razón social
         if ($data->company['legal_name']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->company['legal_name']];
+            $this->addText($lines, $data->company['legal_name'], self::ALIGN_CENTER, $width);
         }
 
         // Identificación
         if ($data->company['identification_number']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->company['identification_number']];
+            $this->addText($lines, $data->company['identification_number'], self::ALIGN_CENTER, $width);
         }
 
         // Dirección empresa
         if ($data->company['address']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->company['address']];
+            $this->addText($lines, $data->company['address'], self::ALIGN_CENTER, $width);
         }
 
         $lines[] = ['type' => 'empty'];
 
         // Sucursal
         if ($data->branch['name']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->branch['name']];
+            $this->addText($lines, $data->branch['name'], self::ALIGN_CENTER, $width);
         }
         if ($data->branch['phone']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'Tel: ' . $data->branch['phone']];
+            $this->addText($lines, 'Tel: '.$data->branch['phone'], self::ALIGN_CENTER, $width);
         }
         if ($data->branch['address'] && $data->branch['address'] !== $data->company['address']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->branch['address']];
+            $this->addText($lines, $data->branch['address'], self::ALIGN_CENTER, $width);
         }
 
         $lines[] = ['type' => 'empty'];
 
         // Tipo documento
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $data->document['type'], 'emphasized' => true];
+        $this->addText($lines, $data->document['type'], self::ALIGN_CENTER, $width, true);
+
         $lines[] = ['type' => 'empty'];
 
         // Venta anulada
         if ($data->document['is_voided']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '*** VENTA ANULADA ***', 'emphasized' => true];
+            $this->addText($lines, '*** VENTA ANULADA ***', self::ALIGN_CENTER, $width, true);
             $lines[] = ['type' => 'empty'];
         }
 
         // Detalles
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Venta: ' . $data->document['sale_number']];
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Fecha: ' . $data->document['completed_at']];
+        $this->addText($lines, 'Venta: '.$data->document['sale_number'], self::ALIGN_LEFT, $width);
+        $this->addText($lines, 'Fecha: '.$data->document['completed_at'], self::ALIGN_LEFT, $width);
 
         // Cajero
         if ($data->cashier && isset($data->cashier['name'])) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Cajero: ' . $data->cashier['name']];
+            $this->addText($lines, 'Cajero: '.$data->cashier['name'], self::ALIGN_LEFT, $width);
         }
 
         // Cliente
         if ($data->customer) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Cliente: ' . $data->customer['name']];
+            $this->addText($lines, 'Cliente: '.$data->customer['name'], self::ALIGN_LEFT, $width);
             if ($data->customer['identification']) {
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Cedula: ' . $data->customer['identification']];
+                $this->addText($lines, 'Cedula: '.$data->customer['identification'], self::ALIGN_LEFT, $width);
             }
         }
 
@@ -132,43 +229,44 @@ class EscPosSaleTicket
     private function detailLines(SaleReceiptData $data, string $paperWidth): array
     {
         $lines = [];
+        $width = $this->textWidth($paperWidth);
         $is58 = $paperWidth === '58';
 
         foreach ($data->items as $item) {
             if ($is58) {
                 // Formato 58mm: varias líneas por item
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => $item['description'], 'emphasized' => true];
+                $this->addText($lines, $item['description'], self::ALIGN_LEFT, $width, true);
 
                 if ($item['product_code']) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Cod: ' . $item['product_code']];
+                    $this->addText($lines, 'Cod: '.$item['product_code'], self::ALIGN_LEFT, $width);
                 }
 
-                $line = $item['quantity'] . ' x CRC ' . $item['unit_price'];
+                $line = $item['quantity'].' x '.self::CURRENCY.' '.$item['unit_price'];
                 if ((float) $item['discount_total'] > 0) {
-                    $line .= ' -CRC ' . $item['discount_total'];
+                    $line .= ' -'.self::CURRENCY.' '.$item['discount_total'];
                 }
                 if ((float) $item['tax_total'] > 0) {
-                    $line .= ' +CRC ' . $item['tax_total'];
+                    $line .= ' +'.self::CURRENCY.' '.$item['tax_total'];
                 }
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  ' . $line];
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_RIGHT, 'value' => 'CRC ' . $item['total']];
+                $this->addText($lines, '  '.$line, self::ALIGN_LEFT, $width);
+                $this->addText($lines, self::CURRENCY.' '.$item['total'], self::ALIGN_RIGHT, $width);
             } else {
                 // Formato 80mm: tabla alineada
                 $desc = mb_substr($item['description'], 0, 30);
                 $qty = str_pad($item['quantity'], 7, ' ', STR_PAD_LEFT);
-                $price = str_pad('CRC ' . $item['unit_price'], 12, ' ', STR_PAD_LEFT);
-                $total = str_pad('CRC ' . $item['total'], 14, ' ', STR_PAD_LEFT);
+                $price = str_pad(self::CURRENCY.' '.$item['unit_price'], 12, ' ', STR_PAD_LEFT);
+                $total = str_pad(self::CURRENCY.' '.$item['total'], 14, ' ', STR_PAD_LEFT);
                 $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => sprintf('%-30s %7s x %12s  %14s', $desc, $qty, $price, $total)];
 
                 if ($item['product_code']) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Cod: ' . $item['product_code']];
+                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Cod: '.$item['product_code']];
                 }
 
                 if ((float) $item['discount_total'] > 0) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Descuento: -CRC ' . $item['discount_total']];
+                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Descuento: -'.self::CURRENCY.' '.$item['discount_total']];
                 }
                 if ((float) $item['tax_total'] > 0) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Impuesto: +CRC ' . $item['tax_total']];
+                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Impuesto: +'.self::CURRENCY.' '.$item['tax_total']];
                 }
             }
         }
@@ -182,25 +280,26 @@ class EscPosSaleTicket
     {
         $lines = [];
         $align = $paperWidth === '58' ? self::ALIGN_LEFT : self::ALIGN_RIGHT;
+        $width = $this->textWidth($paperWidth);
 
-        $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Subtotal:  CRC ' . $data->totals['subtotal']];
+        $this->addText($lines, 'Subtotal:  '.self::CURRENCY.' '.$data->totals['subtotal'], $align, $width);
 
         if ((float) $data->totals['discount_total'] > 0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Descuento: -CRC ' . $data->totals['discount_total']];
+            $this->addText($lines, 'Descuento: -'.self::CURRENCY.' '.$data->totals['discount_total'], $align, $width);
         }
 
         if ((float) $data->totals['tax_total'] > 0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Impuesto: CRC ' . $data->totals['tax_total']];
+            $this->addText($lines, 'Impuesto: '.self::CURRENCY.' '.$data->totals['tax_total'], $align, $width);
         }
 
         if ((float) $data->totals['rounding_total'] !== 0.0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Redondeo: CRC ' . $data->totals['rounding_total']];
+            $this->addText($lines, 'Redondeo: '.self::CURRENCY.' '.$data->totals['rounding_total'], $align, $width);
         }
 
         $lines[] = ['type' => 'separator'];
         $lines[] = ['type' => 'empty'];
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'TOTAL', 'emphasized' => true, 'size' => 'double'];
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'CRC ' . $data->totals['total'], 'emphasized' => true, 'size' => 'double'];
+        $this->addText($lines, 'TOTAL', self::ALIGN_CENTER, $this->textWidth($paperWidth, 'double'), true, 'double');
+        $this->addText($lines, self::CURRENCY.' '.$data->totals['total'], self::ALIGN_CENTER, $this->textWidth($paperWidth, 'double'), true, 'double');
         $lines[] = ['type' => 'empty'];
         $lines[] = ['type' => 'separator'];
 
@@ -211,24 +310,25 @@ class EscPosSaleTicket
     {
         $lines = [];
         $align = $paperWidth === '58' ? self::ALIGN_LEFT : self::ALIGN_RIGHT;
+        $width = $this->textWidth($paperWidth);
 
         foreach ($data->payments as $payment) {
-            $line = $payment['method'] . ': CRC ' . $payment['amount'];
+            $line = $payment['method'].': '.self::CURRENCY.' '.$payment['amount'];
 
             if ($payment['reference']) {
-                $line .= ' (Ref: ' . $payment['reference'] . ')';
+                $line .= ' (Ref: '.$payment['reference'].')';
             }
 
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => $line];
+            $this->addText($lines, $line, $align, $width);
 
             if ($payment['allows_change'] && $payment['received_amount'] !== null && $payment['change_amount'] !== null) {
-                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Recibido: CRC ' . $payment['received_amount']];
-                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Vuelto:   CRC ' . $payment['change_amount']];
+                $this->addText($lines, '  Recibido: '.self::CURRENCY.' '.$payment['received_amount'], $align, $width);
+                $this->addText($lines, '  Vuelto:   '.self::CURRENCY.' '.$payment['change_amount'], $align, $width);
             }
         }
 
         if ($data->payment_summary['is_mixed']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '--- Pago Mixto ---', 'emphasized' => true];
+            $this->addText($lines, '--- Pago Mixto ---', self::ALIGN_CENTER, $width, true);
         }
 
         $lines[] = ['type' => 'separator'];
@@ -244,49 +344,50 @@ class EscPosSaleTicket
 
         $loyalty = $data->loyalty;
         $lines = [];
+        $width = $this->textWidth($paperWidth);
 
         if ($loyalty['kind'] === 'invitation') {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '--- Fidelizacion ---', 'emphasized' => true];
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'Unete a nuestro programa de fidelidad'];
+            $this->addText($lines, '--- Fidelizacion ---', self::ALIGN_CENTER, $width, true);
+            $this->addText($lines, 'Unete a nuestro programa de fidelidad', self::ALIGN_CENTER, $width);
 
             if ($loyalty['portal_name']) {
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => $loyalty['portal_name']];
+                $this->addText($lines, $loyalty['portal_name'], self::ALIGN_CENTER, $width);
             }
 
             // QR de invitación - se renderiza como texto indicando QR
             if ($loyalty['show_registration_qr']) {
                 $lines[] = ['type' => 'qr', 'align' => self::ALIGN_CENTER, 'value' => $loyalty['registration_url'] ?? '', 'size' => 'medium'];
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'Escanea para registrarte'];
+                $this->addText($lines, 'Escanea para registrarte', self::ALIGN_CENTER, $width);
             }
 
             return $lines;
         }
 
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '--- Fidelizacion ---', 'emphasized' => true];
+        $this->addText($lines, '--- Fidelizacion ---', self::ALIGN_CENTER, $width, true);
 
         if ($loyalty['kind'] === 'history' && $loyalty['balance_before'] !== null) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Saldo anterior: ' . $loyalty['balance_before']];
+            $this->addText($lines, 'Saldo anterior: '.$loyalty['balance_before'], self::ALIGN_LEFT, $width);
         }
 
         if ((float) ($loyalty['earned'] ?? 0) > 0) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Puntos ganados: +' . $loyalty['earned']];
+            $this->addText($lines, 'Puntos ganados: +'.$loyalty['earned'], self::ALIGN_LEFT, $width);
         }
 
         if ((float) ($loyalty['redeemed'] ?? 0) > 0) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Puntos canjeados: -' . $loyalty['redeemed']];
+            $this->addText($lines, 'Puntos canjeados: -'.$loyalty['redeemed'], self::ALIGN_LEFT, $width);
         }
 
         $label = $loyalty['kind'] === 'history' ? 'Saldo final' : 'Saldo actual';
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => $label . ': ' . $loyalty['balance_after'], 'emphasized' => true];
+        $this->addText($lines, $label.': '.$loyalty['balance_after'], self::ALIGN_LEFT, $width, true);
 
         if ($loyalty['adjusted']) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '(saldo ajustado)', 'emphasized' => false];
+            $this->addText($lines, '(saldo ajustado)', self::ALIGN_CENTER, $width);
         }
 
         return $lines;
     }
 
-    private function cashSessionLines(SaleReceiptData $data): array
+    private function cashSessionLines(SaleReceiptData $data, string $paperWidth): array
     {
         if ($data->cash_session === null) {
             return [];
@@ -304,7 +405,7 @@ class EscPosSaleTicket
         }
 
         if ($sessionInfo) {
-            $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => implode(' - ', $sessionInfo), 'emphasized' => true];
+            $this->addText($lines, implode(' - ', $sessionInfo), self::ALIGN_CENTER, $this->textWidth($paperWidth), true);
         }
 
         return $lines;

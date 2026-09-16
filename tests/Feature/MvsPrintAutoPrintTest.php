@@ -654,7 +654,7 @@ class MvsPrintAutoPrintTest extends TestCase
         $this->assertSame($beforeCount, $afterCount, 'Fetching ticket must not create duplicate sales');
     }
 
-    public function test_58mm_ticket_preserves_crc_qr_medium_total_double(): void
+    public function test_58mm_ticket_preserves_colon_qr_medium_total_double(): void
     {
         [$company, $branch] = $this->companyContext('Emp design 58');
         $user = $this->posUser($company, $branch);
@@ -668,8 +668,9 @@ class MvsPrintAutoPrintTest extends TestCase
         $lines = collect($payload['lines']);
         $textLines = $lines->where('type', 'text')->pluck('value')->implode("\n");
 
-        // CRC currency
-        $this->assertStringContainsString('CRC', $textLines, '58mm ticket must use CRC currency');
+        // Colón costarricense (₡) en lugar del código ASCII
+        $this->assertStringContainsString('₡', $textLines, '58mm ticket must use the colón symbol');
+        $this->assertStringNotContainsString('CRC', $textLines, '58mm ticket must not mix ASCII CRC code');
         $this->assertStringNotContainsString('â', $textLines, 'No mojibake allowed');
 
         // TOTAL double
@@ -682,10 +683,95 @@ class MvsPrintAutoPrintTest extends TestCase
         $this->assertStringContainsString('Cod:', $textLines, 'Product code must be preserved');
 
         // Payments before loyalty
-        $paymentIdx = $lines->search(fn ($l) => str_contains($l['value'] ?? '', 'Efectivo') || str_contains($l['value'] ?? '', 'CRC'));
+        $paymentIdx = $lines->search(fn ($l) => str_contains($l['value'] ?? '', 'Efectivo') || str_contains($l['value'] ?? '', '₡'));
         $loyaltyIdx = $lines->search(fn ($l) => str_contains($l['value'] ?? '', 'Fidelizacion'));
         if ($paymentIdx !== false && $loyaltyIdx !== false) {
             $this->assertLessThan($loyaltyIdx, $paymentIdx, 'Payments must come before loyalty');
+        }
+    }
+
+    public function test_58mm_wraps_free_text_on_word_boundaries_and_keeps_data_complete(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp wrap');
+        $company->update([
+            'legal_name' => 'Comercio MVS Sociedad Anonima de Responsabilidad Limitada',
+            'address' => 'Avenida Central, Calle Tres, San Jose, Costa Rica',
+        ]);
+        $branch->update(['name' => 'Sucursal Principal Centro de San Jose', 'address' => 'Frente al Parque Central, Edificio Dorado 5 km']);
+
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $sale->items()->update(['description' => 'Producto test', 'product_code' => '1976187289493']);
+        $sale->items()->first()->update(['description' => 'Leche entera liquida de vaca en carton']);
+
+        $service = $this->app->make(EscPosSaleTicket::class);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+
+        $payload = $service->build($receiptData, '58');
+        $textLines = collect($payload['lines'])->where('type', 'text')->pluck('value');
+
+        foreach ($textLines as $line) {
+            $this->assertLessThanOrEqual(32, mb_strlen($line), '58mm line must fit the font A width');
+        }
+
+        // Ninguna palabra normal se corta: todas aparecen completas en el ticket.
+        $joined = collect($textLines)->implode("\n");
+        foreach (['Comercio', 'MVS', 'Sociedad', 'Anonima', 'Responsabilidad', 'Limitada', 'Leche', 'entera', 'carton'] as $word) {
+            $this->assertStringContainsString($word, $joined, "Word '$word' must stay whole on 58mm");
+        }
+        $this->assertStringContainsString('Leche entera liquida de vaca en carton', str_replace("\n", ' ', $joined));
+    }
+
+    public function test_word_longer_than_whole_width_is_hard_split_without_data_loss(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp long word');
+        $company->update(['legal_name' => str_repeat('Superextraordinariamen', 2)]);
+
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $service = $this->app->make(EscPosSaleTicket::class);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+
+        $payload = $service->build($receiptData, '58');
+        $textLines = collect($payload['lines'])->where('type', 'text')->pluck('value');
+
+        $joined = str_replace("\n", '', collect($textLines)->implode("\n"));
+        $this->assertStringContainsString(str_repeat('Superextraordinariamen', 2), $joined, 'Over-long word is split but never loses data');
+    }
+
+    public function test_80mm_uses_wider_wrap_and_keeps_table_row_intact(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp wrap 80');
+        $company->update([
+            'legal_name' => 'Comercio MVS Sociedad Anonima de Responsabilidad Limitada',
+            'address' => 'Avenida Central, Calle Tres, San Jose, Costa Rica',
+        ]);
+
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $service = $this->app->make(EscPosSaleTicket::class);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+
+        $payload = $service->build($receiptData, '80');
+        $textLines = collect($payload['lines'])->where('type', 'text')->pluck('value');
+
+        foreach ($textLines as $line) {
+            if (mb_strlen($line) > 48) {
+                // La única excepción es la fila fija de la tabla de detalle.
+                $this->assertStringContainsString(' x ', $line, 'Only the fixed detail table may exceed the 80mm wrap width');
+            }
+        }
+        // El ancho libre de 80mm es mayor que el de 58mm.
+        $this->assertTrue($textLines->contains(fn ($line) => mb_strlen($line) > 32), '80mm must reuse its wider printable width');
+
+        $joined = collect($textLines)->implode("\n");
+        foreach (['Comercio', 'MVS', 'Responsabilidad', 'Limitada'] as $word) {
+            $this->assertStringContainsString($word, $joined);
         }
     }
 

@@ -19,9 +19,34 @@
  *  QZ Tray instalado localmente es el puente WebSocket que recibe los
  *  comandos RAW e impacta la impresora.
  *
- * Fallback: si QZ Tray no está disponible, el flujo actual de impresión del
- * navegador (window.print) sigue intacto; esta vista solo muestra el estado.
+*  Fallback: si QZ Tray no está disponible, el flujo actual de impresión del
+ *  navegador (window.print) sigue intacto; esta vista solo muestra el estado.
+ *
+ *  Codificación del texto:
+ *  El ticket se imprime en código de página CP850 (secuencia inicial ESC t 02).
+ *  El byte 0x9B es ¢ en CP437 y en CP850, por lo que el colón costarricense
+ *  (₡, U+20A1) se traduce a ese byte y nunca se envían bytes UTF-8 crudos al
+ *  ticket: de esa forma la POS-58-Series no puede mostrar mojibake.
  */
+
+// Tabla Unicode -> byte CP850 para los caracteres latinos del ticket.
+const CP850_TEXT = {
+    'Ç': 0x80, 'ü': 0x81, 'é': 0x82, 'â': 0x83, 'ä': 0x84, 'à': 0x85, 'å': 0x86, 'ç': 0x87,
+    'ê': 0x88, 'ë': 0x89, 'è': 0x8A, 'ï': 0x8B, 'î': 0x8C, 'ì': 0x8D, 'Ä': 0x8E, 'Å': 0x8F,
+    'É': 0x90, 'æ': 0x91, 'Æ': 0x92, 'ô': 0x93, 'ö': 0x94, 'ò': 0x95, 'û': 0x96, 'ù': 0x97,
+    'ÿ': 0x98, 'Ö': 0x99, 'Ü': 0x9A, '¢': 0x9B, '£': 0x9C, '¥': 0x9D, 'ƒ': 0x9F,
+    'á': 0xA0, 'í': 0xA1, 'ó': 0xA2, 'ú': 0xA3, 'ñ': 0xA4, 'Ñ': 0xA5, 'ª': 0xA6, 'º': 0xA7,
+    '¿': 0xA8, '¬': 0xA9, '½': 0xAA, '¼': 0xAB, '¡': 0xAC, '«': 0xAD, '»': 0xAE,
+    'Á': 0xB4, 'Â': 0xB5, 'À': 0xB6, 'ã': 0xC5, 'Ã': 0xC6, 'Ê': 0xD2, 'Ë': 0xD3, 'È': 0xD4,
+    'Í': 0xD6, 'Î': 0xD7, 'Ï': 0xD8, 'Ì': 0xDE, 'Ó': 0xE0, 'ß': 0xE1, 'Ô': 0xE2, 'Ò': 0xE3,
+    'õ': 0xE4, 'Õ': 0xE5, 'µ': 0xE6, 'Ú': 0xE9, 'Û': 0xEA, 'Ù': 0xEB, 'ý': 0xEC, 'Ý': 0xED,
+    '₡': 0x9B,
+};
+
+// Capacidad en bytes del nivel L para versiones QR 1..40 (Modelo 2).
+const QR_BYTE_CAPACITY_L = [19, 34, 55, 80, 108, 136, 156, 194, 232, 274, 324, 370, 428, 461,
+    523, 589, 647, 721, 795, 861, 932, 1006, 1094, 1174, 1276, 1370, 1468, 1531, 1631, 1735,
+    1843, 1955, 2071, 2191, 2306, 2434, 2566, 2702, 2812, 2956];
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('mvsReprint', (ticketUrl, saleId) => ({
@@ -239,6 +264,9 @@ window.MvsPrint = {
             bytes.push(...payload.drawer_command);
         }
 
+        // Select CP850 so accented text and ¢ (0x9B) render natively.
+        bytes.push(0x1B, 0x74, 0x02);
+
         for (const line of payload.lines || []) {
             if (line.type === 'empty' || line.type === 'separator') {
                 if (line.type === 'separator') {
@@ -279,7 +307,7 @@ window.MvsPrint = {
                 // Filtrar data:image/... no imprimible como QR; usar solo URL plana
                 const isDataUrl = qrData.startsWith('data:');
                 if (qrData && !isDataUrl) {
-                    this.addQrCode(bytes, qrData, line.size ?? 'medium', line.align ?? 'center');
+                    this.addQrCode(bytes, qrData, line.size ?? 'medium', line.align ?? 'center', payload.paper_width);
                 }
             }
         }
@@ -290,17 +318,41 @@ window.MvsPrint = {
             bytes.push(0x1D, 0x56, 0x42, 0x00); // GS V B 0 (full cut)
         }
 
+        bytes.push(0x1B, 0x74, 0x00); // restore CP437 for subsequent jobs
+
         return bytes;
     },
 
     /**
      * Agrega comando QR Code ESC/POS (GS ( k)
      * Compatible con impresoras térmicas estándar (Epson, Star, etc.)
+     *
+     * En 58mm el tamaño de módulo es adaptativo: se calcula la versión QR
+     * real del payload (nivel L) y se usa el módulo más grande que cabe en
+     * el área imprimible (48mm ≈ 384 puntos) con su quiet zone. Para URLs
+     * cortas se crece hasta ~38–40mm; si una versión grande no cabe con
+     * módulo 5, se conserva 4 en vez de desbordar. En 80mm se mantiene el
+     * tamaño configurado (medium → 4).
      */
-    addQrCode(bytes, data, size = 'medium', align = 'center') {
+    addQrCode(bytes, data, size = 'medium', align = 'center', paperWidth = '80') {
         const model = 50; // Model 2
         const sizeMap = { small: 3, medium: 4, large: 6 };
-        const moduleSize = sizeMap[size] ?? 4;
+        let moduleSize = sizeMap[size] ?? 4;
+
+        if (paperWidth === '58') {
+            const length = new TextEncoder().encode(data).length;
+            let version = 1;
+            while (version < 40 && QR_BYTE_CAPACITY_L[version - 1] < length) {
+                version++;
+            }
+            // Margen de una versión por si la impresora elige una superior.
+            const buddy = Math.min(40, version + 1);
+            const modules = 17 + 4 * buddy;
+            const safeDots = 384; // 48mm * 8 puntos/mm
+            const fit = Math.floor(safeDots / (modules + 8)); // quiet zone 4+4
+            moduleSize = Math.min(8, Math.max(2, fit));
+        }
+
         const errorCorrection = 48; // L (7%)
 
         const encoded = new TextEncoder().encode(data);
@@ -329,14 +381,17 @@ window.MvsPrint = {
     pushText(bytes, text) {
         for (const char of String(text)) {
             const code = char.charCodeAt(0);
-            if (code < 256) {
+            if (code < 128) {
                 bytes.push(code);
-            } else {
-                const encoded = new TextEncoder().encode(char);
-                for (const byte of encoded) {
-                    bytes.push(byte);
-                }
+                continue;
             }
+            const mapped = CP850_TEXT[char];
+            if (mapped !== undefined) {
+                bytes.push(mapped);
+                continue;
+            }
+            // Nunca bytes UTF-8 crudos en el ticket: evita mojibake garantizado.
+            bytes.push(0x3F); // '?'
         }
     },
 

@@ -134,3 +134,38 @@ test('pending automatic config blocks manual click to avoid duplicate printing',
     resolve({auto_print:true,terminal:{printer_name:'POS-58-Series'}}); await pending;
     assert.equal(calls.prints.length,1);
 });
+
+test('58mm colon and accents print as single CP850 bytes, never UTF-8 mojibake', () => {
+    const { api } = setup();
+    const bytes = Buffer.from(api.buildEscPosFromPayload({ lines: [{ type: 'text', value: 'Total: ₡14.500 José Miño' }], paper_width: '58' }));
+    assert.ok(bytes.includes(Buffer.from([27, 116, 2])));           // selecciona CP850
+    assert.ok(bytes.includes(Buffer.from([0x9B])));                 // ₡ → ¢ (byte idéntico en CP437/CP850)
+    assert.ok(bytes.includes(Buffer.from([0x82])));                 // é → CP850 0x82
+    assert.ok(bytes.includes(Buffer.from([0xA4])));                 // ñ → CP850 0xA4
+    assert.ok(!bytes.includes(Buffer.from([0xE2, 0x82, 0xA1])));    // sin UTF-8 E2 82 A1 (mojibake â‚¡)
+    assert.ok(!bytes.includes(Buffer.from([0xC3, 0xB3])));          // sin UTF-8 ó
+    assert.ok(!bytes.includes(Buffer.from([0xC3, 0xB1])));          // sin UTF-8 ñ
+    assert.ok(bytes.includes(Buffer.from([27, 116, 0])));           // restaura CP437 al final
+});
+
+test('58mm QR module size is adaptive and 80mm keeps configured medium', () => {
+    const { api } = setup();
+    const moduleSizeOf = (payload, width) => {
+        const bytes = Buffer.from(api.buildEscPosFromPayload({ lines: [{ type: 'qr', value: payload }], paper_width: width }));
+        const mark = Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43]);
+        const at = bytes.indexOf(mark);
+        assert.ok(at >= 0, 'module size command must exist');
+        return bytes[at + mark.length];
+    };
+    const shortData = 'https://app.mvscommerce.com/portal-clientes/1/registro';
+    const size58 = moduleSizeOf(shortData, '58');
+    assert.ok(size58 >= 5 && size58 <= 8, 'short 58mm payload should grow the module (' + size58 + ')');
+    const longSize58 = moduleSizeOf('x'.repeat(470), '58');
+    assert.ok(longSize58 <= 4, 'large 58mm payload must not overflow (' + longSize58 + ')');
+    assert.equal(moduleSizeOf(shortData, '80'), 4, '80mm keeps configured medium module size');
+    // payload intacto y centrado, quiet zone sin recortar bordes
+    const bytes = Buffer.from(api.buildEscPosFromPayload({ lines: [{ type: 'qr', value: shortData }], paper_width: '58' }));
+    assert.ok(bytes.includes(Buffer.from([0x1B, 0x61, 0x01])));
+    assert.ok(bytes.includes(Buffer.from([0x1D, 0x28, 0x6B, Buffer.byteLength(shortData) + 3, 0, 0x31, 0x50, 0x30, ...Buffer.from(shortData)])));
+    assert.equal(bytes[bytes.indexOf(Buffer.from([0x1D, 0x28, 0x6B, 3, 0, 0x31, 0x43])) + 7], size58);
+});
