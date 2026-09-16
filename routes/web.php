@@ -991,10 +991,12 @@ Route::resource('transferencias', TransferController::class)
             Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
             Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
         });
+
+    /*
+    |--------------------------------------------------------------------------
     | Offline Authorization
     |--------------------------------------------------------------------------
     */
-
     Route::post('/mvs/offline/authorize', [\App\Http\Controllers\OfflineAuthorizationController::class, 'authorize'])
         ->middleware('permission:configuracion.editar')
         ->name('offline.authorize');
