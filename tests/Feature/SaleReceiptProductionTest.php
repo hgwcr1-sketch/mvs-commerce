@@ -49,8 +49,8 @@ class SaleReceiptProductionTest extends TestCase
         foreach (['58', '80'] as $width) {
             $ticket = app(\App\Services\MvsPrint\EscPosSaleTicket::class)->build($data, $width);
             $text = collect($ticket['lines'])->pluck('value')->implode("\n");
-            $this->assertStringContainsString('Recibido: ₡1.017', $text);
-            $this->assertStringContainsString('Vuelto:   ₡0', $text);
+            $this->assertStringContainsString('Recibido: CRC 1.017', $text);
+            $this->assertStringContainsString('Vuelto:   CRC 0', $text);
             $this->actingAs($user)->withSession($this->activeSession($company, $branch))
                 ->get(route('pos.receipt', $sale).'?format='.$width.'mm')->assertOk()->assertSee('123456789');
         }

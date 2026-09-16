@@ -143,21 +143,21 @@ class EscPosSaleTicket
                     $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => 'Cod: ' . $item['product_code']];
                 }
 
-                $line = $item['quantity'] . ' x ₡' . $item['unit_price'];
+                $line = $item['quantity'] . ' x CRC ' . $item['unit_price'];
                 if ((float) $item['discount_total'] > 0) {
-                    $line .= ' -₡' . $item['discount_total'];
+                    $line .= ' -CRC ' . $item['discount_total'];
                 }
                 if ((float) $item['tax_total'] > 0) {
-                    $line .= ' +₡' . $item['tax_total'];
+                    $line .= ' +CRC ' . $item['tax_total'];
                 }
                 $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  ' . $line];
-                $lines[] = ['type' => 'text', 'align' => self::ALIGN_RIGHT, 'value' => '₡' . $item['total']];
+                $lines[] = ['type' => 'text', 'align' => self::ALIGN_RIGHT, 'value' => 'CRC ' . $item['total']];
             } else {
                 // Formato 80mm: tabla alineada
                 $desc = mb_substr($item['description'], 0, 30);
                 $qty = str_pad($item['quantity'], 7, ' ', STR_PAD_LEFT);
-                $price = str_pad('₡' . $item['unit_price'], 12, ' ', STR_PAD_LEFT);
-                $total = str_pad('₡' . $item['total'], 14, ' ', STR_PAD_LEFT);
+                $price = str_pad('CRC ' . $item['unit_price'], 12, ' ', STR_PAD_LEFT);
+                $total = str_pad('CRC ' . $item['total'], 14, ' ', STR_PAD_LEFT);
                 $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => sprintf('%-30s %7s x %12s  %14s', $desc, $qty, $price, $total)];
 
                 if ($item['product_code']) {
@@ -165,10 +165,10 @@ class EscPosSaleTicket
                 }
 
                 if ((float) $item['discount_total'] > 0) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Descuento: -₡' . $item['discount_total']];
+                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Descuento: -CRC ' . $item['discount_total']];
                 }
                 if ((float) $item['tax_total'] > 0) {
-                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Impuesto: +₡' . $item['tax_total']];
+                    $lines[] = ['type' => 'text', 'align' => self::ALIGN_LEFT, 'value' => '  Impuesto: +CRC ' . $item['tax_total']];
                 }
             }
         }
@@ -183,24 +183,24 @@ class EscPosSaleTicket
         $lines = [];
         $align = $paperWidth === '58' ? self::ALIGN_LEFT : self::ALIGN_RIGHT;
 
-        $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Subtotal:  ₡' . $data->totals['subtotal']];
+        $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Subtotal:  CRC ' . $data->totals['subtotal']];
 
         if ((float) $data->totals['discount_total'] > 0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Descuento: -₡' . $data->totals['discount_total']];
+            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Descuento: -CRC ' . $data->totals['discount_total']];
         }
 
         if ((float) $data->totals['tax_total'] > 0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Impuesto: ₡' . $data->totals['tax_total']];
+            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Impuesto: CRC ' . $data->totals['tax_total']];
         }
 
         if ((float) $data->totals['rounding_total'] !== 0.0) {
-            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Redondeo: ₡' . $data->totals['rounding_total']];
+            $lines[] = ['type' => 'text', 'align' => $align, 'value' => 'Redondeo: CRC ' . $data->totals['rounding_total']];
         }
 
         $lines[] = ['type' => 'separator'];
         $lines[] = ['type' => 'empty'];
         $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'TOTAL', 'emphasized' => true, 'size' => 'double'];
-        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '₡' . $data->totals['total'], 'emphasized' => true, 'size' => 'double'];
+        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'CRC ' . $data->totals['total'], 'emphasized' => true, 'size' => 'double'];
         $lines[] = ['type' => 'empty'];
         $lines[] = ['type' => 'separator'];
 
@@ -213,7 +213,7 @@ class EscPosSaleTicket
         $align = $paperWidth === '58' ? self::ALIGN_LEFT : self::ALIGN_RIGHT;
 
         foreach ($data->payments as $payment) {
-            $line = $payment['method'] . ': ₡' . $payment['amount'];
+            $line = $payment['method'] . ': CRC ' . $payment['amount'];
 
             if ($payment['reference']) {
                 $line .= ' (Ref: ' . $payment['reference'] . ')';
@@ -222,8 +222,8 @@ class EscPosSaleTicket
             $lines[] = ['type' => 'text', 'align' => $align, 'value' => $line];
 
             if ($payment['allows_change'] && $payment['received_amount'] !== null && $payment['change_amount'] !== null) {
-                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Recibido: ₡' . $payment['received_amount']];
-                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Vuelto:   ₡' . $payment['change_amount']];
+                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Recibido: CRC ' . $payment['received_amount']];
+                $lines[] = ['type' => 'text', 'align' => $align, 'value' => '  Vuelto:   CRC ' . $payment['change_amount']];
             }
         }
 
@@ -244,7 +244,6 @@ class EscPosSaleTicket
 
         $loyalty = $data->loyalty;
         $lines = [];
-        $lines[] = ['type' => 'separator'];
 
         if ($loyalty['kind'] === 'invitation') {
             $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '--- Fidelizacion ---', 'emphasized' => true];
@@ -256,7 +255,7 @@ class EscPosSaleTicket
 
             // QR de invitación - se renderiza como texto indicando QR
             if ($loyalty['show_registration_qr']) {
-                $lines[] = ['type' => 'qr', 'align' => self::ALIGN_CENTER, 'value' => $loyalty['registration_url'] ?? '', 'size' => $paperWidth === '58' ? 'small' : 'medium'];
+                $lines[] = ['type' => 'qr', 'align' => self::ALIGN_CENTER, 'value' => $loyalty['registration_url'] ?? '', 'size' => 'medium'];
                 $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'Escanea para registrarte'];
             }
 

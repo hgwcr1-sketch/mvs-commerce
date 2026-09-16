@@ -234,6 +234,11 @@ window.MvsPrint = {
     buildEscPosFromPayload(payload) {
         const bytes = [];
 
+        // Drawer pulse FIRST — opens drawer before printing starts
+        if (payload.open_drawer && payload.drawer_command) {
+            bytes.push(...payload.drawer_command);
+        }
+
         for (const line of payload.lines || []) {
             if (line.type === 'empty' || line.type === 'separator') {
                 if (line.type === 'separator') {
@@ -283,10 +288,6 @@ window.MvsPrint = {
 
         if (payload.auto_cut) {
             bytes.push(0x1D, 0x56, 0x42, 0x00); // GS V B 0 (full cut)
-        }
-
-        if (payload.open_drawer && payload.drawer_command) {
-            bytes.push(...payload.drawer_command);
         }
 
         return bytes;

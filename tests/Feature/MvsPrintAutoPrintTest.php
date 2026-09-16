@@ -566,6 +566,129 @@ class MvsPrintAutoPrintTest extends TestCase
         }
     }
 
+    // ---------------------------------------------------------------
+    // Drawer → Print → Cut order
+    // ---------------------------------------------------------------
+
+    public function test_normal_sale_payload_has_drawer_before_print(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp drawer order');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $terminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'open_drawer' => true,
+            'drawer_command' => [27, 112, 0, 25, 255],
+            'printer_name' => 'POS-58-Series',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', ['sale' => $sale, 'terminal_uuid' => $terminal->terminal_uuid]))
+            ->assertOk();
+
+        $payload = $response->json('payload');
+        $this->assertTrue($payload['open_drawer'], 'Normal sale with terminal open_drawer=true must have open_drawer in payload');
+        $this->assertSame([27, 112, 0, 25, 255], $payload['drawer_command']);
+        $this->assertNotEmpty($payload['lines'], 'Payload must have print lines');
+    }
+
+    public function test_reprint_payload_never_has_drawer(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp no drawer reprint');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+        $terminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'open_drawer' => true,
+            'drawer_command' => [27, 112, 0, 25, 255],
+            'printer_name' => 'POS-58-Series',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', ['sale' => $sale, 'reprint' => 1, 'terminal_uuid' => $terminal->terminal_uuid]))
+            ->assertOk();
+
+        $payload = $response->json('payload');
+        $this->assertFalse($payload['open_drawer'], 'Reprint must NEVER open drawer');
+    }
+
+    public function test_manual_drawer_endpoint_returns_drawer_only_no_print(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp manual drawer');
+        $user = $this->posUserWithPermission($company, $branch, 'mvs.print.configurar');
+        $terminal = MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'open_drawer' => true,
+            'drawer_command' => [27, 112, 0, 25, 255],
+            'printer_name' => 'POS-58-Series',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.terminals.open-drawer', $terminal))
+            ->assertOk();
+
+        $payload = $response->json('payload');
+        $this->assertTrue($payload['open_drawer']);
+        $this->assertEmpty($payload['lines'], 'Manual drawer must have no print lines');
+        $this->assertFalse($payload['auto_cut'], 'Manual drawer must not cut');
+    }
+
+    public function test_print_failure_does_not_create_duplicate_sale(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp no dup');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $beforeCount = Sale::where('company_id', $company->id)->count();
+
+        // Fetching the ticket payload must not create any new sale
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', $sale))
+            ->assertOk();
+
+        $afterCount = Sale::where('company_id', $company->id)->count();
+        $this->assertSame($beforeCount, $afterCount, 'Fetching ticket must not create duplicate sales');
+    }
+
+    public function test_58mm_ticket_preserves_crc_qr_medium_total_double(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp design 58');
+        $user = $this->posUser($company, $branch);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $service = $this->app->make(EscPosSaleTicket::class);
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+
+        $payload = $service->build($receiptData, '58');
+        $lines = collect($payload['lines']);
+        $textLines = $lines->where('type', 'text')->pluck('value')->implode("\n");
+
+        // CRC currency
+        $this->assertStringContainsString('CRC', $textLines, '58mm ticket must use CRC currency');
+        $this->assertStringNotContainsString('â', $textLines, 'No mojibake allowed');
+
+        // TOTAL double
+        $totalLine = $lines->firstWhere('value', 'TOTAL');
+        $this->assertNotNull($totalLine, 'TOTAL line must exist');
+        $this->assertSame('double', $totalLine['size'], 'TOTAL must be double height');
+        $this->assertSame('center', $totalLine['align'], 'TOTAL must be centered');
+
+        // Product code preserved as secondary
+        $this->assertStringContainsString('Cod:', $textLines, 'Product code must be preserved');
+
+        // Payments before loyalty
+        $paymentIdx = $lines->search(fn ($l) => str_contains($l['value'] ?? '', 'Efectivo') || str_contains($l['value'] ?? '', 'CRC'));
+        $loyaltyIdx = $lines->search(fn ($l) => str_contains($l['value'] ?? '', 'Fidelizacion'));
+        if ($paymentIdx !== false && $loyaltyIdx !== false) {
+            $this->assertLessThan($loyaltyIdx, $paymentIdx, 'Payments must come before loyalty');
+        }
+    }
+
     private function company(string $name): Company
     {
         return Company::create(['trade_name' => $name, 'is_active' => true]);
@@ -597,6 +720,26 @@ class MvsPrintAutoPrintTest extends TestCase
             'name' => 'Cajero '.uniqid(),
             'is_active' => true,
         ]);
+
+        $user->companies()->attach($company->id, ['role_id' => $role->id]);
+        $user->branches()->attach([$branch->id]);
+
+        return $user;
+    }
+
+    private function posUserWithPermission(Company $company, Branch $branch, string $permission): User
+    {
+        $user = User::factory()->create();
+        $role = Role::create([
+            'company_id' => $company->id,
+            'name' => 'Cajero '.uniqid(),
+            'is_active' => true,
+        ]);
+        $perm = Permission::firstOrCreate(
+            ['name' => $permission],
+            ['label' => $permission, 'module' => 'MVS Print', 'is_active' => true],
+        );
+        $role->permissions()->syncWithoutDetaching($perm->id);
 
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach([$branch->id]);
@@ -637,6 +780,7 @@ class MvsPrintAutoPrintTest extends TestCase
         SaleItem::create([
             'sale_id' => $sale->id,
             'product_id' => null,
+            'product_code' => '1976187289493',
             'description' => 'Producto test',
             'quantity' => '5.0000',
             'unit_price' => '1000.0000',
