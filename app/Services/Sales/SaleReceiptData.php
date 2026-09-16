@@ -192,7 +192,7 @@ readonly class SaleReceiptData
                     'received_amount' => (float) $payment->received_amount > 0
                         ? number_format((float) $payment->received_amount, 0, ',', '.')
                         : null,
-                    'change_amount' => (float) $payment->change_amount > 0
+                    'change_amount' => $payment->change_amount !== null
                         ? number_format((float) $payment->change_amount, 0, ',', '.')
                         : null,
                     'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false,

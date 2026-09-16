@@ -422,6 +422,25 @@ class MvsPrintAutoPrintTest extends TestCase
         $this->assertIsArray($payload['lines']);
     }
 
+    public function test_real_loyalty_invitation_has_same_company_qr_in_both_widths(): void
+    {
+        [$company, $branch] = $this->companyContext('Comercio QR');
+        $user = $this->posUser($company, $branch);
+        $customer = Customer::create(['company_id' => $company->id, 'name' => 'Cliente QR', 'is_active' => true]);
+        \App\Models\LoyaltySetting::create(['company_id' => $company->id, 'is_active' => true]);
+        $sale = $this->completedSale($company, $branch, $user, customer: $customer);
+        $data = app(\App\Services\Sales\SaleReceiptService::class)->buildReceiptData($sale);
+        $this->assertSame('invitation', $data->loyalty['kind']);
+        foreach (['58', '80'] as $width) {
+            $payload = app(EscPosSaleTicket::class)->build($data, $width);
+            $qr = collect($payload['lines'])->firstWhere('type', 'qr');
+            $this->assertSame(route('loyalty.customer.login', $company), $qr['value']);
+            $total = collect($payload['lines'])->firstWhere('value', 'TOTAL');
+            $this->assertSame('double', $total['size']);
+            $this->assertSame('center', $total['align']);
+        }
+    }
+
     // ---------------------------------------------------------------
     // Reimpresión
     // ---------------------------------------------------------------

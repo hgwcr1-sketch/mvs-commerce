@@ -103,6 +103,9 @@
         <span><strong>Fecha:</strong> {{ $documentData['completed_at'] }}</span>
         <span><strong>Cajero:</strong> {{ $cashierData['name'] }}</span>
         <span><strong>Cliente:</strong> {{ $customerData['name'] }}</span>
+        @if($customerData['identification'])
+            <span><strong>Identificación:</strong> {{ $customerData['identification'] }}</span>
+        @endif
     </section>
     <div class="rule"></div>
     @if($format === '58mm')

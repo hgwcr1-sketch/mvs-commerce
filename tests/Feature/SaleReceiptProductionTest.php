@@ -37,6 +37,25 @@ class SaleReceiptProductionTest extends TestCase
         }
     }
 
+    public function test_exact_cash_payment_keeps_received_and_zero_change_and_customer_identification(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        $customer = Customer::create(['company_id' => $company->id, 'name' => 'Cliente identificado', 'identification' => '123456789', 'is_active' => true]);
+        $sale->update(['customer_id' => $customer->id]);
+        $sale->payments()->update(['received_amount' => '1017.0000', 'change_amount' => '0.0000']);
+        $data = app(SaleReceiptService::class)->buildReceiptData($sale->fresh());
+        $this->assertSame('1.017', $data->payments[0]['received_amount']);
+        $this->assertSame('0', $data->payments[0]['change_amount']);
+        foreach (['58', '80'] as $width) {
+            $ticket = app(\App\Services\MvsPrint\EscPosSaleTicket::class)->build($data, $width);
+            $text = collect($ticket['lines'])->pluck('value')->implode("\n");
+            $this->assertStringContainsString('Recibido: ₡1.017', $text);
+            $this->assertStringContainsString('Vuelto:   ₡0', $text);
+            $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+                ->get(route('pos.receipt', $sale).'?format='.$width.'mm')->assertOk()->assertSee('123456789');
+        }
+    }
+
     public function test_pdf_reuses_the_same_receipt_and_downloads_without_action_controls(): void
     {
         [$company, $branch, $user, $sale] = $this->context();

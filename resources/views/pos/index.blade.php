@@ -1440,6 +1440,9 @@ document.addEventListener('alpine:init', () => {
             } catch {
                 checkout.printStatus = 'failed';
             }
+            finally {
+                if (checkout.printStatus === 'checking') checkout.printStatus = 'failed';
+            }
         },
         async printCompletedSale(saleId, reprint = true) {
             const checkout = this.checkout;
@@ -1454,9 +1457,11 @@ document.addEventListener('alpine:init', () => {
                     { reprint },
                 );
                 checkout.printStatus = result.success ? 'success' : 'failed';
-                checkout.printMessage = result.success ? 'Factura enviada a ' + result.printer : '';
+                checkout.printMessage = result.success ? 'Factura enviada a ' + result.printer : (result.error || 'No fue posible imprimir directamente.');
             } catch {
                 checkout.printStatus = 'failed';
+            } finally {
+                if (checkout.printStatus === 'printing') checkout.printStatus = 'failed';
             }
         },
         newSale() {

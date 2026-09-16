@@ -492,6 +492,27 @@ class MvsPrintTerminalsTest extends TestCase
             ->assertOk();
     }
 
+    public function test_pos_cashier_signature_verifies_against_delivered_certificate_for_exact_string(): void
+    {
+        [$company, $branch] = $this->companyContext('Firma cajero');
+        $user = $this->userWithPermission($company, $branch, permission: 'pos.acceder');
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $pem = $this->get(route('mvs.print.certificate'))->assertOk()->getContent();
+        $exact = hash('sha256', '{"call":"print","params":{"texto":"á ₡"},"timestamp":123456}');
+        $response = $this->postJson(route('mvs.print.signature'), ['request' => $exact])
+            ->assertOk()->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+        $decoded = base64_decode($response->getContent(), true);
+        $this->assertNotFalse($decoded);
+        $this->assertSame(1, openssl_verify($exact, $decoded, $pem, OPENSSL_ALGO_SHA512));
+        $this->assertSame(0, openssl_verify($exact.'x', $decoded, $pem, OPENSSL_ALGO_SHA512));
+        $this->assertStringNotContainsString('PRIVATE KEY', $pem.$response->getContent());
+    }
+
+    public function test_guest_cannot_obtain_signature(): void
+    {
+        $this->postJson(route('mvs.print.signature'), ['request' => 'exact'])->assertRedirect(route('login'));
+    }
+
     public function test_certificate_forbidden_for_unauthenticated_and_cross_company(): void
     {
         [$company, $branch] = $this->companyContext('Empresa cert auth');
