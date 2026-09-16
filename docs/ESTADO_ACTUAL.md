@@ -2,9 +2,9 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## MVS Print — CIERRE COMPLETO (2026-09-16, producción desplegada)
+## MVS Print — instalador 1.0.1 completado, producción actualizada (2026-09-16)
 
-Producción desplegada en `192.81.208.39` (`/var/www/mvscommerce`), branch `feature/pos`, HEAD `c05c444`. Deploy fast-forward desde `9edcb92` → `c05c444` (3 commits: PurchaseExcelImport, QZ fix, merge). npm ci + build + optimize:clear + optimize ejecutados. Config cache con `MVS_PRINT_DOWNLOAD_URL`, `MVS_PRINT_VERSION=1.0.0`, `MVS_PRINT_SHA256=57E2644F...`. Instalador `MVS-Print-Setup.exe` (102,632,513 bytes, SHA256 verificado) en `storage/app/mvs-print/` con symlink en `public/mvs-print/`. Botón descarga activo en Configuración → MVS Print. HTTP 200 + Content-Length + SHA256 match verificados. QZ 2.2.6 embebido en installer NSIS. Prueba física pendiente en Liberia.
+Instalador 1.0.1 completado con launcher propio C# x64 (`MVS Print.exe`, 27,648 bytes), QZ 2.2.6 embebido, ruta automática `C:\Program Files\MVS Print`, identidad dorada oficial (`#D4AF37`), certificado público para trust management, single instance vía Mutex, y tests automatizados. Builds y uploads a producción verificados: SHA256 `1d8a5e66...`, URL `https://app.mvscommerce.com/mvs-print/MVS-Print-Setup.exe?v=1.0.1`. SmartScreen requiere certificado de firma de código (limitación externa, no bug). Pruebas PHP 62/62, JS 25/25 (QZ real), JS 14/14, npm build PASS. Prueba física final pendiente en Liberia.
 
 ## MVS Print — AUTO_PRINT, Imprimir postventa y Reimprimir (2026-09-15, cierre aprobado)
 
