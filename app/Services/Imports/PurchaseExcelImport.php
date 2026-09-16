@@ -3,11 +3,29 @@
 namespace App\Services\Imports;
 
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class PurchaseExcelImport
 {
+    private const REQUIRED_COLUMNS = [
+        'code' => 'Código',
+        'name' => 'Producto',
+        'supplier' => 'Proveedor',
+        'unit' => 'Unidad de medida',
+        'quantity' => 'Cantidad',
+        'cost' => 'Costo',
+    ];
+
+    private const REQUIRED_ROW_FIELDS = [
+        'code' => 'Código',
+        'name' => 'Producto',
+        'supplier' => 'Proveedor',
+        'quantity' => 'Cantidad',
+        'cost' => 'Costo',
+    ];
+
     private const HEADERS = [
         'codigo' => 'code',
         'codigo barra' => 'barcode',
@@ -62,6 +80,7 @@ class PurchaseExcelImport
         }
 
         $columns = $this->resolveColumns(array_shift($sheetRows));
+        $this->validateRequiredColumns($columns);
         $rows = [];
 
         foreach ($sheetRows as $index => $sourceRow) {
@@ -92,11 +111,50 @@ class PurchaseExcelImport
                 continue;
             }
 
-            $row['_row_key'] = 'excel-' . ($index + 2);
+            $this->validateRow($row, $index + 2);
+            $row['_row_key'] = 'excel-'.($index + 2);
             $rows[] = $row;
         }
 
         return $rows;
+    }
+
+    private function validateRequiredColumns(array $columns): void
+    {
+        $errors = [];
+
+        foreach (self::REQUIRED_COLUMNS as $field => $label) {
+            if (! array_key_exists($field, $columns)) {
+                $errors[] = "El archivo no contiene la columna obligatoria {$label}.";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages(['file' => $errors]);
+        }
+    }
+
+    private function validateRow(array $row, int $rowNumber): void
+    {
+        $errors = [];
+
+        foreach (self::REQUIRED_ROW_FIELDS as $field => $label) {
+            if ($row[$field] === null) {
+                $errors[] = "Fila {$rowNumber}: falta el campo obligatorio {$label}.";
+            }
+        }
+
+        if ($row['quantity'] !== null && $row['quantity'] <= 0) {
+            $errors[] = "Fila {$rowNumber}: la cantidad debe ser mayor que cero.";
+        }
+
+        if ($row['cost'] !== null && $row['cost'] < 0) {
+            $errors[] = "Fila {$rowNumber}: el costo debe ser mayor o igual que cero.";
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages(['file' => $errors]);
+        }
     }
 
     private function resolveColumns(array $headers): array
