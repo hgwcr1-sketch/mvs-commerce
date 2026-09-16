@@ -156,6 +156,9 @@ Section "Uninstall"
     ${If} $0 != 0
         Abort "No se pudo retirar la confianza MVS. Revise la configuracion antes de desinstalar."
     ${EndIf}
+    ; Stop MVS Print if running before deleting files
+    nsExec::ExecToLog 'taskkill /IM "MVS Print.exe" /F'
+    Sleep 500
     Delete "$INSTDIR\MVS Print.exe"
     Delete "$INSTDIR\mvs-public-certificate.crt"
     Delete "$INSTDIR\licenses\ATTRIBUTION.txt"

@@ -36,7 +36,9 @@ namespace MvsPrint {
                 string updated = Edit(text,certPath,remove);
                 if (updated != text) {
                     if (File.Exists(path)) File.Copy(path,path+".mvs-print-"+DateTime.UtcNow.ToString("yyyyMMddHHmmssfffffff")+".bak");
-                    File.WriteAllText(path,updated,encoding);
+                    string temp = path + ".mvs-print-temp";
+                    File.WriteAllText(temp,updated,encoding);
+                    File.Move(temp,path,true);
                 }
             }
         }
