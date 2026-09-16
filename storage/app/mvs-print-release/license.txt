@@ -1,0 +1,34 @@
+MVS Print - Termino y Condiciones de Uso
+=========================================
+
+Copyright (c) 2026 MVS Commerce. Todos los derechos reservados.
+
+Este software ("MVS Print") es proporcionado por MVS Commerce para su uso 
+con el sistema MVS Commerce. Al instalar este software, usted acepta los 
+siguientes terminos y condiciones.
+
+1. LICENCIA DE USO
+   Se le concede una licencia no exclusiva, no transferible para usar este 
+   software exclusivamente en conjuncion con una suscripcion valida de 
+   MVS Commerce.
+
+2. PROPIEDAD INTELECTUAL
+   Este software es propiedad de MVS Commerce y esta protegido por leyes 
+   de derechos de autor y propiedad intelectual.
+
+3. RESTRICCIONES
+   No esta permitido copiar, modificar, distribuir, vender o arrendar 
+   este software ni ninguna parte del mismo.
+
+4. LIMITACION DE RESPONSABILIDAD
+   Este software se proporciona "TAL CUAL" sin garantia de ningun tipo.
+
+5. TECNOLOGIA TERCERA
+   Este producto incluye QZ Tray (LGPL-2.1) de QZ Industries, LLC.
+   QZ Tray es un proyecto independiente no afiliado a MVS Commerce.
+
+6. SOPORTE TECNICO
+   Para soporte tecnico visite: https://app.mvscommerce.com
+
+Al continuar con la instalacion, usted confirma que ha leido y acepta 
+estos terminos y condiciones.

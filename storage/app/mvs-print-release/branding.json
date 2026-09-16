@@ -1,0 +1,7 @@
+{
+  "source": "mvs-commerce/resources/css/app.css",
+  "token": "--color-primary",
+  "gold": "#D4AF37",
+  "hover_token": "--color-primary-hover",
+  "hover": "#B1922D"
+}

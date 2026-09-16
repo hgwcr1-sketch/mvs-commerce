@@ -1,0 +1,39 @@
+MVS Print Installer - Third Party Attributions
+===============================================
+
+This product includes QZ Tray, an open-source printing library.
+
+QZ Tray
+  Copyright (c) 2013-2016 QZ Industries, LLC
+  License: GNU Lesser General Public License v2.1 (LGPL-2.1)
+  Website: https://qz.io
+  Source: https://github.com/qzind/tray
+  Version: v2.2.6 (commit 4be94301797d04684f4d70c6bbbff5d9acc36987)
+
+QZ Tray is distributed under the LGPL-2.1 license.
+The full license text is included in licenses/QZ-TRAY-LICENSE.txt.
+
+Source code for QZ Tray v2.2.6 is available at:
+  https://github.com/qzind/tray/tree/v2.2.6
+
+This product also includes the following third-party libraries
+bundled with QZ Tray (see licenses/QZ-TRAY-LICENSE.txt for details):
+
+  - jOOR Reflection Library (Apache 2.0)
+  - Jetty Web Server (Apache 2.0)
+  - Apache log4j (Apache 2.0)
+  - Apache PDFBox (Apache 2.0)
+  - jSSC Library (LGPL-2.1)
+  - hid4java (MIT)
+  - jsemver (MIT)
+
+MVS Print is a product of MVS Commerce.
+QZ Tray is a separate open-source project by QZ Industries, LLC.
+MVS Print is not affiliated with or endorsed by QZ Industries, LLC.
+
+StdUtils NSIS plugin
+  Copyright (C) 2004-2018 LoRd_MuldeR
+  License: LGPL-2.1-or-later (license text in QZ-TRAY-LICENSE.txt)
+  Source: https://github.com/lordmulder/stdutils/
+  Used unmodified for launching in the interactive user session.
+
