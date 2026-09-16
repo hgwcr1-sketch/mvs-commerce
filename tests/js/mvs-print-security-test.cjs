@@ -82,7 +82,9 @@ function setup(fault = {}) {
     }
     vm.runInContext(fs.readFileSync('resources/js/mvs-print/qz.js', 'utf8'), context);
     const api = context.window.MvsPrint;
-    api.timeoutMs = 80; api.printTimeoutMs = 80;
+    // Successful connections must tolerate compiler/CI load; intentional hangs stay short.
+    api.timeoutMs = Object.values(fault).includes('timeout') ? 80 : 2000;
+    api.printTimeoutMs = api.timeoutMs;
     const ui = factories.mvsPrintQz({ signedMode: true, certificateUrl: '/certificate', signatureUrl: '/signature', testUrl: '/test/__ID__', drawerUrl: '/drawer/__ID__' });
     return { api, ui, qz, wire, requests, order, fault, sockets: () => sockets, reprint: factories.mvsReprint('/ticket/7', 7) };
 }

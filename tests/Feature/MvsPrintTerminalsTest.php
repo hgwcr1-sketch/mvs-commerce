@@ -53,6 +53,10 @@ class MvsPrintTerminalsTest extends TestCase
             ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
             ->get(route('mvs.print.index'))
             ->assertOk()
+            ->assertSee('bg-primary')
+            ->assertSee('hover:bg-primary-hover')
+            ->assertDontSee('bg-indigo-')
+            ->assertDontSee('bg-blue-600')
             ->assertSee('Caja visible')
             ->assertDontSee('Caja otra sucursal')
             ->assertDontSee('Caja ajena');

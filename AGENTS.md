@@ -297,6 +297,14 @@ Al finalizar una tarea importante, dejar el repositorio y la documentación en u
 
 ## 13. Interfaz responsive (reglas permanentes)
 
+**Identidad visual oficial:** MVS Commerce usa dorado como color/acento oficial.
+No sustituir el dorado de marca por índigo o azul en módulos nuevos. Antes de crear
+colores nuevos, reutilizar el token dorado oficial existente:
+`--color-primary: #D4AF37` y `--color-primary-hover: #B1922D`, definidos en
+`resources/css/app.css` (Tailwind `bg-primary`, `hover:bg-primary-hover`).
+Los colores semánticos de éxito/error/advertencia se mantienen según función.
+Consultar `docs/GUIA_VISUAL.md`. Esta regla aplica a todos los agentes y herramientas.
+
 Todo desarrollo nuevo debe ser responsive desde el inicio, priorizando el celular en las operaciones de uso diario.
 
 Reglas mínimas obligatorias:

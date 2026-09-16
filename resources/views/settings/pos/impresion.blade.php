@@ -44,7 +44,7 @@
                 <p class="text-sm text-slate-600">Estado del servicio de impresión local en este equipo.</p>
                 <div class="mt-3 flex flex-wrap gap-3">
                     <button type="button" @click="check()" :disabled="checking || busy"
-                            class="min-h-11 rounded-lg bg-amber-500 px-4 py-2.5 font-semibold text-white hover:bg-amber-600">
+                            class="min-h-11 rounded-lg bg-primary px-4 py-2.5 font-semibold text-slate-950 hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                         Detectar MVS Print
                     </button>
                     <button type="button" @click="listPrinters()" :disabled="!connected || checking || busy"
@@ -119,7 +119,7 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                 <label class="flex min-h-11 items-start gap-3">
                     <input type="hidden" name="auto_print" value="0">
-                    <input type="checkbox" name="auto_print" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500">
+                    <input type="checkbox" name="auto_print" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-primary">
                     <span class="block">
                         <span class="font-semibold text-slate-800">Impresión automática</span>
                         <span class="text-sm text-slate-500">Imprimir automáticamente al completar una venta.</span>
@@ -127,7 +127,7 @@
                 </label>
                 <label class="flex min-h-11 items-start gap-3">
                     <input type="hidden" name="auto_cut" value="1">
-                    <input type="checkbox" name="auto_cut" value="1" checked class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500">
+                    <input type="checkbox" name="auto_cut" value="1" checked class="mt-1 h-5 w-5 rounded border-slate-300 text-primary">
                     <span class="block">
                         <span class="font-semibold text-slate-800">Corte automático</span>
                         <span class="text-sm text-slate-500">Enviar comando de corte ESC/POS al terminar el ticket.</span>
@@ -135,7 +135,7 @@
                 </label>
                 <label class="flex min-h-11 items-start gap-3">
                     <input type="hidden" name="open_drawer" value="0">
-                    <input type="checkbox" name="open_drawer" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-amber-500">
+                    <input type="checkbox" name="open_drawer" value="1" class="mt-1 h-5 w-5 rounded border-slate-300 text-primary">
                     <span class="block">
                         <span class="font-semibold text-slate-800">Abrir cajón</span>
                         <span class="text-sm text-slate-500">Enviar comando de apertura de cajón ESC/POS al imprimir (perfil configurable en edición).</span>
@@ -144,7 +144,7 @@
             </div>
 
             <div class="flex justify-end">
-                <button type="submit" class="min-h-11 rounded-xl bg-amber-500 px-6 py-3 font-semibold text-white hover:bg-amber-600">
+                <button type="submit" class="min-h-11 rounded-xl bg-primary px-6 py-3 font-semibold text-slate-950 hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                     Registrar terminal
                 </button>
             </div>
@@ -186,7 +186,7 @@
                             <td class="px-4 py-3">
                                 <div class="flex flex-wrap justify-center gap-2">
                                     <a href="{{ route('mvs.print.terminals.test-print', $terminal) }}"
-                                       class="rounded-lg bg-amber-500 px-3 py-1 text-sm font-semibold text-white hover:bg-amber-600"
+                                       class="rounded-lg bg-primary px-3 py-1 text-sm font-semibold text-slate-950 hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                                        @click.prevent="testPrint('{{ $terminal->id }}')">
                                         Imprimir prueba
                                     </a>
@@ -231,7 +231,7 @@
             @if(config('mvsprint.installer.download_url'))
                 <div class="flex flex-wrap items-center gap-3">
                     <a href="{{ route('mvs.print.download') }}"
-                       class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700">
+                       class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-semibold text-slate-950 hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
@@ -241,6 +241,9 @@
                         <span class="text-xs text-slate-500">Versión {{ config('mvsprint.installer.version') }}</span>
                     @endif
                 </div>
+                @if(config('mvsprint.installer.sha256'))
+                    <p class="break-all text-xs text-slate-500">SHA256: {{ config('mvsprint.installer.sha256') }}</p>
+                @endif
             @else
                 <div class="flex flex-wrap items-center gap-3">
                     <span class="min-h-11 inline-flex items-center gap-2 rounded-lg bg-slate-200 px-5 py-2.5 font-semibold text-slate-500 cursor-not-allowed">
