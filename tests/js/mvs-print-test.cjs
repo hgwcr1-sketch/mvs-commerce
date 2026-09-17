@@ -10,14 +10,15 @@ function setup(options = {}) {
         security: { setCertificatePromise() {}, setSignatureAlgorithm() {}, setSignaturePromise() {} },
         print: async (config, data) => { calls.prints.push({config, data}); if(options.reject) throw Error('denied'); },
     };
+    const payload = options.payload ?? {
+        lines: [{type:'text',value:'Existing sale'}], paper_width:'58', auto_cut:true, open_drawer:true, drawer_command:[27,112,0,25,255],
+    };
     const context = {
         window: { qz: options.unavailable ? undefined : qz, print: () => calls.browser++, open: () => calls.browser++ },
         document: { addEventListener: (_, cb) => cb() }, Alpine: { data: (name, fn) => factories[name] = fn },
         localStorage: { getItem: () => 'terminal-uuid' }, URLSearchParams, TextEncoder, AbortController, setTimeout, clearTimeout,
         btoa: value => Buffer.from(value, 'binary').toString('base64'),
-        fetch: async url => { calls.urls.push(url); return { ok: true, json: async () => ({success: true, qz: {signed_mode:true,certificate_url:'/cert',signature_url:'/sign'}, printer: options.noPrinter ? null : 'POS-58-Series', payload: {
-            lines: [{type:'text',value:'Existing sale'}], paper_width:'58', auto_cut:true, open_drawer:true, drawer_command:[27,112,0,25,255],
-        }}) }; },
+        fetch: async url => { calls.urls.push(url); return { ok: true, json: async () => ({success: true, qz: {signed_mode:true,certificate_url:'/cert',signature_url:'/sign'}, printer: options.noPrinter ? null : 'POS-58-Series', payload}) }; },
     };
     vm.runInNewContext(fs.readFileSync('resources/js/mvs-print/qz.js','utf8'), context);
     context.window.MvsPrint._qzSigned = options.active !== false;
@@ -168,4 +169,54 @@ test('58mm QR module size is adaptive and 80mm keeps configured medium', () => {
     assert.ok(bytes.includes(Buffer.from([0x1B, 0x61, 0x01])));
     assert.ok(bytes.includes(Buffer.from([0x1D, 0x28, 0x6B, Buffer.byteLength(shortData) + 3, 0, 0x31, 0x50, 0x30, ...Buffer.from(shortData)])));
     assert.equal(bytes[bytes.indexOf(Buffer.from([0x1D, 0x28, 0x6B, 3, 0, 0x31, 0x43])) + 7], size58);
+});
+
+// Layaway print coverage: printLayaway / printLayawayPayment / drawer / reprint.
+const layawayPayload = (openDrawer = true) => ({
+    lines: [{ type: 'text', value: 'Apartado APT-1' }],
+    paper_width: '58',
+    auto_cut: true,
+    open_drawer: openDrawer,
+    drawer_command: [27, 112, 0, 25, 255],
+});
+
+test('printLayaway fetches layaway ticket, prints RAW and opens drawer for cash', async () => {
+    const { api, calls } = setup({ active: false, payload: layawayPayload(true) });
+    const result = await api.printLayaway('/mvs/print/ticket/layaway/42', 42);
+    assert.equal(result.success, true);
+    assert.equal(calls.prints.length, 1);
+    assert.match(calls.urls[0], /ticket\/layaway\/42/);
+    assert.ok(!calls.urls[0].includes('reprint='));
+    const bytes = Buffer.from(calls.prints[0].data[0].data, 'base64');
+    assert.ok(bytes.includes(Buffer.from([27, 112, 0, 25, 255])));
+});
+
+test('printLayawayPayment fetches payment ticket and preserves drawer config', async () => {
+    const { api, calls } = setup({ active: false, payload: layawayPayload(true) });
+    const result = await api.printLayawayPayment('/mvs/print/ticket/layaway/42/payment/9', 9);
+    assert.equal(result.success, true);
+    assert.equal(calls.prints.length, 1);
+    assert.match(calls.urls[0], /ticket\/layaway\/42\/payment\/9/);
+});
+
+test('layaway reprint suppresses drawer and marks reprint in URL', async () => {
+    const { api, calls } = setup({ payload: layawayPayload(true) });
+    const result = await api.printLayaway('/mvs/print/ticket/layaway/42', 42, { reprint: true });
+    assert.equal(result.success, true);
+    assert.match(calls.urls[0], /reprint=1/);
+    const bytes = Buffer.from(calls.prints[0].data[0].data, 'base64');
+    assert.ok(!bytes.includes(Buffer.from([27, 112, 0, 25, 255])));
+});
+
+test('layaway print prevents double submit via _printBusy', async () => {
+    const { api, calls, qz } = setup({ active: false, payload: layawayPayload(true) });
+    let complete;
+    qz.print = () => new Promise(resolve => { complete = resolve; });
+    const first = api.printLayaway('/mvs/print/ticket/layaway/42', 42);
+    await new Promise(setImmediate);
+    const second = await api.printLayaway('/mvs/print/ticket/layaway/42', 42);
+    assert.equal(second.success, false);
+    assert.equal(calls.urls.length, 1);
+    complete();
+    await first;
 });

@@ -149,6 +149,58 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.match(pos.successMessage, /APT-1/);
     assert.equal(fresh().layawayMode, false); // A fresh page never restores mode.
 
+    // Mojibake fix: the quote-mode switch label must be UTF-8 correct.
+    assert.ok(html.includes('Cambiar a cotización'));
+    assert.ok(!html.includes('cotizaciÃ³n'));
+
+    // Cash method shows received/change and sends received_amount in payload.
+    const cashMethod = (fresh().paymentMethods || []).find(method => method.allows_change);
+    if (cashMethod) {
+        const cashPos = fresh();
+        await cashPos.enterLayawayMode();
+        cashPos.addProduct(stocked);
+        cashPos.customerId = 7;
+        cashPos.selectedCustomer = { id: 7, name: 'Cliente' };
+        cashPos.layaway.initial_amount = '50';
+        cashPos.layaway.payment_method_id = cashMethod.id;
+        cashPos.layaway.received_amount = '100';
+        assert.equal(cashPos.selectedLayawayMethod?.id, cashMethod.id);
+        assert.equal(cashPos.layawayChange, 50);
+        assert.equal(cashPos.layawayReceivedError, false);
+        handler = async (_, options) => options.method === 'POST'
+            ? reply({ success: true, message: 'Apartado APT-2 creado.', layaway_id: 43, layaway_number: 'APT-2', total: '200.0000', paid_total: '50.0000', balance_due: '150.0000', show_url: '/apartados/43' }, 201)
+            : reply([stocked]);
+        await cashPos.createLayaway();
+        const cashSaved = [...requests].reverse().find(request => request.options.method === 'POST' && request.url.endsWith('/pos/apartado'));
+        assert.ok(cashSaved);
+        const cashBody = JSON.parse(cashSaved.options.body);
+        assert.equal(cashBody.initial_amount, 50);
+        assert.equal(cashBody.payment_method_id, cashMethod.id);
+        assert.equal(cashBody.received_amount, 100);
+    }
+
+    // Non-cash method hides received/change and omits received_amount from payload.
+    const nonCashMethod = (fresh().paymentMethods || []).find(method => !method.allows_change && method.type !== 'credit' && method.type !== 'loyalty_points');
+    if (nonCashMethod) {
+        const cardPos = fresh();
+        await cardPos.enterLayawayMode();
+        cardPos.addProduct(stocked);
+        cardPos.customerId = 7;
+        cardPos.selectedCustomer = { id: 7, name: 'Cliente' };
+        cardPos.layaway.initial_amount = '50';
+        cardPos.layaway.payment_method_id = nonCashMethod.id;
+        assert.equal(cardPos.selectedLayawayMethod?.allows_change, false);
+        assert.equal(cardPos.layawayChange, 0);
+        handler = async (_, options) => options.method === 'POST'
+            ? reply({ success: true, message: 'Apartado APT-3 creado.', layaway_id: 44, layaway_number: 'APT-3', total: '200.0000', paid_total: '50.0000', balance_due: '150.0000', show_url: '/apartados/44' }, 201)
+            : reply([stocked]);
+        await cardPos.createLayaway();
+        const cardSaved = requests.find(request => request.options.method === 'POST' && request.url.endsWith('/pos/apartado') && JSON.parse(request.options.body).payment_method_id === nonCashMethod.id);
+        assert.ok(cardSaved);
+        const cardBody = JSON.parse(cardSaved.options.body);
+        assert.equal('received_amount' in cardBody, false);
+    }
+
     // Leaving the mode preserves the cart and re-enables sale-mode stock enforcement.
     const leaving = fresh();
     await leaving.enterLayawayMode();

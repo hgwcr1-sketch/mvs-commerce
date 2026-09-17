@@ -1,23 +1,21 @@
 <?php
 
-use App\Http\Controllers\InventoryCountController;
-
 use App\Http\Controllers\AccountsPayableController;
+use App\Http\Controllers\AccountsReceivableController;
 /*
 |--------------------------------------------------------------------------
 | Controladores
 |--------------------------------------------------------------------------
 */
 
-use App\Http\Controllers\AccountsReceivableController;
 use App\Http\Controllers\ActiveBranchController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BranchController;
-// Catálogos
 use App\Http\Controllers\BrandController;
+// Catálogos
 use App\Http\Controllers\CashClosingController;
 use App\Http\Controllers\CashDrawerController;
 use App\Http\Controllers\CashMovementController;
@@ -28,22 +26,22 @@ use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
 use App\Http\Controllers\ControlCenterController;
-use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 use App\Http\Controllers\CustomerAddressController;
-// Inventario
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
+// Inventario
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataCenterController;
 use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
-// Compras
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
+// Compras
+use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
-// Ventas
 use App\Http\Controllers\LabelCenterController;
+// Ventas
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
@@ -53,21 +51,24 @@ use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
 use App\Http\Controllers\LoyaltyPortalManagementController;
-use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPortalPasskeyController;
+use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
-use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
+use App\Http\Controllers\MvsPrint\MvsPrintConfigController;
+use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 // MVS Print
+use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
+use App\Http\Controllers\MvsPrint\MvsPrintTicketController;
+// Finanzas
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
-// Finanzas
+// Administración
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PosController;
-// Administración
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductSupplierController;
@@ -563,13 +564,13 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         });
     });
 
-Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
-    ->middleware(['active.branch', 'permission:inventario.transferir'])
-    ->name('transferencias.products.search');
+    Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.products.search');
 
-Route::resource('transferencias', TransferController::class)
-    ->only(['index', 'create', 'store'])
-    ->middleware(['active.branch', 'permission:inventario.transferir']);
+    Route::resource('transferencias', TransferController::class)
+        ->only(['index', 'create', 'store'])
+        ->middleware(['active.branch', 'permission:inventario.transferir']);
 
     Route::post('/transferencias/{transfer}/prepare', [TransferController::class, 'prepare'])
         ->middleware(['active.branch', 'permission:inventario.transferir'])
@@ -986,9 +987,13 @@ Route::resource('transferencias', TransferController::class)
         ->prefix('mvs/print')
         ->name('mvs.print.')
         ->group(function () {
-            Route::get('/ticket/{sale}', \App\Http\Controllers\MvsPrint\MvsPrintTicketController::class)
+            Route::get('/ticket/{sale}', MvsPrintTicketController::class)
                 ->name('ticket');
-            Route::get('/config', [\App\Http\Controllers\MvsPrint\MvsPrintConfigController::class, 'show'])
+            Route::get('/ticket/layaway/{layaway}', [MvsPrintTicketController::class, 'layaway'])
+                ->name('ticket.layaway');
+            Route::get('/ticket/layaway/{layaway}/payment/{payment}', [MvsPrintTicketController::class, 'layawayPayment'])
+                ->name('ticket.layaway.payment');
+            Route::get('/config', [MvsPrintConfigController::class, 'show'])
                 ->name('config');
             // QZ security - accesible desde POS (pos.acceder) sin requerir mvs.print.configurar
             Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');

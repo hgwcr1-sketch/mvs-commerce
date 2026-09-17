@@ -435,6 +435,92 @@ class PosLayawayModeTest extends TestCase
         $this->assertStringContainsString('Layaway mode UI OK', $process->getOutput());
     }
 
+    public function test_pos_layaway_cash_payment_requires_sufficient_received_amount_and_calculates_change(): void
+    {
+        [$company, $branch, $user, $cash, $session] = $this->context();
+        $product = $this->product($company);
+        $this->stock($branch, $product, 5);
+        $customer = $this->customer($company);
+
+        // Insufficient cash received
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'initial_amount' => 100,
+            'payment_method_id' => $cash->id,
+            'cash_session_id' => $session->id,
+            'received_amount' => 50,
+        ])->assertUnprocessable()->assertJsonValidationErrors('received_amount');
+
+        $this->assertDatabaseCount('layaways', 0);
+
+        // Exact cash received → change 0
+        $exact = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'initial_amount' => 100,
+            'payment_method_id' => $cash->id,
+            'cash_session_id' => $session->id,
+            'received_amount' => 100,
+        ])->assertCreated();
+        $layawayExact = Layaway::findOrFail($exact->json('layaway_id'));
+        $paymentExact = $layawayExact->payments->first();
+        $this->assertSame('100.0000', (string) $paymentExact->amount);
+        $this->assertSame('100.0000', (string) $paymentExact->received_amount);
+        $this->assertSame('0.0000', (string) $paymentExact->change_amount);
+        $this->assertSame('900.0000', (string) $layawayExact->balance_due);
+
+        // Higher cash received → correct change
+        $higher = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'initial_amount' => 150,
+            'payment_method_id' => $cash->id,
+            'cash_session_id' => $session->id,
+            'received_amount' => 500,
+        ])->assertCreated();
+        $layawayHigher = Layaway::findOrFail($higher->json('layaway_id'));
+        $paymentHigher = $layawayHigher->payments->first();
+        $this->assertSame('150.0000', (string) $paymentHigher->amount);
+        $this->assertSame('500.0000', (string) $paymentHigher->received_amount);
+        $this->assertSame('350.0000', (string) $paymentHigher->change_amount);
+        $this->assertSame('850.0000', (string) $layawayHigher->balance_due);
+    }
+
+    public function test_pos_layaway_non_cash_payment_ignores_received_amount_and_sets_change_to_zero(): void
+    {
+        [$company, $branch, $user, , $session] = $this->context();
+        $product = $this->product($company);
+        $this->stock($branch, $product, 5);
+        $customer = $this->customer($company);
+        $sinpe = PaymentMethod::forCompany($company->id)->where('type', PaymentMethod::TYPE_SINPE)->firstOrFail();
+
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
+            'customer_id' => $customer->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'initial_amount' => 100,
+            'payment_method_id' => $sinpe->id,
+            'cash_session_id' => null,
+        ])->assertCreated();
+
+        $layaway = Layaway::findOrFail($response->json('layaway_id'));
+        $payment = $layaway->payments->first();
+        $this->assertSame('100.0000', (string) $payment->amount);
+        $this->assertSame('100.0000', (string) $payment->received_amount);
+        $this->assertSame('0.0000', (string) $payment->change_amount);
+        $this->assertSame('900.0000', (string) $layaway->balance_due);
+    }
+
+    public function test_pos_index_does_not_contain_quote_mojibake(): void
+    {
+        [$company, $branch, $user] = $this->context('Empresa', ['pos.acceder', 'ventas.crear', 'apartados.ver', 'apartados.crear', 'cotizaciones.crear']);
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index'))->assertOk();
+
+        $response->assertSee('Cambiar a cotización');
+        $this->assertStringNotContainsString('cotizaciÃ³n', $response->getContent());
+    }
+
     private function context(string $name = 'Empresa', array $permissions = ['pos.acceder', 'ventas.crear', 'apartados.ver', 'apartados.crear']): array
     {
         $company = Company::create(['trade_name' => $name.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'layaway_validity_days' => 30, 'layaway_alert_days' => 5, 'is_active' => true]);

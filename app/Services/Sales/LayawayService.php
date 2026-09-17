@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\User;
+use App\Notifications\LayawayUpcomingNotification;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -189,6 +190,8 @@ class LayawayService
             throw ValidationException::withMessages(['payment_method_id' => 'La forma de pago no es válida para apartados.']);
         }
 
+        [$received, $change] = $this->receivedAndChange($method, $amount, $data['received_amount'] ?? null);
+
         $session = null;
         if ($method->affects_cash) {
             $session = CashSession::query()
@@ -209,6 +212,8 @@ class LayawayService
             'cash_session_id' => $session?->id,
             'payment_method_id' => $method->id,
             'amount' => $amount,
+            'received_amount' => $received,
+            'change_amount' => $change,
             'affects_cash_snapshot' => (bool) $method->affects_cash,
             'cash_effect_amount' => $method->affects_cash ? $amount : 0,
             'reference' => $data['reference'] ?? null,
@@ -226,6 +231,30 @@ class LayawayService
         ]);
 
         return $payment;
+    }
+
+    /**
+     * Resuelve Recibido/Vuelto para un pago de apartado.
+     *
+     * Solo los métodos que permiten vuelto (efectivo, PaymentMethod.allows_change)
+     * aceptan un monto recibido distinto del monto aplicado; el vuelto es la
+     * diferencia y nunca modifica el abono aplicado al apartado. Para el resto de
+     * métodos el recibido coincide con el monto y el vuelto es cero.
+     */
+    private function receivedAndChange(PaymentMethod $method, float $amount, mixed $receivedInput): array
+    {
+        if (! $method->allows_change) {
+            return [bcadd((string) $amount, '0', 4), '0.0000'];
+        }
+
+        $amountStr = bcadd((string) $amount, '0', 4);
+        $receivedStr = bcadd((string) ($receivedInput === null || $receivedInput === '' ? $amount : $receivedInput), '0', 4);
+
+        if (bccomp($receivedStr, $amountStr, 4) < 0) {
+            throw ValidationException::withMessages(['received_amount' => 'El monto recibido no puede ser menor que el monto del pago.']);
+        }
+
+        return [$receivedStr, bcsub($receivedStr, $amountStr, 4)];
     }
 
     public function cancel(Layaway $layaway, User $user, string $reason): void
@@ -300,7 +329,7 @@ class LayawayService
                     if ($alert->wasRecentlyCreated) {
                         foreach ($l->company->users as $user) {
                             if ($user->hasPermission('apartados.ver', $l->company)) {
-                                $user->notify(new \App\Notifications\LayawayUpcomingNotification($l));
+                                $user->notify(new LayawayUpcomingNotification($l));
                             }
                         }
                         $count++;

@@ -41,7 +41,7 @@
             <strong class="text-sm">MODO APARTADO</strong>
             <div class="flex flex-wrap gap-2">
                 @can('cotizaciones.crear')
-                    <button type="button" @click="enterQuoteMode()" :disabled="creatingLayaway || creatingQuote" class="min-h-[44px] rounded-lg border border-sky-500 px-3 py-2 font-semibold text-sky-900 disabled:opacity-40">Cambiar a cotizaciÃ³n</button>
+                    <button type="button" @click="enterQuoteMode()" :disabled="creatingLayaway || creatingQuote" class="min-h-[44px] rounded-lg border border-sky-500 px-3 py-2 font-semibold text-sky-900 disabled:opacity-40">Cambiar a cotización</button>
                 @endcan
                 <button type="button" @click="leaveLayawayMode()" :disabled="creatingLayaway" class="min-h-[44px] rounded-lg border border-primary px-3 py-2 font-semibold disabled:opacity-40">Volver a venta</button>
             </div>
@@ -255,6 +255,13 @@
         <aside class="space-y-3 md:sticky md:top-3">
             <section class="relative rounded-xl bg-white p-3 shadow-sm">
                 <p x-show="successMessage" x-text="successMessage" class="mb-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"></p>
+                <div x-show="successMessage && lastLayaway" class="mb-2 flex flex-wrap items-center gap-2">
+                    <button type="button" @click="printLayawayReceipt(lastLayaway, true)" :disabled="layawayPrint.busy"
+                            class="min-h-[44px] rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-[#806817] hover:bg-primary/10 disabled:opacity-50">
+                        Reimprimir comprobante
+                    </button>
+                    <span x-show="layawayPrint.message" x-cloak x-text="layawayPrint.message" class="text-xs text-slate-600"></span>
+                </div>
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold uppercase text-slate-500">Cliente</p>
@@ -400,6 +407,19 @@
                                 <option :value="method.id" x-text="method.name"></option>
                             </template>
                         </select>
+                    </div>
+                    <div x-show="selectedLayawayMethod?.allows_change">
+                        <label for="layaway-received" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Monto recibido (efectivo)</label>
+                        <input id="layaway-received"
+                               x-model="layaway.received_amount"
+                               type="number"
+                               min="1"
+                               step="1"
+                               inputmode="numeric"
+                               class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-right text-sm font-bold text-primary placeholder:text-primary/50"
+                               placeholder="0">
+                        <div class="mt-1 flex justify-between"><span class="text-slate-300">Vuelto</span><strong class="text-primary" x-text="money(layawayChange)"></strong></div>
+                        <p x-show="layawayReceivedError" class="text-xs font-semibold text-red-300">El monto recibido no puede ser menor que la prima.</p>
                     </div>
                     <div>
                         <label for="layaway-reference" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Referencia (opcional)</label>
@@ -886,7 +906,9 @@ document.addEventListener('alpine:init', () => {
         canCreateLayaway: @json($canCreateLayaway),
         creatingLayaway: false,
         layawayValidityDays: @json($layawayValidityDays),
-        layaway: { expires_at: '', initial_amount: '', payment_method_id: '', reference: '' },
+        layaway: { expires_at: '', initial_amount: '', payment_method_id: '', reference: '', received_amount: '' },
+        lastLayaway: null,
+        layawayPrint: { busy: false, message: '' },
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
         cashSessionId: @json($cashSession?->id),
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
@@ -1042,8 +1064,13 @@ document.addEventListener('alpine:init', () => {
                 && this.apartadoGrandTotal > 0
                 && this.numberValue(this.layaway.initial_amount) > 0
                 && this.numberValue(this.layaway.initial_amount) <= this.apartadoGrandTotal
-                && !!this.layaway.payment_method_id;
+                && !!this.layaway.payment_method_id
+                && !this.layawayReceivedError;
         },
+        get selectedLayawayMethod() { return this.paymentMethods.find(method => Number(method.id) === Number(this.layaway.payment_method_id)); },
+        get layawayReceived() { return this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' ? this.numberValue(this.layaway.received_amount) : this.numberValue(this.layaway.initial_amount); },
+        get layawayReceivedError() { return !!this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' && this.numberValue(this.layaway.received_amount) < this.numberValue(this.layaway.initial_amount); },
+        get layawayChange() { return this.selectedLayawayMethod?.allows_change ? Math.max(0, this.layawayReceived - this.numberValue(this.layaway.initial_amount)) : 0; },
         get usdSession() { return this.usdSessions.find(session => String(session.id) === String(this.cashSessionId)); },
         get usdCashEnabled() { return this.selectedPaymentMethod?.type === 'cash' && this.usdSession?.enabled === true; },
         decimalUnits(value) {
@@ -1604,7 +1631,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.canCreateLayaway || this.creatingLayaway || this.checkout.open || this.layawayMode) return;
             if (this.quoteMode) { await this.leaveQuoteMode(); }
             this.layawayMode = true;
-            this.layaway = { expires_at: this.defaultLayawayExpiration(), initial_amount: '', payment_method_id: '', reference: '' };
+            this.layaway = { expires_at: this.defaultLayawayExpiration(), initial_amount: '', payment_method_id: '', reference: '', received_amount: '' };
             this.notice = this.cart.some(item => this.exceedsStock(item)) ? 'Revise las cantidades: superan el stock disponible para apartar.' : '';
             this.results = [];
             await this.searchProducts(false);
@@ -1630,6 +1657,7 @@ document.addEventListener('alpine:init', () => {
             }
             this.creatingLayaway = true;
             this.notice = '';
+            this.lastLayaway = null;
             try {
                 const response = await fetch({{ Illuminate\Support\Js::from(route('pos.apartados.store', [], false)) }}, {
                     method: 'POST',
@@ -1644,6 +1672,7 @@ document.addEventListener('alpine:init', () => {
                         })),
                         initial_amount: this.numberValue(this.layaway.initial_amount),
                         payment_method_id: this.layaway.payment_method_id,
+                        ...(this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' ? { received_amount: this.numberValue(this.layaway.received_amount) } : {}),
                         cash_session_id: this.cashSessionId || null,
                         reference: this.layaway.reference ? this.layaway.reference.trim() : null,
                         client_token: this.checkoutToken,
@@ -1655,15 +1684,54 @@ document.addEventListener('alpine:init', () => {
                 this.customerId = null;
                 this.selectedCustomer = null;
                 this.checkout.payments = [];
-                this.layaway = { expires_at: '', initial_amount: '', payment_method_id: '', reference: '' };
+                this.layaway = { expires_at: '', initial_amount: '', payment_method_id: '', reference: '', received_amount: '' };
+                this.lastLayaway = { id: payload.layaway_id, number: payload.layaway_number };
+                this.layawayPrint = { busy: false, message: '' };
                 this.checkoutToken = generateUUID();
                 this.successMessage = payload.message;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
+                this.attemptLayawayAutoPrint(this.lastLayaway);
             } catch (error) {
                 this.notice = error.message || 'No fue posible crear el apartado.';
             } finally {
                 this.creatingLayaway = false;
+            }
+        },
+        async attemptLayawayAutoPrint(layaway) {
+            if (!layaway?.id) return;
+            const print = this.layawayPrint;
+            if (print.busy) return;
+            try {
+                if (!window.MvsPrint) throw new Error('MVS Print no disponible');
+                const configUrl = {{ Illuminate\Support\Js::from(route('mvs.print.config', [], false)) }};
+                const config = await window.MvsPrint.fetchConfig(configUrl);
+                if (!config.terminal || !config.terminal.printer_name) return;
+                if (!config.auto_print) return;
+                await this.printLayawayReceipt(layaway, false);
+            } catch {
+                // La impresión automática nunca bloquea la creación del apartado.
+            }
+        },
+        async printLayawayReceipt(layaway, reprint = true) {
+            if (!layaway?.id || this.layawayPrint.busy) return;
+            const print = this.layawayPrint;
+            print.busy = true;
+            print.message = '';
+            try {
+                const ticketUrl = {{ Illuminate\Support\Js::from(route('mvs.print.ticket.layaway', ['layaway' => '__LAYAWAY__'], false)) }};
+                const result = await window.MvsPrint.printLayaway(
+                    ticketUrl.replace('__LAYAWAY__', layaway.id),
+                    layaway.id,
+                    { reprint },
+                );
+                print.message = result.success
+                    ? 'Comprobante enviado a ' + result.printer
+                    : (result.error || 'No fue posible imprimir directamente.');
+            } catch {
+                print.message = 'No fue posible imprimir directamente.';
+            } finally {
+                print.busy = false;
             }
         },
         async enterQuoteMode() {

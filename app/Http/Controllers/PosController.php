@@ -30,7 +30,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
@@ -52,7 +51,7 @@ class PosController extends Controller
         $isGlobalAdmin = $request->user()->isPlatformAdmin()
             || $request->user()->hasPermission('dashboard.admin', $company);
 
-        if (!$branchId && $isGlobalAdmin) {
+        if (! $branchId && $isGlobalAdmin) {
             return redirect()->route('dashboard')
                 ->with('warning', 'Debe seleccionar una sucursal concreta para operar el POS.');
         }
@@ -331,7 +330,7 @@ class PosController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $portal && isset($portal['error']) ? 'Cliente creado correctamente. ' . $portal['error'] : 'Cliente creado correctamente.',
+            'message' => $portal && isset($portal['error']) ? 'Cliente creado correctamente. '.$portal['error'] : 'Cliente creado correctamente.',
             'customer' => [
                 'id' => $customer->id,
                 'name' => $customer->name,
@@ -356,7 +355,7 @@ class PosController extends Controller
         $phoneNormalized = $phones->normalizePhone($customer->phone ?? $customer->mobile);
         $emailNormalized = $customer->email ? mb_strtolower(trim($customer->email)) : null;
         $username = $phoneNormalized ?: ($emailNormalized && filter_var($emailNormalized, FILTER_VALIDATE_EMAIL) ? $emailNormalized : null);
-        if (!$username) {
+        if (! $username) {
             return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
         }
         $exists = LoyaltyPortalCredential::query()
@@ -375,7 +374,7 @@ class PosController extends Controller
             'company_id' => $companyId,
             'customer_id' => $customer->id,
             'username' => $username,
-            'email' => $emailNormalized ?? $username . '@portal.local',
+            'email' => $emailNormalized ?? $username.'@portal.local',
             'password' => $plainPassword,
             'is_active' => true,
             'must_change_password' => true,
@@ -473,6 +472,7 @@ class PosController extends Controller
             'discount_total_type' => ['prohibited'],
             'initial_amount' => ['required', 'numeric', 'gt:0'],
             'payment_method_id' => ['required', 'integer'],
+            'received_amount' => ['nullable', 'numeric', 'gte:0'],
             'cash_session_id' => ['nullable', 'integer'],
             'reference' => ['nullable', 'string', 'max:150'],
             'client_token' => ['nullable', 'uuid'],
@@ -501,6 +501,7 @@ class PosController extends Controller
         }
 
         $company = Company::query()->findOrFail((int) session('active_company_id'));
+        $firstPayment = $layaway->payments()->latest('id')->first();
 
         return response()->json([
             'success' => true,
@@ -510,6 +511,8 @@ class PosController extends Controller
             'total' => $layaway->total,
             'paid_total' => $layaway->paid_total,
             'balance_due' => $layaway->balance_due,
+            'received_amount' => $firstPayment?->received_amount,
+            'change_amount' => $firstPayment?->change_amount,
             'show_url' => $request->user()->hasPermission('apartados.ver', $company)
                 ? route('apartados.show', $layaway)
                 : null,

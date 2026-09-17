@@ -231,15 +231,15 @@ window.MvsPrint = {
     },
 
     /**
-     * Intenta imprimir una venta por QZ Tray.
+     * Transporte genérico para tickets ESC/POS ya preparados por el backend.
      * Retorna { success: bool, error?: string }
      * NUNCA lanza excepción — el caller siempre recibe un resultado.
      */
-    async printSale(ticketUrl, saleId, options = {}) {
-        if (this._saleBusy) return { success: false, error: 'Ya hay una impresión en curso.' };
-        this._saleBusy = true;
+    async _printDocument(ticketUrl, id, options = {}) {
+        if (this._printBusy) return { success: false, error: 'Ya hay una impresión en curso.' };
+        this._printBusy = true;
         try {
-            const ticketData = await this.fetchTicket(ticketUrl, saleId, options);
+            const ticketData = await this.fetchTicket(ticketUrl, id, options);
             if (!ticketData?.success || !ticketData.payload) throw new Error('No se pudo obtener el ticket.');
             await this.ensureConnection(ticketData.qz);
             const printer = ticketData.printer || (!options.reprint && options.printerName);
@@ -248,8 +248,29 @@ window.MvsPrint = {
         } catch (error) {
             return { success: false, error: error.message || 'Error al imprimir' };
         } finally {
-            this._saleBusy = false;
+            this._printBusy = false;
         }
+    },
+
+    /**
+     * Intenta imprimir el ticket de una venta ya completada.
+     */
+    async printSale(ticketUrl, saleId, options = {}) {
+        return this._printDocument(ticketUrl, saleId, options);
+    },
+
+    /**
+     * Intenta imprimir el comprobante de un apartado.
+     */
+    async printLayaway(ticketUrl, layawayId, options = {}) {
+        return this._printDocument(ticketUrl, layawayId, options);
+    },
+
+    /**
+     * Intenta imprimir el comprobante de un abono de apartado.
+     */
+    async printLayawayPayment(ticketUrl, paymentId, options = {}) {
+        return this._printDocument(ticketUrl, paymentId, options);
     },
 
     /**
@@ -409,6 +430,7 @@ window.MvsPrint = {
     _qzSignedUrls: null,
     _connecting: null,
     _pendingPrint: null,
+    _printBusy: false,
     _epoch: 0,
 
     async deadline(operation, label, ms = this.timeoutMs, onTimeout = () => {}) {

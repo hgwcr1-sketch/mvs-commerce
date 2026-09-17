@@ -194,8 +194,32 @@
 }
 
 /* ===========================
+   GLOBAL CURSOR RULE (R11)
+   ===========================
+   Todo control interactivo habilitado muestra cursor de mano.
+   Elementos deshabilitados muestran cursor not-allowed.
+   Se evita poner mano sobre texto/labels/contenedores decorativos.
+   =========================== */
+
+button:not(:disabled),
+a[href]:not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+select,
+input[type="checkbox"],
+input[type="radio"] {
+    cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+a:not([href]):not([role="button"]) {
+    cursor: not-allowed;
+}
+
+/* ===========================
    P10 - TABS REUTILIZABLES
-=========================== */
+   =========================== */
 
 .scrollbar-hide {
     -ms-overflow-style: none;

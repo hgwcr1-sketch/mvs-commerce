@@ -319,6 +319,7 @@ Reglas mínimas obligatorias:
 - **CTA persistente**: en flujos largos (carrito, multi-paso), la acción primaria debe permanecer visible sin depender del scroll.
 - **Verificación conceptual 360 / 768 / 1280** antes de cerrar cualquier tarea que toque UI; desktop y responsive se desarrollan juntos, no como corrección posterior.
 - **Fuente única de navegación**: el menú vive en `components/navigation/sidebar.blade.php` (reutilizado por la barra "Más" móvil/tablet). Al agregar módulos o permisos, actualizar solo esa fuente.
+- **Cursor global**: controles interactivos habilitados usan `cursor-pointer`; deshabilitados usan `cursor-not-allowed` (regla centralizada en `resources/css/app.css`). No agregar cursor de mano sobre texto/labels/contenedores decorativos ni modificar Blade por Blade salvo excepción justificada.
 
 ---
 

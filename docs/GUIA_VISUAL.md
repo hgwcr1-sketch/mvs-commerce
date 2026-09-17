@@ -38,6 +38,17 @@ Windows toman el mismo dorado de `assets/branding.json` del repositorio
 Los recursos de instalación reutilizan el logo MVS existente, sin recolorear QZ.
 El launcher tiene identidad y metadatos propios; QZ conserva su identidad original.
 
+## Cursor global
+
+Controles interactivos habilitados usan `cursor: pointer`; deshabilitados usan
+`cursor: not-allowed`. La regla vive en `resources/css/app.css` (sección
+GLOBAL CURSOR RULE) y cubre `button:not(:disabled)`, `a[href]`,
+`[role="button"]:not([aria-disabled="true"])`, `summary`, `select`,
+`input[type="checkbox"]` e `input[type="radio"]`.
+
+NO agregar cursor de mano sobre texto, labels sueltos o contenedores
+decorativos. NO modificar Blade por Blade salvo excepción justificada.
+
 ## Responsive
 
 Diseñar primero a 360 px, ampliar a 768 y 1280 px. Controles táctiles de al menos

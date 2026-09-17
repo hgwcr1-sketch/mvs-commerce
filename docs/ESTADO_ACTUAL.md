@@ -2,6 +2,36 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## APARTADOS POS — RECIBIDO/VUELTO + MVS PRINT (2026-09-16 noche)
+
+Implementación local terminada para pre-commit; sin commit, push, deploy ni migración en producción.
+
+**Funcionalidad completada:**
+- Migración aditiva `received_amount` / `change_amount` en `layaway_payments` (DECIMAL 19,4 nullable).
+- Casts y validación backend en `LayawayService::receivedAndChange` con BCMath.
+- UI de Recibido/Vuelto en POS (`resources/views/pos/index.blade.php`) y vista de apartado (`resources/views/layaways/show.blade.php`).
+- Corrección del mojibake "Cambiar a cotización".
+- `EscPosLayawayTicket` para comprobantes 58/80 mm con símbolo `₡`, word-wrap y sin mojibake.
+- Endpoints MVS Print: `mvs.print.ticket.layaway` y `mvs.print.ticket.layaway.payment`.
+- Auto-print de apartado y abono desde POS, apertura de cajón solo para efectivo, reimpresión read-only sin drawer ni mutaciones.
+- Actualización de `AGENTS.md` y `docs/GUIA_VISUAL.md`.
+
+**Pruebas ejecutadas:**
+- `PosLayawayModeTest` 17/17, 167 aserciones.
+- `LayawayV1Test` 7/7, 42 aserciones.
+- `MvsPrintLayawayTicketTest` 11/11, 73 aserciones (nuevo).
+- `MvsPrintAutoPrintTest` 32/32, 309 aserciones.
+- `QuoteTest` 12/12, 159 aserciones.
+- `PosCheckoutTest` 17/17, 3 aserciones reportadas por PHPUnit (focalizado junto a los anteriores).
+- Suite focalizada total: **96 pruebas, 96 aprobadas, 753 aserciones, 0 fallos**.
+- Regresión POS + Apartados + Cotización + MVS Print: 298 pruebas, 292 aprobadas, 2036 aserciones, 6 fallos preexistentes documentados (no atribuibles a esta tarea).
+- Tests JS: `mvs-print-test.cjs` 20/20; `pos-layaway-mode.cjs` ejecutado vía `PosLayawayModeTest`.
+- `npm run build` correcto; `git diff --check` limpio; Pint aplicado a archivos PHP modificados.
+
+**Pendiente:**
+- Migración `2026_09_16_000002_add_received_change_to_layaway_payments_table.php` pendiente de ejecución en producción (NO autorizada todavía).
+- Prueba física con impresora térmica y cajón pendiente.
+
 ## Modo Apartado integrado al POS — auditoría pre-commit (2026-09-16)
 
 Implementación local aprobada para pre-commit, todavía sin commit, push ni producción. El POS permite entrar a Apartado con `apartados.crear`, exige cliente y prima positiva, reserva únicamente stock real de la sucursal activa bajo `lockForUpdate`, admite precio manual sólo con `pos.cambiar_precio` y reutiliza las reglas de pago de `LayawayService` (sin crédito ni puntos). Cotización y Apartado son mutuamente exclusivos. La UI nueva usa el dorado oficial `bg-primary` (`#D4AF37`) y mantiene acciones de 44/48 px.
