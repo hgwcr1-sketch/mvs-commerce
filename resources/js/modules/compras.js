@@ -258,13 +258,33 @@ const data = JSON.parse(text);
                 existing.quantity =
                     Number(existing.quantity || 0) + 1;
 
+                this.$nextTick(() => {
+                    const input = document.querySelector(
+                        `input[data-item-id="${product.id}"][data-field="quantity"]`
+                    );
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
+                });
+
             } else {
 
-                this.items.push({
+                this.items.unshift({
                     ...product,
                     quantity: 1,
                     unit_cost: Number(product.cost || 0),
                     new_sale_price: ''
+                });
+
+                this.$nextTick(() => {
+                    const input = document.querySelector(
+                        'input[data-field="quantity"]'
+                    );
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
                 });
             }
 

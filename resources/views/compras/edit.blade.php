@@ -446,6 +446,8 @@ window.purchaseEdit = {
                                         :min="(item.allows_decimals ?? item.product?.unit?.allows_decimals) ? 0.0001 : 1"
                                         :step="(item.allows_decimals ?? item.product?.unit?.allows_decimals) ? 0.0001 : 1"
                                         x-model.number="item.quantity"
+                                        :data-item-id="item.id"
+                                        data-field="quantity"
                                         class="w-24 rounded-lg border border-slate-300 px-2 py-2 text-right">
                                 </td>
 
