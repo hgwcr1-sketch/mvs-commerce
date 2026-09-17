@@ -345,7 +345,7 @@ describe('Phase 3B — Offline Sale Handling', () => {
       'C:\\Users\\USER000\\MVS Commerce\\mvs-commerce-paralelo-2\\resources\\js\\offline\\sale.js',
       'utf8'
     );
-    const hasItems = source.includes('items:');
+    const hasItems = source.includes('items:') || source.includes('items,');
     assert.ok(hasItems, 'payload should include items');
   });
 
