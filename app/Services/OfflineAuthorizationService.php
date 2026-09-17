@@ -36,6 +36,34 @@ class OfflineAuthorizationService
         ]);
     }
 
+    public function provisionTerminal(Company $company, Branch $branch, User $actor, string $terminalUuid): OfflineTerminal
+    {
+        if ((int) $branch->company_id !== (int) $company->id) {
+            abort(422, 'La sucursal no pertenece a la empresa especificada.');
+        }
+
+        $terminal = OfflineTerminal::where('terminal_uuid', $terminalUuid)->first();
+        if ($terminal) {
+            abort_unless(
+                (int) $terminal->company_id === (int) $company->id
+                    && (int) $terminal->branch_id === (int) $branch->id,
+                403,
+                'La terminal pertenece a otro contexto.'
+            );
+
+            return $terminal;
+        }
+
+        return OfflineTerminal::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'terminal_uuid' => $terminalUuid,
+            'name' => 'POS '.$terminalUuid,
+            'status' => OfflineTerminal::STATUS_ACTIVE,
+            'registered_by' => $actor->id,
+        ]);
+    }
+
     public function authorize(OfflineTerminal $terminal, User $actor): array
     {
         $company = $terminal->company;
@@ -47,7 +75,7 @@ class OfflineAuthorizationService
         $this->validateUserForAuthorization($actor, $company, $branch);
 
         $license = $this->resolveLicenseForAuthorization($company);
-        $maxHours = config('offline.max_hours', 48);
+        $maxHours = min(48, max(1, (int) config('offline.max_hours', 48)));
         $now = now();
         $validUntil = $now->copy()->addHours($maxHours);
 
@@ -71,11 +99,14 @@ class OfflineAuthorizationService
             'terminal_uuid' => $terminal->terminal_uuid,
             'issued_at' => $now->toIso8601String(),
             'valid_until' => $validUntil->toIso8601String(),
+            'server_time' => $now->toIso8601String(),
             'license_status' => $license?->status ?? 'unknown',
         ]);
 
         return [
             'authorization' => $token,
+            'token' => $token,
+            'authorization_id' => $authorizationRecord->authorization_id,
             'server_time' => $now->toIso8601String(),
             'issued_at' => $now->toIso8601String(),
             'valid_until' => $validUntil->toIso8601String(),
@@ -129,12 +160,12 @@ class OfflineAuthorizationService
                 return null;
             }
 
-            $supportedAlgs = ['RSA-SHA256'];
+            $supportedAlgs = ['RS256'];
             $supportedVersions = [1];
             if (! in_array($header['alg'] ?? null, $supportedAlgs, true)) {
                 return null;
             }
-            if (! in_array($header['version'] ?? null, $supportedVersions, true)) {
+            if (($header['typ'] ?? null) !== 'MVS-Offline-Auth' || ! in_array($header['version'] ?? null, $supportedVersions, true)) {
                 return null;
             }
 
@@ -218,8 +249,8 @@ class OfflineAuthorizationService
     private function signToken(array $payload): string
     {
         $header = [
-            'alg' => 'RSA-SHA256',
-            'typ' => 'MVS-OFFLINE-AUTH',
+            'alg' => 'RS256',
+            'typ' => 'MVS-Offline-Auth',
             'version' => config('offline.token_version', 1),
         ];
 

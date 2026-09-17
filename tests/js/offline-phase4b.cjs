@@ -86,7 +86,7 @@ describe('Phase 4B — Sync worker module', () => {
     const source = readSource('resources/js/offline/sync-worker.js');
     assert.match(source, /await markSyncing\(op\.id\)/, 'should mark syncing before the request');
     assert.match(source, /bodyStatus === 'processed' \|\| bodyStatus === 'already_processed'/, 'should accept idempotent ACK');
-    assert.match(source, /await markSynced\(op\.id\)/, 'should mark synced after ACK');
+    assert.match(source, /await markSynced\(op\.id(?:,|\))/, 'should mark synced after ACK');
   });
 
   it('reads the CSRF token from the meta tag', () => {

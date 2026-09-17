@@ -265,6 +265,16 @@ describe('Phase 3B — Authorization Verification', () => {
     assert.ok(blocksWithoutKey, 'must block when PUBLIC KEY unavailable');
   });
 
+  it('normalizes PEM keys before WebCrypto import', () => {
+    const fs = require('fs');
+    const source = fs.readFileSync(
+      'C:\\Users\\USER000\\MVS Commerce\\mvs-commerce-paralelo-2\\resources\\js\\offline\\auth-verification.js',
+      'utf8'
+    );
+    const normalizesPem = source.includes('normalizePublicKey') || source.includes('pemToDer');
+    assert.ok(normalizesPem, 'must convert PEM with headers/newlines into DER before importKey');
+  });
+
   it('verifyAuthSignature blocks on invalid signature', () => {
     const fs = require('fs');
     const source = fs.readFileSync(

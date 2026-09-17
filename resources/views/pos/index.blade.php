@@ -1070,12 +1070,18 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             this.loading = true;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             try {
                 const url = new URL({{ Illuminate\Support\Js::from(route('pos.products.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
                 if (this.quoteMode) url.searchParams.set('quote_mode', '1');
-                const response = await fetch(url, { headers: { Accept: 'application/json' } });
-                if (!response.ok) throw new Error('No fue posible buscar productos.');
+                const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+                if (!response.ok) {
+                    const error = new Error('No fue posible buscar productos.');
+                    error.status = response.status;
+                    throw error;
+                }
                 const products = await response.json();
                 if (currentRequest !== this.requestNumber) return;
                 this.results = products;
@@ -1083,8 +1089,20 @@ document.addEventListener('alpine:init', () => {
                 const exactBarcode = products.find(product => product.matched_barcode === term);
                 if (autoAdd && exactBarcode) this.addProduct(exactBarcode);
             } catch (error) {
-                if (currentRequest === this.requestNumber) this.results = [];
+                if (currentRequest === this.requestNumber && !error.status && window.MvsOffline?.searchProductsOffline) {
+                    try {
+                        this.results = await window.MvsOffline.searchProductsOffline(window.__MVS_OFFLINE_CONTEXT__, term, { quoteMode: this.quoteMode });
+                        this.selectedIndex = 0;
+                        const exactBarcode = this.results.find(product => product.matched_barcode === term);
+                        if (autoAdd && exactBarcode) this.addProduct(exactBarcode);
+                    } catch (offlineError) {
+                        this.results = [];
+                    }
+                } else if (currentRequest === this.requestNumber) {
+                    this.results = [];
+                }
             } finally {
+                clearTimeout(timeoutId);
                 if (currentRequest === this.requestNumber) this.loading = false;
             }
         },
@@ -1110,7 +1128,18 @@ document.addEventListener('alpine:init', () => {
                             return;
                         }
                     }
-                } catch (e) {}
+                } catch (error) {
+                    if (!error.status && window.MvsOffline?.searchCustomersOffline) {
+                        try {
+                            const customers = await window.MvsOffline.searchCustomersOffline(window.__MVS_OFFLINE_CONTEXT__, code);
+                            const exact = customers.find(customer => String(customer.public_code || '').toUpperCase() === code.toUpperCase());
+                            if (exact) {
+                                this.selectCustomer(exact);
+                                return;
+                            }
+                        } catch (offlineError) {}
+                    }
+                }
             }
             this.query = code;
             this.searchProducts();
@@ -1368,35 +1397,38 @@ document.addEventListener('alpine:init', () => {
             if (!this.checkoutCanConfirm) return;
             this.checkout.processing = true;
             this.checkout.error = '';
+            let response = null;
+            let checkoutPayload = null;
             try {
-                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout', [], false)) }}, {
+                checkoutPayload = {
+                    checkout_token: this.checkoutToken,
+                    cash_session_id: this.cashSessionId || null,
+                    ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? {
+                        discount_total: this.numberValue(this._generalDiscountInput),
+                        discount_total_type: this._generalDiscountType,
+                    } : {}),
+                    ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
+                    ...(this.quoteId ? { quote_id: this.quoteId } : {}),
+                    customer_id: this.customerId,
+                    document_type: this.documentType,
+                    ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
+                    payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, received_amount_usd, change_currency, reference }) => ({ payment_method_id, amount, received_amount, ...(received_amount_usd ? { received_amount_usd, change_currency } : {}), reference })),
+                    items: this.cart.map(item => ({
+                        product_id: item.id,
+                        quantity: item.quantity,
+                        ...(this.canDiscount && this.numberValue(item._discount) > 0 ? {
+                            discount: this.numberValue(item._discount),
+                            discount_type: item._discountType,
+                        } : {}),
+                        ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? {
+                            unit_price: this.numberValue(item._unitPrice),
+                        } : {}),
+                    })),
+                };
+                response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout', [], false)) }}, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-                    body: JSON.stringify({
-                        checkout_token: this.checkoutToken,
-                        cash_session_id: this.cashSessionId || null,
-                        ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? {
-                            discount_total: this.numberValue(this._generalDiscountInput),
-                            discount_total_type: this._generalDiscountType,
-                        } : {}),
-                        ...(this.suspended.activeId ? { suspended_sale_id: this.suspended.activeId, recovery_token: this.suspended.recoveryToken } : {}),
-                        ...(this.quoteId ? { quote_id: this.quoteId } : {}),
-                        customer_id: this.customerId,
-                        document_type: this.documentType,
-                        ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
-                        payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, received_amount_usd, change_currency, reference }) => ({ payment_method_id, amount, received_amount, ...(received_amount_usd ? { received_amount_usd, change_currency } : {}), reference })),
-                        items: this.cart.map(item => ({
-                            product_id: item.id,
-                            quantity: item.quantity,
-                            ...(this.canDiscount && this.numberValue(item._discount) > 0 ? {
-                                discount: this.numberValue(item._discount),
-                                discount_type: item._discountType,
-                            } : {}),
-                            ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? {
-                                unit_price: this.numberValue(item._unitPrice),
-                            } : {}),
-                        })),
-                    }),
+                    body: JSON.stringify(checkoutPayload),
                 });
                 const payload = await this.readFetchResponse(response);
                 this.checkout.result = payload;
@@ -1414,6 +1446,29 @@ document.addEventListener('alpine:init', () => {
                     this.attemptAutoPrint(payload.sale_id);
                 }
             } catch (error) {
+                if (!response && window.MvsOffline?.attemptOfflineSale) {
+                    const offline = await window.MvsOffline.attemptOfflineSale({
+                        terminalContext: window.__MVS_OFFLINE_CONTEXT__,
+                        saleData: checkoutPayload,
+                    });
+
+                    if (offline.success) {
+                        this.cart = [];
+                        this.customerId = null;
+                        this.selectedCustomer = null;
+                        this.clearSuspendedRecovery();
+                        this.quoteId = null;
+                        this.checkout.payments = [];
+                        this.checkout.open = false;
+                        this.checkout.result = null;
+                        this.checkoutToken = generateUUID();
+                        this.successMessage = 'Venta guardada Offline y pendiente de sincronización.';
+                        this.$nextTick(() => this.focusSearch());
+                        return;
+                    }
+
+                    error = new Error(offline.reason || 'No fue posible guardar la venta Offline.');
+                }
                 this.checkout.error = error.message || 'No fue posible completar el cobro. Intente nuevamente.';
             } finally {
                 this.checkout.processing = false;
@@ -1630,18 +1685,34 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             this.customerLoading = true;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             try {
                 const url = new URL({{ Illuminate\Support\Js::from(route('pos.customers.search', [], false)) }}, window.location.origin);
                 url.searchParams.set('q', term);
-                const response = await fetch(url, { headers: { Accept: 'application/json' } });
-                if (!response.ok) throw new Error('No fue posible buscar clientes.');
+                const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal });
+                if (!response.ok) {
+                    const error = new Error('No fue posible buscar clientes.');
+                    error.status = response.status;
+                    throw error;
+                }
                 const customers = await response.json();
                 if (currentRequest !== this.customerRequestNumber) return;
                 this.customerResults = customers;
                 this.customerSelectedIndex = 0;
             } catch (error) {
-                if (currentRequest === this.customerRequestNumber) this.customerResults = [];
+                if (currentRequest === this.customerRequestNumber && !error.status && window.MvsOffline?.searchCustomersOffline) {
+                    try {
+                        this.customerResults = await window.MvsOffline.searchCustomersOffline(window.__MVS_OFFLINE_CONTEXT__, term);
+                        this.customerSelectedIndex = 0;
+                    } catch (offlineError) {
+                        this.customerResults = [];
+                    }
+                } else if (currentRequest === this.customerRequestNumber) {
+                    this.customerResults = [];
+                }
             } finally {
+                clearTimeout(timeoutId);
                 if (currentRequest === this.customerRequestNumber) this.customerLoading = false;
             }
         },
@@ -1755,7 +1826,9 @@ document.addEventListener('alpine:init', () => {
                 this.resetQuickCustomer();
             } catch (error) {
                 this.quickCustomer.errors = error.payload?.errors || {};
-                this.quickCustomer.message = error.message || 'No fue posible crear el cliente. Intente nuevamente.';
+                this.quickCustomer.message = !error.status
+                    ? 'Crear clientes nuevos requiere conexión con el servidor.'
+                    : (error.message || 'No fue posible crear el cliente. Intente nuevamente.');
             } finally {
                 this.quickCustomer.saving = false;
             }
@@ -1766,6 +1839,12 @@ document.addEventListener('alpine:init', () => {
 
 <script>
 (function () {
+    @php($offlineContext = [
+        'company_id' => $company->id,
+        'branch_id' => $branch->id,
+        'user_id' => auth()->id(),
+    ])
+    window.__MVS_OFFLINE_CONTEXT__ = {{ Illuminate\Support\Js::from($offlineContext) }};
     // Inject public key meta tag for offline signature verification
     @if (config('offline.keys.public') && \Illuminate\Support\Facades\File::exists(storage_path(config('offline.keys.public'))))
         const publicKey = @json(\Illuminate\Support\Facades\File::get(storage_path(config('offline.keys.public'))));

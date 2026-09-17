@@ -2,6 +2,18 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Offline Fase 4B.1B — Venta oficial e idempotencia CERTIFICADAS (2026-09-17)
+
+4B.1B queda **COMPLETADA/CERTIFICADA** para el POS previamente aprovisionado: producto y cliente Offline, checkout con RSA local, persistencia en IndexedDB, cola `pending`, reconexión, sincronización FIFO, Sale oficial y ACK durable. La operación real `fc8c830a-f368-40ef-8b0f-b127a1c2f583` produjo exactamente una Sale (`id=1`, `POS-00000001`), un ítem (producto 1, cantidad 1, total 5650), cliente 1 y un único posting de inventario/Kardex (1951 → 1950). `attempts=0` es correcto: representa cero errores/reintentos.
+
+Validación final: `OfflineSyncTest` **20/20**, JS Offline **39/39**, `npm run build` correcto y `git diff --check` limpio. **4B.1C Cold Start Offline, 4B.1D Caja Offline y 4C impresión Offline permanecen pendientes y no iniciadas.** Esta certificación no declara que todo MVS Commerce funcione Offline.
+
+## Offline Fase 4B.1A — Runtime y provisioning local (2026-09-16)
+
+Implementación local sobre `dummy-branch-1` y HEAD base `28ff770`: bootstrap fail-safe cargado por Vite, IndexedDB persistente, health autenticado, provisioning idempotente de terminal por empresa/sucursal, clave pública, autorización RSA-2048/SHA-256 compatible con Web Crypto, snapshot canónico y runtime FIFO de reconexión con backoff 2s–60s. El Service Worker resuelve los assets desde `public/build/manifest.json` y no contiene hashes manuales. El checkout online, impresión, QZ, recibos, QR y Centro de Control no fueron modificados funcionalmente. Fase 4C y producción no iniciadas; sin commit ni push.
+
+Validación: Offline PHP **80/80**, JS **105/105**, regresión focal POS/MVS Print/recibos/QR/Control Center **140/140**, `npm run build` y `git diff --check` correctos. Validación manual de navegador pendiente.
+
 ## MVS Print — instalador 1.0.2 en preparación (2026-09-16)
 
 Versión bump a 1.0.2 en todos los archivos fuente: NSI (`!ifndef` guard, única definición), Launcher.cs, launcher.manifest, build-installer.ps1, README.md, VERSION. Dorado oficial documentado en AGENTS.md y docs/GUIA_VISUAL.md. Impresion.blade.php migrado de amber/blue a `bg-primary` dorado. Tests PHP 62/62, JS security 25/25, JS print 14/14. Launcher build + tests PASS. Pre-existente: ResponsiveNavigationTest fallo de logo (no relacionado). Build completo del instalador requiere QZ source tree (JDK+Ant); preparado para ejecutar cuando el árbol QZ esté disponible. Prueba física final pendiente. Nota: archivos fuente del installer (`storage/app/mvs-print-release/`) están gitignored; el version bump es local y efectivo en el próximo build.
@@ -25,9 +37,9 @@ Validación final: **86/86 pruebas focales, 679 aserciones, cero fallos**; cubre
 Auditoría final del usuario aprobada: canje, pago parcial/total/mixto, autoridad backend, atomicidad, idempotencia y multitenant correctos. Commit y push a feature/pos autorizados; producción no autorizada. Los problemas consignados abajo se confirman preexistentes y fuera del alcance de este commit, por lo que no bloquean el cierre del pago con puntos. El párrafo siguiente conserva la evidencia de la implementación local anterior al cierre.
 
 Paso 32 pausado por el usuario. Reutilizada fidelización existente; habilitado pago total con puntos sin pago normal, validación de cantidades en checkout y BCMath para puntos/restante. Focal final: 51/51, 373 aserciones; canje total, retry y JavaScript renderizado probados. Regresión POS/Loyalty/USD: 75/76, 590 aserciones; fallo de texto esperado del comprobante fuera del parche. Bloqueo: devoluciones/anulaciones llaman a métodos de inventario ausentes (`saleReturn`, `voidSale`), 13 errores; sin ampliar alcance. Multisucursal añade error de premio por `postRewardRedemption` ausente. Detalle y entrega: [POS_CANJE_PUNTOS.md](POS_CANJE_PUNTOS.md). Sin migración, commit, push ni producción; validación visual pendiente.
-## Offline Fases 1–4B — INTEGRADAS LOCALMENTE sobre feature/pos (2026-09-16, post-recuperación)
+## Offline Fases 1–4B.1B — INTEGRADAS LOCALMENTE sobre dummy-branch-1 (2026-09-17, certificación final)
 
-Fases 1, 1B, 2, 3A, 3B, 4A y 4B del módulo Offline **protegidas por 6 commits locales** sobre `feature/pos` (incluida la sincronización real de operaciones offline pendientes hacia el servidor, con ACK, idempotencia server-side y cola FIFO controlada en el cliente). **NO PUSH. NO PRODUCCIÓN. FASE 4C NO INICIADA.**
+Fases 1, 1B, 2, 3A, 3B, 4A, 4B y 4B.1B del módulo Offline quedan protegidas localmente sobre `dummy-branch-1`, incluida la sincronización real de operaciones offline pendientes hacia el servidor, con ACK, idempotencia server-side y cola FIFO controlada en el cliente. **4B.1C Cold Start Offline, 4B.1D Caja Offline y 4C impresión Offline NO INICIADAS. NO PRODUCCIÓN.**
 
 Arquitectura:
 - `POST /mvs/offline/sync` (`offline.sync`), con `permission:ventas.crear`, dentro del grupo `company.licensed`.

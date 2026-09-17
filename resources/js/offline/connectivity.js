@@ -38,8 +38,14 @@ export const ConnectivityState = {
  * @returns {Promise<'online' | 'offline'>} Server reachability status.
  */
 export async function checkServerReachable() {
+  const debugState = globalThis.__MVS_OFFLINE_DEBUG__;
+  if (debugState) {
+    debugState.healthProbes = (debugState.healthProbes || 0) + 1;
+    if (typeof console !== 'undefined' && console.info) console.info('[MVS Offline] health probe');
+  }
   // Quick signal: if navigator.onLine is false, we're definitely offline
   if (typeof navigator === 'undefined' || !navigator.onLine) {
+    lastHealthStatus = null;
     return 'offline';
   }
 
@@ -58,15 +64,20 @@ export async function checkServerReachable() {
       credentials: 'same-origin',
       signal: controller.signal,
     });
+    lastHealthStatus = response.status;
+    if (debugState) debugState.lastHealthStatus = response.status;
 
-    // If we get ANY response (even 4xx/5xx), the server is reachable
-    // because the request itself arrived and got a response
-    return 'online';
+    // Only an operational, authenticated health response is connectivity.
+    const state = response.status === 200 ? ConnectivityState.ONLINE : ConnectivityState.OFFLINE;
+    setState(state);
+    return state === ConnectivityState.ONLINE ? 'online' : 'offline';
 
   } catch (err) {
     // fetch failed — server likely unreachable
     // err could be: TypeError (network error), AbortError (timeout),
     // or other DOMException
+    setState(ConnectivityState.OFFLINE);
+    lastHealthStatus = null;
     return 'offline';
   } finally {
     clearTimeout(timeoutId);
@@ -78,6 +89,11 @@ export async function checkServerReachable() {
  * Starts as 'unknown'. CheckServerReachable() updates it.
  */
 let currentState = ConnectivityState.UNKNOWN;
+let lastHealthStatus = null;
+
+export function getLastHealthStatus() {
+  return lastHealthStatus;
+}
 
 /**
  * Get the current connectivity state.
@@ -100,6 +116,7 @@ function setState(state) {
  */
 export function resetState() {
   currentState = ConnectivityState.UNKNOWN;
+  lastHealthStatus = null;
 }
 
 /**

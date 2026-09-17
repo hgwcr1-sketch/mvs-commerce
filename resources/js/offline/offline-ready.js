@@ -150,8 +150,12 @@ export async function checkPublicKeyReady() {
     try {
       const parsed = JSON.parse(stored);
       if (parsed?.key && parsed?.fetched_at) {
-        // Verify it's a valid PEM format
-        if (parsed.key.includes('BEGIN PUBLIC KEY') || parsed.key.includes('BEGIN RSA PUBLIC KEY')) {
+        // Verify it's a valid PEM format and normalize the stored value before use
+        const key = String(parsed.key).trim();
+        if (key.includes('BEGIN PUBLIC KEY') || key.includes('BEGIN RSA PUBLIC KEY')) {
+          if (parsed.key !== key) {
+            localStorage.setItem(PUBLIC_KEY_STORAGE_KEY, JSON.stringify({ key, fetched_at: parsed.fetched_at }));
+          }
           return { ready: true, key: parsed.key, source: 'localStorage' };
         }
       }
@@ -163,7 +167,7 @@ export async function checkPublicKeyReady() {
   // Try meta tag (delivered by server in POS page)
   const meta = document.querySelector(`meta[name="${PUBLIC_KEY_META_NAME}"]`);
   if (meta?.content) {
-    const key = meta.content;
+    const key = String(meta.content).trim();
     if (key.includes('BEGIN PUBLIC KEY') || key.includes('BEGIN RSA PUBLIC KEY')) {
       // Store for future offline use
       try {
@@ -181,7 +185,7 @@ export async function checkPublicKeyReady() {
     if (response.ok) {
       const data = await response.json();
       if (data?.public_key) {
-        const key = data.public_key;
+        const key = String(data.public_key).trim();
         if (key.includes('BEGIN PUBLIC KEY') || key.includes('BEGIN RSA PUBLIC KEY')) {
           try {
             localStorage.setItem(PUBLIC_KEY_STORAGE_KEY, JSON.stringify({ key, fetched_at: Date.now() }));

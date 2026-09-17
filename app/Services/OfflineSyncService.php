@@ -255,6 +255,7 @@ class OfflineSyncService
 
         return [
             'payload_version' => (int) ($payload['payload_version'] ?? 1),
+            'checkout_token' => (string) ($payload['checkout_token'] ?? ''),
             'document_type' => $this->resolveDocumentType($payload['document_type'] ?? null),
             'cash_session_id' => isset($payload['cash_session_id'])
                 ? (int) $payload['cash_session_id']
@@ -271,6 +272,9 @@ class OfflineSyncService
                 ? $this->stringifyNumber($payload['discount_total'])
                 : null,
             'discount_total_type' => (string) ($payload['discount_total_type'] ?? 'fixed'),
+            'suspended_sale_id' => isset($payload['suspended_sale_id']) ? (int) $payload['suspended_sale_id'] : null,
+            'recovery_token' => $payload['recovery_token'] ?? null,
+            'quote_id' => isset($payload['quote_id']) ? (int) $payload['quote_id'] : null,
             'items' => $items,
             'payments' => $payments,
         ];
@@ -279,12 +283,18 @@ class OfflineSyncService
     private function processorContract(array $canonical, string $operationUuid): array
     {
         $contract = [
-            'checkout_token' => $operationUuid,
+            'checkout_token' => $canonical['checkout_token'] ?: $operationUuid,
             'document_type' => $canonical['document_type'],
             'cash_session_id' => $canonical['cash_session_id'],
             'customer_id' => $canonical['customer_id'],
             'items' => $canonical['items'],
         ];
+
+        foreach (['suspended_sale_id', 'recovery_token', 'quote_id'] as $field) {
+            if ($canonical[$field] !== null) {
+                $contract[$field] = $canonical[$field];
+            }
+        }
 
         if ($canonical['requested_points'] !== null) {
             $contract['requested_points'] = $canonical['requested_points'];

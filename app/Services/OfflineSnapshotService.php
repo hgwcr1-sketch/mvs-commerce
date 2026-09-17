@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\AccountReceivable;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\OfflineSnapshot;
@@ -72,10 +73,11 @@ class OfflineSnapshotService
 
         $products = Product::where('company_id', $company->id)
             ->where('is_active', true)
+            ->with('unit:id,abbreviation,allows_decimals')
             ->select([
                 'id', 'category_id', 'brand_id', 'unit_id',
                 'name', 'internal_code', 'barcode',
-                'sale_price', 'cost', 'tax_rate',
+                'sale_price', 'wholesale_price', 'special_price', 'price_a', 'price_b', 'price_c', 'cost', 'tax_rate', 'image',
                 'track_inventory', 'allow_negative_stock',
             ])
             ->get()
@@ -89,12 +91,21 @@ class OfflineSnapshotService
                     'internal_code' => $product->internal_code,
                     'barcode' => $product->barcode,
                     'sale_price' => $product->sale_price,
+                    'wholesale_price' => $product->wholesale_price,
+                    'special_price' => $product->special_price,
+                    'price_a' => $product->price_a,
+                    'price_b' => $product->price_b,
+                    'price_c' => $product->price_c,
                     'cost' => $product->cost,
                     'tax_rate' => $product->tax_rate,
+                    'image' => $product->image,
                     'track_inventory' => $product->track_inventory,
                     'allow_negative_stock' => $product->allow_negative_stock,
                     'stock' => (string) ($branchProductStock->get($product->id) ?? '0.0000'),
                 ];
+
+                $data['unit_abbreviation'] = $product->unit?->abbreviation;
+                $data['allows_decimals'] = (bool) $product->unit?->allows_decimals;
 
                 $barcodes = ProductBarcode::where('product_id', $product->id)
                     ->where('is_active', true)
@@ -108,14 +119,33 @@ class OfflineSnapshotService
                 return $data;
             });
 
+        $customerIds = Customer::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->limit(2000)
+            ->pluck('id');
+        $creditUsed = AccountReceivable::where('company_id', $company->id)
+            ->whereIn('customer_id', $customerIds)
+            ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])
+            ->select('customer_id', DB::raw('SUM(balance_due) as credit_used'))
+            ->groupBy('customer_id')
+            ->pluck('credit_used', 'customer_id');
+
         $customers = Customer::where('company_id', $company->id)
             ->where('is_active', true)
             ->select([
                 'id', 'customer_code', 'identification_type', 'identification',
-                'name', 'phone', 'mobile', 'email', 'price_level',
+                'public_code', 'name', 'phone', 'mobile', 'email', 'customer_type',
+                'credit_limit', 'credit_days', 'price_level',
             ])
             ->limit(2000)
-            ->get();
+            ->get()
+            ->map(function ($customer) use ($creditUsed) {
+                $customer->credit_used = $creditUsed->get($customer->id, '0.0000');
+                $customer->credit_due_date = (int) ($customer->credit_days ?? 0) > 0
+                    ? today()->addDays((int) $customer->credit_days)->toDateString()
+                    : null;
+                return $customer;
+            });
 
         $paymentMethods = PaymentMethod::where('company_id', $company->id)
             ->where('is_active', true)

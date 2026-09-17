@@ -21,21 +21,13 @@
 
 import {
   checkServerReachable,
-  getState,
+  getLastHealthStatus,
   resetState,
-  shouldAttemptOffline,
 } from './connectivity.js';
 
-import {
-  checkOfflineSaleEligibility,
-  AUTH_TOKEN_TYPE,
-} from './auth-verification.js';
-
-import {
-  validateSnapshot,
-  saveSnapshot,
-  hasSnapshot,
-} from './snapshot.js';
+import { getSnapshot } from './snapshot.js';
+import { getAuthorization } from './authorization.js';
+import { checkOfflineReady, canMakeOfflineSale } from './offline-ready.js';
 
 import {
   enqueueOperation,
@@ -60,95 +52,48 @@ const SALE_OPERATION_TYPE = 'offline_sale';
  * @returns {Promise<void>}
  */
 export async function attemptOfflineSale({
-  authorizationToken,
   terminalContext,
-  snapshot,
   saleData,
-  onSuccess,
-  onFailure,
-  onOnlineCheckout,
 }) {
-  // Step 1: Quick connectivity check
-  const connectivityState = getState();
-
-  // Step 2: If we already know we're online, continue normal checkout
-  if (connectivityState === 'online') {
-    if (onOnlineCheckout) {
-      onOnlineCheckout();
-    }
-    return;
-  }
-
-  // Step 3: Server unreachable (or unknown) — verify authorization
-  // Verify the authorization token signature and context
-  const eligibility = await checkOfflineSaleEligibility(
-    authorizationToken,
-    // PUBLIC KEY would be passed here — for now, the module
-    // will block if key is unavailable
-    /* publicKey */ null, // In real implementation: pass the CryptoKey or PEM
-    terminalContext
-  );
-
-  if (!eligibility.allowed) {
-    // Authorization failed — block offline sale, show error
-    if (onFailure) {
-      onFailure(eligibility.reason || 'Authorization verification failed');
-    }
-    return;
-  }
-
-  // Step 4: Validate snapshot context matches terminal
-  const snapshotValidation = validateSnapshot(snapshot.data, {
-    company_id: terminalContext.company_id,
-    branch_id: terminalContext.branch_id,
-    terminal_uuid: terminalContext.terminal_uuid,
-  });
-
-  if (!snapshotValidation.valid) {
-    if (onFailure) {
-      onFailure(`Invalid snapshot: ${snapshotValidation.error}`);
-    }
-    return;
-  }
-
-  // Step 5: Save snapshot locally (if not already saved)
-  if (!(await hasSnapshot({
-    company_id: terminalContext.company_id,
-    branch_id: terminalContext.branch_id,
-    terminal_uuid: terminalContext.terminal_uuid,
-  }))) {
-    await saveSnapshot(snapshot.data, {
-      company_id: terminalContext.company_id,
-      branch_id: terminalContext.branch_id,
-      terminal_uuid: terminalContext.terminal_uuid,
-    });
-  }
-
-  // Step 6: Create the pending operation with the sale data
-  // Build the payload from real POS sale data
-  const operationPayload = buildSalePayload(saleData, terminalContext);
-
   try {
+    const reachable = await checkServerReachable();
+    if (reachable === 'online') {
+      return { success: false, reason: 'Servidor disponible; se conserva el checkout online.' };
+    }
+
+    const healthStatus = getLastHealthStatus();
+    if (healthStatus !== null) {
+      return { success: false, reason: `El servidor respondió HTTP ${healthStatus}; no se permite guardar Offline.` };
+    }
+
+    const readiness = await checkOfflineReady(terminalContext);
+    if (!readiness.ready) {
+      return { success: false, reason: `Offline no está listo: ${readiness.blockers.join(', ')}` };
+    }
+
+    const auth = await getAuthorization(terminalContext);
+    const eligibility = await canMakeOfflineSale(terminalContext, auth?.token);
+    if (!eligibility.allowed) {
+      return { success: false, reason: eligibility.reason || 'Autorización Offline inválida.' };
+    }
+
+    const snapshot = await getSnapshot(terminalContext);
+    if (!snapshot) return { success: false, reason: 'Snapshot Offline no disponible.' };
+
+    const operationPayload = buildSalePayload(saleData, terminalContext);
     const operation = await enqueueOperation({
       operation_type: SALE_OPERATION_TYPE,
       company_id: terminalContext.company_id,
       branch_id: terminalContext.branch_id,
       terminal_uuid: terminalContext.terminal_uuid,
-      user_id: saleData.userId || 1, // TODO: get from actual user context
+      user_id: terminalContext.user_id,
+      operation_uuid: saleData.checkout_token,
       payload: operationPayload,
     });
 
-    // Step 7: Wait for IndexedDB transaction to commit, then confirm
-    // The enqueueOperation already persists. Here we just confirm.
-    // In a real implementation, we might wait for a specific event.
-    if (onSuccess) {
-      onSuccess(operation);
-    }
+    return { success: true, operation, snapshot, authorization: auth };
   } catch (err) {
-    // IndexedDB or enqueue failed
-    if (onFailure) {
-      onFailure(err.message || 'Failed to save sale locally');
-    }
+    return { success: false, reason: err.message || 'No fue posible guardar la venta Offline.' };
   }
 }
 
@@ -163,30 +108,46 @@ export async function attemptOfflineSale({
 export function buildSalePayload(saleData, terminalContext) {
   // Canonical document types match the official Sale model values:
   // 'ticket' (electrón  ticket) and 'invoice' (factura electrónica).
-  const documentType = canonicalDocumentType(saleData.documentType);
+  const documentType = canonicalDocumentType(saleData.documentType || saleData.document_type);
 
   const items = (saleData.items || []).map((item) => ({
-    product_id: item.productId,
+    product_id: item.productId ?? item.product_id,
     quantity: toDecimalString(item.quantity),
     discount: item.discount != null ? toDecimalString(item.discount) : '0',
-    discount_type: item.discountType || 'fixed',
-    unit_price: item.unitPrice != null ? toDecimalString(item.unitPrice) : null,
+    discount_type: item.discountType || item.discount_type || 'fixed',
+    unit_price: item.unitPrice != null || item.unit_price != null
+      ? toDecimalString(item.unitPrice ?? item.unit_price)
+      : null,
   }));
 
-  const payments = buildPaymentData(saleData.paymentMethod, saleData.amount, saleData.receivedAmount);
+  const payments = (saleData.payments || []).map((payment) => ({
+    payment_method_id: Number(payment.payment_method_id),
+    amount: toDecimalString(payment.amount),
+    received_amount: payment.received_amount != null ? toDecimalString(payment.received_amount) : null,
+    received_amount_usd: payment.received_amount_usd != null ? toDecimalString(payment.received_amount_usd) : null,
+    change_currency: payment.change_currency || null,
+    reference: payment.reference || null,
+  }));
 
   return {
     payload_version: 1,
+    checkout_token: saleData.checkout_token || null,
     document_type: documentType,
-    cash_session_id: saleData.cashSession ? Number(saleData.cashSession.id) : null,
-    customer_id: saleData.customerId != null ? Number(saleData.customerId) : null,
-    requested_points: saleData.requestedPoints != null ? toDecimalString(saleData.requestedPoints) : null,
-    discount_total: saleData.discountTotal != null ? toDecimalString(saleData.discountTotal) : null,
-    discount_total_type: saleData.discountTotalType || 'fixed',
+    cash_session_id: saleData.cashSessionId ?? (saleData.cashSession ? Number(saleData.cashSession.id) : null),
+    customer_id: saleData.customerId ?? saleData.customer_id ?? null,
+    requested_points: saleData.requestedPoints ?? saleData.requested_points ?? null,
+    discount_total: saleData.discountTotal ?? saleData.discount_total ?? null,
+    discount_total_type: saleData.discountTotalType || saleData.discount_total_type || 'fixed',
     items,
     payments,
     terminal_uuid: terminalContext.terminal_uuid,
     created_at_local: new Date().toISOString(),
+    company_id: terminalContext.company_id,
+    branch_id: terminalContext.branch_id,
+    user_id: terminalContext.user_id,
+    suspended_sale_id: saleData.suspended_sale_id || null,
+    recovery_token: saleData.recovery_token || null,
+    quote_id: saleData.quote_id || null,
   };
 }
 

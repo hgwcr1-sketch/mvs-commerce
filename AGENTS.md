@@ -1,4 +1,49 @@
-# MVS Commerce — Guía para agentes de IA
+# MVS Commerce — Instrucciones para agentes
+
+Estas reglas aplican a todo el workspace. El código, las pruebas y Git son la fuente de verdad; la documentación aporta contexto y decisiones, pero no sustituye la comprobación del repositorio.
+
+## Reglas operativas obligatorias
+
+Antes de cualquier tarea:
+
+1. Verifica la ruta del workspace y trabaja desde `mvs-commerce-paralelo-2`, no desde `mvs-tailwind-test/` ni `.kilo/worktrees/`.
+2. Verifica rama, `HEAD` y `git status --short`.
+3. Lee este archivo, `docs/ESTADO_ACTUAL.md` y la documentación relevante. Para Portal/Producción lee también `docs/CRONOGRAMA_PRODUCCION.md`; para Fidelización, `docs/CRONOGRAMA_FIDELIZACION.md`; para Panel Maestro, `docs/Cronograma_M_Panel_Maestro_MVS_Commerce.xlsx`.
+4. Inspecciona código, rutas, permisos y pruebas del flujo antes de cambiarlo.
+
+- No cambies de rama, worktree o ruta de trabajo sin autorización explícita.
+- Preserva todo trabajo local. Nunca uses `reset`, `clean`, `checkout`, `restore`, `stash` ni comandos que sobrescriban o descarten cambios sin autorización explícita.
+- No hagas commit, push, deploy, cambios en producción, migraciones de producción ni operaciones destructivas de base de datos sin autorización explícita.
+- No modifiques secretos, `.env`, configuración global ni dependencias sin autorización.
+- Investiga primero, identifica la causa raíz, haz el cambio mínimo, ejecuta pruebas focalizadas, inspecciona el diff y reporta el resultado.
+- No repitas auditorías amplias cuando el problema ya está localizado y no avances automáticamente a la siguiente fase.
+- Antes de terminar ejecuta pruebas apropiadas, `npm run build` cuando corresponda, `git diff --check` y `git status --short`.
+
+## Arquitectura y producto
+
+- MVS Commerce es multiempresa, multisucursal, multiusuario y consciente de permisos. Conserva aislamiento por `company_id`, contexto `branch_id` cuando corresponda, usuario, terminal y autorización.
+- Una funcionalidad no está completa si solo existe en backend: debe estar en la UI/navegación correcta, protegida por permisos y ser responsive cuando aplique. Reutiliza la navegación única en `resources/views/components/navigation/sidebar.blade.php`.
+- Reutiliza servicios, DTOs, políticas, rutas y componentes canónicos. No dupliques lógica de negocio ni modifiques stock directamente; usa los servicios existentes de inventario/Kardex.
+- Conserva el comportamiento POS salvo que la tarea pida cambiarlo expresamente.
+- Respeta la precisión decimal/BCMath existente. Las cantidades visibles normalmente usan 2 decimales y la precisión interna permanece definida por el dominio.
+- Conserva la identidad MVS: negro/grafito con acciones primarias doradas/ámbar. No introduzcas azul, índigo, violeta o cyan como color primario/interactivo ni rediseñes pantallas sin solicitud explícita.
+
+## Regresión y Offline
+
+Trata como áreas de regresión alta: checkout POS, sesiones de caja, inventario/Kardex, cotizaciones, apartados, fidelización, MVS Print, QZ, `SaleReceiptData`, `EscPosSaleTicket`, recibos 58mm/80mm, QR de fidelización, Control Center, `CompanySequence` y `PosSaleProcessor`. Toda funcionalidad nueva requiere pruebas focalizadas y regresiones adecuadas.
+
+- Mantén Offline online-first: IndexedDB para datos comerciales, Service Worker para el shell, RSA con claves privadas solo en servidor y máximo 48 horas.
+- La sincronización es FIFO con `MAX_CONCURRENT=1`, UUIDs idempotentes y aislamiento de empresa/sucursal/usuario/terminal.
+- No asignes número oficial antes de sincronizar ni crees ventas duplicadas. Reutiliza `PosSaleProcessor`; no implementes un segundo flujo de venta.
+- Un error HTTP no significa automáticamente Offline: el fallback exige falla/timeout real de red y autorización Offline válida.
+
+## Validación e informe
+
+Comandos habituales: `composer test` o `php artisan test`; focalizado con `vendor/bin/phpunit --filter=NombreDelTest`; PostgreSQL con `vendor/bin/phpunit -c phpunit.postgresql.xml` solo si está disponible; frontend con `npm run build`. No ejecutes `composer run setup` contra una base real porque incluye `migrate --force`.
+
+El informe final debe indicar workspace, rama, `HEAD`, archivos modificados, pruebas y resultados, build/diff status, regresiones o fallos preexistentes, blockers y estado de commit/push/producción. Si Agents Orchestrator está disponible, úsalo para auditorías o implementaciones sustanciales, no para arreglos triviales.
+
+El resto de este archivo conserva el contexto de producto y los enlaces de documentación que deben consultarse según el módulo.
 
 ## 1. Propósito
 
@@ -321,6 +366,34 @@ Reglas mínimas obligatorias:
 - **Fuente única de navegación**: el menú vive en `components/navigation/sidebar.blade.php` (reutilizado por la barra "Más" móvil/tablet). Al agregar módulos o permisos, actualizar solo esa fuente.
 
 ---
+## 14. Arquitectura Offline — reglas permanentes
+
+MVS Commerce debe soportar operación temporal sin conexión en terminales previamente aprovisionadas, sin sustituir el flujo online normal.
+
+Reglas obligatorias:
+
+- La arquitectura es ONLINE-FIRST. Mientras el servidor esté disponible, se utilizan los flujos normales existentes.
+- El modo Offline solo puede activarse ante una falla real de conectividad o timeout y con autorización Offline válida.
+- Una respuesta HTTP del servidor no debe interpretarse automáticamente como pérdida de conexión. Errores 401, 403, 404, 409, 422, 500 o 503 no habilitan por sí solos el modo Offline.
+- La autorización Offline debe estar vinculada a empresa, sucursal, usuario y terminal.
+- La autorización máxima sin reconexión es de 48 horas.
+- La autorización utiliza firma asimétrica RSA/SHA-256. La clave privada permanece exclusivamente en servidor.
+- IndexedDB almacena snapshot, metadata y operaciones pendientes necesarias para trabajar temporalmente.
+- El Service Worker se utiliza para el app shell y recursos necesarios; no debe cachear indiscriminadamente respuestas API, POST ni contenido privado de otros contextos.
+- Toda operación Offline debe tener un UUID idempotente y conservar su contexto original de empresa, sucursal, usuario y terminal.
+- Las ventas Offline no reciben número oficial de venta/factura antes de sincronizar.
+- La creación oficial de Sale, inventario, Kardex, fidelización y demás efectos del dominio ocurre mediante los servicios canónicos del servidor al sincronizar.
+- No duplicar PosSaleProcessor ni crear una segunda lógica oficial de ventas.
+- La sincronización utiliza cola FIFO gradual, una operación por request y MAX_CONCURRENT=1, evitando ráfagas al recuperar conexión.
+- Los reintentos deben ser idempotentes. La pérdida del ACK no puede crear una segunda Sale.
+- Las operaciones pendientes no deben mezclarse ni perderse al cambiar empresa, sucursal, usuario o terminal.
+- Una terminal nueva, sin aprovisionamiento previo o con autorización vencida, no puede habilitarse Offline por sí misma.
+- El modo Offline debe contemplar tanto caída durante la jornada como arranque en frío de una terminal previamente aprovisionada.
+- No implementar autenticación Offline insegura ni almacenar contraseñas en texto plano.
+- No implementar impresión Offline como efecto colateral de otras fases; MVS Print Offline pertenece a su fase específica.
+- Cualquier cambio Offline debe preservar el checkout Online, MVS Print, QZ, recibos, QR de fidelización y demás flujos existentes salvo autorización expresa.
+
+Antes de declarar una fase Offline terminada, validar no solo tests automatizados sino también el flujo real aplicable en navegador cuando corresponda.
 
 ## 14. Regla final
 

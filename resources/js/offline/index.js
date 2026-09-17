@@ -56,6 +56,7 @@ export {
   ConnectivityState,
   getState,
   resetState,
+  getLastHealthStatus,
   shouldAttemptOffline,
 } from './connectivity.js';
 
@@ -87,6 +88,13 @@ export {
 } from './offline-ready.js';
 
 export {
+  searchSnapshotProducts,
+  searchSnapshotCustomers,
+  searchProductsOffline,
+  searchCustomersOffline,
+} from './pos-search.js';
+
+export {
   syncPendingOperations,
   isSyncRunning,
   getBackoffMs,
@@ -96,3 +104,5 @@ export {
   PAUSE_BETWEEN_OPERATIONS_MS,
   SYNC_URL,
 } from './sync-worker.js';
+
+export { bootstrapOffline, startOfflineBootstrap } from './bootstrap.js';

@@ -998,14 +998,15 @@ Route::resource('transferencias', TransferController::class)
     |--------------------------------------------------------------------------
     */
     Route::post('/mvs/offline/authorize', [\App\Http\Controllers\OfflineAuthorizationController::class, 'authorize'])
-        ->middleware('permission:configuracion.editar')
         ->name('offline.authorize');
+    Route::post('/mvs/offline/provision', [\App\Http\Controllers\OfflineAuthorizationController::class, 'provision'])
+        ->name('offline.provision');
     Route::post('/mvs/offline/verify', [\App\Http\Controllers\OfflineAuthorizationController::class, 'verify'])
-        ->middleware('permission:configuracion.editar')
         ->name('offline.verify');
     Route::get('/mvs/offline/public-key', [\App\Http\Controllers\OfflineAuthorizationController::class, 'publicKey'])
-        ->middleware('permission:configuracion.editar')
         ->name('offline.public-key');
+    Route::get('/mvs/offline/health', \App\Http\Controllers\OfflineHealthController::class)
+        ->name('offline.health');
 
     /*
     |--------------------------------------------------------------------------
@@ -1014,7 +1015,6 @@ Route::resource('transferencias', TransferController::class)
     */
 
     Route::post('/mvs/offline/snapshot', [\App\Http\Controllers\OfflineSnapshotController::class, 'show'])
-        ->middleware('permission:configuracion.editar')
         ->name('offline.snapshot');
 
     /*

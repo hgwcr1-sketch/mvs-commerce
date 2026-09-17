@@ -5,22 +5,20 @@
  * Does NOT cache dynamic enterprise data (products, customers, etc.) —
  * that remains in IndexedDB.
  *
- * Cache name: mvs-pos-shell-v1
- * Update: increment version in CACHE_NAME when assets change.
+ * Cache name: mvs-pos-shell-v2
+ * The Vite manifest is read at install time; no hashed asset is maintained here.
  */
 
-const CACHE_NAME = 'mvs-pos-shell-v1';
-const CACHE_VERSION = 1;
+const CACHE_NAME = 'mvs-pos-shell-v2';
+const CACHE_VERSION = 2;
 
 /**
  * Assets to cache for offline POS operation.
  * Only static, versioned assets — no dynamic API responses.
  */
 const SHELL_ASSETS = [
-  '/',
-  '/pos',
-  '/build/assets/app-BzbkRNK6.css',
-  '/build/assets/app-BFp434cI.js',
+  // Dynamic HTML routes are intentionally not precached. Their responses can
+  // contain authenticated company, branch, and user context.
 ];
 
 /**
@@ -103,16 +101,47 @@ function isNetworkOnlyRequest(request) {
   return matchesPath(url, NETWORK_ONLY_PATHS);
 }
 
+async function cacheStaticAssets(cache, urls) {
+  for (const url of [...new Set(urls)]) {
+    const request = new Request('/' + String(url).replace(/^\//, ''), {
+      credentials: 'same-origin',
+    });
+
+    try {
+      const response = await fetch(request);
+      if (!response.ok) {
+        console.warn(`[SW] Static shell asset skipped (HTTP ${response.status}): ${url}`);
+        continue;
+      }
+
+      await cache.put(request, response);
+    } catch (error) {
+      console.warn(`[SW] Static shell asset skipped: ${url}`, error);
+    }
+  }
+}
+
 /**
- * Install event — cache the app shell assets.
+ * Install event — cache only static assets resolved from the Vite manifest.
  */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        return cache.addAll(SHELL_ASSETS.map(url => new Request(url, { credentials: 'same-origin' })))
+        return fetch('/build/manifest.json', { credentials: 'same-origin' })
+          .then((response) => {
+            if (!response.ok) throw new Error(`manifest HTTP ${response.status}`);
+            return response.json();
+          })
+          .then(manifest => {
+            // Vite "'/build/assets/app'" files are resolved from the manifest, never copied here.
+            const assets = Object.values(manifest)
+              .flatMap(entry => [entry.file, ...(entry.css || [])])
+              .filter(Boolean);
+            return cacheStaticAssets(cache, [...SHELL_ASSETS, ...assets]);
+          })
           .catch((error) => {
-            console.warn('[SW] Some shell assets failed to cache:', error);
+            console.warn('[SW] Static shell preparation skipped:', error);
           });
       })
       .then(() => self.skipWaiting())
@@ -166,6 +195,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Do not cache other authenticated HTML pages or session/licence views.
+  if (isNavigationRequest(request)) {
+    return;
+  }
+
   // Default: network-first for other GET requests
   event.respondWith(networkFirst(request));
 });
@@ -196,20 +230,29 @@ async function cacheFirst(request) {
  * Network-first strategy: try network, fallback to cache.
  */
 async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-
   try {
+    const cache = await caches.open(CACHE_NAME);
     const response = await fetch(request);
     if (response.ok) {
-      cache.put(request, response.clone());
+      await cache.put(request, response.clone());
     }
     return response;
   } catch (error) {
-    const cached = await cache.match(request);
-    if (cached) {
-      return cached;
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(request);
+      if (cached) {
+        return cached;
+      }
+    } catch (cacheError) {
+      console.warn('[SW] Network-first cache lookup failed:', cacheError);
     }
-    throw error;
+
+    return new Response('Offline: resource unavailable', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 }
 
@@ -218,27 +261,42 @@ async function networkFirst(request) {
  * If both network and cache fail, return a minimal offline shell.
  */
 async function networkFirstWithOfflineFallback(request) {
-  const cache = await caches.open(CACHE_NAME);
+  let cache;
+  try {
+    cache = await caches.open(CACHE_NAME);
+  } catch (error) {
+    console.warn('[SW] POS cache unavailable:', error);
+    return offlineNavigationResponse();
+  }
 
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone());
+    if (response.ok && response.headers.get('X-MVS-Offline-Shell') === '1') {
+      await cache.put(request, response.clone());
     }
     return response;
   } catch (error) {
-    const cached = await cache.match(request);
-    if (cached) {
-      return cached;
+    try {
+      const cached = await cache.match(request);
+      if (cached) {
+        return cached;
+      }
+
+      // Fallback to root (which is cached) or minimal offline page
+      const rootCached = await cache.match('/');
+      if (rootCached) {
+        return rootCached;
+      }
+    } catch (cacheError) {
+      console.warn('[SW] POS cache lookup failed:', cacheError);
     }
 
-    // Fallback to root (which is cached) or minimal offline page
-    const rootCached = await cache.match('/');
-    if (rootCached) {
-      return rootCached;
-    }
+    return offlineNavigationResponse();
+  }
+}
 
-    return new Response(
+function offlineNavigationResponse() {
+  return new Response(
       `<!DOCTYPE html>
       <html lang="es">
       <head>
@@ -264,7 +322,6 @@ async function networkFirstWithOfflineFallback(request) {
       </html>`,
       { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503, statusText: 'Service Unavailable' }
     );
-  }
 }
 
 /**

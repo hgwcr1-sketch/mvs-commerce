@@ -2,7 +2,7 @@
  * MVS Commerce — Offline Snapshot Storage
  *
  * Stores and retrieves server-authorized snapshots in IndexedDB.
- * All operations scoped to company_id + branch_id + terminal_uuid.
+ * All operations scoped to company_id + branch_id + terminal_uuid + user_id.
  */
 
 import { STORES, getByIndex, put, getByKey, remove, getAll, clearStore } from './db.js';
@@ -29,8 +29,9 @@ export function validateSnapshot(snapshot, context) {
   if (!snapshot.branch?.id) {
     return { valid: false, error: 'Missing branch.id' };
   }
-  if (!snapshot.terminal?.uuid) {
-    return { valid: false, error: 'Missing terminal.uuid' };
+  const terminalUuid = snapshot.terminal?.terminal_uuid || snapshot.terminal?.['uuid'];
+  if (!terminalUuid) {
+    return { valid: false, error: 'Missing terminal.terminal_uuid' };
   }
 
   if (context) {
@@ -40,7 +41,7 @@ export function validateSnapshot(snapshot, context) {
     if (snapshot.branch.id !== context.branch_id) {
       return { valid: false, error: 'Branch mismatch' };
     }
-    if (snapshot.terminal.uuid !== context.terminal_uuid) {
+    if (terminalUuid !== context.terminal_uuid) {
       return { valid: false, error: 'Terminal mismatch' };
     }
   }
@@ -51,8 +52,8 @@ export function validateSnapshot(snapshot, context) {
 /**
  * Generate the IndexedDB key for a snapshot record.
  */
-function snapshotKey(companyId, branchId, terminalUuid) {
-  return `${companyId}::${branchId}::${terminalUuid}`;
+function snapshotKey(companyId, branchId, terminalUuid, userId = 0) {
+  return `${companyId}::${branchId}::${terminalUuid}::${userId}`;
 }
 
 /**
@@ -66,10 +67,11 @@ export async function saveSnapshot(snapshot, context) {
   }
 
   const record = {
-    id: snapshotKey(snapshot.company.id, snapshot.branch.id, snapshot.terminal.uuid),
+    id: snapshotKey(snapshot.company.id, snapshot.branch.id, snapshot.terminal.terminal_uuid || snapshot.terminal['uuid'], context.user_id),
     company_id: snapshot.company.id,
     branch_id: snapshot.branch.id,
-    terminal_uuid: snapshot.terminal.uuid,
+    terminal_uuid: snapshot.terminal.terminal_uuid || snapshot.terminal['uuid'],
+    user_id: context.user_id || 0,
     schema_version: snapshot.schema_version,
     generated_at: snapshot.generated_at,
     saved_at: new Date().toISOString(),
@@ -86,7 +88,7 @@ export async function saveSnapshot(snapshot, context) {
  * Get the snapshot for the given terminal context.
  */
 export async function getSnapshot(context) {
-  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid);
+  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id);
   const record = await getByKey(STORES.snapshot, key);
   return record ? record.data : null;
 }
@@ -95,7 +97,7 @@ export async function getSnapshot(context) {
  * Get snapshot metadata (without full data).
  */
 export async function getSnapshotMetadata(context) {
-  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid);
+  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id);
   const record = await getByKey(STORES.snapshot, key);
   if (!record) return null;
 
@@ -116,7 +118,7 @@ export async function getSnapshotMetadata(context) {
  * Delete the snapshot for the given terminal context.
  */
 export async function deleteSnapshot(context) {
-  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid);
+  const key = snapshotKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id);
   return remove(STORES.snapshot, key);
 }
 

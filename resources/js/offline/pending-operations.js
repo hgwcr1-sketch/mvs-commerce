@@ -82,9 +82,13 @@ export async function enqueueOperation(op) {
     throw new Error(`Invalid operation: ${validation.error}`);
   }
 
+  const operationUuid = op.operation_uuid || generateUUID();
+  const existing = await getByIndex(STORES.pending_operations, 'by_uuid', operationUuid);
+  if (existing.length > 0) return existing[0];
+
   const operation = {
     id: generateUUID(),
-    operation_uuid: generateUUID(),
+    operation_uuid: operationUuid,
     operation_type: op.operation_type,
     company_id: op.company_id,
     branch_id: op.branch_id,
@@ -199,8 +203,12 @@ export async function markTransientError(id, errorMessage) {
 /**
  * Mark operation as synced (server ACK received).
  */
-export async function markSynced(id) {
-  return updateStatus(id, 'synced');
+export async function markSynced(id, ack = {}) {
+  return updateStatus(id, 'synced', {
+    server_sale_id: ack.server_sale_id ?? null,
+    server_sale_number: ack.server_sale_number ?? null,
+    acked_at: ack.acked_at || new Date().toISOString(),
+  });
 }
 
 /**

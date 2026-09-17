@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\OfflineTerminal;
+use App\Models\Branch;
+use App\Models\Company;
 use App\Services\OfflineAuthorizationService;
 use App\Services\OfflineSnapshotService;
 use Illuminate\Http\JsonResponse;
@@ -31,11 +33,19 @@ class OfflineSnapshotController extends Controller
             ], 401);
         }
 
-        $company = Auth::user()->currentCompany;
-        $branch = Auth::user()->currentBranch;
+        if ((int) $payload['company_id'] !== (int) session('active_company_id')
+            || (int) $payload['branch_id'] !== (int) session('active_branch_id')
+            || $payload['terminal_uuid'] !== $request->terminal_uuid) {
+            return response()->json(['message' => 'Autorización fuera de contexto.'], 403);
+        }
+
+        $company = Company::find((int) session('active_company_id'));
+        $branch = Branch::find((int) session('active_branch_id'));
         $user = Auth::user();
 
-        if (! $company || ! $branch) {
+        if (! $company || ! $branch || (int) $branch->company_id !== (int) $company->id
+            || ! $user->companies()->where('companies.id', $company->id)->exists()
+            || ! $user->branches()->where('branches.id', $branch->id)->exists()) {
             return response()->json([
                 'message' => 'Sesión empresarial no válida.',
             ], 403);
@@ -61,6 +71,7 @@ class OfflineSnapshotController extends Controller
 
         return response()->json([
             'snapshot' => $snapshot->snapshot_data,
+            'authorization' => $request->authorization,
             'schema_version' => $snapshot->schema_version,
             'generated_at' => $snapshot->generated_at->toIso8601String(),
             'snapshot_size_bytes' => $snapshot->snapshot_size_bytes,

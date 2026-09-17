@@ -1,5 +1,7 @@
 import '../css/app.css';
 
+import * as MvsOffline from './offline/index.js';
+
 import Alpine from 'alpinejs';
 import qz from 'qz-tray';
 
@@ -13,5 +15,6 @@ import './transfers';
 
 window.Alpine = Alpine;
 window.qz = qz;
+window.MvsOffline = MvsOffline;
 
 Alpine.start();

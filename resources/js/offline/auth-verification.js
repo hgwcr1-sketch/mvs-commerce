@@ -36,7 +36,48 @@ import { generateUUID } from './pending-operations.js';
  * - Response header: X-MVS-Offline-Public-Key
  * - Separate secure endpoint: GET /mvs/offline/public-key
  */
-export const AUTH_TOKEN_TYPE = 'MVS-Offline';
+export const AUTH_TOKEN_TYPE = 'MVS-Offline-Auth';
+
+function normalizePublicKey(publicKey) {
+  if (typeof publicKey !== 'string') {
+    return null;
+  }
+
+  const trimmed = publicKey.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const headerMatch = trimmed.match(/-----BEGIN (?:PUBLIC KEY|RSA PUBLIC KEY)-----([\s\S]*?)-----END (?:PUBLIC KEY|RSA PUBLIC KEY)-----/);
+  if (headerMatch) {
+    const body = headerMatch[1].replace(/\s+/g, '\n').trim();
+    return `-----BEGIN PUBLIC KEY-----\n${body}\n-----END PUBLIC KEY-----`;
+  }
+
+  const compact = trimmed.replace(/-----BEGIN [^-]+-----|-----END [^-]+-----|\s+/g, '');
+  if (/^[A-Za-z0-9+/=]+$/.test(compact)) {
+    return compact;
+  }
+
+  return null;
+}
+
+function publicKeyToSpkiDer(publicKey) {
+  const normalized = normalizePublicKey(publicKey);
+  if (!normalized) {
+    throw new Error('Invalid public key format');
+  }
+
+  const base64 = normalized
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/-----BEGIN RSA PUBLIC KEY-----/g, '')
+    .replace(/-----END RSA PUBLIC KEY-----/g, '')
+    .replace(/[\r\n\s]/g, '');
+
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
 
 /**
  * Decode a base64url string (no padding).
@@ -86,7 +127,7 @@ export function parseAuthToken(token) {
   }
 
   // Validate typ
-  if (header.typ !== 'MVS-Offline-Auth') {
+  if (header.typ !== AUTH_TOKEN_TYPE) {
     throw new Error(`Unexpected token type: ${header.typ}`);
   }
 
@@ -100,7 +141,7 @@ export function parseAuthToken(token) {
  * @param {number} [serverTimeOverride] - optional server time for testing
  * @returns {{ valid: boolean, error?: string, remainingSeconds?: number }}
  */
-function validateAuthWindow(payload, serverTimeOverride) {
+export function validateAuthWindow(payload, serverTimeOverride) {
   const now = typeof navigator !== 'undefined' && navigator.deviceMemory
     ? Date.now()
     : (serverTimeOverride !== undefined ? serverTimeOverride : Date.now());
@@ -123,7 +164,7 @@ function validateAuthWindow(payload, serverTimeOverride) {
   const maxWindowMs = 48 * 60 * 60 * 1000; // 48 hours
   const windowMs = now - issuedAt;
   if (windowMs > maxWindowMs) {
-    return { valid: false, error: `Authorization exceeds maximum valid window (${Math.round(windowMs / (60 * 60 * 1000)}h > 48h)` };
+    return { valid: false, error: `Authorization exceeds maximum valid window (${Math.round(windowMs / (60 * 60 * 1000))}h > 48h)` };
   }
 
   // Return remaining seconds until expiry (for UI display)
@@ -181,16 +222,25 @@ export async function verifyAuthSignature(token, publicKey, context) {
   const signatureBytes = Uint8Array.from(atob(tokenParts[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
   // Convert data to verify from base64url to Uint8Array
-  const dataBytes = Uint8Array.from(atob(rawData.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const dataBytes = new TextEncoder().encode(rawData);
 
   let cryptoKey;
   if (typeof publicKey === 'string') {
-    // PEM string — import as CryptoKey
+    const normalizedKey = normalizePublicKey(publicKey);
+    if (!normalizedKey) {
+      console.error('Offline sale blocked: public key is not valid PEM/base64 content', publicKey);
+      return {
+        valid: false,
+        error: 'Offline sales blocked: PUBLIC KEY not available or invalid. Contact system administrator.',
+        blockReason: 'public_key_unavailable'
+      };
+    }
+
     try {
       const keyData = await window.crypto.subtle.importKey(
         'spki',
-        Uint8Array.from(atob(publicKey.replace(/[^a-zA-Z0-9+\/=]/g, '')), c => c.charCodeAt(0)),
-        { name: 'RSA-SHA256', hash: { name: 'SHA-256' } },
+        publicKeyToSpkiDer(normalizedKey),
+        { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } },
         false,
         ['verify']
       );
@@ -212,7 +262,7 @@ export async function verifyAuthSignature(token, publicKey, context) {
   let verifySuccess;
   try {
     verifySuccess = await window.crypto.subtle.verify(
-      'RSA-SHA256',
+      'RSASSA-PKCS1-v1_5',
       cryptoKey,
       signatureBytes,
       dataBytes

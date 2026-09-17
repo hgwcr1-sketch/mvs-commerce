@@ -27,7 +27,7 @@ describe('Phase 4A — Service Worker', () => {
 
   it('sw.js has correct cache name with version', () => {
     const source = readSource('public/sw.js');
-    assert.match(source, /const CACHE_NAME = 'mvs-pos-shell-v1'/, 'should have versioned cache name');
+    assert.match(source, /const CACHE_NAME = 'mvs-pos-shell-v2'/, 'should have versioned cache name');
   });
 
   it('sw.js caches only shell assets (not entire app)', () => {
@@ -65,6 +65,23 @@ describe('Phase 4A — Service Worker', () => {
     assert.match(source, /request\.method !== 'GET'/, 'should never cache POST');
   });
 
+  it('sw.js does not use cache.addAll for dynamic or partial shell resources', () => {
+    const source = readSource('public/sw.js');
+    assert.doesNotMatch(source, /cache\.addAll/, 'one failed URL must not abort installation');
+    assert.match(source, /cacheStaticAssets/, 'static assets should be cached independently');
+  });
+
+  it('sw.js returns a controlled response when network-first has no cache', () => {
+    const source = readSource('public/sw.js');
+    assert.match(source, /Offline: resource unavailable/, 'generic network-first fallback should be controlled');
+    assert.doesNotMatch(source, /networkFirst[\s\S]*throw error/, 'networkFirst must not reject its FetchEvent');
+  });
+
+  it('authenticated POS HTML is not written to Cache Storage by default', () => {
+    const source = readSource('public/sw.js');
+    assert.match(source, /X-MVS-Offline-Shell/, 'only explicitly marked shell HTML may be cached');
+  });
+
   it('sw.js activate cleans only MVS Offline caches', () => {
     const source = readSource('public/sw.js');
     assert.match(source, /name\.startsWith\('mvs-pos-shell-'\)/, 'should only delete mvs-pos-shell-* caches');
@@ -79,7 +96,7 @@ describe('Phase 4A — Service Worker', () => {
 
   it('sw.js has version in CACHE_VERSION constant', () => {
     const source = readSource('public/sw.js');
-    assert.match(source, /const CACHE_VERSION = 1/, 'should have CACHE_VERSION');
+    assert.match(source, /const CACHE_VERSION = 2/, 'should have CACHE_VERSION');
   });
 
   it('sw.js responds to getVersion message', () => {
@@ -243,5 +260,21 @@ describe('Phase 4A — Module Exports', () => {
     assert.match(source, /getPublicKey/, 'should export getPublicKey');
     assert.match(source, /storePublicKeyLocally/, 'should export storePublicKeyLocally');
     assert.match(source, /clearStoredPublicKey/, 'should export clearStoredPublicKey');
+  });
+});
+
+describe('Phase 4B.1A — Bootstrap runtime ordering', () => {
+  it('opens IndexedDB before remote provisioning and SW registration can fail', () => {
+    const source = readSource('resources/js/offline/bootstrap.js');
+    assert.match(source, /await openDB\(\);/, 'bootstrap must initialize local storage');
+    assert.match(source, /try \{\s*await navigator\.serviceWorker\.register/, 'SW registration is isolated');
+    assert.ok(source.indexOf('await openDB();') < source.indexOf('navigator.serviceWorker.register'), 'IndexedDB must come first');
+  });
+
+  it('keeps readiness separate from local database initialization', () => {
+    const source = readSource('resources/js/offline/bootstrap.js');
+    assert.match(source, /await fetchPublicKey\(\)/, 'remote provisioning remains after local initialization');
+    assert.match(source, /await fetchAndStoreSnapshot/, 'snapshot is still required for provisioning');
+    assert.match(source, /return \{ ready: false/, 'bootstrap failure does not claim readiness');
   });
 });

@@ -125,7 +125,7 @@ export async function syncPendingOperations(context, { authorization } = {}) {
     };
   }
 
-  if (!context?.terminal_uuid) {
+  if (!context || !context.company_id || !context.branch_id || !context.user_id || !context.terminal_uuid) {
     return {
       started: false,
       locked: false,
@@ -176,6 +176,7 @@ export async function syncPendingOperations(context, { authorization } = {}) {
       // eslint-disable-next-line no-await-in-loop
       const pending = (await getPendingOperations(context))
         .filter((op) => op.status === 'pending')
+        .filter((op) => Number(op.user_id) === Number(context.user_id))
         .sort((a, b) => new Date(a.created_at_local) - new Date(b.created_at_local));
 
       if (pending.length === 0) {
@@ -251,7 +252,11 @@ export async function syncPendingOperations(context, { authorization } = {}) {
             // already committed this operation (e.g. lost ACK) and returned the
             // same sale — idempotency contract honored.
             // eslint-disable-next-line no-await-in-loop
-            await markSynced(op.id);
+            await markSynced(op.id, {
+              server_sale_id: body.sale_id ?? body.server_sale_id,
+              server_sale_number: body.sale_number ?? body.server_sale_number,
+              acked_at: new Date().toISOString(),
+            });
             summary.synced += 1;
             resetBackoff();
           } else if (bodyStatus === 'in_progress') {
@@ -302,6 +307,8 @@ export async function syncPendingOperations(context, { authorization } = {}) {
       if (transientHit) {
         // Registry currentBackoffMs growth via a scheduled delay; the caller
         // decides when to re-trigger. We expose the value for testing.
+        summary.backoffMs = currentBackoffMs;
+        currentBackoffMs = Math.min(MAX_BACKOFF_MS, currentBackoffMs * 2);
         summary.reason = 'transient';
         break;
       }

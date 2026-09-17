@@ -28,15 +28,20 @@ export function validateAuthorization(auth) {
 /**
  * Generate the IndexedDB key for an authorization record.
  */
-function authKey(companyId, branchId, terminalUuid) {
-  return `auth::${companyId}::${branchId}::${terminalUuid}`;
+function authKey(companyId, branchId, terminalUuid, userId = 0) {
+  return `auth::${companyId}::${branchId}::${terminalUuid}::${userId}`;
 }
 
 /**
  * Save authorization metadata.
  */
 export async function saveAuthorization(auth, context) {
-  const validation = validateAuthorization(auth);
+  const normalized = typeof auth === 'string' ? { token: auth } : { ...auth };
+  normalized.token ||= normalized.authorization;
+  normalized.company_id ||= context?.company_id;
+  normalized.branch_id ||= context?.branch_id;
+  normalized.terminal_uuid ||= context?.terminal_uuid;
+  const validation = validateAuthorization(normalized);
   if (!validation.valid) {
     throw new Error(`Invalid authorization: ${validation.error}`);
   }
@@ -46,15 +51,16 @@ export async function saveAuthorization(auth, context) {
   }
 
   const record = {
-    key: authKey(context.company_id, context.branch_id, context.terminal_uuid),
+    key: authKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id),
     company_id: context.company_id,
     branch_id: context.branch_id,
     terminal_uuid: context.terminal_uuid,
-    authorization_id: auth.authorization_id,
-    token: auth.token,
-    issued_at: auth.issued_at,
-    valid_until: auth.valid_until,
-    server_time: auth.server_time,
+    user_id: context.user_id,
+    authorization_id: normalized.authorization_id,
+    token: normalized.token,
+    issued_at: normalized.issued_at,
+    valid_until: normalized.valid_until,
+    server_time: normalized.server_time,
     saved_at: new Date().toISOString(),
   };
 
@@ -69,7 +75,7 @@ export async function getAuthorization(context) {
   if (!context?.company_id || !context?.branch_id || !context?.terminal_uuid) {
     return null;
   }
-  const key = authKey(context.company_id, context.branch_id, context.terminal_uuid);
+  const key = authKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id);
   const record = await getByKey(STORES.metadata, key);
   if (!record) return null;
 
@@ -80,6 +86,10 @@ export async function getAuthorization(context) {
     valid_until: record.valid_until,
     server_time: record.server_time,
     saved_at: record.saved_at,
+    company_id: record.company_id,
+    branch_id: record.branch_id,
+    terminal_uuid: record.terminal_uuid,
+    user_id: record.user_id,
   };
 }
 
@@ -99,6 +109,6 @@ export async function deleteAuthorization(context) {
   if (!context?.company_id || !context?.branch_id || !context?.terminal_uuid) {
     return false;
   }
-  const key = authKey(context.company_id, context.branch_id, context.terminal_uuid);
+  const key = authKey(context.company_id, context.branch_id, context.terminal_uuid, context.user_id);
   return remove(STORES.metadata, key);
 }

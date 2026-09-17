@@ -535,6 +535,42 @@ class OfflineSnapshotTest extends TestCase
             ->assertStatus(401);
     }
 
+    public function test_health_returns_authenticated_pos_context_without_configuration_permission(): void
+    {
+        [$company, $branch] = $this->tenant('Empresa');
+        $user = $this->createUserWithAccess($company, $branch);
+
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('offline.health'))
+            ->assertOk()
+            ->assertJson([
+                'status' => 'ok',
+                'user_id' => $user->id,
+                'company_id' => $company->id,
+                'branch_id' => $branch->id,
+            ]);
+    }
+
+    public function test_terminal_provisioning_is_idempotent_for_same_context(): void
+    {
+        [$company, $branch] = $this->tenant('Empresa');
+        $user = $this->seedPermission($company, $branch);
+        $uuid = (string) \Illuminate\Support\Str::uuid();
+        $session = ['active_company_id' => $company->id, 'active_branch_id' => $branch->id];
+
+        $first = $this->actingAs($user)->withSession($session)
+            ->postJson(route('offline.provision'), ['terminal_uuid' => $uuid])
+            ->assertOk();
+        $second = $this->actingAs($user)->withSession($session)
+            ->postJson(route('offline.provision'), ['terminal_uuid' => $uuid])
+            ->assertOk();
+
+        $first->assertJson(['terminal_uuid' => $uuid]);
+        $second->assertJson(['terminal_uuid' => $uuid]);
+        $this->assertDatabaseCount('offline_terminals', 1);
+    }
+
     public function test_unique_operation_uuid_across_operations(): void
     {
         [$company, $branch, $user] = $this->tenant('Empresa');
