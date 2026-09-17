@@ -218,18 +218,23 @@ class DemoCompanyProvisioner
         DB::table('sale_returns')->where('company_id', $cid)->delete();
 
         DB::table('loyalty_movement_lines')->whereIn('loyalty_movement_id', fn ($q) => $q->select('id')->from('loyalty_movements')->where('company_id', $cid))->delete();
+        // loyalty_reward_redemptions.loyalty_movement_id es restrictOnDelete → debe borrarse ANTES que loyalty_movements.
+        DB::table('loyalty_reward_redemptions')->where('company_id', $cid)->delete();
         DB::table('loyalty_movements')->where('company_id', $cid)->delete();
         DB::table('loyalty_accounts')->where('company_id', $cid)->delete();
         DB::table('loyalty_multipliers')->where('company_id', $cid)->delete();
         DB::table('loyalty_rewards')->where('company_id', $cid)->delete();
-        DB::table('loyalty_reward_redemptions')->where('company_id', $cid)->delete();
         DB::table('loyalty_registration_incentive_claims')->where('company_id', $cid)->delete();
         DB::table('loyalty_registration_incentives')->where('company_id', $cid)->delete();
 
         DB::table('accounts_receivable_payments')->where('company_id', $cid)->delete();
         DB::table('accounts_receivable')->where('company_id', $cid)->delete();
+        // layaways.delivered_sale_id es restrictOnDelete → soltar el vínculo demo antes de borrar ventas.
+        DB::table('layaways')->where('company_id', $cid)->update(['delivered_sale_id' => null]);
         DB::table('layaway_payments')->where('company_id', $cid)->delete();
-        DB::table('layaway_items')->where('company_id', $cid)->delete();
+        // layaway_items NO tiene company_id (ver migración 2026_08_21_000003):
+        // alcance por layaway_items.layaway_id → layaways.id (company_id). PostgreSQL-safe vía subquery.
+        DB::table('layaway_items')->whereIn('layaway_id', fn ($q) => $q->select('id')->from('layaways')->where('company_id', $cid))->delete();
         DB::table('layaway_alerts')->where('company_id', $cid)->delete();
         DB::table('layaways')->where('company_id', $cid)->delete();
 
@@ -246,8 +251,26 @@ class DemoCompanyProvisioner
 
         DB::table('purchase_verification_items')->whereIn('purchase_verification_id', fn ($q) => $q->select('id')->from('purchase_verifications')->whereIn('purchase_id', fn ($q2) => $q2->select('id')->from('purchases')->where('company_id', $cid)))->delete();
         DB::table('purchase_verifications')->whereIn('purchase_id', fn ($q) => $q->select('id')->from('purchases')->where('company_id', $cid))->delete();
-        DB::table('purchase_order_source_conversions')->whereIn('purchase_item_id', fn ($q) => $q->select('id')->from('purchase_items')->whereIn('purchase_id', fn ($q2) => $q2->select('id')->from('purchases')->where('company_id', $cid)))->delete();
-        DB::table('purchase_order_item_sources')->whereIn('purchase_order_item_id', fn ($q) => $q->select('id')->from('purchase_order_items')->whereIn('purchase_order_id', fn ($q2) => $q2->select('id')->from('purchase_orders')->where('company_id', $cid)))->delete();
+        // purchase_order_source_conversions NO tiene company_id:
+        // alcance por ambas ramas: purchase_item_id → purchases(company_id) y
+        // purchase_order_item_source_id → purchase_order_items → purchase_orders(company_id).
+        $demoPurchaseIds = fn ($q) => $q->select('id')->from('purchases')->where('company_id', $cid);
+        $demoPurchaseItemIds = fn ($q) => $q->select('id')->from('purchase_items')->whereIn('purchase_id', $demoPurchaseIds);
+        $demoOrderItemIds = fn ($q) => $q->select('purchase_order_items.id')
+            ->from('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->where('purchase_orders.company_id', $cid);
+        $demoConversionSources = fn ($q) => $q->select('purchase_order_item_sources.id')
+            ->from('purchase_order_item_sources')
+            ->join('purchase_order_items', 'purchase_order_items.id', '=', 'purchase_order_item_sources.purchase_order_item_id')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->where('purchase_orders.company_id', $cid);
+        // Si la conversión existe, inventory_lots.purchase_item_id es nullOnDelete:
+        // primero romper el vínculo de lotes demo para no dejar huérfanos cruzados.
+        DB::table('inventory_lots')->where('company_id', $cid)->whereIn('purchase_item_id', $demoPurchaseItemIds)->update(['purchase_item_id' => null]);
+        DB::table('purchase_order_source_conversions')->whereIn('purchase_item_id', $demoPurchaseItemIds)->whereIn('purchase_order_item_source_id', $demoConversionSources)->delete();
+        DB::table('purchase_verification_items')->whereIn('purchase_item_id', $demoPurchaseItemIds)->delete();
+        DB::table('purchase_order_item_sources')->whereIn('purchase_order_item_id', $demoOrderItemIds)->delete();
         DB::table('purchase_order_items')->whereIn('purchase_order_id', fn ($q) => $q->select('id')->from('purchase_orders')->where('company_id', $cid))->delete();
         DB::table('purchase_orders')->where('company_id', $cid)->delete();
         DB::table('purchase_items')->whereIn('purchase_id', fn ($q) => $q->select('id')->from('purchases')->where('company_id', $cid))->delete();
@@ -263,6 +286,21 @@ class DemoCompanyProvisioner
         DB::table('order_items')->whereIn('order_id', fn ($q) => $q->select('id')->from('orders')->where('company_id', $cid))->delete();
         DB::table('orders')->where('company_id', $cid)->delete();
 
+        // quotes/quote_items existen en esquema (2026_08_21_000001) y no estaban en el reset:
+        // quote_items.quote_id es cascadeOnDelete → hijos primero, luego padres.
+        DB::table('quote_items')->whereIn('quote_id', fn ($q) => $q->select('id')->from('quotes')->where('company_id', $cid))->delete();
+        DB::table('quotes')->where('company_id', $cid)->delete();
+
+        // Centro de alertas/notificaciones (2026_09_17_*): alerts es transaccional demo;
+        // alert_recipients cae por cascada de alert_id; notification_preferences es configuración
+        // de negocio y se conserva; notifications (Laravel, UUID) no tiene company_id y no se toca.
+        DB::table('alert_recipients')->whereIn('alert_id', fn ($q) => $q->select('id')->from('alerts')->where('company_id', $cid))->delete();
+        DB::table('alerts')->where('company_id', $cid)->delete();
+
+        // sales.cash_session_id y sale_payments.cash_session_id son restrictOnDelete:
+        // soltar vínculos demo antes de borrar sesiones de caja.
+        DB::table('sales')->where('company_id', $cid)->update(['cash_session_id' => null]);
+        DB::table('sale_payments')->whereIn('sale_id', fn ($q) => $q->select('id')->from('sales')->where('company_id', $cid))->update(['cash_session_id' => null]);
         DB::table('cash_count_details')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
         DB::table('cash_payment_reconciliations')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
         DB::table('cash_session_events')->whereIn('cash_session_id', fn ($q) => $q->select('id')->from('cash_sessions')->where('company_id', $cid))->delete();
