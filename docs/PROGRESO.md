@@ -20,6 +20,20 @@ Antes de iniciar una tarea nueva, revisar siempre:
 
 ---
 
+## POS — Modo Apartado integrado (local, pre-commit)
+
+Estado: IMPLEMENTADO Y AUDITADO LOCALMENTE
+
+- Entrada desde POS con permiso `apartados.crear`, cliente obligatorio, prima positiva y retorno claro a Venta o cambio a Cotización; ambos modos son mutuamente exclusivos.
+- Reserva estricta de inventario por sucursal activa con bloqueo transaccional. Caso probado: stock 5, apartado 2, disponible 3; entrega posterior conserva 3 y no duplica movimientos.
+- Idempotencia mediante `client_token` UUID y `request_fingerprint`, con UNIQUE `(company_id, client_token)`. Replay idéntico reutiliza apartado/pago/reserva; payload distinto responde 409; el mismo token puede existir en empresas distintas.
+- Precio manual sólo con `pos.cambiar_precio`, preservado hasta el `SaleItem` final. Formas de pago reutilizan reglas de Apartados: efectivo requiere caja abierta; tarjeta/SINPE no afectan caja cuando `affects_cash=false`; crédito y puntos están excluidos.
+- Compatible con el módulo existente: listado, detalle, abonos y entrega/finalización verificados por integración.
+- Descuentos no implementados. Pendiente futuro: persistencia explícita de `discount_total`/`gross_total` y preservación durante entrega; la API POS rechaza su inyección.
+- UI de Apartado usa el token dorado oficial `#D4AF37`, con acciones de 44/48 px. Responsive 360/768/1280 validado por estructura y pruebas renderizadas; revisión visual en navegador queda pendiente.
+- Pruebas: Apartado POS 14/14 (134 aserciones), Layaway V1 7/7 (42), Quote 12/12 (159), PosCheckout 46/46 (408), MVS Print PHP 70/70 (348) y JS 41/41. Build Vite y diff-check pasan. Regresión POS + Quote: 193/198, con los mismos cinco fallos históricos, no relacionados.
+- Migración auditada para PostgreSQL 16 y segura para históricos, sin ejecución PostgreSQL local por falta de `pdo_pgsql`. Sin commit, push ni deploy; no listo para producción hasta migración controlada y validación visual/operativa.
+
 ## Módulos completados o estables
 
 ### Clientes

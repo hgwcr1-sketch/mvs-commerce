@@ -228,6 +228,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
             ->middleware(['permission:ventas.crear', 'pos.cash-session'])
             ->name('pos.checkout');
+        Route::post('/pos/apartado', [PosController::class, 'storeLayaway'])
+            ->middleware('permission:apartados.crear')
+            ->name('pos.apartados.store');
         Route::middleware('permission:ventas.crear')->group(function () {
             Route::post('/pos/suspender', [PosController::class, 'storeSuspended'])->name('pos.suspended.store');
             Route::get('/pos/suspendidas', [PosController::class, 'suspendedIndex'])->name('pos.suspended.index');

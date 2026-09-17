@@ -27,7 +27,24 @@
     @can('cotizaciones.crear')
         <section x-show="quoteMode" role="status" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-2 text-sky-900">
             <strong class="text-sm">MODO COTIZACIÓN</strong>
-            <button type="button" @click="leaveQuoteMode()" :disabled="creatingQuote" class="min-h-[44px] rounded-lg border border-sky-400 px-3 py-2 font-semibold disabled:opacity-40">Volver a venta</button>
+            <div class="flex flex-wrap gap-2">
+                @can('apartados.crear')
+                    <button type="button" @click="enterLayawayMode()" :disabled="creatingQuote || creatingLayaway" class="min-h-[44px] rounded-lg border border-primary px-3 py-2 font-semibold text-[#806817] disabled:opacity-40">Cambiar a apartado</button>
+                @endcan
+                <button type="button" @click="leaveQuoteMode()" :disabled="creatingQuote" class="min-h-[44px] rounded-lg border border-sky-400 px-3 py-2 font-semibold disabled:opacity-40">Volver a venta</button>
+            </div>
+        </section>
+    @endcan
+
+    @can('apartados.crear')
+        <section x-show="layawayMode" role="status" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary bg-primary/15 px-4 py-2 text-[#806817]">
+            <strong class="text-sm">MODO APARTADO</strong>
+            <div class="flex flex-wrap gap-2">
+                @can('cotizaciones.crear')
+                    <button type="button" @click="enterQuoteMode()" :disabled="creatingLayaway || creatingQuote" class="min-h-[44px] rounded-lg border border-sky-500 px-3 py-2 font-semibold text-sky-900 disabled:opacity-40">Cambiar a cotizaciÃ³n</button>
+                @endcan
+                <button type="button" @click="leaveLayawayMode()" :disabled="creatingLayaway" class="min-h-[44px] rounded-lg border border-primary px-3 py-2 font-semibold disabled:opacity-40">Volver a venta</button>
+            </div>
         </section>
     @endcan
 
@@ -197,7 +214,7 @@
                                     </td>
                                     <td class="order-6 col-span-2 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 lg:table-cell lg:w-36 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Descuento</span>
-                                        <template x-if="canDiscount">
+                                        <template x-if="canDiscount && !layawayMode">
                                             <div class="flex items-center justify-end gap-1">
                                                 <select x-model="item._discountType"
                                                         class="h-11 w-14 rounded border border-amber-300 bg-amber-50 px-1 text-xs font-bold text-amber-900 lg:h-auto lg:py-1">
@@ -213,15 +230,16 @@
                                                        placeholder="0">
                                             </div>
                                         </template>
+                                        <span x-show="layawayMode" class="text-slate-400">—</span>
 
                                     </td>
                                     <td class="order-5 flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-right lg:table-cell lg:w-24 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Impuesto</span>
-                                        <span x-text="money(lineTax(item, index))"></span>
+                                        <span x-text="money(layawayMode ? apartadoLineTax(item) : lineTax(item, index))"></span>
                                     </td>
                                     <td class="order-3 flex items-start justify-between gap-2 text-right lg:table-cell lg:w-28 lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Total</span>
-                                        <strong class="text-base font-bold lg:text-sm" x-text="money(lineTotal(item, index))"></strong>
+                                        <strong class="text-base font-bold lg:text-sm" x-text="money(layawayMode ? apartadoLineTotal(item) : lineTotal(item, index))"></strong>
                                     </td>
                                     <td class="order-7 flex items-center justify-end lg:table-cell lg:w-20 lg:px-0 lg:py-0 lg:whitespace-nowrap lg:text-right"><button type="button" @click="remove(item)" class="min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 lg:min-h-0 lg:px-2 lg:py-1 lg:text-xs lg:font-normal">Eliminar</button></td>
                                 </tr>
@@ -324,7 +342,7 @@
             </section>
 
             <section class="rounded-xl bg-slate-900 p-4 text-white shadow-lg">
-                <div class="space-y-2 text-sm">
+                <div x-show="!layawayMode" class="space-y-2 text-sm">
                     <div class="flex justify-between"><span class="text-slate-300">Subtotal</span><strong x-text="money(subtotal)"></strong></div>
                     <template x-if="canDiscount">
                         <div class="flex items-center justify-between gap-2">
@@ -349,16 +367,66 @@
                     <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(taxTotal)"></strong></div>
                     <div x-show="roundingTotal !== 0" class="flex justify-between"><span class="text-slate-400">Redondeo</span><strong x-text="money(roundingTotal)"></strong></div>
                 </div>
+                <div x-show="layawayMode" class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-slate-300">Subtotal apartado</span><strong x-text="money(apartadoSubtotal)"></strong></div>
+                    <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(apartadoTaxTotal)"></strong></div>
+                    <p class="text-xs text-primary">Apartado conserva precios del POS; descuentos no se aplican porque el módulo actual no guarda descuentos de apartado.</p>
+                    <div>
+                        <label for="layaway-initial" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Prima (monto inicial)</label>
+                        <input id="layaway-initial"
+                               x-model="layaway.initial_amount"
+                               type="number"
+                               min="1"
+                               step="1"
+                               inputmode="numeric"
+                               class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-right text-sm font-bold text-primary placeholder:text-primary/50"
+                               placeholder="0">
+                    </div>
+                    <div class="flex justify-between"><span class="text-slate-300">Saldo</span><strong class="text-primary" x-text="money(apartadoBalance)"></strong></div>
+                    <div>
+                        <label for="layaway-expires" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Vencimiento</label>
+                        <input id="layaway-expires"
+                               x-model="layaway.expires_at"
+                               type="date"
+                               class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm font-bold text-primary">
+                    </div>
+                    <div>
+                        <label for="layaway-method" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Forma de pago de la prima</label>
+                        <select id="layaway-method"
+                                x-model="layaway.payment_method_id"
+                                class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm font-bold text-primary">
+                            <option value="">Seleccione…</option>
+                            <template x-for="method in layawayPaymentMethods" :key="method.id">
+                                <option :value="method.id" x-text="method.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="layaway-reference" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Referencia (opcional)</label>
+                        <input id="layaway-reference"
+                               x-model="layaway.reference"
+                               type="text"
+                               maxlength="150"
+                               class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm text-primary placeholder:text-primary/50"
+                               placeholder="Comprobante, nota…">
+                    </div>
+                    <p x-show="!customerId" class="text-xs font-semibold text-primary">Seleccione un cliente para crear el apartado.</p>
+                    <p x-show="numberValue(layaway.initial_amount) > apartadoGrandTotal" class="text-xs font-semibold text-red-300">La prima no puede superar el total del apartado.</p>
+                </div>
                 <div class="my-3 border-t border-slate-700"></div>
-                <div class="flex items-end justify-between"><span class="text-base">Total</span><strong class="text-2xl text-amber-400" x-text="money(grandTotal)"></strong></div>
+                <div x-show="!layawayMode" class="flex items-end justify-between"><span class="text-base">Total</span><strong class="text-2xl text-amber-400" x-text="money(grandTotal)"></strong></div>
+                <div x-show="layawayMode" class="flex items-end justify-between"><span class="text-base">Total apartado</span><strong class="text-2xl text-primary" x-text="money(apartadoGrandTotal)"></strong></div>
                 @can('ventas.crear')
-                    <button type="button" x-show="!quoteMode" @click="openCheckout" :disabled="!canCheckout"
+                    <button type="button" x-show="!quoteMode && !layawayMode" @click="openCheckout" :disabled="!canCheckout"
                             class="mt-3 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-base font-normal text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400">
                         Cobrar
                     </button>
                 @endcan
                 @can('cotizaciones.crear')
                     <button type="button" x-show="quoteMode" @click="quoteId ? updateQuote() : createQuote()" :disabled="!canCreateQuote || cart.length === 0 || creatingQuote" class="mt-3 min-h-[44px] w-full rounded-xl px-4 py-2.5 text-base font-bold text-white disabled:opacity-40" :class="quoteId ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-700 hover:bg-sky-800'" x-text="creatingQuote ? 'Guardando…' : (quoteId ? 'Guardar cambios' : 'Guardar cotización')"></button>
+                @endcan
+                @can('apartados.crear')
+                    <button type="button" x-show="layawayMode" @click="createLayaway()" :disabled="!canSubmitLayaway" class="mt-3 min-h-[48px] w-full rounded-xl bg-primary px-4 py-2.5 text-base font-bold text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" x-text="creatingLayaway ? 'Creando…' : 'Crear apartado'"></button>
                 @endcan
             </section>
         </aside>
@@ -376,17 +444,20 @@
         <div class="flex items-center justify-between gap-3 px-4 py-3">
             <div class="leading-tight">
                 <p class="text-xs font-semibold uppercase text-slate-500">Total</p>
-                <p class="text-xl font-black text-slate-900" x-text="money(grandTotal)"></p>
+                <p class="text-xl font-black text-slate-900" x-text="money(layawayMode ? apartadoGrandTotal : grandTotal)"></p>
                 <p x-show="totalItems" class="text-xs text-slate-500" x-text="`Cantidad de artículos: ${totalItems}`"></p>
             </div>
             @can('ventas.crear')
-                <button type="button" x-show="!quoteMode" @click="openCheckout" :disabled="!canCheckout"
+                <button type="button" x-show="!quoteMode && !layawayMode" @click="openCheckout" :disabled="!canCheckout"
                         class="max-w-[16rem] min-h-[48px] flex-1 rounded-xl bg-amber-500 px-6 text-base font-bold text-black hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
                     Cobrar
                 </button>
             @endcan
             @can('cotizaciones.crear')
                 <button type="button" x-show="quoteMode" @click="quoteId ? updateQuote() : createQuote()" :disabled="!canCreateQuote || cart.length === 0 || creatingQuote" class="min-h-[48px] min-w-0 max-w-[16rem] flex-1 rounded-xl px-3 py-2 text-base font-bold text-white disabled:opacity-40" :class="quoteId ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-700 hover:bg-sky-800'" x-text="creatingQuote ? 'Guardando…' : (quoteId ? 'Guardar cambios' : 'Guardar cotización')"></button>
+            @endcan
+            @can('apartados.crear')
+                <button type="button" x-show="layawayMode" @click="createLayaway()" :disabled="!canSubmitLayaway" class="min-h-[48px] min-w-0 max-w-[16rem] flex-1 rounded-xl bg-primary px-3 py-2 text-base font-bold text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500" x-text="creatingLayaway ? 'Creando…' : 'Crear apartado'"></button>
             @endcan
         </div>
     </div>
@@ -427,7 +498,8 @@
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
-            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
+            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
+            @can('apartados.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterLayawayMode()" :disabled="!canCreateLayaway || creatingLayaway || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-bold text-black hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Apartar</button>@endcan
             @can('apartados.crear')<a href="{{ route('apartados.create') }}" class="whitespace-nowrap rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">Nuevo apartado</a>@endcan
             @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
             @foreach(['Nota de crédito', 'Nota de débito'] as $option)
@@ -811,6 +883,11 @@ document.addEventListener('alpine:init', () => {
         quoteMode: false,
         canCreateQuote: @json(auth()->user()->hasPermission('cotizaciones.crear', $company)),
         creatingQuote: false,
+        layawayMode: false,
+        canCreateLayaway: @json($canCreateLayaway),
+        creatingLayaway: false,
+        layawayValidityDays: @json($layawayValidityDays),
+        layaway: { expires_at: '', initial_amount: '', payment_method_id: '', reference: '' },
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
         cashSessionId: @json($cashSession?->id),
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
@@ -948,8 +1025,24 @@ document.addEventListener('alpine:init', () => {
             if (this.creditAvailable < this.grandTotal) return 'El cliente no tiene crédito disponible suficiente.';
             return 'Crédito disponible suficiente para esta venta.';
         },
-        get canCheckout() { return !this.quoteMode && this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
+        get canCheckout() { return !this.quoteMode && !this.layawayMode && this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
+        get layawayPaymentMethods() { return this.paymentMethods.filter(method => method.type !== 'credit' && method.type !== 'loyalty_points'); },
+        apartadoLineTax(item) { return this.decimal4(this.lineAppliedPrice(item) * this.numberValue(item.quantity) * (this.numberValue(item.tax_rate) / 100)); },
+        apartadoLineTotal(item) { return this.decimal4((this.lineAppliedPrice(item) * this.numberValue(item.quantity)) + this.apartadoLineTax(item)); },
+        get apartadoGrandTotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + this.apartadoLineTotal(item), 0)); },
+        get apartadoSubtotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + (this.lineAppliedPrice(item) * this.numberValue(item.quantity)), 0)); },
+        get apartadoTaxTotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + this.apartadoLineTax(item), 0)); },
+        get apartadoBalance() { return Math.max(0, this.decimal4(this.apartadoGrandTotal - this.numberValue(this.layaway.initial_amount))); },
+        get canSubmitLayaway() {
+            return this.layawayMode && this.canCreateLayaway && !this.creatingLayaway && this.cart.length > 0
+                && !!this.customerId && !this.suspended.customerInvalid
+                && !this.cart.some(item => item.unavailable || this.exceedsStock(item))
+                && this.apartadoGrandTotal > 0
+                && this.numberValue(this.layaway.initial_amount) > 0
+                && this.numberValue(this.layaway.initial_amount) <= this.apartadoGrandTotal
+                && !!this.layaway.payment_method_id;
+        },
         get usdSession() { return this.usdSessions.find(session => String(session.id) === String(this.cashSessionId)); },
         get usdCashEnabled() { return this.selectedPaymentMethod?.type === 'cash' && this.usdSession?.enabled === true; },
         decimalUnits(value) {
@@ -1501,8 +1594,80 @@ document.addEventListener('alpine:init', () => {
                 }
             }
         },
+        defaultLayawayExpiration() {
+            const date = new Date();
+            date.setDate(date.getDate() + (Number(this.layawayValidityDays) || 30));
+            return date.toISOString().slice(0, 10);
+        },
+        async enterLayawayMode() {
+            if (!this.canCreateLayaway || this.creatingLayaway || this.checkout.open || this.layawayMode) return;
+            if (this.quoteMode) { await this.leaveQuoteMode(); }
+            this.layawayMode = true;
+            this.layaway = { expires_at: this.defaultLayawayExpiration(), initial_amount: '', payment_method_id: '', reference: '' };
+            this.notice = this.cart.some(item => this.exceedsStock(item)) ? 'Revise las cantidades: superan el stock disponible para apartar.' : '';
+            this.results = [];
+            await this.searchProducts(false);
+            this.$nextTick(() => this.focusSearch());
+        },
+        async leaveLayawayMode() {
+            if (this.creatingLayaway) return;
+            this.layawayMode = false;
+            this.results = [];
+            this.notice = '';
+            await this.searchProducts(false);
+            this.$nextTick(() => this.focusSearch());
+        },
+        async createLayaway() {
+            if (this.creatingLayaway) return;
+            if (!this.canSubmitLayaway) {
+                if (this.layawayMode && this.cart.length === 0) { this.notice = 'Agregue al menos un producto antes de crear el apartado.'; }
+                else if (this.layawayMode && !this.customerId) { this.notice = 'Seleccione un cliente para crear el apartado.'; }
+                else if (this.layawayMode && this.numberValue(this.layaway.initial_amount) <= 0) { this.notice = 'Indique una prima mayor que cero.'; }
+                else if (this.layawayMode && this.numberValue(this.layaway.initial_amount) > this.apartadoGrandTotal) { this.notice = 'La prima no puede superar el total del apartado.'; }
+                else if (this.layawayMode && !this.layaway.payment_method_id) { this.notice = 'Seleccione la forma de pago de la prima.'; }
+                return;
+            }
+            this.creatingLayaway = true;
+            this.notice = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.apartados.store', [], false)) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({
+                        customer_id: this.customerId,
+                        expires_at: this.layaway.expires_at || null,
+                        items: this.cart.map(item => ({
+                            product_id: item.id,
+                            quantity: item.quantity,
+                            ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}),
+                        })),
+                        initial_amount: this.numberValue(this.layaway.initial_amount),
+                        payment_method_id: this.layaway.payment_method_id,
+                        cash_session_id: this.cashSessionId || null,
+                        reference: this.layaway.reference ? this.layaway.reference.trim() : null,
+                        client_token: this.checkoutToken,
+                    }),
+                });
+                const payload = await this.readFetchResponse(response);
+                this.layawayMode = false;
+                this.cart = [];
+                this.customerId = null;
+                this.selectedCustomer = null;
+                this.checkout.payments = [];
+                this.layaway = { expires_at: '', initial_amount: '', payment_method_id: '', reference: '' };
+                this.checkoutToken = generateUUID();
+                this.successMessage = payload.message;
+                await this.searchProducts(false);
+                this.$nextTick(() => this.focusSearch());
+            } catch (error) {
+                this.notice = error.message || 'No fue posible crear el apartado.';
+            } finally {
+                this.creatingLayaway = false;
+            }
+        },
         async enterQuoteMode() {
-            if (!this.canCreateQuote || this.creatingQuote || this.checkout.open) return;
+            if (!this.canCreateQuote || this.creatingQuote || this.checkout.open || this.creatingLayaway) return;
+            if (this.layawayMode) { await this.leaveLayawayMode(); }
             this.quoteMode = true;
             this.notice = '';
             this.results = [];

@@ -21,9 +21,11 @@ use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
+use App\Services\Sales\LayawayService;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +33,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PosController extends Controller
 {
@@ -78,6 +81,8 @@ class PosController extends Controller
             'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
             'canDiscount' => $request->user()->hasPermission('pos.aplicar_descuento', $company),
             'canOverridePrice' => $request->user()->hasPermission('pos.cambiar_precio', $company),
+            'canCreateLayaway' => $request->user()->hasPermission('apartados.crear', $company),
+            'layawayValidityDays' => (int) ($company->layaway_validity_days ?? 30),
         ]);
     }
 
@@ -450,6 +455,65 @@ class PosController extends Controller
             'change_amount' => $firstPayment?->change_amount,
             'receipt_url' => route('pos.receipt', $sale),
         ]);
+    }
+
+    public function storeLayaway(Request $request, LayawayService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'customer_id' => ['required', 'integer'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:today'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['nullable', 'integer'],
+            'items.*.quantity' => ['nullable', 'numeric', 'gt:0'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'gt:0'],
+            'items.*.discount' => ['prohibited'],
+            'items.*.discount_type' => ['prohibited'],
+            'discount_total' => ['prohibited'],
+            'discount_total_type' => ['prohibited'],
+            'initial_amount' => ['required', 'numeric', 'gt:0'],
+            'payment_method_id' => ['required', 'integer'],
+            'cash_session_id' => ['nullable', 'integer'],
+            'reference' => ['nullable', 'string', 'max:150'],
+            'client_token' => ['nullable', 'uuid'],
+        ]);
+
+        try {
+            $layaway = $service->create(
+                $data,
+                $request->user(),
+                (int) session('active_company_id'),
+                (int) session('active_branch_id'),
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => collect($exception->errors())->flatten()->first() ?? 'El apartado contiene datos inválidos.',
+                'errors' => $exception->errors(),
+            ], 422);
+        } catch (ModelNotFoundException) {
+            return response()->json([
+                'message' => 'El producto o cliente seleccionado ya no está disponible.',
+            ], 422);
+        } catch (ConflictHttpException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 409);
+        }
+
+        $company = Company::query()->findOrFail((int) session('active_company_id'));
+
+        return response()->json([
+            'success' => true,
+            'message' => "Apartado {$layaway->number} creado correctamente.",
+            'layaway_id' => $layaway->id,
+            'layaway_number' => $layaway->number,
+            'total' => $layaway->total,
+            'paid_total' => $layaway->paid_total,
+            'balance_due' => $layaway->balance_due,
+            'show_url' => $request->user()->hasPermission('apartados.ver', $company)
+                ? route('apartados.show', $layaway)
+                : null,
+        ], 201);
     }
 
     public function storeSuspended(StoreSuspendedSaleRequest $request, SuspendedSaleService $service): JsonResponse
