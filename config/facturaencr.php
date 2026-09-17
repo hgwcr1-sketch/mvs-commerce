@@ -12,4 +12,6 @@ return [
 
     'timeout' => (int) env('FACTURAENCR_TIMEOUT', 30),
 
+    'sandbox_emisor' => env('FACTURAENCR_SANDBOX_EMISOR', 'EMISORPRUEBA'),
+
 ];

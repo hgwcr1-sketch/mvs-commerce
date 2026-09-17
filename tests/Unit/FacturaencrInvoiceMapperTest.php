@@ -10,9 +10,12 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\User;
+use App\Services\Facturaencr\FacturaencrClient;
 use App\Services\Facturaencr\FacturaencrInvoiceMapper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
 
 class FacturaencrInvoiceMapperTest extends TestCase
 {
@@ -85,7 +88,7 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertSame('Producto 2', $payload['detalle'][1]['detalle']);
         $this->assertSame(2.0, $payload['detalle'][0]['cantidad']);
         $this->assertSame(1.5, $payload['detalle'][1]['cantidad']);
-        $this->assertSame('un', $payload['detalle'][0]['unidadMedida']);
+        $this->assertSame('Unid', $payload['detalle'][0]['unidadMedida']);
         $this->assertSame('kg', $payload['detalle'][1]['unidadMedida']);
     }
 
@@ -275,14 +278,14 @@ class FacturaencrInvoiceMapperTest extends TestCase
     public function test_unsupported_payment_method_throws_error(): void
     {
         [$company, $customer, $sale] = $this->prepareData();
-        $cardPaymentMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'card', 'name' => 'Tarjeta', 'type' => 'card', 'is_system' => true, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => true]);
-        $cardPayment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $cardPaymentMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1200, 'change_amount' => 183]);
+        $chequePaymentMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'cheque', 'name' => 'Cheque', 'type' => 'other', 'is_system' => true, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => true]);
+        $chequePayment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $chequePaymentMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1200, 'change_amount' => 183]);
         $item = $this->createItem($sale);
 
         $mapper = new FacturaencrInvoiceMapper();
 
         try {
-            $mapper->map($sale, [$item], $customer, $company, $cardPayment);
+            $mapper->map($sale, [$item], $customer, $company, $chequePayment);
             $this->fail('Expected FacturaencrValidationException');
         } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $e) {
             $errors = $e->getErrors();
@@ -370,6 +373,260 @@ class FacturaencrInvoiceMapperTest extends TestCase
 
         $mapper = new FacturaencrInvoiceMapper();
         $payload = $mapper->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('01', $payload['condicionVenta']);
+    }
+
+    public function test_cash_payment_maps_to_01(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company, $sale->payments->first());
+
+        $this->assertSame(['01'], $payload['medioPago']);
+    }
+
+    public function test_card_payment_maps_to_02(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $cardMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'card', 'name' => 'Tarjeta', 'type' => 'card', 'is_system' => true, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => true]);
+        $payment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $cardMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1200, 'change_amount' => 183]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company, $payment);
+
+        $this->assertSame(['02'], $payload['medioPago']);
+    }
+
+    public function test_bank_transfer_payment_maps_to_04(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $btMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'bank_transfer', 'name' => 'Transferencia', 'type' => 'bank_transfer', 'is_system' => true, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => true]);
+        $payment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $btMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1200, 'change_amount' => 183]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company, $payment);
+
+        $this->assertSame(['04'], $payload['medioPago']);
+    }
+
+    public function test_sinpe_payment_maps_to_06(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sinpeMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'sinpe', 'name' => 'Sinpe', 'type' => 'sinpe', 'is_system' => true, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => true]);
+        $payment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $sinpeMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1200, 'change_amount' => 183]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company, $payment);
+
+        $this->assertSame(['06'], $payload['medioPago']);
+    }
+
+    public function test_credit_sale_has_no_medio_pago(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => now()->addDays(30)]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('02', $payload['condicionVenta']);
+        $this->assertArrayNotHasKey('medioPago', $payload);
+    }
+
+    public function test_plazo_credito_derived_from_dates(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => now()->addDays(30)]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company);
+
+        $this->assertArrayHasKey('plazoCredito', $payload);
+        $this->assertSame('30', $payload['plazoCredito']);
+    }
+
+    public function test_plazo_credito_60_days(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => now()->addDays(60)]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('60', $payload['plazoCredito']);
+    }
+
+    public function test_plazo_credito_90_days(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => now()->addDays(90)]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('90', $payload['plazoCredito']);
+    }
+
+    public function test_credit_without_due_date_is_blocked(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => null]);
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+
+        try {
+            $mapper->map($sale, [$item], $customer, $company);
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertTrue(isset($errors['plazo_credito']), 'Missing plazo_credito. Actual keys: ' . print_r(array_keys($errors), true));
+        }
+    }
+
+    public function test_unit_un_maps_to_Unid(): void
+    {
+        $unitMapper = new \App\Services\Facturaencr\FacturaencrUnitMapper();
+        $this->assertSame('Unid', $unitMapper->map('un'));
+    }
+
+    public function test_unit_kg_maps_to_kg(): void
+    {
+        $unitMapper = new \App\Services\Facturaencr\FacturaencrUnitMapper();
+        $this->assertSame('kg', $unitMapper->map('kg'));
+    }
+
+    public function test_unit_unknown_throws_error(): void
+    {
+        $unitMapper = new \App\Services\Facturaencr\FacturaencrUnitMapper();
+
+        try {
+            $unitMapper->map('unknown_unit');
+            $this->fail('Expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('no soportada', $e->getMessage());
+        }
+    }
+
+    public function test_cabys_service_found(): void
+    {
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/catalogs/cabys*' => Http::response(['items' => [['codigo' => '5060101000000', 'descripcion' => 'Producto', 'impuesto' => 1]]], 200),
+        ]);
+
+        $client = new FacturaencrClient();
+        $service = new \App\Services\Facturaencr\FacturaencrCabysService($client);
+        $result = $service->validate('5060101000000');
+
+        $this->assertTrue($result['found']);
+        $this->assertSame('5060101000000', $result['codigo']);
+        $this->assertSame('Producto', $result['descripcion']);
+        $this->assertSame(1, $result['impuesto']);
+    }
+
+    public function test_cabys_service_not_found(): void
+    {
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/catalogs/cabys*' => Http::response(['items' => []], 200),
+        ]);
+
+        $client = new FacturaencrClient();
+        $service = new \App\Services\Facturaencr\FacturaencrCabysService($client);
+        $result = $service->validate('9999999999999');
+
+        $this->assertFalse($result['found']);
+    }
+
+    public function test_taxpayer_regimen_found(): void
+    {
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/contribuyentes/3101000000/regimen' => Http::response([
+                'identificacion' => '3101000000',
+                'encontrado' => true,
+                'contribuyente' => true,
+                'regimen' => ['codigo' => 2, 'clave' => 'simplificado', 'descripcion' => 'Régimen simplificado', 'simplificado' => true, 'trasladaIva' => false],
+                'actividadesEconomicas' => [['codigo' => '4711.2', 'descripcion' => 'Ventas al por menor'], ['codigo' => '4711.1', 'descripcion' => 'Ventas al por menor de alimentos']],
+            ], 200),
+        ]);
+
+        $client = new FacturaencrClient();
+        $service = new \App\Services\Facturaencr\FacturaencrTaxpayerService($client);
+        $result = $service->getRegimen('3101000000');
+
+        $this->assertTrue($result['encontrado']);
+        $this->assertTrue($result['contribuyente']);
+        $this->assertSame('simplificado', $result['regimen']['clave']);
+        $this->assertCount(2, $result['actividadesEconomicas']);
+    }
+
+    public function test_taxpayer_multiple_activities(): void
+    {
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/contribuyentes/3101000000/regimen' => Http::response([
+                'identificacion' => '3101000000',
+                'encontrado' => true,
+                'contribuyente' => true,
+                'regimen' => ['codigo' => 2, 'clave' => 'simplificado', 'descripcion' => 'Régimen simplificado', 'simplificado' => true, 'trasladaIva' => false],
+                'actividadesEconomicas' => [
+                    ['codigo' => '4711.2', 'descripcion' => 'Actividad 1'],
+                    ['codigo' => '4711.1', 'descripcion' => 'Actividad 2'],
+                    ['codigo' => '4721.1', 'descripcion' => 'Actividad 3'],
+                ],
+            ], 200),
+        ]);
+
+        $client = new FacturaencrClient();
+        $service = new \App\Services\Facturaencr\FacturaencrTaxpayerService($client);
+        $result = $service->getRegimen('3101000000');
+
+        $this->assertCount(3, $result['actividadesEconomicas']);
+    }
+
+    public function test_emisorprueba_allowed_in_sandbox(): void
+    {
+        Config::set('facturaencr.environment', 'sandbox');
+        Config::set('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
+
+        $mapper = new FacturaencrInvoiceMapper();
+
+        $this->assertTrue($mapper->canUseSandboxEmisor());
+        $this->assertSame('EMISORPRUEBA', $mapper->getSandboxEmisor());
+    }
+
+    public function test_emisorprueba_rejected_outside_sandbox(): void
+    {
+        Config::set('facturaencr.environment', 'production');
+        Config::set('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
+
+        $mapper = new FacturaencrInvoiceMapper();
+
+        $this->assertFalse($mapper->canUseSandboxEmisor());
+    }
+
+    public function test_sandbox_emisor_in_env_example(): void
+    {
+        $this->assertStringContainsString('FACTURAENCR_SANDBOX_EMISOR', file_get_contents(base_path('.env.example')));
+    }
+
+    public function test_no_external_http_in_mapper_tests(): void
+    {
+        Http::fake([]);
+
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        $mapper = new FacturaencrInvoiceMapper();
+        $payload = $mapper->map($sale, [$item], $customer, $company, $sale->payments->first());
 
         $this->assertSame('01', $payload['condicionVenta']);
     }

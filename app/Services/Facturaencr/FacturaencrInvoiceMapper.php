@@ -19,6 +19,9 @@ class FacturaencrInvoiceMapper
 
     private const MEDIO_PAGO_MAP = [
         'cash' => '01',
+        'card' => '02',
+        'bank_transfer' => '04',
+        'sinpe' => '06',
     ];
 
     public function map(
@@ -26,7 +29,8 @@ class FacturaencrInvoiceMapper
         array $saleItems,
         Customer $customer,
         Company $company,
-        ?SalePayment $salePayment = null
+        ?SalePayment $salePayment = null,
+        ?string $idempotencyKey = null
     ): array {
         $errors = $this->validate($sale, $saleItems, $customer, $company, $salePayment);
 
@@ -34,25 +38,62 @@ class FacturaencrInvoiceMapper
             throw new FacturaencrValidationException($errors);
         }
 
-        $paymentMethod = $salePayment?->paymentMethod;
-        $medioPago = $paymentMethod && isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])
-            ? [self::MEDIO_PAGO_MAP[$paymentMethod->code]]
-            : [];
-
-        return [
+        $payload = [
             'emisorLegalId' => $company->identification_number,
             'condicionVenta' => $this->mapCondicionVenta($sale->sale_condition),
-            'medioPago' => $medioPago,
             'currency' => $sale->currency_code,
             'exchangeRate' => (float) $sale->exchange_rate,
             'receptor' => $this->mapReceptor($customer),
             'detalle' => $this->mapDetalle($saleItems),
         ];
+
+        $medioPago = $this->mapMedioPago($sale, $salePayment);
+        if ($medioPago !== []) {
+            $payload['medioPago'] = $medioPago;
+        }
+
+        if ($sale->sale_condition === 'credit') {
+            $plazoCredito = $this->calculatePlazoCredito($sale);
+            if ($plazoCredito !== null) {
+                $payload['plazoCredito'] = $plazoCredito;
+            }
+        }
+
+        if ($idempotencyKey !== null) {
+            $payload['idempotencyKey'] = $idempotencyKey;
+        }
+
+        return $payload;
     }
 
     public function idempotencyKey(Sale $sale, string $documentType): string
     {
         return md5("{$sale->company_id}-{$sale->id}-{$documentType}");
+    }
+
+    public function canUseSandboxEmisor(): bool
+    {
+        return config('facturaencr.environment') === 'sandbox';
+    }
+
+    public function getSandboxEmisor(): string
+    {
+        return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
+    }
+
+    private function calculatePlazoCredito(Sale $sale): ?string
+    {
+        if (empty($sale->due_date)) {
+            return null;
+        }
+
+        if (empty($sale->created_at)) {
+            return null;
+        }
+
+        $days = $sale->created_at->diffInDays($sale->due_date);
+
+        return (string) round($days);
     }
 
     private function validate(
@@ -86,9 +127,24 @@ class FacturaencrInvoiceMapper
             $errors['condicion_venta'] = 'La condición de venta no es mapeable: ' . $sale->sale_condition;
         }
 
+        if ($sale->sale_condition === 'credit') {
+            $plazoCredito = $this->calculatePlazoCredito($sale);
+            if ($plazoCredito === null) {
+                if (empty($sale->due_date)) {
+                    $errors['plazo_credito'] = 'Crédito requiere due_date en la venta para calcular plazoCredito';
+                } elseif (empty($sale->created_at)) {
+                    $errors['plazo_credito'] = 'Crédito requiere fecha de venta (created_at) para calcular plazoCredito';
+                } else {
+                    $errors['plazo_credito'] = 'No se puede derivar plazoCredito de forma segura';
+                }
+            }
+        }
+
         $paymentMethod = $salePayment?->paymentMethod;
-        if ($paymentMethod && !isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])) {
-            $errors['medio_pago'] = 'Medio de pago no soportado por Facturaencr: ' . $paymentMethod->code;
+        if ($paymentMethod) {
+            if (!isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])) {
+                $errors['medio_pago'] = 'Medio de pago no soportado por Facturaencr: ' . $paymentMethod->code;
+            }
         }
 
         if (empty($sale->currency_code)) {
@@ -100,6 +156,8 @@ class FacturaencrInvoiceMapper
         if (empty($saleItems)) {
             $errors['detalle'] = 'No hay líneas de detalle en la venta';
         }
+
+        $unitMapper = new FacturaencrUnitMapper();
 
         foreach ($saleItems as $index => $item) {
             $prefix = "detalle[{$index}]";
@@ -124,6 +182,8 @@ class FacturaencrInvoiceMapper
 
             if (empty($item->unit_code)) {
                 $errors["{$prefix}_unidad"] = 'La unidad de medida no está especificada';
+            } elseif (!$unitMapper->isSupported($item->unit_code)) {
+                $errors["{$prefix}_unidad"] = 'Unidad de medida no soportada por Facturaencr: ' . $item->unit_code;
             }
 
             if ($item->tax_rate <= 0) {
@@ -132,6 +192,25 @@ class FacturaencrInvoiceMapper
         }
 
         return $errors;
+    }
+
+    private function mapMedioPago(Sale $sale, ?SalePayment $salePayment): array
+    {
+        if ($sale->sale_condition === 'credit') {
+            return [];
+        }
+
+        $paymentMethod = $salePayment?->paymentMethod;
+
+        if (!$paymentMethod) {
+            return [];
+        }
+
+        if (!isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])) {
+            return [];
+        }
+
+        return [self::MEDIO_PAGO_MAP[$paymentMethod->code]];
     }
 
     private function mapReceptor(Customer $customer): array
@@ -145,6 +224,7 @@ class FacturaencrInvoiceMapper
 
     private function mapDetalle(array $saleItems): array
     {
+        $unitMapper = new FacturaencrUnitMapper();
         $detalle = [];
 
         foreach ($saleItems as $item) {
@@ -152,7 +232,7 @@ class FacturaencrInvoiceMapper
                 'codigoCabys' => $item->cabys_code,
                 'detalle' => $item->description,
                 'cantidad' => (float) $item->quantity,
-                'unidadMedida' => $item->unit_code,
+                'unidadMedida' => $unitMapper->map($item->unit_code),
                 'precioUnitario' => (float) $item->unit_price,
             ];
         }
