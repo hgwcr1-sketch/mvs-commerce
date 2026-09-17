@@ -118,6 +118,7 @@ class CompanyProvisioner
                 'name' => 'Administrador',
                 'description' => 'Administrador inicial de la empresa.',
                 'is_active' => true,
+                'is_super_admin' => true,
             ]);
 
             $administratorRole->permissions()->sync($permissionIds);
@@ -209,6 +210,7 @@ class CompanyProvisioner
             $role = Role::create([
                 'company_id' => $company->id, 'name' => 'Administrador',
                 'description' => 'Propietario inicial del tenant.', 'is_active' => true,
+                'is_super_admin' => true,
             ]);
             $role->permissions()->sync($permissionIds);
             $company->users()->attach($owner->id, ['role_id' => $role->id]);

@@ -150,6 +150,14 @@ class User extends Authenticatable
             return false;
         }
 
+        // Los roles marcados como super admin heredan todos los permisos activos.
+        if ($role->is_super_admin) {
+            return Permission::query()
+                ->where('name', $permission)
+                ->where('is_active', true)
+                ->exists();
+        }
+
         return $role->permissions()
             ->where('permissions.name', $permission)
             ->where('permissions.is_active', true)

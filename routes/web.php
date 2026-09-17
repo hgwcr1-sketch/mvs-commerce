@@ -63,6 +63,7 @@ use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 // MVS Print
 use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
 use App\Http\Controllers\MvsPrint\MvsPrintTicketController;
+use App\Http\Controllers\NotificationCenterController;
 // Finanzas
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
@@ -214,6 +215,35 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::get('/centro-de-control', [ControlCenterController::class, 'index'])
         ->middleware(['active.branch', 'permission:dashboard.admin'])
         ->name('control-center.index');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Centro de Notificaciones y Alertas MVS
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('notificaciones')->name('notifications.')->middleware(['active.branch'])->group(function () {
+        Route::get('/', [NotificationCenterController::class, 'index'])
+            ->middleware('permission:notificaciones.ver')
+            ->name('index');
+        Route::get('/recientes', [NotificationCenterController::class, 'recent'])
+            ->middleware('permission:notificaciones.ver')
+            ->name('recent');
+        Route::get('/no-leidas', [NotificationCenterController::class, 'unreadCount'])
+            ->middleware('permission:notificaciones.ver')
+            ->name('unread-count');
+        Route::post('/marcar-leidas', [NotificationCenterController::class, 'markAsRead'])
+            ->middleware('permission:notificaciones.ver')
+            ->name('mark-read');
+        Route::post('/{alert}/descartar', [NotificationCenterController::class, 'dismiss'])
+            ->middleware('permission:notificaciones.ver')
+            ->name('dismiss');
+        Route::get('/preferencias', [NotificationCenterController::class, 'preferences'])
+            ->middleware('permission:notificaciones.configurar')
+            ->name('preferences');
+        Route::put('/preferencias', [NotificationCenterController::class, 'updatePreferences'])
+            ->middleware('permission:notificaciones.configurar')
+            ->name('preferences.update');
+    });
 
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
         Route::get('/pos', [PosController::class, 'index'])->middleware('pos.cash-session')->name('pos.index');

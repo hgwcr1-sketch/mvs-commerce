@@ -14,6 +14,7 @@ class ModuleRegistry
         'reports' => ['label' => 'Centro de Datos y reportes', 'prefixes' => ['reportes.']],
         'agenda' => ['label' => 'Agenda', 'prefixes' => ['agenda.']],
         'administration' => ['label' => 'Administración', 'prefixes' => ['dashboard.', 'usuarios.', 'roles.', 'empresa.', 'configuracion.', 'formas_pago.']],
+        'notifications' => ['label' => 'Notificaciones y Alertas', 'prefixes' => ['notificaciones.']],
     ];
 
     public function forPermission(string $permission): ?string

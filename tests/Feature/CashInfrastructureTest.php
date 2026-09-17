@@ -210,7 +210,7 @@ class CashInfrastructureTest extends TestCase
     public function test_seven_cash_permissions_are_provisioned_only_to_administrator(): void
     {
         $company = $this->company('Empresa permisos');
-        $administrator = Role::create(['company_id' => $company->id, 'name' => 'Administrador', 'is_active' => true]);
+        $administrator = Role::create(['company_id' => $company->id, 'name' => 'Administrador', 'is_active' => true, 'is_super_admin' => true]);
         $other = Role::create(['company_id' => $company->id, 'name' => 'Cajero', 'is_active' => true]);
         $this->seed(PermissionSeeder::class);
         $permissions = ['caja.abrir', 'caja.ver', 'caja.movimientos', 'caja.cerrar', 'caja.ver_todas', 'caja.autorizar_diferencia', 'caja.administrar'];
@@ -240,6 +240,7 @@ class CashInfrastructureTest extends TestCase
         $branch = Branch::create(['company_id' => $company->id, 'name' => 'Principal', 'code' => 'P-'.$company->id, 'is_active' => true]);
         $user = User::factory()->create();
         $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'CAJA-1', 'name' => 'Caja 1']);
+
         return [$company, $branch, $user, $register];
     }
 

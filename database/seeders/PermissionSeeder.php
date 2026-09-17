@@ -196,6 +196,19 @@ class PermissionSeeder extends Seeder
             // MVS Print (impresión local por terminal)
             ['name' => 'mvs.print.configurar', 'label' => 'Configurar terminales de impresión local', 'module' => 'MVS Print'],
             ['name' => 'mvs.print.imprimir', 'label' => 'Imprimir por terminal local (QZ Tray)', 'module' => 'MVS Print'],
+
+            // Notificaciones y Alertas MVS
+            ['name' => 'notificaciones.ver', 'label' => 'Ver Centro de Notificaciones', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.inventario', 'label' => 'Recibir alertas de inventario', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.traslados', 'label' => 'Recibir alertas de traslados', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.compras', 'label' => 'Recibir alertas de compras', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.caja', 'label' => 'Recibir alertas de caja', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.apartados', 'label' => 'Recibir alertas de apartados', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.fidelidad', 'label' => 'Recibir alertas de fidelización', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.cxc', 'label' => 'Recibir alertas de cuentas por cobrar', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.cxp', 'label' => 'Recibir alertas de cuentas por pagar', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.administracion', 'label' => 'Recibir alertas de administración', 'module' => 'Notificaciones'],
+            ['name' => 'notificaciones.configurar', 'label' => 'Configurar preferencias de notificación', 'module' => 'Notificaciones'],
         ];
 
         foreach ($permissions as $permission) {
@@ -223,8 +236,10 @@ class PermissionSeeder extends Seeder
             ->pluck('id')
             ->all();
 
+        // Sincronizar todos los permisos activos a los roles marcados como super admin.
+        // Ya no depende del nombre "Administrador", sino del flag is_super_admin.
         Role::query()
-            ->where('name', 'Administrador')
+            ->where('is_super_admin', true)
             ->where('is_active', true)
             ->each(function (Role $role) use ($administratorPermissionIds) {
                 $role->permissions()->syncWithoutDetaching(

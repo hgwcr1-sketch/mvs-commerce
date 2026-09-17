@@ -17,6 +17,10 @@
     if ($bottomNavCompany && (auth()->user()->hasPermission('caja.abrir', $bottomNavCompany) || auth()->user()->hasPermission('caja.ver', $bottomNavCompany))) {
         $bottomNavItems[] = ['route' => 'cash.index', 'pattern' => 'cash.*', 'label' => 'Caja', 'icon' => 'cash'];
     }
+
+    if ($bottomNavCompany && auth()->user()->hasPermission('notificaciones.ver', $bottomNavCompany)) {
+        $bottomNavItems[] = ['route' => 'notifications.index', 'pattern' => 'notifications.index', 'label' => 'Alertas', 'icon' => 'bell'];
+    }
 @endphp
 
 <nav id="bottom-nav"
@@ -52,6 +56,11 @@
                 @case('cash')
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75l11.03-11.03M3.75 12h7.5L3.75 4.5v15l7.5-7.5h-7.5m13.5 1.5l3.75 3.75m0 0l-3.75 3.75"/>
+                    </svg>
+                @break
+                @case('bell')
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0"/>
                     </svg>
                 @break
             @endswitch

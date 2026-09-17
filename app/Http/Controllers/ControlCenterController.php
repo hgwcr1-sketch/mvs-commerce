@@ -11,6 +11,8 @@ class ControlCenterController extends Controller
     public function index(Request $request, ControlCenterService $service)
     {
         $company = Company::query()->findOrFail((int) session('active_company_id'));
+        abort_unless($request->user()->hasPermission('dashboard.admin', $company), 403);
+
         $branchId = session('active_branch_id') ? (int) session('active_branch_id') : null;
 
         $data = $service->forCompany($company, $branchId);

@@ -29,6 +29,7 @@ class TransferController extends Controller
         'cancelled' => 'Cancelado',
         'completed' => 'Completado',
     ];
+
     /**
      * Listado de transferencias.
      */
@@ -263,7 +264,7 @@ class TransferController extends Controller
         }
 
         // Crear la transferencia y sus items dentro de una transacción
-        return DB::transaction(function () use ($companyId, $fromBranchId, $fromBranch, $toBranch, $data, $company, $products, $request, $inventory) {
+        return DB::transaction(function () use ($companyId, $fromBranchId, $data, $request, $inventory) {
             // Crear cabecera de transferencia
             $transfer = InventoryTransfer::create([
                 'company_id' => $companyId,
@@ -448,6 +449,24 @@ class TransferController extends Controller
      */
     public function show(Request $request, InventoryTransfer $transfer)
     {
+        $companyId = (int) session('active_company_id');
+        $company = Company::query()->findOrFail($companyId);
+
+        abort_unless((int) $transfer->company_id === $companyId, 404);
+
+        $assignedBranchIds = $request->user()->branches()
+            ->where('branches.company_id', $companyId)
+            ->pluck('branches.id');
+
+        $canSeeOtherBranches = $request->user()->hasPermission('inventario.ver_otras_sucursales', $company);
+
+        abort_unless(
+            $canSeeOtherBranches
+                || $assignedBranchIds->contains($transfer->from_branch_id)
+                || $assignedBranchIds->contains($transfer->to_branch_id),
+            403
+        );
+
         $transfer->load(['fromBranch', 'toBranch', 'user', 'preparer', 'receiver', 'confirmer', 'items.product']);
         $dispatcher = User::query()->find($transfer->dispatched_by);
         $statusLabels = self::STATUS_LABELS;

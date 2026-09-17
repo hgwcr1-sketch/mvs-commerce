@@ -328,6 +328,12 @@ class LayawayService
                     $alert = LayawayAlert::firstOrCreate(['layaway_id' => $l->id, 'type' => 'upcoming'], ['company_id' => $l->company_id, 'notified_at' => now()]);
                     if ($alert->wasRecentlyCreated) {
                         foreach ($l->company->users as $user) {
+                            if (! $user->is_active) {
+                                continue;
+                            }
+                            if (! $user->branches()->where('branches.id', $l->branch_id)->exists()) {
+                                continue;
+                            }
                             if ($user->hasPermission('apartados.ver', $l->company)) {
                                 $user->notify(new LayawayUpcomingNotification($l));
                             }

@@ -379,9 +379,9 @@
 
     {{-- FOOTER --}}
 
-@canany(['configuracion.ver', 'formas_pago.administrar', 'caja.administrar'])
+@canany(['configuracion.ver', 'formas_pago.administrar', 'caja.administrar', 'notificaciones.configurar'])
 <div x-data="{ open: false }" class="mb-2 px-3">
-    <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-xs text-slate-400 transition hover:text-white {{ request()->routeIs('settings.pos.payment-methods.*', 'settings.cash-registers.*') ? 'text-amber-400' : '' }}">
+    <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-xs text-slate-400 transition hover:text-white {{ request()->routeIs('settings.pos.payment-methods.*', 'settings.cash-registers.*', 'notifications.preferences') ? 'text-amber-400' : '' }}">
         <span class="flex items-center gap-2">
 
     <svg xmlns="http://www.w3.org/2000/svg"
@@ -415,6 +415,9 @@
         @endcan
         @can('mvs.print.configurar')
             <a href="{{ route('mvs.print.index') }}" class="block py-1 text-xs {{ request()->routeIs('mvs.print.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Impresión (MVS Print)</a>
+        @endcan
+        @can('notificaciones.configurar')
+            <a href="{{ route('notifications.preferences') }}" class="block py-1 text-xs {{ request()->routeIs('notifications.preferences') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Alertas y Notificaciones</a>
         @endcan
     </div>
 </div>

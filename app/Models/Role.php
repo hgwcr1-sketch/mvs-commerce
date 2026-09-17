@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
     'name',
     'description',
     'is_active',
+    'is_super_admin',
 ])]
 
 class Role extends Model
@@ -21,6 +22,7 @@ class Role extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_super_admin' => 'boolean',
         ];
     }
 
