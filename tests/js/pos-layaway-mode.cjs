@@ -11,16 +11,18 @@ let factory;
 let requests = [];
 const reply = (payload, status = 200) => ({ ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => payload });
 let handler = async () => reply([]);
+const browserWindow = { location: { origin: 'http://localhost', search: '' }, confirm: () => true, addEventListener: () => {} };
 vm.runInNewContext(script, {
     document: { addEventListener: (_, fn) => fn(), querySelector: () => ({ content: 'test-csrf' }) },
     Alpine: { data: (_, fn) => { factory = fn; } }, URL, URLSearchParams, console,
-    window: { location: { origin: 'http://localhost', search: '' }, confirm: () => true },
+    window: browserWindow,
     fetch: async (url, options = {}) => { requests.push({ url: String(url), options }); return handler(url, options); },
 });
 const fresh = () => {
     const pos = factory();
     pos.$nextTick = () => {};
     pos.$refs = {};
+    pos.$watch = () => {};
     return pos;
 };
 const product = { id: 1, name: 'Sin stock', sale_price: 1000, tax_rate: 0, controls_inventory: true, available_stock: 0, can_add_to_cart: false };
@@ -38,6 +40,8 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.equal(evaluate(enterButton, 'x-show', pos), true);
     assert.equal(evaluate(enterButton, ':disabled', pos), false);
     assert.ok(!/\sdisabled(?:\s|=|>)/.test(enterButton));
+    assert.equal(attribute(enterButton, 'href'), undefined);
+    assert.ok(!html.includes('/apartados/crear'));
     const classes = attribute(enterButton, 'class').split(/\s+/);
     for (const required of ['bg-primary', 'text-black', 'cursor-pointer', 'min-h-[44px]']) assert.ok(classes.includes(required));
     assert.ok(!classes.some(name => /^(opacity-|pointer-events-none|hidden$)/.test(name)));
@@ -64,6 +68,14 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     transitions.addProduct(stocked);
     await transitions.leaveLayawayMode();
     assert.equal(transitions.layawayMode, false);
+
+    browserWindow.location.search = '?mode=layaway';
+    const requested = fresh();
+    requested.init();
+    assert.equal(requested.layawayMode, true);
+    assert.equal(requested.quoteMode, false);
+    assert.ok(requested.layaway.expires_at.length >= 10);
+    browserWindow.location.search = '';
     assert.equal(transitions.quoteMode, false);
     assert.equal(transitions.cart.length, 1);
     await transitions.enterQuoteMode();
@@ -163,6 +175,13 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.equal(denied.canSubmitLayaway, false);
     await denied.createLayaway();
     assert.equal(requests.length, beforeDenied);
+    browserWindow.location.search = '?mode=layaway';
+    const deniedRequested = fresh();
+    deniedRequested.canCreateLayaway = false;
+    deniedRequested.init();
+    assert.equal(deniedRequested.layawayMode, false);
+    assert.equal(deniedRequested.quoteMode, false);
+    browserWindow.location.search = '';
 
     // Mode changes repeat the search without quote_mode and never auto-add a barcode in apartado.
     pos.query = 'BARCODE';

@@ -500,7 +500,6 @@
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
             @can('cotizaciones.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
             @can('apartados.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterLayawayMode()" :disabled="!canCreateLayaway || creatingLayaway || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-bold text-black hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Apartar</button>@endcan
-            @can('apartados.crear')<a href="{{ route('apartados.create') }}" class="whitespace-nowrap rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">Nuevo apartado</a>@endcan
             @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
             @foreach(['Nota de crédito', 'Nota de débito'] as $option)
                 <button type="button" disabled class="whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
@@ -916,8 +915,10 @@ document.addEventListener('alpine:init', () => {
                 this.$refs.searchInput?.focus();
                 setTimeout(() => { if (document.activeElement !== this.$refs.searchInput) this.$refs.searchInput?.focus(); }, 150);
             });
-            const quoteId = new URLSearchParams(window.location.search).get('quote_id');
-            if (quoteId) this.loadQuote(quoteId);
+            const params = new URLSearchParams(window.location.search);
+            const quoteId = params.get('quote_id');
+            if (params.get('mode') === 'layaway') this.enterLayawayMode();
+            else if (quoteId) this.loadQuote(quoteId);
             this.$watch('customerId', () => this.refreshLoyalty());
             this.$watch('cashSessionId', () => this.clearPayments());
             this.$watch('grandTotal', () => { if (this.customerId) this.refreshLoyalty(); });

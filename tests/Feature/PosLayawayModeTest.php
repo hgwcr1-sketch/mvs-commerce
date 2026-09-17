@@ -370,6 +370,11 @@ class PosLayawayModeTest extends TestCase
             ])->assertForbidden();
         $this->actingAs($withoutPermission)->withSession($this->activeSession($company, $branch))
             ->get(route('pos.index'))->assertOk()->assertSee('canCreateLayaway: false', false)->assertDontSee('Crear apartado');
+        $this->actingAs($withoutPermission)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index', ['mode' => 'layaway']))->assertOk()
+            ->assertSee('canCreateLayaway: false', false)->assertDontSee('>Apartar<', false);
+        $this->actingAs($withoutPermission)->withSession($this->activeSession($company, $branch))
+            ->get(route('apartados.index'))->assertForbidden();
 
         [$foreignCompany, $foreignBranch, $foreignUser, $foreignCash] = $this->context('Ajena');
         $foreignProduct = $this->product($foreignCompany);
@@ -414,7 +419,17 @@ class PosLayawayModeTest extends TestCase
         $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
             ->get(route('pos.index'))->assertOk()
             ->assertSee('MODO APARTADO')->assertSee('Crear apartado')->assertSee('Apartar')
+            ->assertSee('canCreateLayaway: true', false)
+            ->assertDontSee(route('apartados.create'));
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.index', ['mode' => 'layaway']))->assertOk()
             ->assertSee('canCreateLayaway: true', false);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('apartados.index'))->assertOk()
+            ->assertSee(route('pos.index', ['mode' => 'layaway']))
+            ->assertDontSee(route('apartados.create'));
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('apartados.create'))->assertOk();
         $process = new Process(['node', base_path('tests/js/pos-layaway-mode.cjs')]);
         $process->setInput($response->getContent())->mustRun();
         $this->assertStringContainsString('Layaway mode UI OK', $process->getOutput());
