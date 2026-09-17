@@ -350,6 +350,31 @@ Trial, Active y Grace permiten operación; Expired, Suspended y Cancelled la blo
 
 ---
 
+## D026 — Nota de Crédito nominativa, unida a la devolución
+
+Toda Nota de Crédito debe pertenecer a un cliente identificado. No existe NC anónima, ni al portador, ni se crea un cliente genérico "Consumidor Final".
+
+- Si la venta original no tiene cliente, la devolución de mercancía sigue funcionando con el comportamiento actual y NO emite NC. En una fase UI posterior, el usuario podrá seleccionar/registrar al cliente antes de generar la NC.
+- Contrato 1 devolución = máximo 1 NC garantizado por `credit_notes.sale_return_id UNIQUE`. Una venta puede tener múltiples devoluciones y, por tanto, múltiples NC.
+- Razón: una NC es un derecho crediticio nominativo y trazable; sin cliente no hay acreedor.
+- Consecuencia: `CreditNoteService::issueFromReturn` exige `customer_id` y la emisión ocurre atómicamente dentro de la misma transacción de `SaleReturnService`, sin alterar inventario ni fidelización.
+
+## D027 — CxC: NC con revisión pendiente, nunca doble beneficio
+
+Mientras no exista conciliación CxC, una NC emitida sobre una venta con cuenta por cobrar:
+
+- se marca con `requires_ar_review=true`;
+- NO disminuye `balance_due`, NO crea `AccountReceivablePayment` y NO modifica `AccountReceivable`;
+- `applyToSale` la rechaza a nivel dominio (bloqueo duro en Fase 1), sin importar la venta destino.
+
+Antes de habilitar la aplicación de esa NC en POS deberá existir conciliación CxC; de lo contrario el cliente obtendría doble beneficio económico (abono implícito vía NC + pago íntegro de la CxC). Esta decisión NO es la solución definitiva de conciliación.
+
+## D028 — NC interna separada de NC electrónica Hacienda
+
+La Nota de Crédito interna (`credit_notes`) es la fuente financiera del negocio. NO comparte columnas ni ciclo de vida con la futura NC electrónica de Hacienda: la integración fiscal se implementará después como entidad/tabla separada 1:1, sin tocar la feature de factura electrónica actual.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

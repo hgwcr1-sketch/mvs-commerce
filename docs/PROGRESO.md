@@ -481,6 +481,36 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ---
 
+## Notas de Crédito
+
+Estado: FASE 1 — NÚCLEO DE DOMINIO IMPLEMENTADO (sin UI, sin POS, sin Hacienda)
+
+Incluye (Fase 1, rama `feature/notas-credito`):
+
+- Nota de Crédito nominativa: SIEMPRE requiere cliente identificado en la venta original; no existe NC anónima ni al portador.
+- Emisión automática y atómica desde `SaleReturnService` dentro de la misma transacción de devolución, solo si la venta tiene `customer_id`; consumidor final devuelve igual y no genera NC.
+- Contrato 1 devolución = máximo 1 NC (`sale_return_id` UNIQUE); una venta puede tener múltiples devoluciones y múltiples NC.
+- Importes exclusivamente BCMath escala 4 / DECIMAL(19,4): `issued_amount`, `applied_amount`, `balance`; saldo nunca negativo.
+- Aplicación a venta destino a nivel dominio/servicio (`applyToSale`) con idempotencia por `(company_id, application_token)`; NO conectada al POS y NO modifica `balance_due` de la venta ni CxC.
+- Anulación (`void`) solo para NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): `balance` pasa a `0.0000`, `issued_amount` se conserva para auditoría. Una NC parcial o totalmente aplicada exige revertir primero sus aplicaciones (fase POS/anulaciones, no implementada).
+- Auditoría de aplicación exclusiva de `credit_note_applications` (`applied_by`/`applied_at`); la cabecera `credit_notes` no duplica esos campos.
+- Ventas con CxC: la NC se emite con `requires_ar_review=true`, sin disminuir `balance_due` ni crear abonos, y `applyToSale` la rechaza a nivel dominio. Conciliación CxC obligatoria antes de habilitar su aplicación en POS (evita doble beneficio económico).
+- La NC no mueve inventario y no modifica fidelización.
+- Numeración `NC-00000001` por empresa vía `CompanySequence::nextCreditNoteNumber()`.
+- NC interna ≠ NC electrónica Hacienda: sin columnas fiscales; la integración futura será una entidad/tabla separada 1:1.
+
+Elementos:
+
+- Migraciones `2026_09_16_000001_create_credit_notes_table` y `2026_09_16_000002_create_credit_note_applications_table`.
+- `CreditNote`, `CreditNoteApplication`, `CreditNoteService` (`issueFromReturn`, `availableForCustomer`, `applyToSale`, `void`).
+- Relaciones: `SaleReturn->creditNote`, `Sale->creditNotesIssued` / `creditNoteApplicationsAsDestination`, `Customer->creditNotes` / `creditNoteApplications`.
+
+Pendiente (fases siguientes, no autorizado aún): reversión de aplicaciones (prerequisito para anular NC ya usadas), medio de pago NC en POS, UI de selección de NC, conciliación automática CxC, NC electrónica Hacienda, permisos/menú, reportes.
+
+Pruebas relacionadas: `CreditNoteTest` (19 pruebas, 122 aserciones); regresión `SaleReturnTest`, `SaleVoidTest`, `LoyaltyRewardRedemptionTest` en verde; `SaleReturnLoyaltyTest` conserva 2 fallos preexistentes en la base (deriva de expectativas del canje proporcional pre-impuesto, ajena a esta fase).
+
+---
+
 ## Cuentas por pagar
 
 Estado: ACTIVO

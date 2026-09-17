@@ -125,6 +125,16 @@ class Sale extends Model
         return $this->hasMany(SaleReturn::class);
     }
 
+    public function creditNotesIssued(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function creditNoteApplicationsAsDestination(): HasMany
+    {
+        return $this->hasMany(CreditNoteApplication::class);
+    }
+
     public function voidedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'voided_by');

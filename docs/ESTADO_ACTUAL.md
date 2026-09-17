@@ -2,6 +2,12 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Notas de Crédito — Fase 1 núcleo de dominio (2026-09-16)
+
+Base `b748c5d`, rama `feature/notas-credito`, trabajo local **sin commit** (así debe permanecer hasta orden explícita). Implementado el núcleo de NC según decisiones D026–D028: migraciones `credit_notes` y `credit_note_applications` (DECIMAL 19,4, `sale_return_id` UNIQUE, idempotencia por empresa+`application_token`), modelos `CreditNote`/`CreditNoteApplication`, secuencia `NC-00000001` por empresa, `CreditNoteService` (`issueFromReturn`/`availableForCustomer`/`applyToSale`/`void`) con BCMath escala 4, locking y transacciones, y emisión atómica integrada en `SaleReturnService` **solo con cliente identificado**. NC nominativa: sin cliente no hay NC; la devolución de consumidor final sigue intacta. Auditoría de aplicación vive únicamente en `credit_note_applications` (`applied_by`/`applied_at`/`amount`/token); la cabecera `credit_notes` **no** duplica ese control. CxC NO se toca: NC con `requires_ar_review=true`, saldo CxC intacto y **bloqueo duro en `applyToSale`** (rechazada hasta existir conciliación CxC; evita doble beneficio económico). NC interna ≠ NC electrónica Hacienda (futuro 1:1 separado). `void()` solo admite NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): al anular, `balance=0.0000`, se registran `voided_by/at`+motivo y `issued_amount` queda intacto para auditoría; revertir aplicaciones pertenece a la fase POS/anulaciones. `applyToSale` existe solo a nivel dominio/servicio: **NO conectar al POS todavía**, no modifica `balance_due` ni pagos. NC no mueve inventario ni fidelización.
+
+Validación: `CreditNoteTest` **19/19, 122 aserciones**; regresión pedida `SaleReturnTest`+`SaleVoidTest`+`LoyaltyRewardRedemptionTest` en verde (combinada: 60 pruebas, 58 pasan, 357 aserciones); `SaleReturnLoyaltyTest` 2 fallos **preexistentes en `b748c5d`** verificados con stash y con valores idénticos a la línea base (deriva de expectativas del canje proporcional pre-impuesto, módulo ajeno, no corregir aquí). Pint: archivos nuevos limpios; `CompanySequence`/`Customer`/`SaleReturn` conservan los mismos avisos de formato de la base, sin refactor ajeno. `git diff --check` correcto. `InventoryPostingService.php` intacto. Pendiente Fase 2: UI de selección/registro de cliente para NC de consumidor final, medio de pago NC en POS, conciliación CxC, permisos/menú/reportes.
+
 ## MVS Print — instalador 1.0.2 en preparación (2026-09-16)
 
 Versión bump a 1.0.2 en todos los archivos fuente: NSI (`!ifndef` guard, única definición), Launcher.cs, launcher.manifest, build-installer.ps1, README.md, VERSION. Dorado oficial documentado en AGENTS.md y docs/GUIA_VISUAL.md. Impresion.blade.php migrado de amber/blue a `bg-primary` dorado. Tests PHP 62/62, JS security 25/25, JS print 14/14. Launcher build + tests PASS. Pre-existente: ResponsiveNavigationTest fallo de logo (no relacionado). Build completo del instalador requiere QZ source tree (JDK+Ant); preparado para ejecutar cuando el árbol QZ esté disponible. Prueba física final pendiente. Nota: archivos fuente del installer (`storage/app/mvs-print-release/`) están gitignored; el version bump es local y efectivo en el próximo build.
@@ -210,7 +216,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/pos`
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (base `b748c5d`), para el desarrollo paralelo de Notas de Crédito Fase 1. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
