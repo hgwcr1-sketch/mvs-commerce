@@ -33,7 +33,7 @@ class AccountsReceivableController extends Controller
      */
     public function show(Request $request, AccountReceivable $accountReceivable, CashSessionResolver $resolver): View
     {
-        $account = $this->scoped($accountReceivable)->load(['customer','sale','payments.paymentMethod','payments.user']);
+        $account = $this->scoped($accountReceivable)->load(['customer','sale','payments.paymentMethod','payments.user','adjustments.creditNote']);
         $methods = PaymentMethod::forCompany($account->company_id)->active()->whereNotIn('type',[PaymentMethod::TYPE_CREDIT,PaymentMethod::TYPE_LOYALTY_POINTS])->ordered()->get();
         $sessions = $resolver->applicable($request->user(), $account->company_id, $account->branch_id);
         return view('accounts-receivable.show', compact('account','methods','sessions'));

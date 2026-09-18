@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Models\AccountReceivable;
+use App\Models\AccountReceivableAdjustment;
 use App\Models\LoyaltyMovement;
 use App\Models\Sale;
 use App\Models\SalePayment;
@@ -63,6 +64,15 @@ class SaleVoidService
 
             if ($sale->accountReceivable?->payments->isNotEmpty()) {
                 throw ValidationException::withMessages(['sale' => 'No se puede anular una venta a crédito que ya tiene abonos registrados.']);
+            }
+
+            if (AccountReceivableAdjustment::query()
+                ->where('company_id', $sale->company_id)
+                ->where('account_receivable_id', $sale->accountReceivable?->id)
+                ->where('status', AccountReceivableAdjustment::STATUS_ACTIVE)
+                ->exists()
+            ) {
+                throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con compensaciones CxC activas registradas.']);
             }
 
             foreach ($sale->items as $item) {

@@ -26,6 +26,7 @@ class CreditNote extends Model
         'credit_note_number',
         'currency_code',
         'issued_amount',
+        'offset_amount',
         'applied_amount',
         'balance',
         'status',
@@ -44,6 +45,7 @@ class CreditNote extends Model
     {
         return [
             'issued_amount' => 'decimal:4',
+            'offset_amount' => 'decimal:4',
             'applied_amount' => 'decimal:4',
             'balance' => 'decimal:4',
             'requires_ar_review' => 'boolean',
@@ -90,6 +92,11 @@ class CreditNote extends Model
     public function applications(): HasMany
     {
         return $this->hasMany(CreditNoteApplication::class);
+    }
+
+    public function arAdjustments(): HasMany
+    {
+        return $this->hasMany(AccountReceivableAdjustment::class);
     }
 
     public function scopeForCompany(Builder $query, int $companyId): Builder

@@ -3,6 +3,7 @@
 namespace App\Services\Sales;
 
 use App\Models\AccountReceivable;
+use App\Models\AccountReceivableAdjustment;
 use App\Models\CompanySequence;
 use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
@@ -14,16 +15,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Núcleo de Notas de Crédito (Fase 1).
+ * Núcleo de Notas de Crédito (Fase 1 + Fase 2B).
  *
  * Reglas permanentes:
  *  - Toda Nota de Crédito es nominativa: exige customer_id en la venta original.
  *  - 1 devolución = máximo 1 Nota de Crédito (sale_return_id UNIQUE).
  *  - Dinero exclusivamente con BCMath a escala 4; jamás floats.
- *  - La NC NO mueve inventario, NO modifica fidelización y NO altera CxC.
- *  - Si la venta original tiene CxC, la NC se emite con requires_ar_review=true
- *    y NO se disminuye balance_due ni se crean abonos: la aplicación en POS
- *    queda bloqueada hasta existir conciliación CxC (evita doble beneficio).
+ *  - La NC NO mueve inventario, NO modifica fidelización.
+ *  - Invariante financiera: issued_amount = offset_amount + applied_amount + balance.
+ *  - Fase 2B: la NC emitida sobre una venta con CxC se concilia
+ *    automáticamente contra AccountReceivable cuando procede (misma empresa,
+ *    cliente, venta, sucursal y moneda). El offset NO afecta caja ni pagos.
+ *  - requires_ar_review es un semáforo transitorio: pasa a false tras la
+ *    conciliación o cuando no existe AR / AR pagada / balance_due <= 0.
  *  - NC interna ≠ NC electrónica Hacienda: la integración fiscal será una
  *    entidad 1:1 separada.
  */
@@ -31,11 +35,21 @@ class CreditNoteService
 {
     private const SCALE = 4;
 
+    public function __construct(
+        private readonly AccountsReceivableReconciliationService $reconciliationService,
+    ) {}
+
     /**
      * Emite la Nota de Crédito derivada de una devolución.
      *
      * Idempotencia: una misma devolución produce siempre la misma NC;
      * un idempotency_key repetido por empresa también la reutiliza.
+     *
+     * Tras crear la NC, se intenta conciliación automática CxC dentro de la
+     * misma unidad transaccional. Si existe AccountReceivable para la venta,
+     * se determina el offset contra el saldo pendiente; de lo contrario
+     * requires_ar_review queda en false. Si la conciliación falla la
+     * transacción completa se revierte.
      */
     public function issueFromReturn(SaleReturn $saleReturn, User $user, ?string $idempotencyKey = null): CreditNote
     {
@@ -88,13 +102,14 @@ class CreditNoteService
                 ]);
             }
 
-            $requiresArReview = AccountReceivable::query()
+            $hasAr = AccountReceivable::query()
+                ->where('company_id', $sale->company_id)
                 ->where('sale_id', $sale->id)
                 ->exists();
 
             $now = now();
 
-            return CreditNote::create([
+            $creditNote = CreditNote::create([
                 'company_id' => $saleReturn->company_id,
                 'branch_id' => $saleReturn->branch_id,
                 'customer_id' => $sale->customer_id,
@@ -105,6 +120,7 @@ class CreditNoteService
                 ),
                 'currency_code' => $sale->currency_code,
                 'issued_amount' => $issuedAmount,
+                'offset_amount' => '0',
                 'applied_amount' => '0',
                 'balance' => $issuedAmount,
                 'status' => CreditNote::STATUS_ISSUED,
@@ -112,17 +128,26 @@ class CreditNoteService
                 'issued_by' => $user->id,
                 'issued_at' => $now,
                 'idempotency_key' => $idempotencyKey,
-                'requires_ar_review' => $requiresArReview,
+                'requires_ar_review' => $hasAr,
             ]);
+
+            if ($hasAr) {
+                $this->reconciliationService->reconcile($creditNote, $user);
+            } else {
+                $creditNote->update(['requires_ar_review' => false]);
+            }
+
+            return $creditNote->fresh();
         });
     }
 
     /**
      * Notas de crédito disponibles (saldo > 0) para un cliente de una empresa.
      *
-     * Orden FIFO por fecha de emisión. Incluye las marcadas con
-     * requires_ar_review: quien las consuma desde POS deberá primero
-     * conciliar la CxC de la venta origen (decisión de Fase 1).
+     * Orden FIFO por fecha de emisión. Exclusivamente NC con saldo disponible
+     * y estado issued/partially_applied. La conciliación automática de Fase 2B
+     * resuelve requires_ar_review al emitir la NC; el guard de applyToSale
+     * permanece como defensa en profundidad.
      *
      * @return Collection<int, CreditNote>
      */
@@ -143,6 +168,8 @@ class CreditNoteService
      * Idempotencia garantizada por (company_id, application_token) UNIQUE.
      * Fase 1: registra la aplicación a nivel dominio; NO modifica el saldo de
      * la venta destino ni la CxC de ninguna cuenta.
+     *
+     * Lock order: Sale → CreditNote (orden global aprobado).
      */
     public function applyToSale(
         CreditNote $creditNote,
@@ -169,6 +196,11 @@ class CreditNoteService
             if ($existing !== null) {
                 return $existing;
             }
+
+            $target = Sale::query()
+                ->whereKey($sale->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $note = CreditNote::query()
                 ->whereKey($creditNote->id)
@@ -200,11 +232,6 @@ class CreditNoteService
                     'amount' => 'El monto supera el saldo disponible de la Nota de Crédito.',
                 ]);
             }
-
-            $target = Sale::query()
-                ->whereKey($sale->id)
-                ->lockForUpdate()
-                ->firstOrFail();
 
             if ((int) $target->company_id !== (int) $note->company_id) {
                 throw ValidationException::withMessages([
@@ -264,16 +291,20 @@ class CreditNoteService
     }
 
     /**
-     * Anula una Nota de Crédito jamás aplicada.
+     * Anula una Nota de Crédito jamás aplicada ni compensada.
      *
-     * Solo es anulación directa si applied_amount == 0.0000 y no existe
-     * ninguna aplicación activa (status applied). Una NC parcial o
-     * totalmente aplicada requiere antes revertir sus aplicaciones, lo que
-     * pertenece a la fase POS/anulaciones y NO se implementa en Fase 1.
+     * Solo es anulación directa si:
+     *  - applied_amount == 0.0000
+     *  - offset_amount == 0.0000
+     *  - sin CreditNoteApplications activas
+     *  - sin AccountReceivableAdjustments activos
+     *
+     * Una NC con aplicaciones, compensaciones o ajustes activos requiere
+     * revertir primero; la reversión de ajustes pertenece a una fase posterior.
      *
      * Al anular: status voided, balance pasa a 0.0000 y se registran
-     * voided_by/voided_at/void_reason. issued_amount permanece intacto para
-     * auditoría y applied_amount sigue en 0.0000.
+     * voided_by/voided_at/void_reason. issued_amount y offset_amount se
+     * conservan para auditoría.
      */
     public function void(CreditNote $creditNote, User $user, string $reason): CreditNote
     {
@@ -302,9 +333,14 @@ class CreditNoteService
                 ->where('status', CreditNoteApplication::STATUS_APPLIED)
                 ->exists();
 
-            if (bccomp((string) $note->applied_amount, '0', self::SCALE) > 0 || $hasActiveApplications) {
+            $hasActiveAdjustments = AccountReceivableAdjustment::query()
+                ->where('credit_note_id', $note->id)
+                ->where('status', AccountReceivableAdjustment::STATUS_ACTIVE)
+                ->exists();
+
+            if (bccomp((string) $note->applied_amount, '0', self::SCALE) > 0 || $hasActiveApplications || bccomp((string) $note->offset_amount, '0', self::SCALE) > 0 || $hasActiveAdjustments) {
                 throw ValidationException::withMessages([
-                    'credit_note' => 'La Nota de Crédito tiene aplicaciones registradas: deben revertirse primero sus aplicaciones antes de anularla.',
+                    'credit_note' => 'La Nota de Crédito tiene aplicaciones o compensaciones CxC registradas: deben revertirse primero antes de anularla.',
                 ]);
             }
 

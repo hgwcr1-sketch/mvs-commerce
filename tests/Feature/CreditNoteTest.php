@@ -629,7 +629,7 @@ class CreditNoteTest extends TestCase
         $this->creditNotes()->issueFromReturn(SaleReturn::sole(), $user);
     }
 
-    public function test_return_on_credit_sale_flags_ar_review_and_keeps_ar_intact(): void
+    public function test_return_on_credit_sale_auto_reconciles_and_reduces_ar_balance(): void
     {
         [$company, $branch, $user, $customer] = $this->scenario();
         $product = $this->product($company);
@@ -655,30 +655,22 @@ class CreditNoteTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $note = CreditNote::sole();
-        $this->assertTrue((bool) $note->requires_ar_review);
-        $this->assertSame('1130.0000', (string) $note->balance);
+        $this->assertFalse((bool) $note->requires_ar_review);
+        $this->assertSame('1130.0000', (string) $note->offset_amount);
+        $this->assertSame('0.0000', (string) $note->applied_amount);
+        $this->assertSame('0.0000', (string) $note->balance);
 
         $account->refresh();
-        $this->assertSame('5650.0000', (string) $account->balance_due);
+        $this->assertSame('4520.0000', (string) $account->balance_due);
         $this->assertSame(AccountReceivable::STATUS_PENDING, $account->status);
         $this->assertDatabaseCount('accounts_receivable_payments', 0);
 
-        $target = $this->completedSale($company, $branch, $user, $product->id, 5, $customer);
-
-        try {
-            $this->creditNotes()->applyToSale($note->fresh(), $target, '500.0000', $user, 'APL-ARBLOCK-'.uniqid());
-            $this->fail('Se esperaba bloqueo de aplicación por revisión CxC pendiente.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('credit_note', $e->errors());
-            $this->assertStringContainsString('conciliación CxC', $e->errors()['credit_note'][0]);
-        }
-
-        $note->refresh();
-        $this->assertSame(CreditNote::STATUS_ISSUED, $note->status);
-        $this->assertSame('1130.0000', (string) $note->balance);
-        $this->assertDatabaseCount('credit_note_applications', 0);
-        $account->refresh();
-        $this->assertSame('5650.0000', (string) $account->balance_due);
+        $this->assertDatabaseCount('accounts_receivable_adjustments', 1);
+        $adj = \App\Models\AccountReceivableAdjustment::sole();
+        $this->assertSame('1130.0000', (string) $adj->amount);
+        $this->assertSame('5650.0000', (string) $adj->balance_before);
+        $this->assertSame('4520.0000', (string) $adj->balance_after);
+        $this->assertSame($note->id, (int) $adj->credit_note_id);
     }
 
     public function test_void_unused_credit_note_zeroes_balance_and_preserves_issued_amount(): void
