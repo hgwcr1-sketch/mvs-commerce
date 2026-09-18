@@ -1,6 +1,7 @@
 import '../css/app.css';
 
 import * as MvsOffline from './offline/index.js';
+import './offline/cold-start.js';
 
 import Alpine from 'alpinejs';
 import qz from 'qz-tray';

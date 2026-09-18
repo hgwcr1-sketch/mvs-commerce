@@ -27,14 +27,14 @@ describe('Phase 4A — Service Worker', () => {
 
   it('sw.js has correct cache name with version', () => {
     const source = readSource('public/sw.js');
-    assert.match(source, /const CACHE_NAME = 'mvs-pos-shell-v2'/, 'should have versioned cache name');
+    assert.match(source, /const CACHE_NAME = 'mvs-pos-shell-v5'/, 'should have versioned cache name');
   });
 
   it('sw.js caches only shell assets (not entire app)', () => {
     const source = readSource('public/sw.js');
     assert.match(source, /const SHELL_ASSETS = \[/, 'should define SHELL_ASSETS array');
-    assert.match(source, /'\/pos'/, 'should include POS route');
-    assert.match(source, /'\/build\/assets\/app/, 'should include compiled CSS/JS');
+    assert.match(source, /'\/offline-shell\.html'/, 'should include generic offline shell');
+    assert.match(source, /'\/build\/manifest\.json'/, 'should include Vite manifest');
   });
 
   it('sw.js does NOT cache API endpoints', () => {
@@ -79,7 +79,7 @@ describe('Phase 4A — Service Worker', () => {
 
   it('authenticated POS HTML is not written to Cache Storage by default', () => {
     const source = readSource('public/sw.js');
-    assert.match(source, /X-MVS-Offline-Shell/, 'only explicitly marked shell HTML may be cached');
+    assert.match(source, /offline-shell\.html/, 'only generic shell HTML may be cached');
   });
 
   it('sw.js activate cleans only MVS Offline caches', () => {
@@ -96,7 +96,7 @@ describe('Phase 4A — Service Worker', () => {
 
   it('sw.js has version in CACHE_VERSION constant', () => {
     const source = readSource('public/sw.js');
-    assert.match(source, /const CACHE_VERSION = 2/, 'should have CACHE_VERSION');
+    assert.match(source, /const CACHE_VERSION = 5/, 'should have CACHE_VERSION');
   });
 
   it('sw.js responds to getVersion message', () => {

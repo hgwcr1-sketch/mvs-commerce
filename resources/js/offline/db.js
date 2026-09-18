@@ -117,29 +117,41 @@ export async function getAll(storeName) {
 
 /**
  * Put (insert or update) a value into any store.
+ * Resolves only after the IndexedDB transaction commits (tx.oncomplete), not
+ * upon request success, so consumers never confirm durable writes (e.g. a
+ * pending_operation) before IndexedDB actually commits them.
  */
 export async function put(storeName, value) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
+    let settled = false;
+    const settle = (fn, value) => { if (!settled) { settled = true; fn(value); } };
     const store = tx.objectStore(storeName);
     const req = store.put(value);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(new Error(`put failed: ${req.error?.message}`));
+    req.onerror = () => settle(reject, new Error(`put failed: ${req.error?.message}`));
+    tx.oncomplete = () => settle(resolve, req.result);
+    tx.onerror = () => settle(reject, new Error(`put transaction failed: ${tx.error?.message}`));
+    tx.onabort = () => settle(reject, new Error(`put aborted: ${tx.error?.message}`));
   });
 }
 
 /**
  * Delete a value from any store by key.
+ * Resolves only after the transaction commits.
  */
 export async function remove(storeName, key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
+    let settled = false;
+    const settle = (fn, value) => { if (!settled) { settled = true; fn(value); } };
     const store = tx.objectStore(storeName);
     const req = store.delete(key);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(new Error(`remove failed: ${req.error?.message}`));
+    req.onerror = () => settle(reject, new Error(`remove failed: ${req.error?.message}`));
+    tx.oncomplete = () => settle(resolve, true);
+    tx.onerror = () => settle(reject, new Error(`remove transaction failed: ${tx.error?.message}`));
+    tx.onabort = () => settle(reject, new Error(`remove aborted: ${tx.error?.message}`));
   });
 }
 
@@ -159,16 +171,20 @@ export async function getByIndex(storeName, indexName, query) {
 }
 
 /**
- * Clear all records from a store.
+ * Clear all records from a store. Resolves only after the transaction commits.
  */
 export async function clearStore(storeName) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
+    let settled = false;
+    const settle = (fn, value) => { if (!settled) { settled = true; fn(value); } };
     const store = tx.objectStore(storeName);
     const req = store.clear();
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(new Error(`clearStore failed: ${req.error?.message}`));
+    req.onerror = () => settle(reject, new Error(`clearStore failed: ${req.error?.message}`));
+    tx.oncomplete = () => settle(resolve, true);
+    tx.onerror = () => settle(reject, new Error(`clearStore transaction failed: ${tx.error?.message}`));
+    tx.onabort = () => settle(reject, new Error(`clearStore aborted: ${tx.error?.message}`));
   });
 }
 

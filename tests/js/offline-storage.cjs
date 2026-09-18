@@ -29,7 +29,12 @@ function createMemoryIDB() {
 
     _request(result) {
       const req = { result, error: null, onsuccess: null, onerror: null };
-      setTimeout(() => { if (req.onsuccess) req.onsuccess({ target: req }); }, 0);
+      const store = this;
+      setTimeout(() => {
+        if (req.onsuccess) req.onsuccess({ target: req });
+        const tx = store._activeTx;
+        if (tx && typeof tx.oncomplete === 'function') tx.oncomplete({ target: tx });
+      }, 0);
       return req;
     }
 
@@ -100,11 +105,17 @@ function createMemoryIDB() {
         if (!this.stores.has(name)) throw new Error(`Store not found: ${name}`);
         storeMap.set(name, this.stores.get(name));
       }
-      return {
+      const tx = {
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
         objectStore(name) {
-          return storeMap.get(name);
+          const store = storeMap.get(name);
+          store._activeTx = tx;
+          return store;
         },
       };
+      return tx;
     }
 
     close() {

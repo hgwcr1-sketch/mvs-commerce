@@ -67,6 +67,28 @@ class OfflineAuthorizationTest extends TestCase
         $payload = $service->verifyToken($result['authorization']);
         $this->assertNotNull($payload);
         $this->assertEquals($company->id, $payload['company_id']);
+        $this->assertSame($user->id, $payload['user_id']);
+        $this->assertSame($branch->id, $payload['branch_id']);
+        $this->assertSame($terminal->terminal_uuid, $payload['terminal_uuid']);
+        $this->assertNull($service->verifyToken($this->tamperPayload($result['authorization'], 'user_id', $user->id + 1)));
+    }
+
+    public function test_legacy_token_without_signed_user_remains_valid_for_existing_flows(): void
+    {
+        [$company, $branch] = $this->tenant('Legacy');
+        $user = $this->createUserWithAccess($company, $branch);
+        $terminal = $this->createActiveTerminal($company, $branch);
+        $service = app(OfflineAuthorizationService::class);
+        $token = $service->authorize($terminal, $user)['token'];
+        [$header, $encodedPayload] = explode('.', $token);
+        $payload = json_decode(base64_decode(strtr($encodedPayload, '-_', '+/')), true);
+        unset($payload['user_id']);
+        $encodedPayload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+        $data = $header.'.'.$encodedPayload;
+        openssl_sign($data, $signature, File::get($this->testPrivateKeyPath), OPENSSL_ALGO_SHA256);
+        $legacy = $data.'.'.rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
+        $this->assertSame($payload, $service->verifyToken($legacy));
+        $this->assertSame($payload, $service->verifyTokenAllowExpired($legacy));
     }
 
     public function test_modifying_company_id_invalidates_signature(): void

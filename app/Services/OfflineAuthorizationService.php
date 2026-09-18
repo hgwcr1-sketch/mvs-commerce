@@ -96,6 +96,7 @@ class OfflineAuthorizationService
             'authorization_id' => $authorizationRecord->authorization_id,
             'company_id' => $company->id,
             'branch_id' => $branch->id,
+            'user_id' => $actor->id,
             'terminal_uuid' => $terminal->terminal_uuid,
             'issued_at' => $now->toIso8601String(),
             'valid_until' => $validUntil->toIso8601String(),

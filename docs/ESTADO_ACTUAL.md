@@ -2,6 +2,30 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Offline 4B.1C — Cold Start certificado manualmente + cierre de commit Offline (2026-09-17)
+
+**PRUEBA MANUAL COLD START: PASS.** Reinicio completo de la PC, Laravel OFF desde el arranque, Chrome abierto directamente a `http://127.0.0.1:8000/pos`: se sirvió el shell Offline real (`offline-shell.html`), nunca el HTML privado de POS ni `/`. Identidad local (empresa/sucursal/usuario) y terminal con vigencia visible, búsqueda Offline de producto y cliente, carrito disponible y cobro bloqueado sin caja recuperable. Evidencia de consola aportada: `shell:true`, `posBlade:false`, `scriptShell:true`, `checkoutDisabled:true`, `caches:['mvs-pos-shell-v5']`. Sin ventas, sin caja Offline y sin borrar IndexedDB ni `pending_operations`.
+
+Antecedente de la corrección v5 (conservada íntegra): GET programático `/pos` o `/` con `Accept: */*` no entraba en la rama de navegación y alcanzaba `networkFirst()`, que guardaba toda respuesta 200; v5 limita las escrituras al shell genérico y a recursos estáticos permitidos, rechaza redirecciones, respuestas privadas/no-store y HTML bajo URLs de assets, usa `cache: no-store` para documentos/datos no cacheables, sirve `/offline-shell.html` en navegación offline, purga solo cachés MVS anteriores y no toca IndexedDB. Instrumentación temporal `v5-diag-1` retirada de `public/sw.js` y de su prueba; las protecciones contra cachear `/pos`, `/` y HTML privado, el fallback Offline, la purga de cachés, IndexedDB, la validación RSA/usuario/empresa/sucursal/terminal, el snapshot Cold Start y el cobro bloqueado sin caja recuperable permanecen.
+
+Defecto separado de commit Offline corregido en `resources/js/offline/db.js`: `put()`, `remove()` y `clearStore()` ahora resuelven en `tx.oncomplete` (commit durable), no en `req.onsuccess`, y rechazan en `tx.onerror`/`tx.onabort`. Así `attemptOfflineSale` nunca confirma una venta Offline antes de que IndexedDB confirme durablemente el `pending_operation`. El mock de `tests/js/offline-storage.cjs` emula el commit de transacción.
+
+Validación final: PHP Offline **81/81 (310 aserciones)**; POS checkout/infraestructura/caja **27/27 (161)**; todas las suites JS Offline **207/207**, con Cold Start **39/39**, `offline-service-worker.cjs` **14/14** y `offline-commit.cjs` **2/2**. `npm run build` correcto; `git diff --check` correcto (solo aviso CRLF en `public/sw.js`). **4B.1C lista para cierre/commit; 4B.1D y 4C NO iniciadas; sin commit/push/merge/producción.**
+
+## Offline 4B.1C — aislamiento RSA de usuario, validación local (2026-09-17)
+
+Trabajo local sobre `dummy-branch-1`, base `0497403a46f37f6437962dda3e2af86976647e74`; cambios Cold Start del relevo preservados. **4B.1C implementada, NO CERTIFICADA**: pendiente prueba manual de arranque completo de Chrome con Laravel apagado. Las referencias inferiores a 4B.1C no iniciada corresponden al cierre histórico de 4B.1B.
+
+El payload RS256 versión 1 conserva `authorization_id`, `company_id`, `branch_id`, `terminal_uuid`, `issued_at`, `valid_until`, `server_time`, `license_status` y añade `user_id` del actor autenticado. Se firma el JSON codificado base64url como `header.payload`, sin recanonicalización en navegador. No cambia RSA-2048/SHA-256, claves, esquema de BD ni versión de IndexedDB.
+
+Cold Start exige `signed.user_id == metadata.user_id == snapshot.user.id`, firma válida, contexto exacto y vigencia firmada actual de máximo 48 horas. Metadata local no puede prolongar la vigencia firmada. Tokens v1 antiguos sin `user_id` siguen admitidos por los flujos 4B.1B existentes, pero **no habilitan Cold Start**: requieren reconexión y apertura de `/pos`; el bootstrap solicita una nueva autorización al servidor y refresca el snapshot únicamente estando online. No hay renovación local, limpieza de IndexedDB ni modificación de operaciones pendientes.
+
+Pruebas nuevas en `tests/js/offline-cold-start-runtime.cjs`: ejecución del código real de recuperación y RSA/WebCrypto, con I/O de almacenamiento simulado; cubren usuario/empresa/sucursal/terminal, snapshot, firma/clave, expiración, ventana de 48h y actualización online compatible con tokens antiguos. Las 13 pruebas estáticas originales se conservan; el supuesto guard 55/55 del relevo no existe como evidencia verificable y no es requisito.
+
+Validación final: PHP Offline **81/81 (310 aserciones)**; POS checkout **14/14 (96)** e infraestructura/caja **13/13 (65)**; las nueve suites JS Offline **191/191**, incluyendo Cold Start **39/39 (26 runtime + 13 estáticas)**. Build correcto (advertencias no bloqueantes de importación dinámica/tiempos de plugins); diff-check correcto. Cache del shell **v4** para instalar el bundle actualizado sin tocar IndexedDB. **READY_FOR_MANUAL_COLD_START_TEST: YES**, sin certificación de navegador. Antes de apagar Laravel, abrir `/pos` online con el mismo perfil/origen para actualizar autorización y preparar el shell; no borrar datos ni crear ventas.
+
+El shell permite identidad, búsquedas de producto/cliente y carrito; **el cobro permanece bloqueado incluso con caja abierta en servidor**, sin recuperación de caja en este shell. No crear otra venta durante la prueba manual. 4B.1D y 4C no iniciadas. Sin commit, push, merge ni producción.
+
 ## Offline Fase 4B.1B — Venta oficial e idempotencia CERTIFICADAS (2026-09-17)
 
 4B.1B queda **COMPLETADA/CERTIFICADA** para el POS previamente aprovisionado: producto y cliente Offline, checkout con RSA local, persistencia en IndexedDB, cola `pending`, reconexión, sincronización FIFO, Sale oficial y ACK durable. La operación real `fc8c830a-f368-40ef-8b0f-b127a1c2f583` produjo exactamente una Sale (`id=1`, `POS-00000001`), un ítem (producto 1, cantidad 1, total 5650), cliente 1 y un único posting de inventario/Kardex (1951 → 1950). `attempts=0` es correcto: representa cero errores/reintentos.

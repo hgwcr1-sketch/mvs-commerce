@@ -291,6 +291,7 @@ export async function verifyAuthSignature(token, publicKey, context) {
       company_id: payload.company_id,
       branch_id: payload.branch_id,
       terminal_uuid: payload.terminal_uuid,
+      user_id: payload.user_id,
       issued_at: payload.issued_at,
       valid_until: payload.valid_until,
       server_time: payload.server_time,

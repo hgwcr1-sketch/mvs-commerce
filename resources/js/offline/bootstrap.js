@@ -4,6 +4,7 @@ import { fetchAndStoreSnapshot } from './snapshot-client.js';
 import { checkPublicKeyReady, storePublicKeyLocally } from './offline-ready.js';
 import { getSnapshotMetadata } from './snapshot.js';
 import { checkServerReachable, getLastHealthStatus } from './connectivity.js';
+import { parseAuthToken } from './auth-verification.js';
 import { syncPendingOperations } from './sync-worker.js';
 
 const TERMINAL_KEY = 'mvs-offline-terminal';
@@ -125,6 +126,14 @@ async function provision(context) {
 
   const health = await checkServerReachable();
   if (health === 'online') {
+    // Add the signed user claim to legacy authorizations only via the server.
+    // Keep existing Offline 4B.1B behavior while the server is unreachable.
+    let signedUserId;
+    try { signedUserId = parseAuthToken(auth.token).payload.user_id; } catch (_) { /* refresh online */ }
+    if (signedUserId !== context.user_id) {
+      auth = await fetchAuthorization(context);
+      await saveAuthorization(auth, context);
+    }
     const snapshotResult = await fetchAndStoreSnapshot({
       authorizationToken: auth.token,
       terminalUuid: context.terminal_uuid,
