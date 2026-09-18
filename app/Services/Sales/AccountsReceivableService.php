@@ -18,17 +18,19 @@ class AccountsReceivableService
 
     public function __construct(private readonly CashSessionResolver $cashSessionResolver) {}
 
-    public function createForSale(Sale $sale, Customer $customer): AccountReceivable
+    public function createForSale(Sale $sale, Customer $customer, ?string $creditAmount = null): AccountReceivable
     {
         $customer = Customer::query()->whereKey($customer->id)->where('company_id', $sale->company_id)->where('is_active', true)->lockForUpdate()->first();
         if (!$customer) throw ValidationException::withMessages(['customer_id' => 'Para vender a crédito debe seleccionar un cliente válido.']);
         if (bccomp((string) $customer->credit_limit, '0', self::SCALE) <= 0) throw ValidationException::withMessages(['credit' => 'Este cliente no tiene crédito autorizado.']);
         if ((int) $customer->credit_days <= 0) throw ValidationException::withMessages(['credit' => 'El cliente no tiene un plazo de crédito configurado.']);
 
+        $amount = $creditAmount ?? (string) $sale->total;
+
         $used = (string) AccountReceivable::query()->forCompany($sale->company_id)->where('customer_id', $customer->id)
             ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])->lockForUpdate()->sum('balance_due');
         $available = bcsub((string) $customer->credit_limit, $used, self::SCALE);
-        if (bccomp((string) $sale->total, $available, self::SCALE) > 0) {
+        if (bccomp($amount, $available, self::SCALE) > 0) {
             throw ValidationException::withMessages(['credit' => 'El cliente no tiene crédito disponible suficiente.']);
         }
 
@@ -36,7 +38,7 @@ class AccountsReceivableService
         return AccountReceivable::firstOrCreate(['sale_id' => $sale->id], [
             'company_id' => $sale->company_id, 'branch_id' => $sale->branch_id, 'customer_id' => $customer->id,
             'issued_at' => $issued->toDateString(), 'due_date' => $issued->copy()->addDays((int) $customer->credit_days)->toDateString(),
-            'original_amount' => $sale->total, 'balance_due' => $sale->total, 'status' => AccountReceivable::STATUS_PENDING, 'currency_code' => $sale->currency_code,
+            'original_amount' => $amount, 'balance_due' => $amount, 'status' => AccountReceivable::STATUS_PENDING, 'currency_code' => $sale->currency_code,
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Services\Sales;
 
 use App\Models\AccountReceivable;
 use App\Models\AccountReceivableAdjustment;
+use App\Models\CreditNoteApplication;
 use App\Models\LoyaltyMovement;
 use App\Models\Sale;
 use App\Models\SalePayment;
@@ -75,6 +76,15 @@ class SaleVoidService
                 ->exists()
             ) {
                 throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con compensaciones CxC activas registradas.']);
+            }
+
+            if (CreditNoteApplication::query()
+                ->where('company_id', $sale->company_id)
+                ->where('sale_id', $sale->id)
+                ->where('status', CreditNoteApplication::STATUS_APPLIED)
+                ->exists()
+            ) {
+                throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con aplicaciones de nota de crédito activas.']);
             }
 
             foreach ($sale->items as $item) {

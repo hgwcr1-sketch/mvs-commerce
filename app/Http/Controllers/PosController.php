@@ -9,6 +9,7 @@ use App\Http\Requests\StoreSuspendedSaleRequest;
 use App\Models\AccountReceivable;
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\PaymentMethod;
@@ -406,6 +407,48 @@ class PosController extends Controller
             number_format((float) $validated['total'], 4, '.', ''),
             (bool) ($validated['has_offers'] ?? false),
         ));
+    }
+
+    public function searchCreditNotes(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer'],
+        ]);
+
+        $companyId = (int) session('active_company_id');
+        $company = Company::query()->findOrFail($companyId);
+
+        if (! $request->user()->hasPermission('notas_credito.aplicar', $company)) {
+            abort(403);
+        }
+
+        $customer = Customer::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->find($validated['customer_id']);
+
+        if ($customer === null) {
+            return response()->json(['message' => 'Cliente no encontrado.'], 404);
+        }
+
+        $notes = CreditNote::query()
+            ->forCompany($companyId)
+            ->forCustomer($customer->id)
+            ->available()
+            ->with('saleReturn:id,sale_id,reason')
+            ->with('branch:id,name')
+            ->orderBy('issued_at')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json($notes->map(fn (CreditNote $note) => [
+            'id' => $note->id,
+            'number' => $note->credit_note_number,
+            'balance' => $note->balance,
+            'issued_at' => $note->issued_at?->toIso8601String(),
+            'branch_name' => $note->branch?->name,
+            'sale_return_reason' => $note->saleReturn?->reason,
+        ])->values());
     }
 
     public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse

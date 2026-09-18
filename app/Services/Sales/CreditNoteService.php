@@ -291,6 +291,140 @@ class CreditNoteService
     }
 
     /**
+     * Aplica múltiples NC a una venta en orden determinista (POS batch).
+     *
+     * Lock order canónico: Sale → NC1 → NC2 → ... (ASC by id).
+     * Valida TODAS las NC antes de empezar writes económicos.
+     * Preserva invariante: issued_amount = offset_amount + applied_amount + balance.
+     *
+     * @param array<int, array{credit_note_id: int, amount: string}> $canonicalNC
+     * @return CreditNoteApplication[]
+     */
+    public function applyBatchToSale(
+        Sale $sale,
+        array $canonicalNC,
+        User $user,
+        string $checkoutToken,
+    ): array {
+        if ($canonicalNC === []) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($sale, $canonicalNC, $user, $checkoutToken): array {
+            $target = Sale::query()
+                ->whereKey($sale->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Lock NCs en orden determinista ASC
+            $ncIds = array_column($canonicalNC, 'credit_note_id');
+            $sortedNCs = CreditNote::query()
+                ->whereIn('id', $ncIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($sortedNCs->count() !== count($ncIds)) {
+                throw ValidationException::withMessages([
+                    'credit_note_applications' => 'Una o más Notas de Crédito no están disponibles.',
+                ]);
+            }
+
+            // ── FASE 1: Validar TODO el batch antes de cualquier write ──
+            foreach ($canonicalNC as $ncReq) {
+                $note = $sortedNCs->get($ncReq['credit_note_id']);
+
+                if ((int) $note->company_id !== (int) $target->company_id) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'La NC '.$note->credit_note_number.' pertenece a otra empresa.',
+                    ]);
+                }
+
+                if ($target->customer_id === null || (int) $note->customer_id !== (int) $target->customer_id) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'La NC '.$note->credit_note_number.' no pertenece a este cliente.',
+                    ]);
+                }
+
+                if (in_array($note->status, [CreditNote::STATUS_VOIDED, CreditNote::STATUS_APPLIED], true)) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'La NC '.$note->credit_note_number.' no tiene saldo aplicable.',
+                    ]);
+                }
+
+                if ($note->requires_ar_review) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'La NC '.$note->credit_note_number.' requiere conciliación CxC.',
+                    ]);
+                }
+
+                $applied = bcadd((string) $ncReq['amount'], '0', self::SCALE);
+
+                if (bccomp($applied, '0', self::SCALE) <= 0) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'El monto para NC '.$note->credit_note_number.' debe ser mayor que cero.',
+                    ]);
+                }
+
+                if (bccomp($applied, (string) $note->balance, self::SCALE) > 0) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'El monto para NC '.$note->credit_note_number.' supera su saldo disponible ('.number_format((float) $note->balance, 2, '.', '').').',
+                    ]);
+                }
+            }
+
+            // ── FASE 2: Crear applications y actualizar NCs ──
+            $applications = [];
+            $now = now();
+
+            foreach ($canonicalNC as $ncReq) {
+                $note = $sortedNCs->get($ncReq['credit_note_id']);
+                $applicationToken = "pos-sale:{$checkoutToken}:cn:{$note->id}";
+
+                // Idempotencia
+                $existing = CreditNoteApplication::query()
+                    ->where('company_id', $note->company_id)
+                    ->where('application_token', $applicationToken)
+                    ->first();
+
+                if ($existing !== null) {
+                    $applications[] = $existing;
+                    continue;
+                }
+
+                $applied = bcadd((string) $ncReq['amount'], '0', self::SCALE);
+                $newBalance = bcsub((string) $note->balance, $applied, self::SCALE);
+                $newApplied = bcadd((string) $note->applied_amount, $applied, self::SCALE);
+                $fullyApplied = bccomp($newBalance, '0', self::SCALE) === 0;
+
+                $applications[] = CreditNoteApplication::create([
+                    'company_id' => $note->company_id,
+                    'credit_note_id' => $note->id,
+                    'sale_id' => $target->id,
+                    'customer_id' => $note->customer_id,
+                    'amount' => $applied,
+                    'application_token' => $applicationToken,
+                    'applied_by' => $user->id,
+                    'applied_at' => $now,
+                    'status' => CreditNoteApplication::STATUS_APPLIED,
+                    'notes' => 'Aplicación POS venta '.$target->sale_number,
+                ]);
+
+                $note->update([
+                    'applied_amount' => $newApplied,
+                    'balance' => $newBalance,
+                    'status' => $fullyApplied
+                        ? CreditNote::STATUS_APPLIED
+                        : CreditNote::STATUS_PARTIALLY_APPLIED,
+                ]);
+            }
+
+            return $applications;
+        });
+    }
+
+    /**
      * Anula una Nota de Crédito jamás aplicada ni compensada.
      *
      * Solo es anulación directa si:
