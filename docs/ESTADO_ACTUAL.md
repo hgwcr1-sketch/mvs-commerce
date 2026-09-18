@@ -2,6 +2,46 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Notas de Crédito — Fase 3A cerrada: POS Backend Integration (2026-09-18)
+
+**Commit `3f55ba9`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`). Fase 3A cerrada y certificada.
+
+Cadena completa de Notas de Crédito:
+
+- Fase 0 — `b748c5d` (fix inventory posting)
+- Fase 1 — `e035cea` (core NC domain)
+- Fase 2B — `7bb6b2d` (NC↔AR reconciliation)
+- Fase 2C — `85907e9` (formal reversal mechanism)
+- **Fase 3A — `3f55ba9` (POS backend integration) ← CERRADA**
+
+Fase 3A implementa el backend del POS para soportar Notas de Crédito en el checkout:
+
+- Aplicación de NC en POS (endpoint `pos.credit-notes.available` + campo `credit_note_applications` en `pos.checkout`).
+- `CreditNoteApplication` como dominio separado (NO es PaymentMethod, NO crea SalePayment, NO crea CashMovement).
+- Aplicación parcial y múltiples NC por venta.
+- Locking determinista: Sale → NC1 → NC2 → ... (ASC by id).
+- Idempotencia: checkout fingerprint incluye NC + `application_token` por NC.
+- NC + efectivo, tarjeta, SINPE, múltiples pagos.
+- NC + fidelización/puntos.
+- NC + crédito: CxC creada únicamente por el monto restante (`total - ncAppliedAmount`); credit limit consumido solo por el restante.
+- 100% NC sin CashSession (cuando backend prueba cobertura total y no hay pagos).
+- Cross-branch permitido para aplicación POS cuando company y customer coinciden.
+- Endpoint backend para consultar NC disponibles (`searchCreditNotes`).
+- Permiso `notas_credito.aplicar`.
+- `SaleVoidService` bloqueado temporalmente cuando existen aplicaciones NC activas.
+- Precisión monetaria BCMath SCALE=4.
+
+Semántica importante: `paid_total` NO representa necesariamente efectivo recibido. Para venta 100% cubierta por NC: `SalePayment = 0`, `CashMovement = 0`, pero la venta queda económicamente satisfecha.
+
+Certificación:
+
+- `PosCreditNoteTest`: **42/42 PASS**.
+- Certificación final: **237/237 PASS**, 1553 assertions.
+- Correcciones durante auditoría: (1) `paid_total`/`balance_due` en NC+crédito, (2) expectativa de mensaje loyalty por integración NC+puntos.
+- `PosSuspendedSalesTest` mantiene 1 fallo preexistente de formato, ajeno a NC.
+
+Pendiente: Fase 3B (POS UI + Receipt).
+
 ## Notas de Crédito — Fase 2C reversión NC↔CxC (2026-09-17)
 
 Base `7bb6b2d` (Fase 2B commit), rama `feature/notas-credito`, trabajo local **sin commit** (así debe permanecer hasta orden explícita). Fase 2C implementada: mecanismo formal de reversión de compensaciones NC↔CxC según decisión D029. Mig `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table` agrega `reversed_amount` y `reversal_adjustment_id`. `AccountReceivableAdjustment` extiendido con constante `TYPE_CREDIT_NOTE_OFFSET_REVERSAL`, relaciones `reversalAdjustment`/`reversedBy` y helpers `isFullyReversed()`/`remainingAmount()`. `AccountsReceivableReconciliationService::reverseOffset()` implementado: validación, lock order AR→NC→adjustment, idempotencia, reversión idempotente, cap a `original_amount`, creación de reversal adjustment. `AccountsReceivableController::reverseAdjustment` con permiso `cuentas_cobrar.revertir`. Ruta `POST cuentas-por-cobrar/{ar}/revertir-ajuste/{adjustment}`. Vista `accounts-receivable/show.blade.php` actualizada con historial de reversas (badge violeta), formulario de reversión con motivo. Suite: `AccountsReceivableReversalTest` 23/23, 65 aserciones; `CreditNoteReconciliationTest` 18/18; `CreditNoteTest` 19/19; regresión broader 96/103 (7 fallos preexistentes loyalty). Pendiente: commit, push, documentación, revisión del usuario.
@@ -218,7 +258,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (base `b748c5d`), para el desarrollo paralelo de Notas de Crédito Fase 1. `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `3f55ba9`). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -237,8 +277,9 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
-- Fase 2C reversión NC↔CxC: implementada localmente (sin commit), 23 tests pasando;
-- Fase 2B conciliación NC↔CxC: commit `7bb6b2d` (13 archivos, 1453 insertions);
+- **Fase 3A NC-POS: commit `3f55ba9`** (integración backend NC con POS, 9 archivos, 1351 insertions);
+- Fase 2C reversión NC↔CxC: commit `85907e9` (reversión formal de compensaciones);
+- Fase 2B conciliación NC↔CxC: commit `7bb6b2d` (conciliación automática, 13 archivos, 1453 insertions);
 - Fase 1 núcleo NC: commit `e035cea`;
 - canje de puntos de fidelización (`8392dd4`);
 - pedidos internos (`Order`) y órdenes de compra con conversión a compras;
@@ -249,15 +290,14 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito — Fase 2C**: reversión formal NC↔CxC implementada localmente, 23/23 tests, pendiente commit/push/usuario. Rama `feature/notas-credito`.
-- Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. Evidencia P25: SQLite 28/28, 163 aserciones; compatibilidad PostgreSQL estática OK, ejecución real pendiente antes de producción; 3 fallos históricos de `PosAccessAndSearchTest` fuera de alcance. **P26 SIGUIENTE BLOQUE OFICIAL**. P40 solo documentó/probó el procedimiento; no ejecutó PostgreSQL ni producción. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
+- **Notas de Crédito — Fase 3A CERRADA** (`3f55ba9`). Backend POS completo. SIGUIENTE: Fase 3B (POS UI + Receipt), pendiente de autorización.
+- Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
 - R01 — Navegación responsive: COMPLETADO (`9c03912`).
 - R02 — POS móvil + escaneo: **COMPLETADO** (R02-A + R02-B escáner por cámara).
 - R03 — Productos/Inventario móvil + cámara: **COMPLETADO** (responsive mobile-first, cámara integrada en ambas vistas, `productos.search` enriquecido). Pendiente commit junto con R02. Siguiente fase responsive: **R04**.
 - POS: expansión activa (uno de los módulos principales).
-- Configuración de OpenCode como agente alternativo para trabajar este repositorio.
 
 ## Próximo paso
 
@@ -268,13 +308,14 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
+**Prioridad inmediata: Notas de Crédito Fase 3B (POS UI + Receipt), pendiente de autorización. La Fase 3A cerró con commit `3f55ba9`.**
 
-No asumir que el último estado conocido sigue vigente.
+**P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
 
 ## Archivos o módulos relevantes
 
 - POS: `PosController`, `PosSaleProcessor`, `Sale`, `SaleItem`, `SalePayment`.
+- Notas de Crédito: `CreditNote`, `CreditNoteApplication`, `CreditNoteService`, `AccountsReceivableReconciliationService`, `AccountReceivableAdjustment`.
 - Fidelización: `app/Services/Loyalty/*`, `LoyaltyAccount`, `LoyaltyMovement`, `LoyaltyMovementLine`, `LoyaltyReward`, `LoyaltyRewardRedemption`, `LoyaltyPromotion`.
 - Caja: `app/Services/Cash/*`, notificaciones por correo con reintentos.
 - Pedidos/órdenes: `OrderService`, `PurchaseOrderPreparationService`, `PurchaseOrderConversionService`.
@@ -285,6 +326,7 @@ No asumir que el último estado conocido sigue vigente.
 Suite principal: `tests/Feature`.
 
 - POS: `PosCheckoutTest`, `PosSuspendedSalesTest`, `PosCashSessionIntegrationTest`, `PosAccessAndSearchTest`.
+- Notas de Crédito: `PosCreditNoteTest` (42/42), `CreditNoteTest` (19/19), `CreditNoteReconciliationTest` (18/18), `AccountsReceivableReversalTest` (23/23).
 - Navegación: `ResponsiveNavigationTest`, `LoyaltySettingsSidebarNavigationTest`.
 - Fidelización: `tests/Feature/Loyalty*Test.php` (incluye `LoyaltyExpirationTest`, `LoyaltyExpirationSettingTest`, `LoyaltyCustomerPortalTest`, `LoyaltyPortalAccessTest`, `LoyaltyPortalAccessQrTest`, `LoyaltyPromotionTest`, `LoyaltyOnlineSaleTest`, `LoyaltyOnlineRedemptionTest`), `PosCheckoutLoyaltyPointsRequestTest`, `PosCheckoutLoyaltyRedemptionTest`, `PosLoyaltyInterfaceTest`, `PosLoyaltyMixedPaymentsTest`, `SaleVoidLoyaltyTest`, `LoyaltySettingsSidebarNavigationTest`. Premios, disponibilidad, canjes y vencimiento: `LoyaltyRewardTest`, `LoyaltyRewardAvailabilityTest`, `LoyaltyRewardRedemptionTest`.
 - Caja: `Cash*Test.php`.
