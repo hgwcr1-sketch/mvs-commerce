@@ -2,11 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Notas de Crédito — Fase 1 núcleo de dominio (2026-09-16)
+## Notas de Crédito — Fase 2C reversión NC↔CxC (2026-09-17)
 
-Base `b748c5d`, rama `feature/notas-credito`, trabajo local **sin commit** (así debe permanecer hasta orden explícita). Implementado el núcleo de NC según decisiones D026–D028: migraciones `credit_notes` y `credit_note_applications` (DECIMAL 19,4, `sale_return_id` UNIQUE, idempotencia por empresa+`application_token`), modelos `CreditNote`/`CreditNoteApplication`, secuencia `NC-00000001` por empresa, `CreditNoteService` (`issueFromReturn`/`availableForCustomer`/`applyToSale`/`void`) con BCMath escala 4, locking y transacciones, y emisión atómica integrada en `SaleReturnService` **solo con cliente identificado**. NC nominativa: sin cliente no hay NC; la devolución de consumidor final sigue intacta. Auditoría de aplicación vive únicamente en `credit_note_applications` (`applied_by`/`applied_at`/`amount`/token); la cabecera `credit_notes` **no** duplica ese control. CxC NO se toca: NC con `requires_ar_review=true`, saldo CxC intacto y **bloqueo duro en `applyToSale`** (rechazada hasta existir conciliación CxC; evita doble beneficio económico). NC interna ≠ NC electrónica Hacienda (futuro 1:1 separado). `void()` solo admite NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): al anular, `balance=0.0000`, se registran `voided_by/at`+motivo y `issued_amount` queda intacto para auditoría; revertir aplicaciones pertenece a la fase POS/anulaciones. `applyToSale` existe solo a nivel dominio/servicio: **NO conectar al POS todavía**, no modifica `balance_due` ni pagos. NC no mueve inventario ni fidelización.
+Base `7bb6b2d` (Fase 2B commit), rama `feature/notas-credito`, trabajo local **sin commit** (así debe permanecer hasta orden explícita). Fase 2C implementada: mecanismo formal de reversión de compensaciones NC↔CxC según decisión D029. Mig `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table` agrega `reversed_amount` y `reversal_adjustment_id`. `AccountReceivableAdjustment` extiendido con constante `TYPE_CREDIT_NOTE_OFFSET_REVERSAL`, relaciones `reversalAdjustment`/`reversedBy` y helpers `isFullyReversed()`/`remainingAmount()`. `AccountsReceivableReconciliationService::reverseOffset()` implementado: validación, lock order AR→NC→adjustment, idempotencia, reversión idempotente, cap a `original_amount`, creación de reversal adjustment. `AccountsReceivableController::reverseAdjustment` con permiso `cuentas_cobrar.revertir`. Ruta `POST cuentas-por-cobrar/{ar}/revertir-ajuste/{adjustment}`. Vista `accounts-receivable/show.blade.php` actualizada con historial de reversas (badge violeta), formulario de reversión con motivo. Suite: `AccountsReceivableReversalTest` 23/23, 65 aserciones; `CreditNoteReconciliationTest` 18/18; `CreditNoteTest` 19/19; regresión broader 96/103 (7 fallos preexistentes loyalty). Pendiente: commit, push, documentación, revisión del usuario.
 
-Validación: `CreditNoteTest` **19/19, 122 aserciones**; regresión pedida `SaleReturnTest`+`SaleVoidTest`+`LoyaltyRewardRedemptionTest` en verde (combinada: 60 pruebas, 58 pasan, 357 aserciones); `SaleReturnLoyaltyTest` 2 fallos **preexistentes en `b748c5d`** verificados con stash y con valores idénticos a la línea base (deriva de expectativas del canje proporcional pre-impuesto, módulo ajeno, no corregir aquí). Pint: archivos nuevos limpios; `CompanySequence`/`Customer`/`SaleReturn` conservan los mismos avisos de formato de la base, sin refactor ajeno. `git diff --check` correcto. `InventoryPostingService.php` intacto. Pendiente Fase 2: UI de selección/registro de cliente para NC de consumidor final, medio de pago NC en POS, conciliación CxC, permisos/menú/reportes.
+Commits previos:
+- Fase 2B: `7bb6b2d` (conciliación NC↔CxC automática, 13 archivos, 1453 insertions).
+- Fase 1: `e035cea` (núcleo NC).
 
 ## MVS Print — instalador 1.0.2 en preparación (2026-09-16)
 
@@ -235,7 +237,9 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
-- integración de fidelización en POS (`7be1f80`), incluida auditoría con 152 tests de Loyalty / POS-Loyalty sin fallos;
+- Fase 2C reversión NC↔CxC: implementada localmente (sin commit), 23 tests pasando;
+- Fase 2B conciliación NC↔CxC: commit `7bb6b2d` (13 archivos, 1453 insertions);
+- Fase 1 núcleo NC: commit `e035cea`;
 - canje de puntos de fidelización (`8392dd4`);
 - pedidos internos (`Order`) y órdenes de compra con conversión a compras;
 - integración de caja con POS;
@@ -245,6 +249,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
+- **Notas de Crédito — Fase 2C**: reversión formal NC↔CxC implementada localmente, 23/23 tests, pendiente commit/push/usuario. Rama `feature/notas-credito`.
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. Evidencia P25: SQLite 28/28, 163 aserciones; compatibilidad PostgreSQL estática OK, ejecución real pendiente antes de producción; 3 fallos históricos de `PosAccessAndSearchTest` fuera de alcance. **P26 SIGUIENTE BLOQUE OFICIAL**. P40 solo documentó/probó el procedimiento; no ejecutó PostgreSQL ni producción. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.

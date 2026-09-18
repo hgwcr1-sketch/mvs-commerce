@@ -52,13 +52,19 @@
                     'amount' => (float) $p->amount,
                     'currency_code' => $account->currency_code,
                 ])->merge($adjustments->map(fn ($a) => [
-                    'type' => 'adjustment',
+                    'type' => $a->type === \App\Models\AccountReceivableAdjustment::TYPE_CREDIT_NOTE_OFFSET_REVERSAL ? 'reversal' : 'adjustment',
                     'datetime' => $a->created_at?->format('d/m/Y H:i') ?? '—',
-                    'method' => 'Compensación NC-' . optional($a->creditNote)->credit_note_number,
+                    'method' => $a->type === \App\Models\AccountReceivableAdjustment::TYPE_CREDIT_NOTE_OFFSET_REVERSAL
+                        ? 'Reversión compensación NC-' . optional($a->creditNote)->credit_note_number
+                        : 'Compensación NC-' . optional($a->creditNote)->credit_note_number,
                     'reference' => $a->reason ?? '—',
                     'user' => optional($a->createdBy)->name ?? '—',
                     'amount' => (float) $a->amount,
                     'currency_code' => $a->credit_note_id ? optional($a->creditNote)->currency_code : $account->currency_code,
+                    'adjustment_id' => $a->id,
+                    'is_reversible' => $a->type === \App\Models\AccountReceivableAdjustment::TYPE_CREDIT_NOTE_OFFSET
+                        && $a->status === \App\Models\AccountReceivableAdjustment::STATUS_ACTIVE
+                        && bccomp(bcsub((string) $a->amount, (string) $a->reversed_amount, 4), '0', 4) > 0,
                 ]));
                 $movements = $movements->sortBy('datetime')->values();
             @endphp
@@ -72,6 +78,7 @@
                             <th class="px-3 py-3">Referencia</th>
                             <th class="px-3 py-3">Usuario</th>
                             <th class="px-3 py-3 text-right">Monto</th>
+                            <th class="px-3 py-3">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -81,6 +88,8 @@
                                 <td class="px-3 py-3">
                                     @if($movement['type'] === 'payment')
                                         <span class="inline-flex items-center gap-1.5 text-xs font-semibold"><span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500"></span> Pago</span>
+                                    @elseif($movement['type'] === 'reversal')
+                                        <span class="inline-flex items-center gap-1.5 text-xs font-semibold"><span class="h-2 w-2 shrink-0 rounded-full bg-violet-500"></span> Reversión</span>
                                     @else
                                         <span class="inline-flex items-center gap-1.5 text-xs font-semibold"><span class="h-2 w-2 shrink-0 rounded-full bg-amber-500"></span> Compensación</span>
                                     @endif
@@ -88,7 +97,24 @@
                                 <td class="px-3 py-3">{{ $movement['method'] }}</td>
                                 <td class="px-3 py-3">{{ $movement['reference'] }}</td>
                                 <td class="px-3 py-3">{{ $movement['user'] }}</td>
-                                <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">₡{{ number_format($movement['amount'], 0, ',', '.') }}</td>
+                                <td class="whitespace-nowrap px-3 py-3 text-right font-semibold">
+                                    @if($movement['type'] === 'reversal')
+                                        +₡{{ number_format($movement['amount'], 0, ',', '.') }}
+                                    @else
+                                        ₡{{ number_format($movement['amount'], 0, ',', '.') }}
+                                    @endif
+                                </td>
+                                <td class="px-3 py-3">
+                                    @if($movement['is_reversible'] ?? false)
+                                        @can('cuentas_cobrar.revertir')
+                                            <form method="POST" action="{{ route('cuentas-por-cobrar.adjustments.reverse', [$account, $movement['adjustment_id']]) }}" class="inline-flex items-center gap-2" onsubmit="return confirm('¿Está seguro de revertir esta compensación?')">
+                                                @csrf
+                                                <input type="text" name="reason" required maxlength="255" placeholder="Motivo" class="w-40 rounded border border-slate-300 px-2 py-1 text-xs">
+                                                <button type="submit" class="rounded bg-violet-600 px-2 py-1 text-xs font-semibold text-white hover:bg-violet-700">Revertir</button>
+                                            </form>
+                                        @endcan
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

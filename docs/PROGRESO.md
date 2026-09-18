@@ -483,31 +483,56 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ## Notas de Crédito
 
-Estado: FASE 1 — NÚCLEO DE DOMINIO IMPLEMENTADO (sin UI, sin POS, sin Hacienda)
+Estado: FASE 2C — REVERSIÓN DE COMPENSACIÓN NC↔CxC IMPLEMENTADA (sin commit)
 
-Incluye (Fase 1, rama `feature/notas-credito`):
+Incluye (Fase 1 + Fase 2B + Fase 2C, rama `feature/notas-credito`):
 
+**Fase 1 — Núcleo de dominio:**
 - Nota de Crédito nominativa: SIEMPRE requiere cliente identificado en la venta original; no existe NC anónima ni al portador.
 - Emisión automática y atómica desde `SaleReturnService` dentro de la misma transacción de devolución, solo si la venta tiene `customer_id`; consumidor final devuelve igual y no genera NC.
 - Contrato 1 devolución = máximo 1 NC (`sale_return_id` UNIQUE); una venta puede tener múltiples devoluciones y múltiples NC.
 - Importes exclusivamente BCMath escala 4 / DECIMAL(19,4): `issued_amount`, `applied_amount`, `balance`; saldo nunca negativo.
 - Aplicación a venta destino a nivel dominio/servicio (`applyToSale`) con idempotencia por `(company_id, application_token)`; NO conectada al POS y NO modifica `balance_due` de la venta ni CxC.
-- Anulación (`void`) solo para NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): `balance` pasa a `0.0000`, `issued_amount` se conserva para auditoría. Una NC parcial o totalmente aplicada exige revertir primero sus aplicaciones (fase POS/anulaciones, no implementada).
+- Anulación (`void`) solo para NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): `balance` pasa a `0.0000`, `issued_amount` se conserva para auditoría.
 - Auditoría de aplicación exclusiva de `credit_note_applications` (`applied_by`/`applied_at`); la cabecera `credit_notes` no duplica esos campos.
-- Ventas con CxC: la NC se emite con `requires_ar_review=true`, sin disminuir `balance_due` ni crear abonos, y `applyToSale` la rechaza a nivel dominio. Conciliación CxC obligatoria antes de habilitar su aplicación en POS (evita doble beneficio económico).
 - La NC no mueve inventario y no modifica fidelización.
 - Numeración `NC-00000001` por empresa vía `CompanySequence::nextCreditNoteNumber()`.
 - NC interna ≠ NC electrónica Hacienda: sin columnas fiscales; la integración futura será una entidad/tabla separada 1:1.
 
+**Fase 2B — Conciliación CxC automática:**
+- Conciliación automática NC↔CxC al emitir NC sobre venta con `AccountReceivable` activo.
+- `AccountsReceivableReconciliationService::reconcile()` reduce `AR.balance_due` y `NC.offset_amount`; crea `AccountReceivableAdjustment` tipo `credit_note_offset`.
+- NC emitida con CxC: `requires_ar_review=false` (conciliación inmediata), `balance` = 0 tras offset total.
+- Cambio de estado automático: AR `pending→partial/paid`, NC `issued→applied`.
+- `applyToSale` habilitado para NC conciliadas (balance > 0).
+- Guardas: `SaleVoidService` no permite anular venta con ajustes activos; `CreditNoteService::void()` no permite anular NC con `offset_amount > 0`.
+- Migración `2026_09_16_000003_create_accounts_receivable_adjustments_table`.
+
+**Fase 2C — Reversión formal de compensación NC↔CxC:**
+- `reverseOffset()` revierte un offset previo creando adjustment `credit_note_offset_reversal` (original immutable).
+- Incrementa `AR.balance_due` (cap a `original_amount`), decrementa `NC.offset_amount`.
+- Reversión idempotente por llave `credit-note-ar-offset-reversal:{adjustment_id}` UNIQUE.
+- Campos: `reversed_amount` (acumulado en original), `reversal_adjustment_id` (FK nullable).
+- Permiso `cuentas_cobrar.revertir`; UI en vista de detalle de CxC con historial de tipo reversal.
+- No crea pagos, caja ni movimientos de efectivo.
+- Migración `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table`.
+
 Elementos:
 
-- Migraciones `2026_09_16_000001_create_credit_notes_table` y `2026_09_16_000002_create_credit_note_applications_table`.
+- Migraciones `2026_09_16_000001_create_credit_notes_table`, `2026_09_16_000002_create_credit_note_applications_table`, `2026_09_16_000003_create_accounts_receivable_adjustments_table`, `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table`.
 - `CreditNote`, `CreditNoteApplication`, `CreditNoteService` (`issueFromReturn`, `availableForCustomer`, `applyToSale`, `void`).
-- Relaciones: `SaleReturn->creditNote`, `Sale->creditNotesIssued` / `creditNoteApplicationsAsDestination`, `Customer->creditNotes` / `creditNoteApplications`.
+- `AccountReceivableAdjustment` (tipos: `credit_note_offset`, `credit_note_offset_reversal`; campos `reversed_amount`, `reversal_adjustment_id`).
+- `AccountsReceivableReconciliationService` (`reconcile`, `reverseOffset`).
+- `AccountsReceivableController::reverseAdjustment`.
+- Relaciones: `SaleReturn->creditNote`, `Sale->creditNotesIssued` / `creditNoteApplicationsAsDestination`, `Customer->creditNotes` / `creditNoteApplications`, `AccountReceivableAdjustment->reversalAdjustment` / `reversedBy`.
 
-Pendiente (fases siguientes, no autorizado aún): reversión de aplicaciones (prerequisito para anular NC ya usadas), medio de pago NC en POS, UI de selección de NC, conciliación automática CxC, NC electrónica Hacienda, permisos/menú, reportes.
+Pendiente (fases siguientes): medio de pago NC en POS, conciliación CxC manual/automática avanzada, NC electrónica Hacienda, permisos/menú, reportes.
 
-Pruebas relacionadas: `CreditNoteTest` (19 pruebas, 122 aserciones); regresión `SaleReturnTest`, `SaleVoidTest`, `LoyaltyRewardRedemptionTest` en verde; `SaleReturnLoyaltyTest` conserva 2 fallos preexistentes en la base (deriva de expectativas del canje proporcional pre-impuesto, ajena a esta fase).
+Pruebas relacionadas:
+- `CreditNoteTest` (19 pruebas, 122 aserciones) — Fase 1.
+- `CreditNoteReconciliationTest` (18 pruebas) — Fase 2B.
+- `AccountsReceivableReversalTest` (23 pruebas, 65 aserciones) — Fase 2C.
+- Regresión broader: 96/103 (7 fallos preexistentes en `SaleReturnLoyaltyTest` + `SaleVoidLoyaltyTest`, no atribuibles a NC).
 
 ---
 

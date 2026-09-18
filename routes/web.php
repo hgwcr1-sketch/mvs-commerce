@@ -743,6 +743,7 @@ Route::resource('transferencias', TransferController::class)
         Route::get('cuentas-por-cobrar', [AccountsReceivableController::class, 'index'])->name('cuentas-por-cobrar.index');
         Route::get('cuentas-por-cobrar/{accountReceivable}', [AccountsReceivableController::class, 'show'])->name('cuentas-por-cobrar.show');
         Route::post('cuentas-por-cobrar/{accountReceivable}/abonos', [AccountsReceivableController::class, 'payment'])->middleware('permission:cuentas_cobrar.abonar')->name('cuentas-por-cobrar.payments.store');
+        Route::post('cuentas-por-cobrar/{accountReceivable}/revertir-ajuste/{adjustment}', [AccountsReceivableController::class, 'reverseAdjustment'])->middleware('permission:cuentas_cobrar.revertir')->name('cuentas-por-cobrar.adjustments.reverse');
         Route::put('cuentas-por-cobrar-configuracion', [AccountsReceivableController::class, 'updateAlertDays'])->middleware('permission:cuentas_cobrar.editar')->name('cuentas-por-cobrar.alert-days.update');
     });
 

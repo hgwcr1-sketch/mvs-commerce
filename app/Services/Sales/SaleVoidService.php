@@ -69,7 +69,9 @@ class SaleVoidService
             if (AccountReceivableAdjustment::query()
                 ->where('company_id', $sale->company_id)
                 ->where('account_receivable_id', $sale->accountReceivable?->id)
+                ->where('type', AccountReceivableAdjustment::TYPE_CREDIT_NOTE_OFFSET)
                 ->where('status', AccountReceivableAdjustment::STATUS_ACTIVE)
+                ->whereRaw('amount - reversed_amount > 0')
                 ->exists()
             ) {
                 throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con compensaciones CxC activas registradas.']);

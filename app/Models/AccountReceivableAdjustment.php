@@ -4,12 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AccountReceivableAdjustment extends Model
 {
     protected $table = 'accounts_receivable_adjustments';
 
     public const TYPE_CREDIT_NOTE_OFFSET = 'credit_note_offset';
+
+    public const TYPE_CREDIT_NOTE_OFFSET_REVERSAL = 'credit_note_offset_reversal';
 
     public const STATUS_ACTIVE = 'active';
 
@@ -22,6 +25,8 @@ class AccountReceivableAdjustment extends Model
         'credit_note_id',
         'type',
         'amount',
+        'reversed_amount',
+        'reversal_adjustment_id',
         'balance_before',
         'balance_after',
         'reason',
@@ -37,6 +42,7 @@ class AccountReceivableAdjustment extends Model
     {
         return [
             'amount' => 'decimal:4',
+            'reversed_amount' => 'decimal:4',
             'balance_before' => 'decimal:4',
             'balance_after' => 'decimal:4',
             'voided_at' => 'datetime',
@@ -73,8 +79,28 @@ class AccountReceivableAdjustment extends Model
         return $this->belongsTo(User::class, 'voided_by');
     }
 
+    public function reversalAdjustment(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reversal_adjustment_id');
+    }
+
+    public function reversedBy(): HasOne
+    {
+        return $this->hasOne(self::class, 'reversal_adjustment_id');
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function isFullyReversed(): bool
+    {
+        return bccomp((string) $this->reversed_amount, (string) $this->amount, 4) >= 0;
+    }
+
+    public function remainingAmount(): string
+    {
+        return bcsub((string) $this->amount, (string) $this->reversed_amount, 4);
     }
 }

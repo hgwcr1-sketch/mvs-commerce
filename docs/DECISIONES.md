@@ -375,6 +375,36 @@ La Nota de Crédito interna (`credit_notes`) es la fuente financiera del negocio
 
 ---
 
+## D029 — Conciliación NC↔CxC: offset compensatorio automático
+
+Al emitir una Nota de Crédito sobre una venta con cuenta por cobrar activa, la conciliación es automática: se crea un `AccountReceivableAdjustment` de tipo `credit_note_offset` que reduce `AR.balance_due` y `NC.offset_amount` al mismo monto, sin crear pagos ni movimientos de caja.
+
+- La NC se marca con `requires_ar_review=false` (conciliación inmediata).
+- `CreditNote.balance` pasa a `0.0000` tras offset total.
+- El AR cambia de estado `pending → partial/paid` según el saldo restante.
+- `applyToSale` queda habilitado para NC con balance > 0.
+- Guardas: `SaleVoidService` no permite anular venta con ajustes activos; `CreditNoteService::void()` no permite anular NC con `offset_amount > 0`.
+- Invariante post-offset: `AR.issued_amount = AR.balance_due + Σ(offsets) + Σ(pagos)`.
+
+## D030 — Reversión formal de compensación NC↔CxC
+
+La reversión de un offset previo entre NC y CxC es un movimiento separado, no un pago, no una anulación:
+
+- Crea un `AccountReceivableAdjustment` de tipo `credit_note_offset_reversal`; el adjustment original permanece inmutable como evidencia histórica.
+- `amount` del reversal siempre positivo; el `type` determina la dirección.
+- Incrementa `AR.balance_due` (sin superar `AR.original_amount`) y decrementa `NC.offset_amount`.
+- NO crea `AccountReceivablePayment`, NO crea `CashMovement`, NO usa `PaymentMethod`, NO toca inventario ni fidelización.
+- Relación: el adjustment original apunta al reversal más reciente vía `reversal_adjustment_id` (FK nullable). El reversal tiene `reversal_adjustment_id = NULL`. `reversed_amount` en el original acumula el monto total revertido.
+- **Efecto económico activo** de un offset: `amount - reversed_amount`. Cuando `reversed_amount == amount`, el offset está completamente revertido y ya no se trata como compensación económicamente activa. La fila original NO se elimina.
+- `SaleVoid` bloquea solo si existen offsets con `status = ACTIVE` y `amount - reversed_amount > 0`.
+- Idempotente: llave `credit-note-ar-offset-reversal:{adjustment_id}` con `UNIQUE(company_id, idempotency_key)`.
+- Lock order: AR → NC → adjustment (consistente con reconcile).
+- Permiso backend: `cuentas_cobrar.revertir`; la validación es en el servicio, no solo UI.
+- NC con aplicaciones parciales (`applied_amount > 0`): reversal permitido si el balance NC tras reversión no excede `issued_amount`.
+- Invariante NC se preserva: `issued_amount = offset_amount + applied_amount + balance`.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:
