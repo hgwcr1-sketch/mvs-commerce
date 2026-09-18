@@ -39,7 +39,7 @@ class FacturaencrInvoiceMapper
         }
 
         $payload = [
-            'emisorLegalId' => $company->identification_number,
+            'emisorLegalId' => $this->emisorLegalId($company),
             'condicionVenta' => $this->mapCondicionVenta($sale->sale_condition),
             'currency' => $sale->currency_code,
             'exchangeRate' => (float) $sale->exchange_rate,
@@ -91,7 +91,7 @@ class FacturaencrInvoiceMapper
             return null;
         }
 
-        $days = $sale->created_at->diffInDays($sale->due_date);
+        $days = $sale->created_at->copy()->startOfDay()->diffInDays($sale->due_date->copy()->startOfDay());
 
         return (string) round($days);
     }
@@ -104,6 +104,11 @@ class FacturaencrInvoiceMapper
         ?SalePayment $salePayment = null
     ): array {
         $errors = [];
+
+        if (config('facturaencr.environment', 'sandbox') !== 'sandbox'
+            && config('facturaencr.sandbox_emisor', 'EMISORPRUEBA') === $company->identification_number) {
+            $errors['emisor'] = 'EMISORPRUEBA solo puede utilizarse en ambiente sandbox';
+        }
 
         if (empty($company->identification_number)) {
             $errors['emisor'] = 'El emisor no tiene identificación fiscal (companies.identification_number vacío)';
@@ -192,6 +197,15 @@ class FacturaencrInvoiceMapper
         }
 
         return $errors;
+    }
+
+    private function emisorLegalId(Company $company): string
+    {
+        if (config('facturaencr.environment', 'sandbox') === 'sandbox') {
+            return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
+        }
+
+        return (string) $company->identification_number;
     }
 
     private function mapMedioPago(Sale $sale, ?SalePayment $salePayment): array

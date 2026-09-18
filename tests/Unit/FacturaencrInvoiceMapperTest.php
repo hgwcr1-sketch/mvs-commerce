@@ -30,7 +30,7 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $payload = $mapper->map($sale, [$item], $customer, $company, $sale->payments->first());
 
         $this->assertArrayHasKey('emisorLegalId', $payload);
-        $this->assertSame($company->identification_number, $payload['emisorLegalId']);
+        $this->assertSame('EMISORPRUEBA', $payload['emisorLegalId']);
         $this->assertArrayHasKey('condicionVenta', $payload);
         $this->assertSame('01', $payload['condicionVenta']);
         $this->assertArrayHasKey('medioPago', $payload);
@@ -49,6 +49,26 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertArrayHasKey('cantidad', $payload['detalle'][0]);
         $this->assertArrayHasKey('unidadMedida', $payload['detalle'][0]);
         $this->assertArrayHasKey('precioUnitario', $payload['detalle'][0]);
+    }
+
+    public function test_sandbox_emisor_is_blocked_outside_sandbox(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $company->update(['identification_number' => 'EMISORPRUEBA']);
+        $item = $this->createItem($sale);
+        Config::set('facturaencr.environment', 'production');
+
+        try {
+            (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $exception) {
+            $this->assertSame(
+                'EMISORPRUEBA solo puede utilizarse en ambiente sandbox',
+                $exception->getErrors()['emisor']
+            );
+        } finally {
+            Config::set('facturaencr.environment', 'sandbox');
+        }
     }
 
     public function test_receptor_with_full_data(): void
@@ -359,8 +379,8 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $payload1 = $mapper->map($sale1, [$item1], $customer1, $company1);
         $payload2 = $mapper->map($sale2, [$item2], $customer2, $company2);
 
-        $this->assertSame($company1->identification_number, $payload1['emisorLegalId']);
-        $this->assertSame($company2->identification_number, $payload2['emisorLegalId']);
+        $this->assertSame('EMISORPRUEBA', $payload1['emisorLegalId']);
+        $this->assertSame('EMISORPRUEBA', $payload2['emisorLegalId']);
         $this->assertSame('01', $payload1['condicionVenta']);
         $this->assertSame('01', $payload2['condicionVenta']);
     }

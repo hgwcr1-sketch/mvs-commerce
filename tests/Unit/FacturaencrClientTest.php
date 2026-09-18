@@ -10,6 +10,12 @@ use Illuminate\Support\Facades\Http;
 
 class FacturaencrClientTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
+
     public function test_constructor_reads_config_values(): void
     {
         Config::set('facturaencr.base_url', 'https://api.facturaencr.com/v2/efactura');
