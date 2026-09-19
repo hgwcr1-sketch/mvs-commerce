@@ -2,45 +2,93 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Notas de Crédito — Fase 3A cerrada: POS Backend Integration (2026-09-18)
+## Notas de Crédito Nominativa — IMPLEMENTADA Y CERTIFICADA (2026-09-19)
 
-**Commit `3f55ba9`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`). Fase 3A cerrada y certificada.
+**Commit `a734f5d`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`). Módulo completo certificado y congelado.
 
-Cadena completa de Notas de Crédito:
+**ESTADO: CÓDIGO CERTIFICADO / PENDIENTE DEPLOY PRODUCCIÓN**
 
-- Fase 0 — `b748c5d` (fix inventory posting)
-- Fase 1 — `e035cea` (core NC domain)
-- Fase 2B — `7bb6b2d` (NC↔AR reconciliation)
-- Fase 2C — `85907e9` (formal reversal mechanism)
-- **Fase 3A — `3f55ba9` (POS backend integration) ← CERRADA**
+### Cadena completa de Notas de Crédito
 
-Fase 3A implementa el backend del POS para soportar Notas de Crédito en el checkout:
+| Fase | Commit | Descripción |
+|------|--------|-------------|
+| 0 | `b748c5d` | fix(inventory): restore missing posting operations |
+| 1 | `e035cea` | feat(credit-notes): implement core credit note domain |
+| 2B | `7bb6b2d` | feat(credit-notes): reconcile credit notes with receivables |
+| 2C | `85907e9` | feat(credit-notes): support receivable offset reversals |
+| 3A | `3f55ba9` | feat(credit-notes): integrate credit notes with pos backend |
+| 3B | `58bc902` | docs: record POS backend certification |
+| **final** | **`a734f5d`** | **feat(credit-notes): complete pos workflow and reversals** |
 
-- Aplicación de NC en POS (endpoint `pos.credit-notes.available` + campo `credit_note_applications` en `pos.checkout`).
-- `CreditNoteApplication` como dominio separado (NO es PaymentMethod, NO crea SalePayment, NO crea CashMovement).
-- Aplicación parcial y múltiples NC por venta.
-- Locking determinista: Sale → NC1 → NC2 → ... (ASC by id).
-- Idempotencia: checkout fingerprint incluye NC + `application_token` por NC.
-- NC + efectivo, tarjeta, SINPE, múltiples pagos.
-- NC + fidelización/puntos.
-- NC + crédito: CxC creada únicamente por el monto restante (`total - ncAppliedAmount`); credit limit consumido solo por el restante.
-- 100% NC sin CashSession (cuando backend prueba cobertura total y no hay pagos).
-- Cross-branch permitido para aplicación POS cuando company y customer coinciden.
-- Endpoint backend para consultar NC disponibles (`searchCreditNotes`).
-- Permiso `notas_credito.aplicar`.
-- `SaleVoidService` bloqueado temporalmente cuando existen aplicaciones NC activas.
-- Precisión monetaria BCMath SCALE=4.
+### Funcionalidad certificada
 
-Semántica importante: `paid_total` NO representa necesariamente efectivo recibido. Para venta 100% cubierta por NC: `SalePayment = 0`, `CashMovement = 0`, pero la venta queda económicamente satisfecha.
+- NC nominativa ligada a cliente identificado.
+- Consumidor Final puede devolver pero NO genera NC reutilizable.
+- Búsqueda de venta/factura para iniciar devolución.
+- Devolución parcial/total según reglas existentes.
+- Emisión automática de NC cuando corresponde.
+- Múltiples NC por venta, aplicación parcial.
+- NC + efectivo, tarjeta/SINPE, crédito, loyalty.
+- 100% NC sin CashSession.
+- Cross-branch POS permitido solo same company/customer.
+- Conciliación CxC mantiene reglas de sucursal.
+- Comprobante muestra NC separada de formas de pago.
+- Reimpresión recupera aplicaciones persistidas.
+- `SaleVoidService` revierte formalmente `CreditNoteApplication`.
+- `voided_by` / `voided_at` / `void_reason` preservan auditoría.
+- Doble reversión protegida (idempotencia).
+- NC NO es PaymentMethod, NO genera SalePayment, NO genera CashMovement.
+- Precisión interna DECIMAL(19,4) / BCMath preservada.
+- UI no muestra `.0000` técnico.
+- Permisos: `notas_credito.crear`, `notas_credito.aplicar`.
+- Asignación explícita solo a: Administrador, Administrador Local.
+- Cajero no recibe esos permisos automáticamente.
 
-Certificación:
+### Tests core certificados
 
-- `PosCreditNoteTest`: **42/42 PASS**.
-- Certificación final: **237/237 PASS**, 1553 assertions.
-- Correcciones durante auditoría: (1) `paid_total`/`balance_due` en NC+crédito, (2) expectativa de mensaje loyalty por integración NC+puntos.
-- `PosSuspendedSalesTest` mantiene 1 fallo preexistente de formato, ajeno a NC.
+132/132 tests focales NC pasando en certificación final (626+ assertions).
 
-Pendiente: Fase 3B (POS UI + Receipt).
+| Suite | Tests | Estado |
+|-------|-------|--------|
+| PosCreditNoteTest | 42 | PASS |
+| CreditNoteTest | 19 | PASS |
+| CreditNoteReconciliationTest | 18 | PASS |
+| SaleReturnTest | 19 | PASS |
+| DevolucionesIndexTest | 16 | PASS |
+| OrderPermissionSeederTest | 2 | PASS |
+| PosCheckoutTest | 14 | PASS |
+| SaleVoidTest | 2 | PASS |
+
+### Deuda técnica preexistente (NO causada por NC)
+
+- `SaleVoidLoyaltyTest`: 5 fallos de expectativas loyalty (diff 25 pts, canje proporcional).
+- `SaleReturnLoyaltyTest`: 2 fallos de expectativas loyalty (diff 20-30 pts).
+- `PosAccessAndSearchTest`: 3 fallos de payload fields históricos.
+
+### Pendiente de producción
+
+Antes del deploy:
+- Backup PostgreSQL.
+- Verificar migraciones ya existentes (no hay nuevas en este commit).
+- `PermissionSeeder` no destructivo (updateOrCreate).
+- `npm run build`.
+- Caches Laravel (`config:cache`, `route:cache`, `view:cache`).
+- Smoke tests: crear devolución → verificar NC → aplicar en POS → verificar receipt → anular → verificar reversión.
+- Verificar permisos por rol.
+
+### Fase futura — NO implementada (roadmap)
+
+**Nota de Crédito al Portador** — decisiones aprobadas:
+- Destinada principalmente a ventas Consumidor Final.
+- Configurable por empresa.
+- Número interno NC consecutivo para trazabilidad.
+- Canje mediante código secreto aleatorio NO consecutivo.
+- Número NC por sí solo NO permite canje.
+- Código perdido = NO recuperable; MVS no reemite ni revela.
+- Posesión del código constituye mecanismo de canje.
+- Diseño debe impedir doble uso/replay.
+- Debe admitir aplicación parcial y saldo.
+- NO implementar antes de estabilizar NC nominativa en producción.
 
 ## Notas de Crédito — Fase 2C reversión NC↔CxC (2026-09-17)
 
@@ -258,7 +306,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `3f55ba9`). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `a734f5d`). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -277,6 +325,8 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
+- **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
+- Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
 - **Fase 3A NC-POS: commit `3f55ba9`** (integración backend NC con POS, 9 archivos, 1351 insertions);
 - Fase 2C reversión NC↔CxC: commit `85907e9` (reversión formal de compensaciones);
 - Fase 2B conciliación NC↔CxC: commit `7bb6b2d` (conciliación automática, 13 archivos, 1453 insertions);
@@ -290,7 +340,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito — Fase 3A CERRADA** (`3f55ba9`). Backend POS completo. SIGUIENTE: Fase 3B (POS UI + Receipt), pendiente de autorización.
+- **Notas de Crédito Nominativa — CERTIFICADA Y CONGELADA** (`a734f5d`). Flujo completo POS/UI/receipt/reversals. Pendiente deploy producción.
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
@@ -308,7 +358,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: Notas de Crédito Fase 3B (POS UI + Receipt), pendiente de autorización. La Fase 3A cerró con commit `3f55ba9`.**
+**Prioridad inmediata: deploy de Notas de Crédito Nominativa a producción (certificada `a734f5d`). Siguiente módulo funcional pendiente según prioridades del proyecto.**
 
 **P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
 

@@ -483,7 +483,9 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ## Notas de Crédito
 
-Estado: FASE 3A CERRADA — POS Backend Integration (commit `3f55ba9`)
+Estado: **COMPLETADA Y CERTIFICADA** — commit `a734f5d` en `feature/notas-credito`
+
+**Estado de deploy: CÓDIGO CERTIFICADO, PENDIENTE DEPLOY PRODUCCIÓN**
 
 Cadena completa (rama `feature/notas-credito`):
 
@@ -493,84 +495,101 @@ Cadena completa (rama `feature/notas-credito`):
 | 1 | `e035cea` | feat(credit-notes): implement core credit note domain | CERRADA |
 | 2B | `7bb6b2d` | feat(credit-notes): reconcile credit notes with receivables | CERRADA |
 | 2C | `85907e9` | feat(credit-notes): support receivable offset reversals | CERRADA |
-| **3A** | **`3f55ba9`** | **feat(credit-notes): integrate credit notes with pos backend** | **CERRADA** |
+| 3A | `3f55ba9` | feat(credit-notes): integrate credit notes with pos backend | CERRADA |
+| 3B | `58bc902` | docs: record POS backend certification | CERRADA |
+| **final** | **`a734f5d`** | **feat(credit-notes): complete pos workflow and reversals** | **CERTIFICADA** |
 
-Incluye (Fase 1 + Fase 2B + Fase 2C, rama `feature/notas-credito`):
+### Funcionalidad certificada
 
 **Fase 1 — Núcleo de dominio:**
-- Nota de Crédito nominativa: SIEMPRE requiere cliente identificado en la venta original; no existe NC anónima ni al portador.
-- Emisión automática y atómica desde `SaleReturnService` dentro de la misma transacción de devolución, solo si la venta tiene `customer_id`; consumidor final devuelve igual y no genera NC.
-- Contrato 1 devolución = máximo 1 NC (`sale_return_id` UNIQUE); una venta puede tener múltiples devoluciones y múltiples NC.
-- Importes exclusivamente BCMath escala 4 / DECIMAL(19,4): `issued_amount`, `applied_amount`, `balance`; saldo nunca negativo.
-- Aplicación a venta destino a nivel dominio/servicio (`applyToSale`) con idempotencia por `(company_id, application_token)`; NO conectada al POS y NO modifica `balance_due` de la venta ni CxC.
-- Anulación (`void`) solo para NC jamás aplicada (`applied_amount=0.0000` y sin aplicaciones activas): `balance` pasa a `0.0000`, `issued_amount` se conserva para auditoría.
-- Auditoría de aplicación exclusiva de `credit_note_applications` (`applied_by`/`applied_at`); la cabecera `credit_notes` no duplica esos campos.
-- La NC no mueve inventario y no modifica fidelización.
-- Numeración `NC-00000001` por empresa vía `CompanySequence::nextCreditNoteNumber()`.
-- NC interna ≠ NC electrónica Hacienda: sin columnas fiscales; la integración futura será una entidad/tabla separada 1:1.
+- NC nominativa ligada a cliente identificado.
+- Consumidor Final puede devolver pero NO genera NC reutilizable.
+- Búsqueda de venta/factura para iniciar devolución.
+- Emisión automática de NC cuando corresponde.
+- Contrato 1 devolución = máximo 1 NC (`sale_return_id` UNIQUE).
+- Importes BCMath DECIMAL(19,4); saldo nunca negativo.
+- Auditoría exclusiva en `credit_note_applications`.
+- NC interna ≠ NC electrónica Hacienda.
 
 **Fase 2B — Conciliación CxC automática:**
-- Conciliación automática NC↔CxC al emitir NC sobre venta con `AccountReceivable` activo.
-- `AccountsReceivableReconciliationService::reconcile()` reduce `AR.balance_due` y `NC.offset_amount`; crea `AccountReceivableAdjustment` tipo `credit_note_offset`.
-- NC emitida con CxC: `requires_ar_review=false` (conciliación inmediata), `balance` = 0 tras offset total.
-- Cambio de estado automático: AR `pending→partial/paid`, NC `issued→applied`.
-- `applyToSale` habilitado para NC conciliadas (balance > 0).
-- Guardas: `SaleVoidService` no permite anular venta con ajustes activos; `CreditNoteService::void()` no permite anular NC con `offset_amount > 0`.
-- Migración `2026_09_16_000003_create_accounts_receivable_adjustments_table`.
+- Conciliación NC↔CxC al emitir NC sobre venta con `AccountReceivable` activo.
+- `AccountsReceivableReconciliationService::reconcile()` reduce AR y NC offset.
+- NC emitida con CxC: `requires_ar_review=false`, balance=0 tras offset total.
 
-**Fase 2C — Reversión formal de compensación NC↔CxC:**
-- `reverseOffset()` revierte un offset previo creando adjustment `credit_note_offset_reversal` (original immutable).
-- Incrementa `AR.balance_due` (cap a `original_amount`), decrementa `NC.offset_amount`.
-- Reversión idempotente por llave `credit-note-ar-offset-reversal:{adjustment_id}` UNIQUE.
-- Campos: `reversed_amount` (acumulado en original), `reversal_adjustment_id` (FK nullable).
-- Permiso `cuentas_cobrar.revertir`; UI en vista de detalle de CxC con historial de tipo reversal.
-- No crea pagos, caja ni movimientos de efectivo.
-- Migración `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table`.
+**Fase 2C — Reversión formal de compensación:**
+- `reverseOffset()` revierte offset previo creando `credit_note_offset_reversal`.
+- Incrementa AR, decrementa NC offset; idempotente por llave única.
+- Permiso `cuentas_cobrar.revertir`.
 
 **Fase 3A — Integración Backend POS:**
-- El backend POS ya soporta aplicación de Notas de Crédito en el checkout.
-- `CreditNoteApplication` como dominio separado: NC NO es PaymentMethod, NO crea SalePayment, NO crea CashMovement.
-- Aplicación parcial y múltiples NC en una misma venta, con orden determinista ASC por ID.
-- Locking: Sale → NC1 → NC2 → ... (resuelto en `CreditNoteService::applyBatchToSale`).
-- Idempotencia: fingerprint del checkout incluye NC + `application_token` por NC (`pos-sale:{checkoutToken}:cn:{ncId}`).
-- NC + efectivo, tarjeta, SINPE, múltiples pagos: cubierto por `resolvePayments` con `$coverageTargetForPayments`.
-- NC + fidelización/puntos: validación de cobertura `remaining = total - ncAppliedAmount - redeemedAmount`.
-- NC + crédito: CxC creada por `$creditAmount = total - ncAppliedAmount`; credit limit consumido solo por el restante; `paid_total` y `balance_due` reflejan correctamente el monto restante.
-- 100% NC sin CashSession: cuando `ncCoversTotal && empty($payments)`, se omite la sesión de caja.
-- Cross-branch permitido para aplicación POS cuando `company_id` y `customer_id` coinciden.
-- Endpoint `pos.credit-notes.available` (`PosController::searchCreditNotes`) con permiso `notas_credito.aplicar`.
-- `SaleVoidService` bloquea temporalmente la anulación cuando existen aplicaciones NC activas.
-- Precisión monetaria BCMath SCALE=4; invariante `issued_amount = offset_amount + applied_amount + balance`.
+- Backend POS soporta NC en checkout.
+- `CreditNoteApplication` como dominio separado.
+- Aplicación parcial y múltiples NC con locking ASC por ID.
+- NC + efectivo, tarjeta/SINPE, crédito, loyalty.
+- 100% NC sin CashSession.
+- Cross-branch POS permitido same company/customer.
+- Endpoint `pos.credit-notes.available` con permiso `notas_credito.aplicar`.
+- `SaleVoidService` bloquea anulación con NC activas.
 
-Elementos:
+**Fase 3B — Documentación POS:**
+- Certificación backend documentada.
+- Estado de módulo registrado.
 
-- Migraciones `2026_09_16_000001_create_credit_notes_table`, `2026_09_16_000002_create_credit_note_applications_table`, `2026_09_16_000003_create_accounts_receivable_adjustments_table`, `2026_09_17_000002_add_offset_amount_to_credit_notes_table`, `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table`.
-- `CreditNote`, `CreditNoteApplication`, `CreditNoteService` (`issueFromReturn`, `availableForCustomer`, `applyToSale`, `applyBatchToSale`, `void`).
-- `AccountReceivableAdjustment` (tipos: `credit_note_offset`, `credit_note_offset_reversal`; campos `reversed_amount`, `reversal_adjustment_id`).
-- `AccountsReceivableReconciliationService` (`reconcile`, `reverseOffset`).
-- `PosSaleProcessor` (integración NC en `process()`, `canonicalCreditNotes`, cobertura NC en `resolvePayments`).
-- `PosController::searchCreditNotes` (endpoint NC disponibles).
-- `StorePosSaleRequest` (validación `credit_note_applications`).
-- `SaleVoidService` (bloqueo con NC activas).
+**Fase final — Flujo completo POS/UI/receipt/reversals:**
+- POS UI: `creditNotes`, `fetchCreditNotes`, `toggleCreditNote`, `applyMaxCreditNote` en `pos/index.blade.php`.
+- Top bar buttons unificados: "Cotizar", "Nota de Crédito" → `/devoluciones`.
+- "Facturar / NC" → vista principal del POS.
+- Receipt: `SaleReceiptData.php` DTO `credit_note_applications` + sección visual en `receipt.blade.php`.
+- `CreditNoteService::reverseApplication()` + `reverseApplications()` (lock ASC, idempotente, campos auditoría).
+- `SaleVoidService` llama reversión en vez de bloquear.
+- Balance y estado de NC restaurados correctamente.
+- DevolucionesController: `index` con búsqueda, ruta `GET /devoluciones`.
+- sidebar: "Nota de Crédito" en menú, permisos explícitos.
 
-Elementos:
+### Tests certificados
 
-- Migraciones `2026_09_16_000001_create_credit_notes_table`, `2026_09_16_000002_create_credit_note_applications_table`, `2026_09_16_000003_create_accounts_receivable_adjustments_table`, `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table`.
-- `CreditNote`, `CreditNoteApplication`, `CreditNoteService` (`issueFromReturn`, `availableForCustomer`, `applyToSale`, `void`).
-- `AccountReceivableAdjustment` (tipos: `credit_note_offset`, `credit_note_offset_reversal`; campos `reversed_amount`, `reversal_adjustment_id`).
-- `AccountsReceivableReconciliationService` (`reconcile`, `reverseOffset`).
-- `AccountsReceivableController::reverseAdjustment`.
-- Relaciones: `SaleReturn->creditNote`, `Sale->creditNotesIssued` / `creditNoteApplicationsAsDestination`, `Customer->creditNotes` / `creditNoteApplications`, `AccountReceivableAdjustment->reversalAdjustment` / `reversedBy`.
+**132/132 tests focales NC pasando** (626+ assertions):
 
-Pendiente (fases siguientes): Fase 3B (POS UI + Receipt), reversión formal de CreditNoteApplication al anular una venta, NC electrónica Hacienda, devolución posterior de venta pagada con NC, cash refund, reportes.
+| Suite | Tests | Descripción |
+|-------|-------|-------------|
+| PosCreditNoteTest | 42 | POS checkout + reversión |
+| CreditNoteTest | 19 | Domain invariants |
+| CreditNoteReconciliationTest | 18 | NC↔AR reconciliation |
+| SaleReturnTest | 19 | Devolución + emisión NC |
+| DevolucionesIndexTest | 16 | Búsqueda interfaz |
+| OrderPermissionSeederTest | 2 | Asignación permisos |
+| PosCheckoutTest | 14 | Checkout NC integrado |
+| SaleVoidTest | 2 | Reversión anulación |
 
-Pruebas relacionadas:
-- `PosCreditNoteTest` (42 pruebas, 121 aserciones) — Fase 3A.
-- `CreditNoteTest` (19 pruebas, 122 aserciones) — Fase 1.
-- `CreditNoteReconciliationTest` (18 pruebas) — Fase 2B.
-- `AccountsReceivableReversalTest` (23 pruebas, 65 aserciones) — Fase 2C.
-- Certificación final: 237/237 tests, 1553 assertions.
-- Regresión más amplia: 252/254, 1696 aserciones; 1 fallo preexistente `PosSuspendedSalesTest` (formato, ajeno a NC).
+### Deuda técnica preexistente (NO causada por NC)
+
+- `SaleVoidLoyaltyTest`: 5 fallos (diff 25 pts, canje proporcional).
+- `SaleReturnLoyaltyTest`: 2 fallos (diff 20-30 pts).
+- `PosAccessAndSearchTest`: 3 fallos (payload fields históricos).
+
+### Pendiente producción
+
+Antes del deploy:
+- Backup PostgreSQL.
+- Migraciones ya existentes (no hay nuevas en commit final).
+- `PermissionSeeder` no destructivo (`updateOrCreate`).
+- `npm run build`.
+- Caches Laravel.
+- Smoke tests: devolución → NC → POS → receipt → anulación → reversión.
+- Verificar permisos por rol.
+
+### Fase futura — NO implementada
+
+**Nota de Crédito al Portador** (decisiones aprobadas):
+- Destinada a ventas Consumidor Final.
+- Configurable por empresa.
+- Número interno NC consecutivo.
+- Canje con código secreto aleatorio NO consecutivo.
+- Número NC por sí solo NO permite canje.
+- Código perdido = NO recuperable.
+- Posesión del código = mecanismo de canje.
+- Debe admitir aplicación parcial y saldo.
+- NO implementar antes de estabilizar NC nominativa.
 
 ---
 
