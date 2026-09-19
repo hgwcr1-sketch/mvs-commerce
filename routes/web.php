@@ -81,6 +81,7 @@ use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\DevolucionesController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
@@ -256,6 +257,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
             ->name('pos.customers.quick-store');
         Route::get('/pos/fidelidad/consulta', [PosController::class, 'loyaltySummary'])
             ->name('pos.loyalty.summary');
+
+        Route::get('/pos/notas-credito/disponibles', [PosController::class, 'searchCreditNotes'])
+            ->middleware('permission:notas_credito.aplicar')
+            ->name('pos.credit-notes.available');
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
             ->middleware(['permission:ventas.crear', 'pos.cash-session'])
             ->name('pos.checkout');
@@ -760,6 +765,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::put('apartados-configuracion', [LayawayController::class, 'updateSettings'])->middleware('permission:empresa.editar')->name('apartados.settings.update');
     });
 
+    Route::get('/devoluciones', [DevolucionesController::class, 'index'])
+        ->middleware(['active.branch', 'permission:notas_credito.crear'])
+        ->name('devoluciones.index');
+
     Route::get('/ventas/{venta}/devolucion', [ReturnController::class, 'create'])
         ->middleware(['active.branch', 'permission:devoluciones.crear'])
         ->name('ventas.return.create');
@@ -777,6 +786,7 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('cuentas-por-cobrar', [AccountsReceivableController::class, 'index'])->name('cuentas-por-cobrar.index');
         Route::get('cuentas-por-cobrar/{accountReceivable}', [AccountsReceivableController::class, 'show'])->name('cuentas-por-cobrar.show');
         Route::post('cuentas-por-cobrar/{accountReceivable}/abonos', [AccountsReceivableController::class, 'payment'])->middleware('permission:cuentas_cobrar.abonar')->name('cuentas-por-cobrar.payments.store');
+        Route::post('cuentas-por-cobrar/{accountReceivable}/revertir-ajuste/{adjustment}', [AccountsReceivableController::class, 'reverseAdjustment'])->middleware('permission:cuentas_cobrar.revertir')->name('cuentas-por-cobrar.adjustments.reverse');
         Route::put('cuentas-por-cobrar-configuracion', [AccountsReceivableController::class, 'updateAlertDays'])->middleware('permission:cuentas_cobrar.editar')->name('cuentas-por-cobrar.alert-days.update');
     });
 

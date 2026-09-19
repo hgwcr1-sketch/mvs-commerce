@@ -22,6 +22,7 @@ class SaleReturnService
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly LoyaltySaleReturnAdjustmentService $loyaltyAdjustments,
+        private readonly CreditNoteService $creditNotes,
     ) {}
 
     /**
@@ -204,6 +205,13 @@ class SaleReturnService
                     ? Sale::STATUS_PARTIALLY_RETURNED
                     : Sale::STATUS_RETURNED,
             ]);
+
+            // Fase 1 Notas de Crédito: NC nominativa dentro de la misma
+            // transacción de devolución. Sin cliente identificado no se emite
+            // NC y la devolución continúa con su comportamiento actual.
+            if ($sale->customer_id !== null) {
+                $this->creditNotes->issueFromReturn($saleReturn, $user);
+            }
 
             return $saleReturn->fresh(['items']);
         });

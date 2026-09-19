@@ -5,7 +5,7 @@ namespace App\Services\Modules;
 class ModuleRegistry
 {
     public const MODULES = [
-        'sales' => ['label' => 'Ventas y POS', 'prefixes' => ['pos.', 'ventas.', 'cotizaciones.', 'pedidos.', 'apartados.', 'devoluciones.']],
+        'sales' => ['label' => 'Ventas y POS', 'prefixes' => ['pos.', 'ventas.', 'cotizaciones.', 'pedidos.', 'apartados.', 'devoluciones.', 'notas_credito.']],
         'inventory' => ['label' => 'Productos e inventario', 'prefixes' => ['productos.', 'categorias.', 'marcas.', 'unidades.', 'inventario.']],
         'purchases' => ['label' => 'Compras y proveedores', 'prefixes' => ['compras.', 'proveedores.', 'cuentas_pagar.']],
         'customers' => ['label' => 'Clientes y CxC', 'prefixes' => ['clientes.', 'cuentas_cobrar.']],

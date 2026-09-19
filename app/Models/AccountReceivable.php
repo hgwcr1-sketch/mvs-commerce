@@ -29,6 +29,7 @@ class AccountReceivable extends Model
     public function company(): BelongsTo { return $this->belongsTo(Company::class); }
     public function branch(): BelongsTo { return $this->belongsTo(Branch::class); }
     public function payments(): HasMany { return $this->hasMany(AccountReceivablePayment::class); }
+    public function adjustments(): HasMany { return $this->hasMany(AccountReceivableAdjustment::class); }
     public function scopeForCompany(Builder $query, int $id): Builder { return $query->where('company_id', $id); }
     public function scopeForBranch(Builder $query, int $id): Builder { return $query->where('branch_id', $id); }
 

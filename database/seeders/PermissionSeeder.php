@@ -131,6 +131,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'devoluciones.crear', 'label' => 'Registrar devoluciones', 'module' => 'Devoluciones'],
             ['name' => 'devoluciones.aprobar', 'label' => 'Aprobar devoluciones', 'module' => 'Devoluciones'],
 
+            // Notas de crédito
+            ['name' => 'notas_credito.crear', 'label' => 'Crear notas de crédito', 'module' => 'Notas de Crédito'],
+            ['name' => 'notas_credito.aplicar', 'label' => 'Aplicar notas de crédito', 'module' => 'Notas de Crédito'],
+
             // Cuentas por cobrar
             ['name' => 'cuentas_cobrar.ver', 'label' => 'Ver cuentas por cobrar', 'module' => 'Cuentas por Cobrar'],
             ['name' => 'cuentas_cobrar.abonar', 'label' => 'Registrar abonos', 'module' => 'Cuentas por Cobrar'],
@@ -245,6 +249,23 @@ class PermissionSeeder extends Seeder
                 $role->permissions()->syncWithoutDetaching(
                     $administratorPermissionIds
                 );
+            });
+
+        // Notas de crédito: asignación explícita a Administrador y Administrador Local
+        $ncPermissionIds = Permission::query()
+            ->where('is_active', true)
+            ->where('name', 'like', 'notas_credito.%')
+            ->pluck('id')
+            ->all();
+
+        Role::query()
+            ->where(function ($query) {
+                $query->where('name', 'Administrador')
+                    ->orWhere('name', 'Administrador Local');
+            })
+            ->where('is_active', true)
+            ->each(function (Role $role) use ($ncPermissionIds) {
+                $role->permissions()->syncWithoutDetaching($ncPermissionIds);
             });
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services\Sales;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanySequence;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
@@ -34,6 +35,7 @@ class PosSaleProcessor
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
         private readonly AccountsReceivableService $accountsReceivableService,
+        private readonly CreditNoteService $creditNoteService,
         private readonly LoyaltyEarningService $loyaltyEarningService,
         private readonly LoyaltyOfferEligibilityService $loyaltyOfferEligibilityService,
         private readonly LoyaltyBirthdayService $loyaltyBirthdayService,
@@ -48,12 +50,20 @@ class PosSaleProcessor
         $items = $this->consolidateItems($data['items']);
         $payments = $this->canonicalPayments($data['payments']);
         $requestedPoints = $this->canonicalRequestedPoints($data);
+        $canonicalNC = $this->canonicalCreditNotes($data['credit_note_applications'] ?? []);
+
+        $ncAppliedAmount = '0.0000';
+        foreach ($canonicalNC as $nc) {
+            $ncAppliedAmount = bcadd($ncAppliedAmount, $nc['amount'], 4);
+        }
+        $hasNC = bccomp($ncAppliedAmount, '0', 4) > 0;
 
         $fingerprint = $this->fingerprint(
             $data,
             $items,
             $payments,
             $requestedPoints,
+            $canonicalNC,
             $user->id,
             $companyId,
             $branchId,
@@ -89,7 +99,10 @@ class PosSaleProcessor
                 $requestedPoints,
                 $user,
                 $companyId,
-                $branchId
+                $branchId,
+                $hasNC,
+                $ncAppliedAmount,
+                $canonicalNC
             ) {
                 $company = Company::query()
                     ->where('is_active', true)
@@ -126,23 +139,6 @@ class PosSaleProcessor
 
                 $quote = $this->lockQuoteForCheckout($data, $companyId, $branchId);
 
-                $cashSession = $this->cashSessionResolver->resolve(
-                    $user,
-                    $companyId,
-                    $branchId,
-                    isset($data['cash_session_id'])
-                        ? (int) $data['cash_session_id']
-                        : null,
-                    true,
-                );
-
-                $suspendedSale = $this->lockSuspensionForCheckout(
-                    $data,
-                    $user,
-                    $companyId,
-                    $branchId,
-                );
-
                 $customerId = $data['customer_id'] ?? null;
                 $customer = null;
 
@@ -159,6 +155,28 @@ class PosSaleProcessor
                         ]);
                     }
                 }
+
+                // ─── NC: permission + customer validation ───
+                if ($hasNC) {
+                    if (! $user->hasPermission('notas_credito.aplicar', $company)) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'No tiene permiso para aplicar Notas de Crédito.',
+                        ]);
+                    }
+
+                    if ($customer === null) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'Debe seleccionar un cliente para aplicar Notas de Crédito.',
+                        ]);
+                    }
+                }
+
+                $suspendedSale = $this->lockSuspensionForCheckout(
+                    $data,
+                    $user,
+                    $companyId,
+                    $branchId,
+                );
 
                 $paymentMethods = PaymentMethod::query()
                     ->where('company_id', $companyId)
@@ -388,11 +406,48 @@ class PosSaleProcessor
                     $total - $unroundedTotal,
                 );
 
+                // ─── NC coverage validation ───
+                if ($hasNC) {
+                    if (bccomp($ncAppliedAmount, (string) $total, 4) > 0) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'Las Notas de Crédito superan el total de la venta.',
+                        ]);
+                    }
+                }
+
+                // ─── CashSession: conditional on NC coverage ───
+                $ncCoversTotal = $hasNC
+                    && bccomp($ncAppliedAmount, (string) $total, 4) >= 0;
+                $cashSessionNeeded = ! $ncCoversTotal || count($payments) > 0;
+
+                $cashSession = null;
+                if ($cashSessionNeeded) {
+                    $cashSession = $this->cashSessionResolver->resolve(
+                        $user,
+                        $companyId,
+                        $branchId,
+                        isset($data['cash_session_id'])
+                            ? (int) $data['cash_session_id']
+                            : null,
+                        true,
+                    );
+                }
+
+                // ─── Coverage target for resolvePayments ───
+                $coverageTargetForPayments = null;
+                if ($hasNC) {
+                    $coverageTargetForPayments = (float) bcsub(
+                        (string) $total,
+                        $ncAppliedAmount,
+                        4,
+                    );
+                }
+
                 $resolvedPayments = $this->resolvePayments(
                     $payments,
                     $paymentMethods,
                     $total,
-                    null,
+                    $coverageTargetForPayments,
                     $requestedPoints === null,
                     $cashSession,
                 );
@@ -422,8 +477,12 @@ class PosSaleProcessor
                     'tax_total' => $taxTotal,
                     'rounding_total' => $roundingTotal,
                     'total' => $total,
-                    'paid_total' => $isCredit ? 0 : $total,
-                    'balance_due' => $isCredit ? $total : 0,
+                    'paid_total' => $isCredit
+                        ? ($hasNC ? (float) bcsub((string) $total, $ncAppliedAmount, 4) : 0)
+                        : $total,
+                    'balance_due' => $isCredit
+                        ? ($hasNC ? (float) bcsub((string) $total, $ncAppliedAmount, 4) : $total)
+                        : 0,
                     'due_date' => $isCredit ? now()->startOfDay()->addDays((int) $customer->credit_days) : null,
                     'notes' => null,
                     'completed_at' => now(),
@@ -459,6 +518,16 @@ class PosSaleProcessor
                             $line['quantity'],
                         );
                     }
+                }
+
+                // ─── NC: apply batch (Sale → NC1 → NC2 → ...) ───
+                if ($hasNC) {
+                    $this->creditNoteService->applyBatchToSale(
+                        $sale,
+                        $canonicalNC,
+                        $user,
+                        $data['checkout_token'],
+                    );
                 }
 
                 $redeemedAmount = '0.0000';
@@ -518,11 +587,12 @@ class PosSaleProcessor
                     foreach ($resolvedPayments as $payment) {
                         $cashApplied = bcadd($cashApplied, (string) $payment['amount'], 4);
                     }
-                    $remaining = bcsub((string) $sale->total, $redemption['redeemed_amount'], 4);
+                    $ncAndLoyaltyDeducted = bcadd($ncAppliedAmount, $redemption['redeemed_amount'], 4);
+                    $remaining = bcsub((string) $sale->total, $ncAndLoyaltyDeducted, 4);
 
                     if (bccomp($remaining, '0', 4) < 0 || bccomp($cashApplied, $remaining, 4) !== 0) {
                         throw ValidationException::withMessages([
-                            'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta menos el monto canjeado con puntos.',
+                            'payments' => 'La suma de los pagos debe ser exactamente igual al total menos NC y puntos canjeados.',
                         ]);
                     }
 
@@ -567,7 +637,8 @@ class PosSaleProcessor
                 }
 
                 if ($isCredit) {
-                    $this->accountsReceivableService->createForSale($sale, $customer);
+                    $creditAmount = bcsub((string) $total, $ncAppliedAmount, 4);
+                    $this->accountsReceivableService->createForSale($sale, $customer, $creditAmount);
                 }
 
                 if ($suspendedSale !== null) {
@@ -1042,6 +1113,30 @@ class PosSaleProcessor
         return bcadd($points, '0', 4);
     }
 
+    private function canonicalCreditNotes(array $applications): array
+    {
+        if (empty($applications)) {
+            return [];
+        }
+
+        $canonical = array_map(fn (array $nc) => [
+            'credit_note_id' => (int) $nc['credit_note_id'],
+            'amount' => bcadd((string) $nc['amount'], '0', 4),
+        ], array_values($applications));
+
+        $ids = array_column($canonical, 'credit_note_id');
+        if (count($ids) !== count(array_unique($ids))) {
+            throw ValidationException::withMessages([
+                'credit_note_applications' => 'No puede repetir una Nota de Crédito en la misma venta.',
+            ]);
+        }
+
+        // Deterministic order: sort by credit_note_id ASC
+        usort($canonical, fn (array $a, array $b) => $a['credit_note_id'] <=> $b['credit_note_id']);
+
+        return $canonical;
+    }
+
     private function resolvePayments(
         array $payments,
         $paymentMethods,
@@ -1223,6 +1318,7 @@ class PosSaleProcessor
         array $items,
         array $payments,
         ?string $requestedPoints,
+        array $canonicalNC,
         int $userId,
         int $companyId,
         int $branchId,
@@ -1245,6 +1341,8 @@ class PosSaleProcessor
                 'payments' => $payments,
 
                 'requested_points' => $requestedPoints,
+
+                'credit_note_applications' => $canonicalNC,
 
                 'items' => array_map(
                     fn (array $line) => [

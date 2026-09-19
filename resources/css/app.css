@@ -244,3 +244,52 @@ a:not([href]):not([role="button"]) {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ===========================
+   GLOBAL CURSOR POINTER - MVS COMMERCE
+   =========================== */
+
+/* Elementos interactivos habilitados: cursor pointer */
+button:not(:disabled),
+a[href],
+[role="button"]:not([aria-disabled="true"]),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+select:not(:disabled) {
+    cursor: pointer;
+}
+
+/* Elementos deshabilitados: cursor not-allowed */
+button:disabled,
+input:disabled,
+select:disabled,
+[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+}
+
+/* Excepciones: elementos que NO deben tener cursor pointer */
+.no-cursor-pointer,
+.no-cursor-pointer *,
+label:not(:has(input)),
+.output,
+pre,
+code,
+kbd,
+samp {
+    cursor: default;
+}
+
+/* Focus visible consistente para accesibilidad */
+*:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Remover outline por defecto en botones que usan focus-visible personalizado */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible) {
+    outline: none;
+}

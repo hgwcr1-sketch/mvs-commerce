@@ -3,12 +3,15 @@
 namespace App\Services\Sales;
 
 use App\Models\AccountReceivable;
+use App\Models\AccountReceivableAdjustment;
+use App\Models\CreditNoteApplication;
 use App\Models\LoyaltyMovement;
 use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyAccountService;
+use App\Services\Sales\CreditNoteService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +20,7 @@ class SaleVoidService
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly LoyaltyAccountService $loyaltyAccountService,
+        private readonly CreditNoteService $creditNoteService,
     ) {}
 
     public function void(Sale $sale, User $user, string $reason): Sale
@@ -63,6 +67,26 @@ class SaleVoidService
 
             if ($sale->accountReceivable?->payments->isNotEmpty()) {
                 throw ValidationException::withMessages(['sale' => 'No se puede anular una venta a crédito que ya tiene abonos registrados.']);
+            }
+
+            if (AccountReceivableAdjustment::query()
+                ->where('company_id', $sale->company_id)
+                ->where('account_receivable_id', $sale->accountReceivable?->id)
+                ->where('type', AccountReceivableAdjustment::TYPE_CREDIT_NOTE_OFFSET)
+                ->where('status', AccountReceivableAdjustment::STATUS_ACTIVE)
+                ->whereRaw('amount - reversed_amount > 0')
+                ->exists()
+            ) {
+                throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con compensaciones CxC activas registradas.']);
+            }
+
+            if (CreditNoteApplication::query()
+                ->where('company_id', $sale->company_id)
+                ->where('sale_id', $sale->id)
+                ->where('status', CreditNoteApplication::STATUS_APPLIED)
+                ->exists()
+            ) {
+                $this->reverseCreditNoteApplications($sale, $user, $reason);
             }
 
             foreach ($sale->items as $item) {
@@ -134,5 +158,31 @@ class SaleVoidService
                 'void_reason' => $reason,
             ],
         ]);
+    }
+
+    /**
+     * Revierte todas las aplicaciones de Nota de Crédito activas asociadas a la venta.
+     *
+     * @param  array<CreditNoteApplication>  $applications
+     */
+    private function reverseCreditNoteApplications(Sale $sale, User $user, string $reason): void
+    {
+        $applications = CreditNoteApplication::query()
+            ->where('company_id', $sale->company_id)
+            ->where('sale_id', $sale->id)
+            ->where('status', CreditNoteApplication::STATUS_APPLIED)
+            ->get();
+
+        if ($applications->isEmpty()) {
+            return;
+        }
+
+        $voidReason = "Anulación de venta {$sale->sale_number}: {$reason}";
+
+        $this->creditNoteService->reverseApplications(
+            $applications->all(),
+            $user,
+            $voidReason
+        );
     }
 }

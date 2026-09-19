@@ -25,7 +25,8 @@ class SaleController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('sale_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                        $customerQuery->where('name', 'like', "%{$search}%");
+                        $customerQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('identification', 'like', "%{$search}%");
                     });
             });
         }

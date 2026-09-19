@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreAccountReceivablePaymentRequest;
 use App\Models\AccountReceivable;
+use App\Models\AccountReceivableAdjustment;
 use App\Models\PaymentMethod;
 use App\Services\Cash\CashSessionResolver;
+use App\Services\Sales\AccountsReceivableReconciliationService;
 use App\Services\Sales\AccountsReceivableService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +35,7 @@ class AccountsReceivableController extends Controller
      */
     public function show(Request $request, AccountReceivable $accountReceivable, CashSessionResolver $resolver): View
     {
-        $account = $this->scoped($accountReceivable)->load(['customer','sale','payments.paymentMethod','payments.user']);
+        $account = $this->scoped($accountReceivable)->load(['customer','sale','payments.paymentMethod','payments.user','adjustments.creditNote']);
         $methods = PaymentMethod::forCompany($account->company_id)->active()->whereNotIn('type',[PaymentMethod::TYPE_CREDIT,PaymentMethod::TYPE_LOYALTY_POINTS])->ordered()->get();
         $sessions = $resolver->applicable($request->user(), $account->company_id, $account->branch_id);
         return view('accounts-receivable.show', compact('account','methods','sessions'));
@@ -47,6 +49,35 @@ class AccountsReceivableController extends Controller
         $account = $this->scoped($accountReceivable);
         $service->pay($account, $request->validated(), $request->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
         return back()->with('success', 'Abono registrado correctamente.');
+    }
+
+    /**
+     * Revierte una compensación NC ↔ CxC.
+     */
+    public function reverseAdjustment(
+        Request $request,
+        AccountReceivable $accountReceivable,
+        AccountReceivableAdjustment $adjustment,
+        AccountsReceivableReconciliationService $service,
+    ): RedirectResponse {
+        $account = $this->scoped($accountReceivable);
+
+        $company = $request->user()->companies()->findOrFail((int) session('active_company_id'));
+        abort_unless($request->user()->hasPermission('cuentas_cobrar.revertir', $company), 403);
+
+        abort_unless(
+            $adjustment->account_receivable_id === $account->id
+                && $adjustment->company_id === $account->company_id,
+            404,
+        );
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $service->reverseOffset($adjustment, $request->user(), $data['reason']);
+
+        return back()->with('success', 'Compensación revertida correctamente.');
     }
 
     public function updateAlertDays(Request $request): RedirectResponse
