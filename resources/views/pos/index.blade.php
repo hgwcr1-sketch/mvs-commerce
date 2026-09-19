@@ -1813,6 +1813,7 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 print.busy = false;
             }
+        },
         async fetchCreditNotes() {
             if (!this.customerId) {
                 this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
