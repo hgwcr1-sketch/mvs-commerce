@@ -86,11 +86,11 @@
 
     {{-- VENTAS --}}
     <div class="nav-desktop-group">
-    @canany(['pos.acceder', 'ventas.ver', 'cotizaciones.ver', 'pedidos.ver', 'cuentas_cobrar.ver', 'cuentas_pagar.ver', 'apartados.ver', 'devoluciones.ver'])
+    @canany(['pos.acceder', 'ventas.ver', 'cotizaciones.ver', 'pedidos.ver', 'cuentas_cobrar.ver', 'cuentas_pagar.ver', 'apartados.ver', 'devoluciones.crear', 'notas_credito.crear'])
         <x-navigation.dropdown
             icon="tag"
             label="Ventas"
-            :active="request()->routeIs('pos.*', 'ventas.*', 'cotizaciones.*', 'pedidos.*', 'cuentas-por-cobrar.*', 'cuentas-por-pagar.*', 'apartados.*')">
+            :active="request()->routeIs('pos.*', 'ventas.*', 'cotizaciones.*', 'pedidos.*', 'cuentas-por-cobrar.*', 'cuentas-por-pagar.*', 'apartados.*', 'devoluciones.*')">
 
             @can('pos.acceder')
                 <x-navigation.submenu route="pos.index" label="POS" />
@@ -120,8 +120,8 @@
                 <x-navigation.submenu route="apartados.index" label="Apartados" />
             @endcan
 
-            @can('devoluciones.ver')
-                <x-navigation.submenu route="ventas.index" label="Devoluciones" :parameters="['with_returns' => 1]" :active="request()->routeIs('ventas.index') && request()->boolean('with_returns')" />
+            @can('notas_credito.crear')
+                <x-navigation.submenu route="devoluciones.index" label="Nota de Crédito" :active="request()->routeIs('devoluciones.*')" />
             @endcan
 
         </x-navigation.dropdown>

@@ -79,6 +79,7 @@ use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\DevolucionesController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SaleController;
@@ -729,6 +730,10 @@ Route::resource('transferencias', TransferController::class)
         Route::post('apartados/{apartado}/entregar', [LayawayController::class, 'deliver'])->middleware('permission:apartados.entregar')->name('apartados.deliver');
         Route::put('apartados-configuracion', [LayawayController::class, 'updateSettings'])->middleware('permission:empresa.editar')->name('apartados.settings.update');
     });
+
+    Route::get('/devoluciones', [DevolucionesController::class, 'index'])
+        ->middleware(['active.branch', 'permission:notas_credito.crear'])
+        ->name('devoluciones.index');
 
     Route::get('/ventas/{venta}/devolucion', [ReturnController::class, 'create'])
         ->middleware(['active.branch', 'permission:devoluciones.crear'])

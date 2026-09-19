@@ -11,6 +11,7 @@ use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyAccountService;
+use App\Services\Sales\CreditNoteService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +20,7 @@ class SaleVoidService
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly LoyaltyAccountService $loyaltyAccountService,
+        private readonly CreditNoteService $creditNoteService,
     ) {}
 
     public function void(Sale $sale, User $user, string $reason): Sale
@@ -84,7 +86,7 @@ class SaleVoidService
                 ->where('status', CreditNoteApplication::STATUS_APPLIED)
                 ->exists()
             ) {
-                throw ValidationException::withMessages(['sale' => 'No se puede anular una venta con aplicaciones de nota de crédito activas.']);
+                $this->reverseCreditNoteApplications($sale, $user, $reason);
             }
 
             foreach ($sale->items as $item) {
@@ -156,5 +158,31 @@ class SaleVoidService
                 'void_reason' => $reason,
             ],
         ]);
+    }
+
+    /**
+     * Revierte todas las aplicaciones de Nota de Crédito activas asociadas a la venta.
+     *
+     * @param  array<CreditNoteApplication>  $applications
+     */
+    private function reverseCreditNoteApplications(Sale $sale, User $user, string $reason): void
+    {
+        $applications = CreditNoteApplication::query()
+            ->where('company_id', $sale->company_id)
+            ->where('sale_id', $sale->id)
+            ->where('status', CreditNoteApplication::STATUS_APPLIED)
+            ->get();
+
+        if ($applications->isEmpty()) {
+            return;
+        }
+
+        $voidReason = "Anulación de venta {$sale->sale_number}: {$reason}";
+
+        $this->creditNoteService->reverseApplications(
+            $applications->all(),
+            $user,
+            $voidReason
+        );
     }
 }

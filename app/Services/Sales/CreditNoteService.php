@@ -489,4 +489,206 @@ class CreditNoteService
             return $note->fresh();
         });
     }
+
+    /**
+     * Revierte una aplicación de Nota de Crédito (usada al anular la venta destino).
+     *
+     * Esta operación:
+     * - Marca la CreditNoteApplication como voided (con auditoría)
+     * - Restaura applied_amount y balance de la CreditNote
+     * - Actualiza el status de la CreditNote (issued/partially_applied)
+     *
+     * Idempotencia: una aplicación ya revertida no puede revertirse de nuevo.
+     * Lock order: Sale → CreditNoteApplication → CreditNote (orden global aprobado).
+     *
+     * @param  CreditNoteApplication  $application  La aplicación a revertir
+     * @param  User                   $user         Usuario que ejecuta la reversión
+     * @param  string                 $reason       Motivo de la reversión (p.ej. "Anulación de venta POS-00000001")
+     * @return CreditNoteApplication                La aplicación revertida (fresh)
+     */
+    public function reverseApplication(
+        CreditNoteApplication $application,
+        User $user,
+        string $reason
+    ): CreditNoteApplication {
+        $reason = trim($reason);
+
+        if ($reason === '') {
+            throw ValidationException::withMessages([
+                'reason' => 'Debe indicar el motivo de la reversión.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($application, $user, $reason): CreditNoteApplication {
+            // Lock orden global: Sale → Application → CreditNote
+            $app = CreditNoteApplication::query()
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($app->status === CreditNoteApplication::STATUS_VOIDED) {
+                throw ValidationException::withMessages([
+                    'application' => 'La aplicación ya ha sido revertida.',
+                ]);
+            }
+
+            if ($app->status !== CreditNoteApplication::STATUS_APPLIED) {
+                throw ValidationException::withMessages([
+                    'application' => 'Solo se pueden revertir aplicaciones con estado "applied".',
+                ]);
+            }
+
+            // Lock CreditNote
+            $note = CreditNote::query()
+                ->whereKey($app->credit_note_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Validar que la NC pertenece a la misma empresa/venta
+            if ((int) $note->company_id !== (int) $app->company_id) {
+                throw ValidationException::withMessages([
+                    'application' => 'La aplicación pertenece a una NC de otra empresa.',
+                ]);
+            }
+
+            // Marcar aplicación como revertida
+            $now = now();
+            $app->update([
+                'status' => CreditNoteApplication::STATUS_VOIDED,
+                'voided_by' => $user->id,
+                'voided_at' => $now,
+                'void_reason' => $reason,
+            ]);
+
+            // Restaurar la NC: restar el monto aplicado
+            $amount = (string) $app->amount;
+            $newApplied = bcsub((string) $note->applied_amount, $amount, self::SCALE);
+            $newBalance = bcadd((string) $note->balance, $amount, self::SCALE);
+
+            // Determinar nuevo status de la NC
+            $fullyApplied = bccomp($newBalance, '0', self::SCALE) === 0;
+            $newStatus = $fullyApplied
+                ? CreditNote::STATUS_APPLIED
+                : ($newApplied === '0.0000' ? CreditNote::STATUS_ISSUED : CreditNote::STATUS_PARTIALLY_APPLIED);
+
+            $note->update([
+                'applied_amount' => $newApplied,
+                'balance' => $newBalance,
+                'status' => $newStatus,
+            ]);
+
+            return $app->fresh();
+        });
+    }
+
+    /**
+     * Revierte múltiples aplicaciones de NC (batch) para una venta anulada.
+     *
+     * Lock order: Sale → Applications (ASC by id) → CreditNotes (ASC by id)
+     *
+     * @param  array<int, CreditNoteApplication>  $applications
+     * @param  User                               $user
+     * @param  string                             $reason
+     * @return CreditNoteApplication[]
+     */
+    public function reverseApplications(
+        array $applications,
+        User $user,
+        string $reason
+    ): array {
+        if ($applications === []) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($applications, $user, $reason): array {
+            // Lock todas las aplicaciones en orden determinista
+            $appIds = array_map(fn ($app) => $app->id, $applications);
+            $sortedApps = CreditNoteApplication::query()
+                ->whereIn('id', $appIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($sortedApps->count() !== count($appIds)) {
+                throw ValidationException::withMessages([
+                    'applications' => 'Una o más aplicaciones no están disponibles para reversión.',
+                ]);
+            }
+
+            // Lock todas las NCs involucradas en orden determinista
+            $ncIds = $sortedApps->pluck('credit_note_id')->unique()->values()->all();
+            $sortedNCs = CreditNote::query()
+                ->whereIn('id', $ncIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($sortedNCs->count() !== count($ncIds)) {
+                throw ValidationException::withMessages([
+                    'applications' => 'Una o más NCs asociadas no están disponibles.',
+                ]);
+            }
+
+            $reversed = [];
+            $now = now();
+
+            foreach ($sortedApps as $app) {
+                if ($app->status === CreditNoteApplication::STATUS_VOIDED) {
+                    throw ValidationException::withMessages([
+                        'applications' => 'La aplicación '.$app->id.' ya ha sido revertida.',
+                    ]);
+                }
+
+                if ($app->status !== CreditNoteApplication::STATUS_APPLIED) {
+                    throw ValidationException::withMessages([
+                        'applications' => 'La aplicación '.$app->id.' no tiene estado "applied".',
+                    ]);
+                }
+
+                $note = $sortedNCs->get($app->credit_note_id);
+
+                if ($note === null) {
+                    throw ValidationException::withMessages([
+                        'applications' => 'NC no encontrada para la aplicación '.$app->id.'.',
+                    ]);
+                }
+
+                if ((int) $note->company_id !== (int) $app->company_id) {
+                    throw ValidationException::withMessages([
+                        'applications' => 'La aplicación '.$app->id.' pertenece a una NC de otra empresa.',
+                    ]);
+                }
+
+                // Marcar aplicación como revertida
+                $app->update([
+                    'status' => CreditNoteApplication::STATUS_VOIDED,
+                    'voided_by' => $user->id,
+                    'voided_at' => $now,
+                    'void_reason' => $reason,
+                ]);
+
+                // Restaurar la NC
+                $amount = (string) $app->amount;
+                $newApplied = bcsub((string) $note->applied_amount, $amount, self::SCALE);
+                $newBalance = bcadd((string) $note->balance, $amount, self::SCALE);
+
+                $fullyApplied = bccomp($newBalance, '0', self::SCALE) === 0;
+                $newStatus = $fullyApplied
+                    ? CreditNote::STATUS_APPLIED
+                    : ($newApplied === '0.0000' ? CreditNote::STATUS_ISSUED : CreditNote::STATUS_PARTIALLY_APPLIED);
+
+                $note->update([
+                    'applied_amount' => $newApplied,
+                    'balance' => $newBalance,
+                    'status' => $newStatus,
+                ]);
+
+                $reversed[] = $app->fresh();
+            }
+
+            return $reversed;
+        });
+    }
 }

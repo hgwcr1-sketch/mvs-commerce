@@ -83,6 +83,7 @@
     $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 0, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 0, ',', '.'), 'total' => number_format((float) $item->total, 0, ',', '.')])->toArray();
     $totalsData = $data?->totals ?? ['subtotal' => number_format((float) $sale->subtotal, 0, ',', '.'), 'discount_total' => number_format((float) $sale->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $sale->tax_total, 0, ',', '.'), 'rounding_total' => number_format((float) $sale->rounding_total, 0, ',', '.'), 'total' => number_format((float) $sale->total, 0, ',', '.')];
     $paymentsData = $data?->payments ?? $sale->payments->map(fn($payment) => ['method' => $payment->paymentMethod->name ?? 'Pago', 'amount' => number_format((float) $payment->amount, 0, ',', '.'), 'reference' => $payment->reference ?? null, 'received_amount' => (float) $payment->received_amount > 0 ? number_format((float) $payment->received_amount, 0, ',', '.') : null, 'change_amount' => (float) $payment->change_amount > 0 ? number_format((float) $payment->change_amount, 0, ',', '.') : null, 'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false])->toArray();
+    $creditNotesData = $data?->credit_note_applications ?? $sale->creditNoteApplicationsAsDestination->map(fn($app) => ['credit_note_number' => $app->creditNote->credit_note_number ?? 'NC', 'amount' => number_format((float) $app->amount, 0, ',', '.')])->toArray();
     $paymentSummaryData = $data?->payment_summary ?? ['is_mixed' => $sale->payments->count() >= 2];
     $loyaltyData = $data?->loyalty ?? $loyalty;
     $cashSessionData = $data?->cash_session ?? ($sale->cashSession ? ['session_number' => $sale->cashSession->session_number, 'cash_register_name' => $sale->cashSession->cashRegister->name] : null);
@@ -171,6 +172,17 @@
         @endif
         <tr class="grand"><td>TOTAL</td><td>₡{{ $totalsData['total'] }}</td></tr>
     </table>
+
+    @if(count($creditNotesData) > 0)
+    <div class="rule"></div>
+    <p><strong>Notas de crédito aplicadas</strong></p>
+    <table class="{{ $format === '58mm' ? 'pay-table' : '' }}">
+        @foreach($creditNotesData as $cn)
+            <tr><td>{{ $cn['credit_note_number'] }}</td><td>₡{{ $cn['amount'] }}</td></tr>
+        @endforeach
+    </table>
+    @endif
+
     <div class="rule"></div>
     <p><strong>Formas de pago</strong>@if($paymentSummaryData['is_mixed']) — Pago mixto @endif</p>
     <table class="{{ $format === '58mm' ? 'pay-table' : '' }}">

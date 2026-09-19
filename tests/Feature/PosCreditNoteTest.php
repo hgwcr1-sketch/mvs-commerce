@@ -586,7 +586,7 @@ class PosCreditNoteTest extends TestCase
         $this->assertDatabaseHas('credit_notes', ['id' => $nc->id, 'balance' => '0.0000']);
     }
 
-    public function test_salevoid_blocked_with_active_nc(): void
+    public function test_salevoid_reverses_active_nc_and_restores_balance(): void
     {
         [$company, $branch, $user] = $this->context();
         $customer = $this->customer($company);
@@ -596,8 +596,36 @@ class PosCreditNoteTest extends TestCase
         $saleId = $this->checkoutNc($user, $company, $branch, $customer, $product, [$nc->id => 10000], 10000)->json('sale_id');
         $sale = Sale::findOrFail($saleId);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        app(\App\Services\Sales\SaleVoidService::class)->void($sale, $user, 'Intento de anulación');
+        // La NC está totalmente aplicada (balance = 0)
+        $nc->refresh();
+        $this->assertSame('0.0000', (string) $nc->balance);
+        $this->assertSame(CreditNote::STATUS_APPLIED, $nc->status);
+
+        // Anular la venta debe revertir la aplicación de NC
+        app(\App\Services\Sales\SaleVoidService::class)->void($sale, $user, 'Anulación con NC aplicada');
+
+        // Verificar que la venta quedó anulada
+        $sale->refresh();
+        $this->assertSame(Sale::STATUS_VOIDED, $sale->status);
+
+        // Verificar que la aplicación de NC fue revertida
+        $app = CreditNoteApplication::where('sale_id', $sale->id)
+            ->where('status', CreditNoteApplication::STATUS_VOIDED)
+            ->firstOrFail();
+        $this->assertSame(CreditNoteApplication::STATUS_VOIDED, $app->status);
+        $this->assertNotNull($app->voided_at);
+        $this->assertSame('Anulación de venta '.$sale->sale_number.': Anulación con NC aplicada', $app->void_reason);
+
+        // Verificar que la NC recuperó su balance original
+        $nc->refresh();
+        $this->assertSame('10000.0000', (string) $nc->balance);
+        $this->assertSame('0.0000', (string) $nc->applied_amount);
+        $this->assertSame(CreditNote::STATUS_ISSUED, $nc->status);
+
+        // La NC debe estar disponible nuevamente
+        $available = app(\App\Services\Sales\CreditNoteService::class)->availableForCustomer((int) $company->id, (int) $customer->id);
+        $this->assertCount(1, $available);
+        $this->assertSame($nc->id, $available->first()->id);
     }
 
     public function test_100_percent_nc_no_cash_session(): void
