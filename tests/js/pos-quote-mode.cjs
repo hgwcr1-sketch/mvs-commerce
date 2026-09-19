@@ -38,7 +38,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.equal(evaluate(enterButton, ':disabled', pos), false);
     assert.ok(!/\sdisabled(?:\s|=|>)/.test(enterButton));
     const classes = attribute(enterButton, 'class').split(/\s+/);
-    for (const required of ['bg-sky-700', 'text-white', 'cursor-pointer', 'min-h-[44px]']) assert.ok(classes.includes(required));
+    for (const required of ['bg-white', 'text-slate-700', 'cursor-pointer', 'min-h-[44px]']) assert.ok(classes.includes(required));
     assert.ok(!classes.some(name => /^(opacity-|pointer-events-none|hidden$)/.test(name)));
     await evaluate(enterButton, '@click', pos);
     assert.equal(pos.quoteMode, true);
