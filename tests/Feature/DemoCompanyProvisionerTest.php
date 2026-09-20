@@ -8,15 +8,19 @@ use App\Models\BranchLabelSetting;
 use App\Models\Color;
 use App\Models\Company;
 use App\Models\CompanyLicense;
+use App\Models\CompanySequence;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\LoyaltySetting;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\SaleReturn;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\DemoCompanyProvisioner;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DemoCompanyProvisionerTest extends TestCase
@@ -883,5 +887,136 @@ class DemoCompanyProvisionerTest extends TestCase
                 @rename($backup, $file);
             }
         }
+    }
+
+    // =========================================================
+    // I. RESET CON CREDIT NOTES (FK ORDER)
+    // =========================================================
+
+    public function test_reset_succeeds_with_credit_notes_present(): void
+    {
+        $demo = $this->provisioner->create();
+        $cid = $demo->id;
+
+        $branch = $demo->branches()->first();
+
+        $customer = Customer::where('company_id', $cid)->first();
+
+        $saleId = DB::table('sales')->insertGetId([
+            'company_id' => $cid,
+            'branch_id' => $branch->id,
+            'user_id' => $demo->owner_user_id,
+            'customer_id' => $customer->id,
+            'sale_number' => 'POS-TEST-001',
+            'document_type' => 'electronic_ticket',
+            'sale_condition' => 'cash',
+            'status' => 'completed',
+            'currency_code' => 'CRC',
+            'exchange_rate' => 1,
+            'subtotal' => 10000,
+            'tax_total' => 1300,
+            'discount_total' => 0,
+            'rounding_total' => 0,
+            'total' => 11300,
+            'paid_total' => 11300,
+            'balance_due' => 0,
+            'completed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $returnId = DB::table('sale_returns')->insertGetId([
+            'company_id' => $cid,
+            'branch_id' => $branch->id,
+            'sale_id' => $saleId,
+            'user_id' => $demo->owner_user_id,
+            'return_number' => 'DEV-00000001',
+            'reason' => 'Test return',
+            'status' => 'completed',
+            'returned_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $cnId = DB::table('credit_notes')->insertGetId([
+            'company_id' => $cid,
+            'branch_id' => $branch->id,
+            'customer_id' => $customer->id,
+            'sale_id' => $saleId,
+            'sale_return_id' => $returnId,
+            'credit_note_number' => 'NC-00000001',
+            'currency_code' => 'CRC',
+            'issued_amount' => 5000,
+            'offset_amount' => 0,
+            'applied_amount' => 0,
+            'balance' => 5000,
+            'status' => 'issued',
+            'reason' => 'Test',
+            'issued_by' => $demo->owner_user_id,
+            'issued_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->provisioner->reset();
+
+        $this->assertDatabaseMissing('credit_notes', ['id' => $cnId]);
+        $this->assertDatabaseMissing('sale_returns', ['id' => $returnId]);
+        $this->assertDatabaseMissing('sales', ['id' => $saleId]);
+    }
+
+    public function test_reset_syncs_sequences_after_clearing(): void
+    {
+        $demo = $this->provisioner->create();
+        $cid = $demo->id;
+
+        CompanySequence::create([
+            'company_id' => $cid,
+            'name' => 'sale_return',
+            'current_value' => 5,
+        ]);
+
+        CompanySequence::create([
+            'company_id' => $cid,
+            'name' => 'credit_note',
+            'current_value' => 3,
+        ]);
+
+        $this->provisioner->reset();
+
+        $srSeq = CompanySequence::where('company_id', $cid)->where('name', 'sale_return')->first();
+        $cnSeq = CompanySequence::where('company_id', $cid)->where('name', 'credit_note')->first();
+
+        $this->assertNotNull($srSeq);
+        $this->assertNotNull($cnSeq);
+        $this->assertSame(0, (int) $srSeq->current_value);
+        $this->assertSame(0, (int) $cnSeq->current_value);
+    }
+
+    public function test_other_company_sequences_unaffected_by_demo_reset(): void
+    {
+        $otherCompany = Company::create([
+            'trade_name' => 'Otra Empresa NC ' . uniqid(),
+            'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica',
+            'is_active' => true,
+        ]);
+
+        CompanySequence::create([
+            'company_id' => $otherCompany->id,
+            'name' => 'sale_return',
+            'current_value' => 42,
+        ]);
+
+        $demo = $this->provisioner->create();
+
+        $this->provisioner->reset();
+
+        $otherSeq = CompanySequence::where('company_id', $otherCompany->id)
+            ->where('name', 'sale_return')
+            ->first();
+
+        $this->assertNotNull($otherSeq);
+        $this->assertSame(42, (int) $otherSeq->current_value);
     }
 }

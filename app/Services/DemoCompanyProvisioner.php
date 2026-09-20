@@ -151,6 +151,7 @@ class DemoCompanyProvisioner
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($company) {
             $this->clearTransactionals($company);
+            $this->resetSequences($company);
             $this->clearCatalogs($company);
             $this->clearUsers($company);
 
@@ -214,6 +215,9 @@ class DemoCompanyProvisioner
     {
         $cid = $company->id;
 
+        DB::table('credit_note_applications')->where('company_id', $cid)->delete();
+        DB::table('accounts_receivable_adjustments')->where('company_id', $cid)->delete();
+        DB::table('credit_notes')->where('company_id', $cid)->delete();
         DB::table('sale_return_items')->whereIn('sale_return_id', fn ($q) => $q->select('id')->from('sale_returns')->where('company_id', $cid))->delete();
         DB::table('sale_returns')->where('company_id', $cid)->delete();
 
@@ -277,6 +281,16 @@ class DemoCompanyProvisioner
         Product::query()->where('company_id', $cid)->forceDelete();
         Customer::query()->where('company_id', $cid)->forceDelete();
         Supplier::query()->where('company_id', $cid)->forceDelete();
+    }
+
+    private function resetSequences(Company $company): void
+    {
+        $cid = $company->id;
+
+        DB::table('company_sequences')
+            ->where('company_id', $cid)
+            ->whereIn('name', ['sale_return', 'credit_note'])
+            ->update(['current_value' => 0, 'updated_at' => now()]);
     }
 
     private function seedTransactions(Company $company): void
