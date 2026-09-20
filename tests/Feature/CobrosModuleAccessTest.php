@@ -71,6 +71,11 @@ class CobrosModuleAccessTest extends TestCase
             ->assertOk()
             ->assertSee('MVS CobrOS')
             ->assertSee('Panel de CobrOS')
+            ->assertSee('src="'.asset('images/logo-mvs-cobros.png').'"', false)
+            ->assertSee('href="'.asset('icons/cobros/favicon-32x32.png').'"', false)
+            ->assertSee('href="'.asset('icons/cobros/apple-touch-icon.png').'"', false)
+            ->assertSee('href="'.asset('manifest-cobros.json').'"', false)
+            ->assertDontSee('href="'.asset('manifest.json').'"', false)
             ->assertDontSee('MVS Commerce')
             ->assertDontSee('href="'.route('dashboard').'"', false)
             ->assertSee($c->trade_name);

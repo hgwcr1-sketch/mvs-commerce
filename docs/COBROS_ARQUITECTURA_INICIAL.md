@@ -87,3 +87,26 @@ Documento de decisiones aprobadas para el módulo CobrOS. Recopilado en la base
   activación y aislamiento.
 
 - Validación Fase 1A.1: 13 pruebas CobrOS, 63 aserciones. company.licensed permanece intacto: licencia empresarial operable y módulo CobrOS son suficientes, sin módulos Commerce adicionales. Detalle de regresión en PROGRESO_COBROS.md.
+
+## FASE 1B — Identidad propia + PWA base
+
+- Logo oficial: `public/images/logo-mvs-cobros.png`, incorporado sin alterar
+  la imagen. No se incluye la extensión duplicada `.png.png`.
+- Layout propio con logo, favicon y apple-touch-icon de CobrOS; mantiene
+  responsive e independencia de Commerce.
+- Manifest estático público: `/manifest-cobros.json`, nombre `MVS CobrOS`,
+  nombre corto `CobrOS`, `id`, `start_url` y `scope`: `/cobros`;
+  `display: standalone`. Scope sin barra final para incluir la ruta actual
+  `/cobros` y sus descendientes sin cambiar rutas ni redirecciones.
+  El scope del manifest delimita presentación, no sustituye autorización.
+- Reutilizados los cuatro iconos normales/maskable 192/512 ya existentes;
+  no se regeneraron. Dorado `#D4AF37` del layout y blanco `#ffffff` existente.
+- Sin service worker: se reutiliza el patrón de manifest estático del proyecto;
+  no hay registro SW existente. No se añade caché, API offline ni datos locales.
+  [MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
+  no exige SW para instalación. Requiere HTTPS (localhost para desarrollo)
+  y navegador compatible; instalación real en dispositivo pendiente.
+- Autenticación compartida intacta: `/login` queda fuera del scope; con sesión
+  vencida sigue aplicando el flujo de acceso existente.
+- Sin funciones del dueño/cobrador, cambios de negocio, RuteOS ni Commerce.
+  `tmp_generate_cobros_icons.php` permanece untracked e intacto.

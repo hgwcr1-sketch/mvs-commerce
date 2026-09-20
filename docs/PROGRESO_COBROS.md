@@ -62,7 +62,7 @@ Sin `active.branch` a propósito: el portal del dueño opera a nivel de empresa.
   de permisos por el mecanismo normal.
 - `OrderPermissionSeederTest` desactualizado respecto al flag
   `is_super_admin` (preexistente, corrección futura aparte).
-- PWA y logo final de CobrOS: aún no creados (fase posterior).
+- Pendiente histórico de 1A: PWA y logo; identidad y manifest base entregados en Fase 1B (ver abajo), offline fuera de alcance.
 ## Fase 1A.1 — Separación visual y navegacional (2026-09-20)
 
 Decisión definitiva: CobrOS es una aplicación separada para el usuario,
@@ -92,3 +92,45 @@ Validación en SQLite en memoria:
   breakpoints y contenedores existentes. Sin validación visual en navegador.
 
 Usuario autoriza el commit con la excepción de regresión documentada; sin push ni merge.
+
+## FASE 1B — Identidad propia + PWA base
+
+- Logo oficial: `public/images/logo-mvs-cobros.png`, incorporado sin alterar
+  la imagen. No se incluye la extensión duplicada `.png.png`.
+- Layout propio con logo, favicon y apple-touch-icon de CobrOS; mantiene
+  responsive e independencia de Commerce.
+- Manifest estático público: `/manifest-cobros.json`, nombre `MVS CobrOS`,
+  nombre corto `CobrOS`, `id`, `start_url` y `scope`: `/cobros`;
+  `display: standalone`. Scope sin barra final para incluir la ruta actual
+  `/cobros` y sus descendientes sin cambiar rutas ni redirecciones.
+  El scope del manifest delimita presentación, no sustituye autorización.
+- Reutilizados los cuatro iconos normales/maskable 192/512 ya existentes;
+  no se regeneraron. Dorado `#D4AF37` del layout y blanco `#ffffff` existente.
+- Sin service worker: se reutiliza el patrón de manifest estático del proyecto;
+  no hay registro SW existente. No se añade caché, API offline ni datos locales.
+  [MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable)
+  no exige SW para instalación. Requiere HTTPS (localhost para desarrollo)
+  y navegador compatible; instalación real en dispositivo pendiente.
+- Autenticación compartida intacta: `/login` queda fuera del scope; con sesión
+  vencida sigue aplicando el flujo de acceso existente.
+- Sin funciones del dueño/cobrador, cambios de negocio, RuteOS ni Commerce.
+  `tmp_generate_cobros_icons.php` permanece untracked e intacto.
+
+### Validación Fase 1B
+
+- `CobrosModuleAccessTest|CobrosManifestTest`: 14/14, 98 aserciones.
+- Regresión dirigida de 1A.1: `CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test`
+  y los nueve casos de navegación de `ResponsiveNavigationTest`: 32/32,
+  149 aserciones. No se reejecutó el fallo ajeno del logo Commerce.
+- HTTP local sin autenticación: manifest 200/application-json y siete PNG
+  200/image-png (logo, favicon, apple-touch-icon y cuatro iconos del manifest).
+- `git diff --check` correcto. Iconos existentes y navegación Commerce intactos.
+- `npm.cmd run build` no ejecutable: falta `node_modules/.bin/vite.cmd`.
+  Sin instalación de dependencias. Las clases h-16, w-16, shrink-0 y
+  object-contain ya están presentes en el CSS compilado del worktree;
+  no se modificaron fuentes CSS/JS.
+- Responsive revisado conceptualmente a 360/768/1280; logo de 64x64 con
+  object-contain y ancho fijo, sin alterar breakpoints. No se verificó
+  instalación PWA ni apariencia en dispositivo/navegador real.
+- Pruebas de acceso con SQLite en memoria; sin cambios a BD de desarrollo,
+  migraciones del producto, push ni merge.

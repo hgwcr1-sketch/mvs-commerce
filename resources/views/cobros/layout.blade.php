@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>@yield('title', 'MVS CobrOS')</title>
     <meta name="description" content="@yield('description', '')">
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('icons/favicon-32x32.png') }}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('icons/apple-touch-icon.png') }}">
-    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('icons/cobros/favicon-32x32.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('icons/cobros/apple-touch-icon.png') }}">
+    <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
     <meta name="theme-color" content="#D4AF37">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -16,9 +16,8 @@
         <nav class="border-b border-slate-200 bg-white">
             <div class="mx-auto flex max-w-7xl items-center justify-between px-3 py-3 sm:px-4 sm:py-4">
                 <div class="flex items-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-[#B1922D]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                    <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS"
+                         width="64" height="64" class="h-16 w-16 shrink-0 object-contain">
                     <div>
                         <span class="text-lg font-bold text-slate-900">MVS CobrOS</span>
                         <p class="text-xs text-slate-500">Cobranza Operativa</p>

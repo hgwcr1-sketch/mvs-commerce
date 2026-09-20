@@ -1,0 +1,17 @@
+{
+    "id": "/cobros",
+    "name": "MVS CobrOS",
+    "short_name": "CobrOS",
+    "lang": "es",
+    "start_url": "/cobros",
+    "scope": "/cobros",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#D4AF37",
+    "icons": [
+        { "src": "/icons/cobros/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/cobros/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/cobros/icon-maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+        { "src": "/icons/cobros/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    ]
+}
