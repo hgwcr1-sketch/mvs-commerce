@@ -1,5 +1,9 @@
 # MVS CobrOS — Registro de avance
 
+> Fuente oficial del orden de fases: `docs/CRONOGRAMA_COBROS.md`
+> (Cronograma Maestro de MVS CobrOS). Este registro documenta la evidencia
+> de avance de cada fase; el cronograma define el orden y el alcance.
+
 ## Fase 1A — Completada: fundación aislada del módulo
 
 Rama `feature/cobros-v1` en el worktree `mvs-commerce-cobros`.
