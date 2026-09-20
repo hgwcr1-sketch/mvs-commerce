@@ -33,6 +33,7 @@ class CreditNote extends Model
         'reason',
         'issued_by',
         'issued_at',
+        'expires_at',
         'voided_by',
         'voided_at',
         'void_reason',
@@ -50,6 +51,7 @@ class CreditNote extends Model
             'balance' => 'decimal:4',
             'requires_ar_review' => 'boolean',
             'issued_at' => 'datetime',
+            'expires_at' => 'datetime',
             'voided_at' => 'datetime',
         ];
     }
@@ -113,7 +115,20 @@ class CreditNote extends Model
     {
         return $query
             ->whereIn('status', [self::STATUS_ISSUED, self::STATUS_PARTIALLY_APPLIED])
-            ->where('balance', '>', 0);
+            ->where('balance', '>', 0)
+            ->where(function (Builder $query) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
+    }
+
+    /**
+     * La NC está vencida cuando tiene expires_at y ya pasó la fecha.
+     * expires_at null significa vigencia ilimitada.
+     */
+    public function isExpired(): bool
+    {
+        return $this->expires_at !== null && $this->expires_at->isPast();
     }
 
     public function hasAvailableBalance(): bool

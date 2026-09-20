@@ -512,6 +512,7 @@ Cadena completa (rama `feature/notas-credito`):
 | 3A | `3f55ba9` | feat(credit-notes): integrate credit notes with pos backend | CERRADA |
 | 3B | `58bc902` | docs: record POS backend certification | CERRADA |
 | **final** | **`a734f5d`** | **feat(credit-notes): complete pos workflow and reversals** | **CERTIFICADA** |
+| 4A | `9b55929` | feat(credit-notes): add configurable expiration | **LOCAL, SIN PUSH/DEPLOY** |
 
 ### Funcionalidad certificada
 
@@ -548,6 +549,16 @@ Cadena completa (rama `feature/notas-credito`):
 **Fase 3B — Documentación POS:**
 - Certificación backend documentada.
 - Estado de módulo registrado.
+
+**Fase 4A — Vigencia configurable (commit local `9b55929`, post-apagado):**
+- Política por empresa `none/30/60/90/custom` + días personalizados en `companies` (migración `2026_09_20_000002`, default `none`).
+- `expires_at` en `credit_notes` calculado UNA VEZ al emitir; cambios posteriores NO alteran NC existentes (migración `2026_09_20_000001`, además `customer_id` nullable en NC y aplicaciones preparando Consumer Final).
+- NC sin `expires_at` = vigencia ilimitada (backward compatible).
+- `CreditNote::isExpired()` + `scopeAvailable` excluye vencidas; backend rechaza aplicación (mensaje claro) en `applyToSale`/`applyBatchToSale`.
+- Reversión de aplicación NO valida vencimiento (restaura saldo; la NC sigue vencida/indisponible).
+- Permiso `notas_credito.configurar` (Administrador/Administrador Local; Cajero NO) + ruta `PUT configuracion/notas-credito` + pestaña "Notas de Crédito" en Configuración (responsive, dorado).
+- NO implementado (roadmap): status `expired`, Consumer Final habilitado, `application_code`.
+- Validación: `CreditNoteExpirationTest` 22/22 (73 aserciones); regresión NC/POS/permisos/demo/settings en verde; `npm run build` OK. Pendiente auditoría del usuario y despliegue controlado.
 
 **Fase final — Flujo completo POS/UI/receipt/reversals:**
 - POS UI: `creditNotes`, `fetchCreditNotes`, `toggleCreditNote`, `applyMaxCreditNote` en `pos/index.blade.php`.

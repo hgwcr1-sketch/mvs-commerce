@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\Model;
     'layaway_validity_days',
     'layaway_alert_days',
     'payable_alert_days',
+    'credit_note_expiration_policy',
+    'credit_note_custom_expiration_days',
     'is_active',
 ])]
 
@@ -43,7 +45,27 @@ class Company extends Model
             'layaway_validity_days' => 'integer',
             'layaway_alert_days' => 'integer',
             'payable_alert_days' => 'integer',
+            'credit_note_custom_expiration_days' => 'integer',
         ];
+    }
+
+    /**
+     * Días efectivos de vigencia para notas de crédito.
+     *
+     * null = sin expiración.
+     */
+    public function ncExpirationDays(): ?int
+    {
+        return match ($this->credit_note_expiration_policy) {
+            'none' => null,
+            '30' => 30,
+            '60' => 60,
+            '90' => 90,
+            'custom' => $this->credit_note_custom_expiration_days
+                ? (int) $this->credit_note_custom_expiration_days
+                : null,
+            default => null,
+        };
     }
 
     public function users()

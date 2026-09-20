@@ -841,6 +841,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:configuracion.editar')
         ->name('configuracion.whatsapp.update');
 
+    Route::put('configuracion/notas-credito', [SettingController::class, 'updateCreditNoteExpiration'])
+        ->middleware('permission:notas_credito.configurar')
+        ->name('configuracion.notas-credito.update');
+
     Route::put('configuracion/fidelidad/plantillas', [SettingController::class, 'updateLoyaltyTemplates'])
         ->middleware('permission:fidelidad.configuracion')
         ->name('configuracion.loyalty-templates.update');
