@@ -26,6 +26,12 @@ use Illuminate\Validation\ValidationException;
  *  - Fase 2B: la NC emitida sobre una venta con CxC se concilia
  *    automáticamente contra AccountReceivable cuando procede (misma empresa,
  *    cliente, venta, sucursal y moneda). El offset NO afecta caja ni pagos.
+ *  - Fase 4A: la vigencia se calcula UNA VEZ al emitir según la política de
+ *    la empresa (ncExpirationDays). expires_at null = sin vencimiento. Una NC
+ *    vencida conserva saldo/historial pero no puede aplicarse (ni en
+ *    applyToSale ni en applyBatchToSale) y no aparece como disponible.
+ *  - La reversión de una aplicación NO valida vencimiento: restaura saldo y
+ *    estado monetario; la NC permanece vencida e indisponible.
  *  - requires_ar_review es un semáforo transitorio: pasa a false tras la
  *    conciliación o cuando no existe AR / AR pagada / balance_due <= 0.
  *  - NC interna ≠ NC electrónica Hacienda: la integración fiscal será una
@@ -109,6 +115,12 @@ class CreditNoteService
 
             $now = now();
 
+            $expiresAt = null;
+            $expirationDays = $sale->company?->ncExpirationDays();
+            if ($expirationDays !== null && $expirationDays > 0) {
+                $expiresAt = $now->copy()->addDays($expirationDays);
+            }
+
             $creditNote = CreditNote::create([
                 'company_id' => $saleReturn->company_id,
                 'branch_id' => $saleReturn->branch_id,
@@ -127,6 +139,7 @@ class CreditNoteService
                 'reason' => $saleReturn->reason,
                 'issued_by' => $user->id,
                 'issued_at' => $now,
+                'expires_at' => $expiresAt,
                 'idempotency_key' => $idempotencyKey,
                 'requires_ar_review' => $hasAr,
             ]);
@@ -210,6 +223,12 @@ class CreditNoteService
             if (in_array($note->status, [CreditNote::STATUS_VOIDED, CreditNote::STATUS_APPLIED], true)) {
                 throw ValidationException::withMessages([
                     'credit_note' => 'La Nota de Crédito no tiene saldo aplicable.',
+                ]);
+            }
+
+            if ($note->isExpired()) {
+                throw ValidationException::withMessages([
+                    'credit_note' => 'La Nota de Crédito está vencida y ya no puede aplicarse.',
                 ]);
             }
 
@@ -350,6 +369,12 @@ class CreditNoteService
                 if (in_array($note->status, [CreditNote::STATUS_VOIDED, CreditNote::STATUS_APPLIED], true)) {
                     throw ValidationException::withMessages([
                         'credit_note_applications' => 'La NC '.$note->credit_note_number.' no tiene saldo aplicable.',
+                    ]);
+                }
+
+                if ($note->isExpired()) {
+                    throw ValidationException::withMessages([
+                        'credit_note_applications' => 'La NC '.$note->credit_note_number.' está vencida y ya no puede aplicarse.',
                     ]);
                 }
 

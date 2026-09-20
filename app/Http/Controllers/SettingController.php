@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateCreditNoteExpirationRequest;
 use App\Http\Requests\UpdateLoyaltyMessageTemplatesRequest;
 use App\Http\Requests\UpdateLoyaltySettingRequest;
 use App\Http\Requests\UpdateWhatsAppSettingRequest;
@@ -83,6 +84,27 @@ class SettingController extends Controller
         }
 
         return back()->with('success', 'Plantillas de Fidelidad actualizadas correctamente.');
+    }
+
+    /**
+     * Vigencia configurable de Notas de Crédito por empresa.
+     *
+     * Los cambios posteriores de la configuración NO modifican las NC
+     * existentes; el expires_at se calcula únicamente al emitir.
+     */
+    public function updateCreditNoteExpiration(UpdateCreditNoteExpirationRequest $request): RedirectResponse
+    {
+        $company = Company::query()->findOrFail((int) session('active_company_id'));
+
+        $company->update([
+            'credit_note_expiration_policy' => $request->validated('credit_note_expiration_policy'),
+            'credit_note_custom_expiration_days' => $request->validated('credit_note_expiration_policy') === 'custom'
+                ? (int) $request->validated('credit_note_custom_expiration_days')
+                : null,
+        ]);
+
+        return redirect()->to(route('configuracion.index').'#notas-credito')
+            ->with('success', 'Vigencia de notas de crédito actualizada correctamente.');
     }
 
     public function loyaltySettings(): RedirectResponse
