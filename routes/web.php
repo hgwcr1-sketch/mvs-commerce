@@ -265,6 +265,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
     // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
     Route::middleware(['auth', 'active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder'])->prefix('cobros')->name('cobros.')->group(function () {
+        Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
+            ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
         Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
             ->name('index');
     });

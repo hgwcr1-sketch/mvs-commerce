@@ -134,3 +134,56 @@ Usuario autoriza el commit con la excepción de regresión documentada; sin push
   instalación PWA ni apariencia en dispositivo/navegador real.
 - Pruebas de acceso con SQLite en memoria; sin cambios a BD de desarrollo,
   migraciones del producto, push ni merge.
+
+## FASE 1C — Portal del Dueño / Dashboard de cartera de solo lectura
+
+- `GET /cobros/owner`, nombre `cobros.owner.dashboard`, conserva `auth`,
+  `active.company`, `company.licensed`, `company.module:cobros` y
+  `permission:cobros.acceder`; agrega `permission:cobros.portal_dueno`.
+- `/cobros` sigue siendo entrada general: enlace «Consultar cartera» solo
+  para dueños autorizados. Cobradores/supervisores sin ese permiso no ven
+  métricas globales; no se obliga `active.branch`.
+- `PortfolioSummaryService` consulta AccountReceivable, sus relaciones
+  Customer/Sale/Branch y AccountReceivablePayment con ámbito empresarial.
+  AccountsReceivableService existente solo ofrece métodos de escritura:
+  se conserva intacto y no se invoca `pay()` ni `createForSale()`.
+- Métricas: saldo total, saldo vencido, pagos de hoy, clientes distintos con
+  saldo, cuentas próximas a vencer y cuentas vencidas. Saldo positivo,
+  excluyendo paid/cancelled; vencimiento real por fecha, sin depender del
+  status guardado. Ventana próxima inclusiva hoy..hoy+credit_alert_days.
+- «Hoy» usa zona horaria de la empresa. Pagos: intervalo desde medianoche
+  inclusive hasta mañana exclusivo, convertido a zona de almacenamiento de
+  la aplicación. Sumas BCMath con casts decimal:4 en lotes de 500, sin float.
+  Totales nominales sin conversión monetaria; cada fila conserva su moneda.
+- Filtro GET opcional `branch_id`: por defecto todas las sucursales, sin
+  cambiar sucursal operativa. Sucursal ajena/inexistente: 404; valor inválido:
+  validación de formulario. Métricas y listado comparten el mismo filtro.
+- Listado paginado a 20, orden por vencimiento e ID: vencidas primero, luego
+  próximas y posteriores. Cliente, venta si existe, sucursal, emisión,
+  vencimiento, saldo y estado efectivo calculado solo para presentación.
+  El status persistido nunca se modifica.
+- UI en vistas CobrOS: tarjetas adaptables móvil/tablet/escritorio, filtros
+  de 44px, identidad propia y sin enlaces hacia Commerce. No hay pagos.
+- Pagos reales, cobrador, asignaciones, rutas/mapas, notificaciones y offline
+  quedan para fases posteriores. Sin migraciones ni cambios de negocio.
+
+### Validación Fase 1C
+
+- `CobrosOwnerDashboardTest|CobrosModuleAccessTest|CobrosManifestTest`:
+  **22/22, 151 aserciones** (8 pruebas nuevas del dueño).
+- Regresión `CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test` y
+  nueve casos de navegación responsive ya usados en 1B: **32/32, 149 aserciones**.
+- Dos empresas, sucursal ajena 404, permiso dueño obligatorio, módulo/base
+  obligatorios, sin sucursal asignada, filtro independiente de sesión,
+  vencimiento real y límites inclusivos, pagos en ambos límites del día,
+  decimales, estado efectivo y paginación con filtro conservado.
+- Query log del GET: cero INSERT/UPDATE/DELETE/DDL; snapshots de cuentas,
+  pagos y cajas intactos. Mock del servicio financiero impide pay/createForSale.
+  Fixtures exclusivamente SQLite en memoria, sin modificar BD de desarrollo.
+- Pint de tres PHP nuevos y `git diff --check`: correctos.
+- Vite sigue ausente en este worktree (limitación de 1B): sin build nuevo ni
+  instalación de dependencias. Las 40 clases estáticas de la nueva vista
+  existen en el CSS compilado disponible. Responsive conceptual 360/768/1280;
+  validación visual en navegador/dispositivo pendiente.
+- Sin cambios a Commerce/RuteOS ni corrección de fallos ajenos. Sin ejecutar
+  migraciones sobre BD del proyecto, sin push ni merge.

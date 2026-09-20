@@ -31,6 +31,10 @@
         </div>
     </div>
 
+    @can('cobros.portal_dueno')
+        <a href="{{ route('cobros.owner.dashboard') }}" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 py-2 font-semibold text-slate-950 hover:bg-primary-hover">Consultar cartera</a>
+    @endcan
+
     <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide">Próximamente</h3>
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
