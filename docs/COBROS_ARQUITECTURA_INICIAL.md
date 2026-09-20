@@ -5,7 +5,7 @@ Documento de decisiones aprobadas para el módulo CobrOS. Recopilado en la base
 
 ## 1. Identidad del producto
 
-- CobrOS será un producto independiente visualmente dentro de MVS Commerce.
+- CobrOS es una aplicación separada para el usuario, compartiendo servicios internos del monolito modular. Decisión definitiva de Fase 1A.1: sin enlaces entre la navegación de Commerce y CobrOS.
 - V1 vivirá en el mismo monolito Laravel como módulo delimitado.
 - Tendrá tres portales separados:
   - Portal Central MVS (administración de empresa/platforma).
@@ -81,10 +81,9 @@ Documento de decisiones aprobadas para el módulo CobrOS. Recopilado en la base
 - Ruta: `GET /cobros` → `cobros.index` →
   `App\Http\Controllers\Cobros\CobrosDashboardController` (panel inicial vacío;
   no consulta cartera, caja, pagos, GPS ni rutas).
-- Enlace "MVS CobrOS" en la navegación de Commerce
-  (`components/navigation/sidebar.blade.php`), visible solo con
-  `@can('cobros.acceder')` (permiso + módulo contratado).
-- El layout de CobrOS ofrece "Volver a MVS Commerce" sin mezclar menús.
+- Fase 1A.1: retirados el enlace CobrOS de Commerce, el retorno a Commerce y el sufijo Commerce del título propio. La arquitectura interna se conserva.
 - Pruebas: `tests/Feature/CobrosModuleAccessTest.php` (12 pruebas,
   55 aserciones) cubren los 11 escenarios requeridos de acceso, perfiles,
   activación y aislamiento.
+
+- Validación Fase 1A.1: 13 pruebas CobrOS, 63 aserciones. company.licensed permanece intacto: licencia empresarial operable y módulo CobrOS son suficientes, sin módulos Commerce adicionales. Detalle de regresión en PROGRESO_COBROS.md.

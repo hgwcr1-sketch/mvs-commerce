@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>@yield('title', 'MVS CobrOS') — MVS Commerce</title>
+    <title>@yield('title', 'MVS CobrOS')</title>
     <meta name="description" content="@yield('description', '')">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('icons/favicon-32x32.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('icons/apple-touch-icon.png') }}">
@@ -28,10 +28,6 @@
                     @if($company)
                         <span class="text-sm text-slate-600 hidden sm:inline">{{ $company->trade_name }}</span>
                     @endif
-                    <a href="{{ route('dashboard') }}"
-                       class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                        Volver a MVS Commerce
-                    </a>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-300">

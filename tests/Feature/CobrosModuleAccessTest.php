@@ -71,6 +71,8 @@ class CobrosModuleAccessTest extends TestCase
             ->assertOk()
             ->assertSee('MVS CobrOS')
             ->assertSee('Panel de CobrOS')
+            ->assertDontSee('MVS Commerce')
+            ->assertDontSee('href="'.route('dashboard').'"', false)
             ->assertSee($c->trade_name);
     }
 
@@ -197,7 +199,7 @@ class CobrosModuleAccessTest extends TestCase
      | Navegación separada desde Commerce
      | --------------------------------------------------------------------- */
 
-    public function test_cobros_link_in_commerce_navigation_follows_module_and_permission(): void
+    public function test_cobros_is_absent_from_commerce_navigation_even_with_module_and_permission(): void
     {
         [$c, $b, $u] = $this->context(['dashboard.ver', 'cobros.acceder']);
         $this->setContract($c, ['cobros', 'administration']);
@@ -205,7 +207,8 @@ class CobrosModuleAccessTest extends TestCase
         $this->actingAs($u)->withSession($this->ctx($c, $b))
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('MVS CobrOS');
+            ->assertDontSee('MVS CobrOS')
+            ->assertDontSee('href="'.route('cobros.index').'"', false);
 
         $this->setContract($c, ['administration']);
 
@@ -215,9 +218,20 @@ class CobrosModuleAccessTest extends TestCase
             ->assertDontSee('MVS CobrOS');
     }
 
-    /* ---------------------------------------------------------------------
-     | Helpers
-     | --------------------------------------------------------------------- */
+    public function test_cobros_only_company_with_active_license_can_enter_without_commerce_modules(): void
+    {
+        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        $this->setContract($c, ['cobros']);
+        $license = app(\App\Services\CompanyLicenseService::class)->ensure($c);
+        $license->update(['status' => 'active', 'expires_at' => now()->addMonth()]);
+
+        $this->assertSame(['cobros'], $c->modules()->where('is_enabled', true)->pluck('module_key')->all());
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.index'))->assertOk();
+
+        $license->update(['status' => 'suspended']);
+        $this->get(route('cobros.index'))->assertRedirect(route('license.status'));
+    }
 
     private function context(array $permissions, string $companyName = 'Empresa'): array
     {
