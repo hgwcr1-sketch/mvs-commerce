@@ -51,7 +51,7 @@
             )
                 <a
                     href="{{ route('ventas.return.create', $sale) }}"
-                    class="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700">
+                    class="rounded-lg bg-primary px-4 py-2 font-semibold text-slate-950 hover:bg-primary-hover">
                     Devolver productos
                 </a>
             @endif
