@@ -43,7 +43,7 @@ class CobrosOwnerDashboardTest extends TestCase
             ->assertDontSee('Registrar pago')->assertDontSee('Abonar')
             ->assertViewHas('branchId', null)
             ->assertViewHas('metrics', ['total_due' => '0.0000', 'total_overdue' => '0.0000', 'collected_today' => '0.0000', 'customers_with_balance' => 0, 'upcoming_count' => 0, 'overdue_count' => 0]);
-        $this->get(route('cobros.index'))->assertSee('Consultar cartera');
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
         $this->post(route('cobros.owner.dashboard'))->assertStatus(405);
     }
 
@@ -52,7 +52,8 @@ class CobrosOwnerDashboardTest extends TestCase
         [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
             ->get(route('cobros.owner.dashboard'))->assertForbidden();
-        $this->get(route('cobros.index'))->assertOk()->assertDontSee('Consultar cartera')->assertDontSee('Total por cobrar');
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
+        $this->get(route('cobros.collector.index'))->assertOk()->assertDontSee('Consultar cartera')->assertDontSee('Total por cobrar');
     }
 
     public function test_module_and_base_permission_remain_required(): void
@@ -162,7 +163,7 @@ class CobrosOwnerDashboardTest extends TestCase
     {
         $c = Company::create(['trade_name' => 'Empresa '.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'credit_alert_days' => 5, 'is_active' => true]);
         $b = Branch::create(['company_id' => $c->id, 'name' => 'Principal', 'code' => 'P', 'is_active' => true]);
-        $u = User::factory()->create();
+        $u = User::factory()->create(['is_active' => true]);
         $role = Role::create(['company_id' => $c->id, 'name' => 'Dueño', 'is_active' => true]);
         foreach ($permissions as $name) {
             $permission = Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'CobrOS', 'is_active' => true]);

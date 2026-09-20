@@ -191,3 +191,56 @@ Usuario autoriza el commit con la excepción de regresión documentada; sin push
   validación visual en navegador/dispositivo pendiente.
 - Sin cambios a Commerce/RuteOS ni corrección de fallos ajenos. Sin ejecutar
   migraciones sobre BD del proyecto, sin push ni merge.
+
+## FASE 1D — Estructura operativa de cobradores
+
+Alcance aprobado por el usuario para 1D: reutilizar estructura existente,
+SIN alta de usuarios paralelos, pivotes nuevos, migraciones ni seeders.
+Esta instrucción sustituye la previsión inicial del cronograma de crear
+pivote/permisos y UI de alta: no se implementa esa previsión en esta fase.
+
+- User existente = identidad del cobrador.
+- company_user = relación empresa/rol; branch_user = sucursales operativas
+  del cobrador. No existe CobrosCollector ni estado activo duplicado.
+- `CollectorAccessService` es de solo lectura: `branchesForCollecting()` y
+  `canCollectIn()` reutilizan `User::isActive()` y `hasPermission()` con
+  `cobros.cobrar` en la empresa recibida. Este último ya valida pertenencia,
+  rol de esa empresa activo, permiso activo y módulo contratado.
+- Toda consulta de sucursales asignadas añade `branches.company_id` y
+  `branches.is_active`; un branch_user ajeno/contaminado nunca concede acceso.
+  `active_branch_id` NO autoriza cobranza. No se lee desde el servicio.
+- Supervisor = User + cobros.supervisar; Dueño = User + cobros.portal_dueno.
+  Supervisor consulta sucursales de la empresa activa sin exigir asignación
+  individual; dueño conserva dashboard 1C y su filtro empresarial.
+- `/cobros` redirige según permisos EN la empresa activa, en este orden:
+  Dueño → `/cobros/owner`; Supervisor → `/cobros/supervisor`;
+  Cobrador → `/cobros/collector`; sin permiso operativo → 403.
+- Rutas específicas conservan grupo base auth/active.company/company.licensed/
+  company.module:cobros/permission:cobros.acceder y exigen su permiso propio.
+  `EnsureActiveUser` solo en CobrOS usa isActive() para bloquear 403 incluso
+  sesiones existentes de usuarios inactivos; no modifica middleware/modelos
+  compartidos. Era necesario porque hasPermission no comprueba is_active
+  del usuario (sí el del rol).
+- Landings mínimas con identidad/layout CobrOS, sucursales permitidas y aviso
+  de fase pendiente: supervisor 4A, cobrador 2A después de 1E. Sin métricas,
+  clientes, asignaciones, visitas, pagos ni datos simulados.
+- Pruebas previas de entrada adaptadas a las redirecciones; dashboard 1C,
+  sus métricas y control de lectura se conservan.
+
+### Revisión focal de seguridad y validación 1D
+
+- Suite CobrOS: **34/34, 247 aserciones**, incluidas 12 pruebas nuevas 1D,
+  ocho pruebas 1C, accesos previos e identidad/manifest.
+- Cubiertos permisos directos y prioridad, falta de permiso operativo,
+  pertenencia a empresa, pivote contaminado, cambio de contexto del mismo
+  usuario con roles distintos, usuario/rol/sucursal inactivos, ausencia de
+  asignación, módulo/licencia deshabilitados e independencia de sucursal
+  Commerce. IDs enviados en request no sustituyen el contexto validado.
+- Query log del servicio: cero escrituras. Sin cambios a modelos compartidos,
+  finanzas, UI Commerce, RuteOS o BD persistente; fixtures SQLite en memoria.
+- Pint de PHP nuevos/controlador y diff-check correctos. Revisión responsive
+  conceptual 360/768/1280: texto adaptable y listado sin tabla ni acciones.
+  Las 19 clases de la landing existen en el CSS compilado disponible.
+  Se conserva limitación 1B: Vite no instalado; sin nuevo build ni validación
+  visual real. No se amplió PWA ni se instalaron dependencias.
+- `tmp_generate_cobros_icons.php` intacto y fuera del commit. Sin push ni merge.

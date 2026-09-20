@@ -28,7 +28,7 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_company_without_cobros_module_is_rejected(): void
     {
-        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
         $this->setContract($c, ['sales']);
 
         $this->actingAs($u)->withSession($this->ctx($c, $b))
@@ -48,7 +48,7 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_user_with_permission_but_module_disabled_is_rejected(): void
     {
-        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
 
         // Empresas sin contrato configurado mantienen el comportamiento legacy.
         $this->assertTrue($c->isModuleEnabled('cobros'));
@@ -63,14 +63,15 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_company_with_module_and_user_with_permission_opens_initial_panel(): void
     {
-        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
         $this->setContract($c, ['cobros']);
 
         $this->actingAs($u)->withSession($this->ctx($c, $b))
-            ->get(route('cobros.index'))
+            ->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
+        $this->get(route('cobros.collector.index'))
             ->assertOk()
             ->assertSee('MVS CobrOS')
-            ->assertSee('Panel de CobrOS')
+            ->assertSee('Portal del cobrador')
             ->assertSee('src="'.asset('images/logo-mvs-cobros.png').'"', false)
             ->assertSee('href="'.asset('icons/cobros/favicon-32x32.png').'"', false)
             ->assertSee('href="'.asset('icons/cobros/apple-touch-icon.png').'"', false)
@@ -87,7 +88,7 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_user_of_other_company_cannot_use_a_foreign_company_context(): void
     {
-        [$a, $aBranch, $ua] = $this->context(['cobros.acceder'], 'Alpha');
+        [$a, $aBranch, $ua] = $this->context(['cobros.acceder', 'cobros.cobrar'], 'Alpha');
         [$b, $bBranch, $ub] = $this->context(['clientes.ver'], 'Beta');
         $this->setContract($a, ['cobros']);
         $this->setContract($b, ['sales']);
@@ -101,7 +102,8 @@ class CobrosModuleAccessTest extends TestCase
 
         // Alpha solo ve su empresa, nunca datos de Beta.
         $this->actingAs($ua)->withSession($this->ctx($a, $aBranch))
-            ->get(route('cobros.index'))
+            ->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
+        $this->get(route('cobros.collector.index'))
             ->assertOk()
             ->assertSee($a->trade_name)
             ->assertDontSee($b->trade_name);
@@ -117,7 +119,8 @@ class CobrosModuleAccessTest extends TestCase
         $this->setContract($c, ['cobros']);
 
         $this->actingAs($owner)->withSession($this->ctx($c, $b))
-            ->get(route('cobros.index'))
+            ->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
+        $this->get(route('cobros.owner.dashboard'))
             ->assertOk();
 
         // El Portal del Dueño, por sí solo, no concede entrada (sin bypass).
@@ -176,11 +179,12 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_disabling_cobros_blocks_access_without_destroying_data(): void
     {
-        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
         $this->setContract($c, ['cobros']);
 
         $this->actingAs($u)->withSession($this->ctx($c, $b))
-            ->get(route('cobros.index'))
+            ->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
+        $this->get(route('cobros.collector.index'))
             ->assertOk();
 
         $this->setContract($c, ['sales']);
@@ -225,14 +229,14 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_cobros_only_company_with_active_license_can_enter_without_commerce_modules(): void
     {
-        [$c, $b, $u] = $this->context(['cobros.acceder']);
+        [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
         $this->setContract($c, ['cobros']);
         $license = app(\App\Services\CompanyLicenseService::class)->ensure($c);
         $license->update(['status' => 'active', 'expires_at' => now()->addMonth()]);
 
         $this->assertSame(['cobros'], $c->modules()->where('is_enabled', true)->pluck('module_key')->all());
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
-            ->get(route('cobros.index'))->assertOk();
+            ->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
 
         $license->update(['status' => 'suspended']);
         $this->get(route('cobros.index'))->assertRedirect(route('license.status'));
@@ -248,7 +252,7 @@ class CobrosModuleAccessTest extends TestCase
         ]);
         $b = Branch::create(['company_id' => $c->id, 'name' => 'Principal', 'code' => 'P'.uniqid(), 'is_active' => true]);
 
-        $u = User::factory()->create();
+        $u = User::factory()->create(['is_active' => true]);
         $r = Role::create(['company_id' => $c->id, 'name' => 'R'.uniqid(), 'is_active' => true]);
 
         foreach ($permissions as $name) {

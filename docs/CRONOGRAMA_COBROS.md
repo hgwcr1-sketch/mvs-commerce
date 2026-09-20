@@ -84,6 +84,9 @@ Cada fase declara: objetivo, funcionalidades, modelos/servicios, migración
 pertenece a la fase y dependencia.
 
 ### 1D — Estructura operativa de cobradores
+
+**Estado: COMPLETADA LOCALMENTE (2026-09-20).** Suite CobrOS 34/34, 247 aserciones. Alcance específico aprobado sin migraciones ni pivotes nuevos y evidencia en PROGRESO_COBROS.md, sección Fase 1D; sustituye la previsión inicial descrita abajo.
+
 - Objetivo: definir quiénes cobran y bajo qué empresa/sucursal operan.
 - Funcionalidades: alta/gestión de cobradores y supervisores de CobrOS;
   relación cobrador ↔ empresa (+ sucursales permitidas); roles CobrOS
