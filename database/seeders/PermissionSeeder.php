@@ -209,6 +209,18 @@ class PermissionSeeder extends Seeder
             ['name' => 'notificaciones.cxp', 'label' => 'Recibir alertas de cuentas por pagar', 'module' => 'Notificaciones'],
             ['name' => 'notificaciones.administracion', 'label' => 'Recibir alertas de administración', 'module' => 'Notificaciones'],
             ['name' => 'notificaciones.configurar', 'label' => 'Configurar preferencias de notificación', 'module' => 'Notificaciones'],
+
+            // MVS RouteOS — Ventas, Rutas y Cobros
+            ['name' => 'routeos.acceder', 'label' => 'Acceder a RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.rutas.ver', 'label' => 'Ver rutas de RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.rutas.gestionar', 'label' => 'Gestionar rutas de RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.pedidos.crear', 'label' => 'Crear pedidos RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.pedidos.bodega', 'label' => 'Atender pedidos RouteOS en bodega', 'module' => 'RouteOS'],
+            ['name' => 'routeos.pedidos.facturar', 'label' => 'Facturar pedidos RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.cobros', 'label' => 'Registrar cobros RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.supervisar', 'label' => 'Supervisar RouteOS', 'module' => 'RouteOS'],
+            ['name' => 'routeos.credito.administrar', 'label' => 'Administrar límites y plazos de crédito de clientes', 'module' => 'RouteOS'],
+            ['name' => 'routeos.configuracion', 'label' => 'Configurar RouteOS', 'module' => 'RouteOS'],
         ];
 
         foreach ($permissions as $permission) {

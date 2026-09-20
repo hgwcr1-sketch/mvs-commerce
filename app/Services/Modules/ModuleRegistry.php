@@ -15,6 +15,7 @@ class ModuleRegistry
         'agenda' => ['label' => 'Agenda', 'prefixes' => ['agenda.']],
         'administration' => ['label' => 'Administración', 'prefixes' => ['dashboard.', 'usuarios.', 'roles.', 'empresa.', 'configuracion.', 'formas_pago.']],
         'notifications' => ['label' => 'Notificaciones y Alertas', 'prefixes' => ['notificaciones.']],
+        'routeos' => ['label' => 'RouteOS', 'prefixes' => ['routeos.']],
     ];
 
     public function forPermission(string $permission): ?string

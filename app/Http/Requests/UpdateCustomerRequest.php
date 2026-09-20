@@ -97,11 +97,45 @@ class UpdateCustomerRequest extends FormRequest
 
             'address' => 'nullable|string',
 
+            'latitude' => [
+                'nullable',
+                'numeric',
+                'between:-90,90',
+                function ($attribute, $value, $fail) {
+                    if ($value !== null && $this->input('longitude') === null) {
+                        $fail('Debe enviar latitud y longitud juntas.');
+                    }
+                },
+            ],
+
+            'longitude' => [
+                'nullable',
+                'numeric',
+                'between:-180,180',
+                function ($attribute, $value, $fail) {
+                    if ($value !== null && $this->input('latitude') === null) {
+                        $fail('Debe enviar latitud y longitud juntas.');
+                    }
+                },
+            ],
+
+            'location_reference' => ['nullable', 'string', 'max:500'],
+
             'notes' => 'nullable|string|max:2000',
 
-            'credit_limit' => 'required|numeric|min:0',
+            'credit_limit' => [
+                'required',
+                'numeric',
+                'min:0',
+                new \App\Rules\CanAdministerCustomerCredit($this->route('cliente')),
+            ],
 
-            'credit_days' => 'nullable|integer|min:0',
+            'credit_days' => [
+                'nullable',
+                'integer',
+                'min:0',
+                new \App\Rules\CanAdministerCustomerCredit($this->route('cliente')),
+            ],
 
             'price_level' => [
                 'required',

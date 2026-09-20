@@ -70,6 +70,7 @@ use App\Http\Controllers\PaymentMethodController;
 // Administración
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\RouteosController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductSupplierController;
@@ -243,6 +244,16 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::put('/preferencias', [NotificationCenterController::class, 'updatePreferences'])
             ->middleware('permission:notificaciones.configurar')
             ->name('preferences.update');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | MVS RouteOS — Ventas, Rutas y Cobros
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware(['active.branch', 'permission:routeos.acceder'])->prefix('routeos')->name('routeos.')->group(function () {
+        Route::get('/', [RouteosController::class, 'index'])
+            ->name('index');
     });
 
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {

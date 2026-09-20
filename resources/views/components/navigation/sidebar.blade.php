@@ -132,6 +132,13 @@
         <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
     @endcanany
 
+    {{-- ROUTEOS --}}
+    <div class="nav-desktop-group">
+    @can('routeos.acceder')
+        <x-navigation.item route="routeos.index" icon="map" label="RouteOS" :active="request()->routeIs('routeos.*')" />
+    @endcan
+    </div>
+
         {{-- PRODUCTOS --}}
     <div class="nav-desktop-group">
     @canany([
