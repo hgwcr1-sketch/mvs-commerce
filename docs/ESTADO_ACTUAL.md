@@ -2,6 +2,18 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Notas de Crédito — Fase 4A vigencia configurable — RECUPERADA POST-APAGADO, LOCAL, SIN PUSH/DEPLOY (2026-09-20)
+
+**Commit `9b55929`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`), base `a5ed4ae`. Fase 4A completa tras apagado (CASO B: implementación parcial sin commit; se recuperó, completó y commitó localmente). Producción NO autorizada; no hacer push.
+
+- **Política por empresa**: `credit_note_expiration_policy` `none/30/60/90/custom` + `credit_note_custom_expiration_days` en `companies` (migración `2026_09_20_000002`, default `none`). `Company::ncExpirationDays()` traduce la política a días.
+- **Vigencia fijada al emitir**: `CreditNoteService::issueFromReturn` calcula `expires_at` UNA vez (`issued_at + días`); cambios posteriores de configuración NO alteran NC existentes. Migración `2026_09_20_000001`: `credit_notes.expires_at` nullable + `customer_id` nullable en `credit_notes` y `credit_note_applications` (preparación Consumer Final; FK preservadas).
+- **Comportamiento**: NC sin `expires_at` = vigencia ilimitada (backward compatible; NC locales existentes conservan `NULL`). `CreditNote::isExpired()` y `scopeAvailable` excluye vencidas; el backend rechaza aplicación de vencidas (mensaje `ValidationException`) en `applyToSale` y `applyBatchToSale`. La reversión de una aplicación NO valida vencimiento (restaura saldo; la NC permanece vencida/indisponible).
+- **Administración**: permiso `notas_credito.configurar` (asignado vía bloque existente `notas_credito.%` a Administrador/Administrador Local; Cajero NO). Ruta `PUT configuracion/notas-credito`, `UpdateCreditNoteExpirationRequest`, `SettingController::updateCreditNoteExpiration`, pestaña "Notas de Crédito" en `settings/index.blade.php` (radios dorados, campo personalizado deshabilitado salvo `custom`, responsive 44px).
+- **NO implementado por diseño/roadmap**: status `expired`, Consumer Final habilitado, `is_consumer_final`, `application_code` — pendientes de la fase correspondiente.
+- **Relevo previo pendiente**: Fase 2C reversión NC↔CxC y demo `5c889f9` del agente previo están integradas en `feature/notas-credito` (base `a5ed4ae`); el punto de recuperación F45 no se tocó.
+- **Validación**: `CreditNoteExpirationTest` **22/22 (73 aserciones)**; regresión NC `CreditNoteTest`+`CreditNoteReconciliationTest`+`OrderPermissionSeederTest`+`DevolucionesIndexTest` **55/55 (295)**; `PosCreditNoteTest`+`DemoCompanyProvisionerTest` **105/105 (608)**; settings/Loyalty/WhatsApp **35/35 (167)**. `npm run build` OK; `git diff --check` limpio. Pendiente auditoría del usuario y despliegue controlado.
+
 ## Notas de Crédito Nominativa — IMPLEMENTADA Y CERTIFICADA (2026-09-19)
 
 **Commit `a734f5d`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`). Módulo completo certificado y congelado.
@@ -306,7 +318,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `a734f5d`). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `9b55929`, Fase 4A vigencia configurable). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -325,6 +337,7 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
+- **Fase 4A vigencia configurable NC: commit `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones; local, sin push ni deploy);
 - **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
 - Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
 - **Fase 3A NC-POS: commit `3f55ba9`** (integración backend NC con POS, 9 archivos, 1351 insertions);
