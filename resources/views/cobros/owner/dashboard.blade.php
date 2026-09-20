@@ -34,7 +34,7 @@
             <div class="cobros-metric {{ $loop->first ? 'cobros-metric-primary' : '' }}">
                 <h2>{{ $label }}</h2>
                 <p>@if($loop->index < 3)
-                    @include('cobros.components.money', ['amount' => $value])
+                    @include('cobros.components.money', ['amount' => $value, 'currency' => 'CRC'])
                 @else
                     {{ $value }}
                 @endif</p>

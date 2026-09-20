@@ -50,6 +50,29 @@ class CobrosOwnerDashboardTest extends TestCase
         $this->post(route('cobros.owner.dashboard'))->assertStatus(405);
     }
 
+    public function test_monetary_metrics_have_colon_symbol_while_counts_stay_integers(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $response = $this->actingAs($user)->withSession(['active_company_id' => $company->id])
+            ->get(route('cobros.owner.dashboard'))->assertOk();
+        $html = $response->getContent();
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+        $xpath = new \DOMXPath($dom);
+        $values = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " cobros-metric ")]/p');
+        $this->assertCount(6, $values);
+        foreach (['₡0.00', '₡0.00', '₡0.00', '0', '0', '0'] as $index => $expected) {
+            $this->assertSame($expected, trim($values->item($index)->textContent));
+        }
+        $response->assertDontSee('.0000');
+        $this->assertSame('₡1,234.50', trim(strip_tags(view('cobros.components.money', ['amount' => '1234.5000', 'currency' => 'CRC'])->render())));
+        $this->assertSame('₡12,450.75', trim(strip_tags(view('cobros.components.money', ['amount' => '12450.7500', 'currency' => 'CRC'])->render())));
+        $this->assertSame('USD 12.50', trim(strip_tags(view('cobros.components.money', ['amount' => '12.5000', 'currency' => 'USD'])->render())));
+        if ($fixture = getenv('COBROS_SHELL_HTML')) {
+            file_put_contents($fixture, $html);
+        }
+    }
+
     public function test_collector_cannot_see_owner_metrics_or_link(): void
     {
         [$c, $b, $u] = $this->context(['cobros.acceder', 'cobros.cobrar']);
@@ -107,7 +130,7 @@ class CobrosOwnerDashboardTest extends TestCase
             ->get(route('cobros.owner.dashboard'))->assertOk()
             ->assertDontSee('CLIENTE EMPRESA AJENA')
             ->assertSee('190.79')->assertSee('100.12')->assertSee('9.12')
-            ->assertSee('CRC 100.12')->assertDontSee('100.1234')->assertDontSee('.0000')
+            ->assertSee('₡100.12')->assertDontSee('100.1234')->assertDontSee('.0000')
             ->assertViewHas('metrics', ['total_due' => '190.7900', 'total_overdue' => '100.1234', 'collected_today' => '9.1235', 'customers_with_balance' => 2, 'upcoming_count' => 2, 'overdue_count' => 1]);
         $queries = DB::getQueryLog();
         DB::disableQueryLog();

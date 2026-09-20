@@ -5,10 +5,12 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 ## Worktree CobrOS — UI base recuperada (2026-09-20)
 
 En este worktree la rama verificada es feature/cobros-v1; base a8fb2a8.
-Shell propio responsive y presentación monetaria de 2 decimales terminados.
-Suite CobrOS: 48/48, 327 aserciones, SQLite en memoria; finanzas 1C y permisos
-1D intactos. Detalle y límites en docs/PROGRESO_COBROS.md, sección UI base.
-Vite no instalado; build y revisión visual real pendientes. 1E no iniciada.
+Shell corregido sobre f0e31be: barra horizontal + Más en todos los tamaños,
+sin sidebar permanente; ₡ y 2 decimales solo en importes. Dashboard aprobado
+conservado. Suite CobrOS: 49/49, 360 aserciones; finanzas 1C y permisos 1D
+intactos. Chrome headless con fixtures PASS 360/768/1280 y apertura/cierres.
+Detalle en docs/PROGRESO_COBROS.md, corrección exacta de navegación.
+Vite no instalado; build y prueba manual/PWA pendientes. 1E no iniciada.
 tmp_generate_cobros_icons.php preservado fuera del commit; sin push ni merge.
 Las entradas Commerce siguientes son contexto heredado de la rama base.
 

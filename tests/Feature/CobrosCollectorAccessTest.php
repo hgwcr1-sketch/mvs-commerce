@@ -191,12 +191,16 @@ class CobrosCollectorAccessTest extends TestCase
                 ->get(route('cobros.'.$selected))->assertOk()
                 ->assertSee('logo-mvs-cobros.png')->assertSee($company->trade_name)->assertSee($user->name)
                 ->assertSee('aria-current="page"', false)->assertDontSee('MVS Commerce')
+                ->assertSee('Más')->assertSee('aria-expanded="false"', false)
+                ->assertSee('<dialog id="cobros-more-panel"', false)->assertSee('Cerrar menú')
+                ->assertDontSee('<aside class="cobros-sidebar"', false)
                 ->assertDontSee('Asignaciones')->assertDontSee('Visitas')->assertDontSee('Reportes')
                 ->assertDontSee('Configuración')->assertDontSee('Fase 1E');
             foreach (['owner.dashboard', 'supervisor.index', 'collector.index'] as $route) {
                 $link = 'href="'.route('cobros.'.$route).'"';
                 if ($route === $selected) {
                     $response->assertSee($link, false);
+                    $this->assertSame(2, substr_count($response->getContent(), $link));
                 } else {
                     $response->assertDontSee($link, false);
                 }

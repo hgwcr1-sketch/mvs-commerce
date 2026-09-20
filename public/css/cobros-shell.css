@@ -33,9 +33,6 @@ gold reuses the shared brand token. */
 .cobros-skip:focus{
     top:12px
 }
-.cobros-brand,.cobros-company,.cobros-sidebar-footer{
-    display:none
-}
 .cobros-navigation{
     position:fixed;
     bottom:0;
@@ -43,7 +40,8 @@ gold reuses the shared brand token. */
     right:0;
     z-index:40;
     display:flex;
-    background:var(--cobros-navy);
+    background:white;
+    border-top:1px solid #e2e8f0;
     padding:8px 8px calc(8px + env(safe-area-inset-bottom));
     gap:6px;
     box-shadow:0 -2px 12px #14263d18
@@ -59,7 +57,10 @@ gold reuses the shared brand token. */
     gap:4px;
     padding:6px;
     border-radius:10px;
-    color:#e2e8f0;
+    color:#64748b;
+    background:transparent;
+    border:0;
+    font-family:inherit;
     text-decoration:none;
     font-size:12px;
     text-align:center;
@@ -69,7 +70,7 @@ gold reuses the shared brand token. */
     flex-shrink:0
 }
 .cobros-nav-item:hover{
-    background:#253b55
+    background:#f1f5f9
 }
 .cobros-nav-item[aria-current=page]{
     background:var(--cobros-gold);
@@ -144,7 +145,7 @@ gold reuses the shared brand token. */
     background:#f1f5f9
 }
 .cobros-main{
-    max-width:1440px;
+    max-width:none;
     margin:auto;
     padding:24px 16px calc(112px + env(safe-area-inset-bottom));
     min-width:0;
@@ -243,46 +244,8 @@ gold reuses the shared brand token. */
     }
 }
 @media(min-width:768px){
-    .cobros-sidebar{
-        position:fixed;
-        inset:0 auto 0 0;
-        width:88px;
-        display:flex;
-        flex-direction:column;
-        background:var(--cobros-navy);
-        padding:16px 8px;
-        z-index:40;
-        overflow-y:auto
-    }
-    .cobros-brand{
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        gap:12px
-    }
-    .cobros-brand img{
-        width:56px;
-        height:56px
-    }
-    .cobros-brand-copy{
-        display:none
-    }
-    .cobros-navigation{
-        position:static;
-        flex-direction:column;
-        padding:24px 0;
-        box-shadow:none
-    }
-    .cobros-nav-item{
-        flex:none;
-        min-height:64px;
-        font-size:11px
-    }
-    .cobros-workspace{
-        margin-left:88px
-    }
     .cobros-main{
-        padding:28px 24px 40px
+        padding:28px 24px calc(112px + env(safe-area-inset-bottom))
     }
     .cobros-header{
         padding:16px 24px
@@ -292,66 +255,110 @@ gold reuses the shared brand token. */
     }
 }
 @media(min-width:1024px){
-    .cobros-sidebar{
-        width:248px;
-        padding:24px 16px
-    }
-    .cobros-brand{
-        justify-content:flex-start
-    }
-    .cobros-brand-copy{
-        display:block;
-        min-width:0;
-        color:white
-    }
-    .cobros-brand-copy strong{
-        font-size:17px
-    }
-    .cobros-brand-copy span{
-        display:block;
-        font-size:11px;
-        color:#cbd5e1;
-        margin-top:4px
-    }
-    .cobros-company{
-        display:block;
-        margin-top:28px;
-        padding:16px 8px;
-        border-top:1px solid #ffffff26;
-        overflow-wrap:anywhere
-    }
-    .cobros-company>span{
-        color:#cbd5e1
-    }
-    .cobros-company strong{
-        display:block;
-        color:white;
-        font-size:14px;
-        margin-top:6px
-    }
-    .cobros-navigation{
-        padding-top:8px
-    }
-    .cobros-nav-item{
-        flex-direction:row;
-        justify-content:flex-start;
-        gap:12px;
-        padding:12px;
-        min-height:48px;
-        font-size:14px;
-        text-align:left
-    }
-    .cobros-sidebar-footer{
-        display:block;
-        margin-top:auto;
-        padding:20px 8px;
-        color:#cbd5e1;
-        font-size:11px
-    }
-    .cobros-workspace{
-        margin-left:248px
-    }
     .cobros-metrics{
         grid-template-columns:repeat(3,minmax(0,1fr))
     }
+}
+/* The complete menu overlays the page only while the native dialog is open. */
+.cobros-more-panel:not([open]){
+    display:none
+}
+.cobros-more-panel{
+    position:fixed;
+    inset:0 0 0 auto;
+    margin:0 0 0 auto;
+    width:360px;
+    max-width:90vw;
+    height:100%;
+    height:100dvh;
+    max-height:100%;
+    max-height:100dvh;
+    padding:16px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+    border:0;
+    background:var(--cobros-navy);
+    color:white;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    overflow-wrap:anywhere
+}
+.cobros-more-panel::backdrop{
+    background:rgb(15 23 42 / .6)
+}
+.cobros-panel-heading{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding-bottom:12px;
+    border-bottom:1px solid #ffffff26
+}
+.cobros-panel-close{
+    min-width:44px;
+    min-height:44px;
+    background:transparent;
+    color:white;
+    font-size:28px;
+    border:1px solid #ffffff40;
+    border-radius:10px
+}
+.cobros-brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-top:24px
+}
+.cobros-brand-copy{
+    min-width:0
+}
+.cobros-brand-copy strong{
+    font-size:17px
+}
+.cobros-brand-copy span,.cobros-sidebar-footer{
+    display:block;
+    font-size:11px;
+    color:#cbd5e1;
+    margin-top:4px
+}
+.cobros-company{
+    margin-top:24px
+}
+.cobros-company>span{
+    color:#cbd5e1
+}
+.cobros-company strong{
+    display:block;
+    margin-top:6px
+}
+.cobros-panel-user{
+    margin-top:12px;
+    color:#cbd5e1;
+    font-size:14px
+}
+.cobros-panel-navigation{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin:24px 0
+}
+.cobros-panel-navigation .cobros-nav-item{
+    flex:none;
+    flex-direction:row;
+    justify-content:flex-start;
+    gap:12px;
+    min-height:48px;
+    padding:12px;
+    color:#e2e8f0;
+    text-align:left;
+    font-size:14px
+}
+.cobros-panel-navigation .cobros-nav-item:hover{
+    background:#253b55
+}
+.cobros-panel-navigation .cobros-nav-item[aria-current=page]{
+    background:var(--cobros-gold);
+    color:#14263d
+}
+.cobros-sidebar-footer{
+    margin-top:24px
 }

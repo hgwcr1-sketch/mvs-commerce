@@ -276,3 +276,34 @@ pivote/permisos y UI de alta: no se implementa esa previsión en esta fase.
   No se instalaron dependencias. Esto no certifica apariencia ni PWA real.
 - Fase 1E NO iniciada. Sin migraciones/seeders sobre BD persistente, cambios
   de BD de desarrollo, pagos/caja/recibos nuevos, push, merge ni despliegue.
+
+## Corrección exacta de navegación y símbolo monetario (2026-09-20)
+
+- Base f0e31be limpia salvo el temporal excluido. Se inspeccionó el Commerce
+  actual: barra inferior horizontal en todos los tamaños y menú oscuro bajo
+  demanda desde Más. La indicación específica del usuario sustituye el rail
+  tablet/sidebar permanente de la UI base anterior.
+- CobrOS adopta ese patrón sin copiar rutas: iconos con texto debajo, opciones
+  autorizadas y Más con hamburguesa; una única fuente Blade para barra y panel.
+  El diálogo nativo inicia cerrado, contiene logo/empresa/usuario/menú/salida,
+  mantiene el foco dentro y cierra con botón, Escape o backdrop, restaurando
+  foco y scroll. No reserva ancho lateral en ningún breakpoint.
+- Dashboard, cards, header, filtro y landings conservados. Las tres métricas
+  monetarias ahora llevan ₡; CRC en cuentas también usa ₡ y otras monedas
+  conservan su código. Conteos enteros sin símbolo. Money/BCMath, precisión
+  interna DECIMAL(19,4), consultas y contratos financieros 1C/1D intactos.
+- Suite CobrOS: **49/49, 360 aserciones**, SQLite en memoria; incluye moneda,
+  conteos, permisos de ambas navegaciones, aislamiento y dashboard read-only.
+- Chrome headless sobre HTML real renderizado por prueba HTTP y assets locales:
+  PASS a 360/768/1280, barra horizontal, ancho útil completo, cero overflow,
+  controles >=44px, panel inicialmente oculto, apertura y los tres cierres,
+  retorno de foco y métricas. Capturas 360/1280 revisadas. No es certificación
+  de PWA instalada ni prueba manual con datos reales.
+- Reproducible: establecer COBROS_SHELL_HTML al archivo temporal deseado antes
+  de ejecutar CobrosOwnerDashboardTest; después ejecutar
+  node tests/js/cobros-shell-browser.cjs con esa misma variable. Node 24 y
+  Chrome local usados, sin dependencias nuevas; COBROS_CHROME_PATH permite
+  indicar otra instalación de Chrome. Capturas en el directorio temporal.
+- Vite sigue ausente; no se hizo build nuevo. CSS/JS CobrOS públicos versionados
+  cargan directamente. Sin 1E, BD persistente, migraciones, seeders, cambios
+  Commerce/RuteOS, push ni merge. tmp_generate_cobros_icons.php intacto.

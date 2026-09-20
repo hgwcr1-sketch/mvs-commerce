@@ -10,19 +10,10 @@
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
     <meta name="theme-color" content="#D4AF37">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=1">
+    <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=2">
 </head>
 <body class="cobros-app">
     <a class="cobros-skip" href="#cobros-main">Ir al contenido</a>
-    <aside class="cobros-sidebar" aria-label="MVS CobrOS">
-        <div class="cobros-brand">
-            <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="64" height="64">
-            <div class="cobros-brand-copy"><strong>MVS CobrOS</strong><span>Cobranza Operativa</span></div>
-        </div>
-        <div class="cobros-company"><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
-        @include('cobros.components.navigation')
-        <div class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</div>
-    </aside>
     <div class="cobros-workspace">
         <header class="cobros-header">
             <div class="cobros-header-company">
@@ -47,5 +38,25 @@
             @yield('content')
         </main>
     </div>
+    @include('cobros.components.navigation', ['panel' => false])
+    <dialog id="cobros-more-panel" class="cobros-more-panel" aria-labelledby="cobros-more-title">
+        <div class="cobros-panel-heading">
+            <h2 id="cobros-more-title">Menú CobrOS</h2>
+            <button type="button" id="cobros-more-close" class="cobros-panel-close" aria-label="Cerrar menú" autofocus>×</button>
+        </div>
+        <div class="cobros-brand">
+            <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="64" height="64">
+            <div class="cobros-brand-copy"><strong>MVS CobrOS</strong><span>Cobranza Operativa</span></div>
+        </div>
+        <div class="cobros-company"><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
+        <p class="cobros-panel-user">{{ auth()->user()->name }}</p>
+        @include('cobros.components.navigation', ['panel' => true])
+        <form method="POST" action="{{ route('logout') }}" class="cobros-panel-exit">
+            @csrf
+            <button type="submit" class="cobros-logout">Salir</button>
+        </form>
+        <p class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</p>
+    </dialog>
+    <script src="{{ asset('js/cobros-navigation.js') }}?v=1" defer></script>
 </body>
 </html>
