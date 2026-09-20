@@ -16,6 +16,7 @@ class ModuleRegistry
         'administration' => ['label' => 'Administración', 'prefixes' => ['dashboard.', 'usuarios.', 'roles.', 'empresa.', 'configuracion.', 'formas_pago.']],
         'notifications' => ['label' => 'Notificaciones y Alertas', 'prefixes' => ['notificaciones.']],
         'routeos' => ['label' => 'RouteOS', 'prefixes' => ['routeos.']],
+        'cobros' => ['label' => 'MVS CobrOS', 'prefixes' => ['cobros.']],
     ];
 
     public function forPermission(string $permission): ?string

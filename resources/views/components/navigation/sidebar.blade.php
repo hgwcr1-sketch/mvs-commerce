@@ -139,6 +139,14 @@
     @endcan
     </div>
 
+    {{-- COBROS --}}
+    <div class="nav-desktop-group">
+    {{-- @can ya valida permiso + módulo contratado (Gate::before → hasPermission). --}}
+    @can('cobros.acceder')
+        <x-navigation.item route="cobros.index" icon="users" label="MVS CobrOS" :active="request()->routeIs('cobros.*')" />
+    @endcan
+    </div>
+
         {{-- PRODUCTOS --}}
     <div class="nav-desktop-group">
     @canany([

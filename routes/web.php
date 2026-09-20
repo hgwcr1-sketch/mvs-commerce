@@ -256,6 +256,19 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
             ->name('index');
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | MVS CobrOS — Cobranza Operativa
+    |--------------------------------------------------------------------------
+    */
+
+    // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
+    // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
+    Route::middleware(['auth', 'active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder'])->prefix('cobros')->name('cobros.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
+            ->name('index');
+    });
+
     Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
         Route::get('/pos', [PosController::class, 'index'])->middleware('pos.cash-session')->name('pos.index');
         Route::get('/pos/productos/buscar', [PosController::class, 'searchProducts'])

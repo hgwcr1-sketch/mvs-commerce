@@ -221,6 +221,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'routeos.supervisar', 'label' => 'Supervisar RouteOS', 'module' => 'RouteOS'],
             ['name' => 'routeos.credito.administrar', 'label' => 'Administrar límites y plazos de crédito de clientes', 'module' => 'RouteOS'],
             ['name' => 'routeos.configuracion', 'label' => 'Configurar RouteOS', 'module' => 'RouteOS'],
+            // MVS CobrOS — Fundación independiente (Fase 1A)
+            ['name' => 'cobros.acceder', 'label' => 'Acceder a CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'cobros.portal_dueno', 'label' => 'Acceder al Portal del Dueño', 'module' => 'CobrOS'],
+            ['name' => 'cobros.supervisar', 'label' => 'Supervisar CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
         ];
 
         foreach ($permissions as $permission) {

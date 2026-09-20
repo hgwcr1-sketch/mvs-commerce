@@ -39,14 +39,23 @@ Documento de decisiones aprobadas para el módulo CobrOS. Recopilado en la base
 ## 5. Activación y aislamiento (Fase 1A)
 
 - CobrOS se activa mediante el mecanismo existente de `CompanyModule`.
-- El módulo usa la clave interna `cobros`.
+- El módulo usa la clave interna `cobros`, registrada en `ModuleRegistry`
+  con nombre visible "MVS CobrOS" y su propia familia de permisos `cobros.*`.
 - Los permisos de CobrOS son independientes de `routeos.*`.
 - La entrada al portal usa middleware propio: `auth`, `active.company`,
-  `company.module:cobros`, `permission:cobros.acceder`.
+  `company.licensed`, `company.module:cobros`, `permission:cobros.acceder`.
+- No se aplica `active.branch` a propósito: el portal del dueño opera a nivel
+  de empresa completa; exigir sucursal activa lo bloquearía sin necesidad.
+- El Gate `cobros.acceder` combina permiso del rol y módulo contratado
+  mediante `hasPermission()` existente; no hay bypass adicional.
+- La activación/desactivación del módulo sigue siendo exclusiva de Platform
+  Admin vía `platform.modules.update` (middleware `platform.admin`); el
+  tenant no puede autoactivar el producto pagado.
 - El layout de CobrOS es independiente del layout de Commerce.
 - CobrOS no muestra menús de POS, inventario, caja, compras ni módulos
   internos de Commerce.
-- Un usuario de otra empresa no puede acceder usando contexto de otra empresa.
+- Un usuario de otra empresa no puede acceder usando contexto de otra empresa:
+  `EnsureActiveCompany` corrige la sesión a sus propias empresas.
 - Activar CobrOS no activa automáticamente POS, caja, inventario ni RouteOS.
 - Desactivar CobrOS bloquea el acceso sin eliminar datos.
 
@@ -66,3 +75,16 @@ Documento de decisiones aprobadas para el módulo CobrOS. Recopilado en la base
 - Implementar entidades de cobros sin modificar la base actual.
 - Mantener la separación entre RuteOS y CobrOS hasta que la compartición
   de geolocalización y auditoría esté claramente definida.
+
+## 8. Implementación de la Fase 1A (confirmado)
+
+- Ruta: `GET /cobros` → `cobros.index` →
+  `App\Http\Controllers\Cobros\CobrosDashboardController` (panel inicial vacío;
+  no consulta cartera, caja, pagos, GPS ni rutas).
+- Enlace "MVS CobrOS" en la navegación de Commerce
+  (`components/navigation/sidebar.blade.php`), visible solo con
+  `@can('cobros.acceder')` (permiso + módulo contratado).
+- El layout de CobrOS ofrece "Volver a MVS Commerce" sin mezclar menús.
+- Pruebas: `tests/Feature/CobrosModuleAccessTest.php` (12 pruebas,
+  55 aserciones) cubren los 11 escenarios requeridos de acceso, perfiles,
+  activación y aislamiento.
