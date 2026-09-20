@@ -10,52 +10,42 @@
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
     <meta name="theme-color" content="#D4AF37">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=1">
 </head>
-<body class="min-h-screen bg-slate-100">
-    <div class="min-h-screen">
-        <nav class="border-b border-slate-200 bg-white">
-            <div class="mx-auto flex max-w-7xl items-center justify-between px-3 py-3 sm:px-4 sm:py-4">
-                <div class="flex items-center gap-3">
-                    <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS"
-                         width="64" height="64" class="h-16 w-16 shrink-0 object-contain">
-                    <div>
-                        <span class="text-lg font-bold text-slate-900">MVS CobrOS</span>
-                        <p class="text-xs text-slate-500">Cobranza Operativa</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 sm:gap-3">
-                    @if($company)
-                        <span class="text-sm text-slate-600 hidden sm:inline">{{ $company->trade_name }}</span>
-                    @endif
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-300">
-                            Salir
-                        </button>
-                    </form>
-                </div>
+<body class="cobros-app">
+    <a class="cobros-skip" href="#cobros-main">Ir al contenido</a>
+    <aside class="cobros-sidebar" aria-label="MVS CobrOS">
+        <div class="cobros-brand">
+            <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="64" height="64">
+            <div class="cobros-brand-copy"><strong>MVS CobrOS</strong><span>Cobranza Operativa</span></div>
+        </div>
+        <div class="cobros-company"><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
+        @include('cobros.components.navigation')
+        <div class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</div>
+    </aside>
+    <div class="cobros-workspace">
+        <header class="cobros-header">
+            <div class="cobros-header-company">
+                <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="44" height="44">
+                <div><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
             </div>
-        </nav>
-
-        <main class="mx-auto max-w-3xl px-3 py-6 sm:px-4 sm:py-8">
+            <div class="cobros-account">
+                <span class="cobros-user">{{ auth()->user()->name }}</span>
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="cobros-logout">Salir</button>
+                </form>
+            </div>
+        </header>
+        <main id="cobros-main" class="cobros-main" tabindex="-1">
             @if(session('success'))
-                <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-                    {{ session('success') }}
-                </div>
+                <div role="status" class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">{{ session('success') }}</div>
             @endif
-
             @if(session('error'))
-                <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-                    {{ session('error') }}
-                </div>
+                <div role="alert" class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{{ session('error') }}</div>
             @endif
-
             @yield('content')
         </main>
-
-        <footer class="border-t border-slate-200 bg-white px-3 py-4 text-center text-xs text-slate-400 sm:px-4">
-            MVS CobrOS — Cobranza Operativa · Versión 1.0
-        </footer>
     </div>
 </body>
 </html>

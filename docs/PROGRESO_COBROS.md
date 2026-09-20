@@ -244,3 +244,35 @@ pivote/permisos y UI de alta: no se implementa esa previsión en esta fase.
   Se conserva limitación 1B: Vite no instalado; sin nuevo build ni validación
   visual real. No se amplió PWA ni se instalaron dependencias.
 - `tmp_generate_cobros_icons.php` intacto y fuera del commit. Sin push ni merge.
+
+## UI base — Shell independiente antes de 1E (2026-09-20)
+
+- Recuperación post-apagado: caso C, rama feature/cobros-v1, HEAD inicial
+  a8fb2a8. Sin cambios UI ni commit previo de shell; único untracked inicial
+  tmp_generate_cobros_icons.php, preservado y excluido.
+- Shell inspirado en la UX Commerce, con navegación completamente propia:
+  Inicio / Cartera, Supervisión y Mi cartera, filtrados con hasPermission
+  contra la empresa activa. Logo CobrOS, empresa, usuario y salida compartidos
+  por los tres perfiles. Sin enlaces Commerce ni módulos futuros.
+- Azul oscuro, dorado oficial y blanco. Barra inferior móvil, rail tablet y
+  sidebar escritorio; controles de 44px, foco visible y salto al contenido.
+  CSS público exclusivo de CobrOS, cargado solo por su layout, sin cambiar
+  fuentes CSS/JS compartidas. No depende de un build nuevo para estos estilos.
+- Dashboard conserva las seis métricas, filtros, paginación y consultas 1C.
+  Total por cobrar destacado, filtro compacto y cuentas en tarjetas adaptables.
+  Landings 1D mantienen sucursales reales y aviso de disponibilidad futura.
+- Dinero UI: exactamente 2 decimales, separador de miles y código monetario
+  en cada cuenta (ejemplo CRC 1,234.56). Totales nominales conservan la semántica
+  1C, sin atribuirles una moneda ni convertirlos. Helper Money + parcial Blade
+  reutilizable, redondeo visual de mitades alejándose de cero usando cadenas
+  y BCMath; normaliza cero negativo y soporta importes grandes sin float.
+  Precisión interna DECIMAL(19,4)/decimal:4 + BCMath intacta.
+- Suite CobrOS: **48/48 pruebas, 327 aserciones**, SQLite exclusivamente en
+  memoria. Incluye casos monetarios, HTML sin .0000 ni texto de cuatro
+  decimales, enlaces y permisos por empresa activa, aislamiento 1D y métricas
+  y cero escrituras del dashboard 1C. Sin cambios a servicios financieros.
+- Responsive revisado conceptualmente en 360/768/1280. Vite no instalado en
+  este worktree; build nuevo y validación visual real en navegador pendientes.
+  No se instalaron dependencias. Esto no certifica apariencia ni PWA real.
+- Fase 1E NO iniciada. Sin migraciones/seeders sobre BD persistente, cambios
+  de BD de desarrollo, pagos/caja/recibos nuevos, push, merge ni despliegue.

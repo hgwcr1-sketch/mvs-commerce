@@ -39,6 +39,9 @@ class CobrosOwnerDashboardTest extends TestCase
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
             ->get(route('cobros.owner.dashboard'))->assertOk()
             ->assertSee('Todas las sucursales')->assertSee('No hay cuentas con saldo')
+            ->assertSee('0.00')->assertDontSee('.0000')->assertDontSee('cuatro decimales')
+            ->assertSee('cobros-shell.css')->assertSee('aria-current="page"', false)
+            ->assertSee($u->name)->assertSee('Salir')
             ->assertDontSee('MVS Commerce')->assertDontSee('Volver a MVS Commerce')
             ->assertDontSee('Registrar pago')->assertDontSee('Abonar')
             ->assertViewHas('branchId', null)
@@ -103,6 +106,8 @@ class CobrosOwnerDashboardTest extends TestCase
         $response = $this->actingAs($u)->withSession(['active_company_id' => $c->id, 'active_branch_id' => $b->id])
             ->get(route('cobros.owner.dashboard'))->assertOk()
             ->assertDontSee('CLIENTE EMPRESA AJENA')
+            ->assertSee('190.79')->assertSee('100.12')->assertSee('9.12')
+            ->assertSee('CRC 100.12')->assertDontSee('100.1234')->assertDontSee('.0000')
             ->assertViewHas('metrics', ['total_due' => '190.7900', 'total_overdue' => '100.1234', 'collected_today' => '9.1235', 'customers_with_balance' => 2, 'upcoming_count' => 2, 'overdue_count' => 1]);
         $queries = DB::getQueryLog();
         DB::disableQueryLog();

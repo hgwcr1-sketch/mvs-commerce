@@ -133,10 +133,10 @@ class CobrosCollectorAccessTest extends TestCase
         $this->get(route('cobros.owner.dashboard'))->assertOk()->assertSee('Cartera del dueño');
         $role->permissions()->detach(Permission::where('name', 'cobros.portal_dueno')->first()->id);
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.supervisor.index'));
-        $this->get(route('cobros.supervisor.index'))->assertOk()->assertSee('Fase 4A');
+        $this->get(route('cobros.supervisor.index'))->assertOk()->assertSee('Disponible próximamente');
         $role->permissions()->detach(Permission::where('name', 'cobros.supervisar')->first()->id);
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
-        $this->get(route('cobros.collector.index'))->assertOk()->assertSee('Fase 2A')
+        $this->get(route('cobros.collector.index'))->assertOk()->assertSee('Disponible próximamente')
             ->assertDontSee('Total por cobrar')->assertDontSee('MVS Commerce');
         $role->permissions()->detach(Permission::where('name', 'cobros.cobrar')->first()->id);
         $this->get(route('cobros.index'))->assertForbidden();
@@ -179,6 +179,38 @@ class CobrosCollectorAccessTest extends TestCase
         $c->license()->update(['status' => 'suspended']);
         $this->get(route('cobros.collector.index'))->assertRedirect(route('license.status'));
         $this->get(route('cobros.supervisor.index'))->assertRedirect(route('license.status'));
+    }
+
+    public function test_shell_navigation_follows_active_company_permissions_only(): void
+    {
+        [$a, $branch, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+        [$b] = $this->context(['cobros.acceder', 'cobros.supervisar'], $user);
+        [$c] = $this->context(['cobros.acceder', 'cobros.cobrar'], $user);
+        foreach ([[$a, 'owner.dashboard'], [$b, 'supervisor.index'], [$c, 'collector.index']] as [$company, $selected]) {
+            $response = $this->actingAs($user)->withSession(['active_company_id' => $company->id])
+                ->get(route('cobros.'.$selected))->assertOk()
+                ->assertSee('logo-mvs-cobros.png')->assertSee($company->trade_name)->assertSee($user->name)
+                ->assertSee('aria-current="page"', false)->assertDontSee('MVS Commerce')
+                ->assertDontSee('Asignaciones')->assertDontSee('Visitas')->assertDontSee('Reportes')
+                ->assertDontSee('Configuración')->assertDontSee('Fase 1E');
+            foreach (['owner.dashboard', 'supervisor.index', 'collector.index'] as $route) {
+                $link = 'href="'.route('cobros.'.$route).'"';
+                if ($route === $selected) {
+                    $response->assertSee($link, false);
+                } else {
+                    $response->assertDontSee($link, false);
+                }
+            }
+            $dom = new \DOMDocument;
+            @$dom->loadHTML($response->getContent());
+            foreach ($dom->getElementsByTagName('a') as $link) {
+                $href = $link->getAttribute('href');
+                $this->assertTrue(str_starts_with($href, '#') || str_starts_with($href, url('/cobros')), $href);
+            }
+            if ($selected !== 'owner.dashboard') {
+                $response->assertSee('Disponible próximamente')->assertDontSee('Total por cobrar')->assertDontSee('Clientes con saldo');
+            }
+        }
     }
 
     private function context(array $permissions = ['cobros.acceder', 'cobros.cobrar'], ?User $user = null): array

@@ -1,0 +1,357 @@
+/* CobrOS only: independent shell;
+gold reuses the shared brand token. */
+.cobros-app{
+    --cobros-navy:#14263d;
+    --cobros-gold:var(--color-primary,#D4AF37);
+    margin:0;
+    background:#f4f6f9;
+    color:#14263d;
+    font-family:system-ui,sans-serif
+}
+.cobros-app *{
+    box-sizing:border-box
+}
+.cobros-app a:focus-visible,.cobros-app button:focus-visible,.cobros-app select:focus-visible{
+    outline:3px solid var(--cobros-gold);
+    outline-offset:3px
+}
+.cobros-app button,.cobros-app select,.cobros-app a[href]{
+    cursor:pointer
+}
+.cobros-app button:disabled{
+    cursor:not-allowed
+}
+.cobros-skip{
+    position:fixed;
+    top:-100px;
+    left:12px;
+    z-index:60;
+    padding:12px;
+    background:white;
+    color:#14263d
+}
+.cobros-skip:focus{
+    top:12px
+}
+.cobros-brand,.cobros-company,.cobros-sidebar-footer{
+    display:none
+}
+.cobros-navigation{
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    z-index:40;
+    display:flex;
+    background:var(--cobros-navy);
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+    gap:6px;
+    box-shadow:0 -2px 12px #14263d18
+}
+.cobros-nav-item{
+    display:flex;
+    flex:1;
+    min-width:0;
+    min-height:52px;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:4px;
+    padding:6px;
+    border-radius:10px;
+    color:#e2e8f0;
+    text-decoration:none;
+    font-size:12px;
+    text-align:center;
+    overflow-wrap:anywhere
+}
+.cobros-nav-item svg{
+    flex-shrink:0
+}
+.cobros-nav-item:hover{
+    background:#253b55
+}
+.cobros-nav-item[aria-current=page]{
+    background:var(--cobros-gold);
+    color:#14263d;
+    font-weight:700
+}
+.cobros-workspace{
+    min-width:0
+}
+.cobros-header{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 16px;
+    background:white;
+    border-bottom:1px solid #e2e8f0
+}
+.cobros-header-company{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+    flex:1
+}
+.cobros-header-company img,.cobros-brand img{
+    object-fit:contain;
+    flex-shrink:0;
+    border-radius:10px;
+    background:white
+}
+.cobros-header-company div{
+    min-width:0;
+    overflow-wrap:anywhere
+}
+.cobros-header-company span,.cobros-company>span{
+    display:block;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:#64748b
+}
+.cobros-header-company strong{
+    font-size:14px
+}
+.cobros-account{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    width:100%;
+    min-width:0
+}
+.cobros-user{
+    font-size:13px;
+    color:#64748b;
+    overflow-wrap:anywhere;
+    min-width:0
+}
+.cobros-logout{
+    min-height:44px;
+    min-width:60px;
+    padding:8px 12px;
+    border:1px solid #cbd5e1;
+    border-radius:10px;
+    background:white;
+    font-weight:600;
+    flex-shrink:0
+}
+.cobros-logout:hover{
+    background:#f1f5f9
+}
+.cobros-main{
+    max-width:1440px;
+    margin:auto;
+    padding:24px 16px calc(112px + env(safe-area-inset-bottom));
+    min-width:0;
+    overflow-wrap:anywhere
+}
+.cobros-filter{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:16px;
+    background:white;
+    border:1px solid #e2e8f0;
+    border-radius:14px
+}
+.cobros-filter>div{
+    min-width:0;
+    flex:1
+}
+.cobros-filter select{
+    min-height:44px;
+    max-width:100%
+}
+.cobros-filter button{
+    min-height:44px
+}
+.cobros-metrics{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:14px
+}
+.cobros-metric{
+    min-width:0;
+    padding:20px;
+    background:white;
+    border:1px solid #e2e8f0;
+    border-radius:16px
+}
+.cobros-metric h2{
+    font-size:14px;
+    color:#64748b
+}
+.cobros-metric p{
+    margin-top:12px;
+    font-size:26px;
+    font-weight:750;
+    line-height:1.25;
+    overflow-wrap:anywhere;
+    font-variant-numeric:tabular-nums
+}
+.cobros-metric-primary{
+    background:var(--cobros-navy);
+    border-top:4px solid var(--cobros-gold);
+    color:white
+}
+.cobros-metric-primary h2{
+    color:#e2e8f0
+}
+.cobros-metric-primary p{
+    font-size:32px;
+    color:var(--cobros-gold)
+}
+.cobros-money{
+    font-variant-numeric:tabular-nums;
+    overflow-wrap:anywhere
+}
+.cobros-account-card{
+    border-left:3px solid var(--cobros-gold)
+}
+.cobros-account-card dd{
+    margin-top:4px
+}
+.cobros-notice{
+    border-left:4px solid var(--cobros-gold)
+}
+.cobros-main nav[role=navigation] a,.cobros-main nav[role=navigation] span[aria-current] span{
+    min-height:44px;
+    min-width:44px;
+    align-items:center;
+    justify-content:center
+}
+@media(min-width:640px){
+    .cobros-account{
+        width:auto;
+        max-width:50%
+    }
+    .cobros-filter{
+        flex-direction:row;
+        align-items:end;
+        max-width:640px
+    }
+    .cobros-filter button{
+        align-self:flex-end
+    }
+    .cobros-metrics{
+        grid-template-columns:repeat(2,minmax(0,1fr))
+    }
+}
+@media(min-width:768px){
+    .cobros-sidebar{
+        position:fixed;
+        inset:0 auto 0 0;
+        width:88px;
+        display:flex;
+        flex-direction:column;
+        background:var(--cobros-navy);
+        padding:16px 8px;
+        z-index:40;
+        overflow-y:auto
+    }
+    .cobros-brand{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:12px
+    }
+    .cobros-brand img{
+        width:56px;
+        height:56px
+    }
+    .cobros-brand-copy{
+        display:none
+    }
+    .cobros-navigation{
+        position:static;
+        flex-direction:column;
+        padding:24px 0;
+        box-shadow:none
+    }
+    .cobros-nav-item{
+        flex:none;
+        min-height:64px;
+        font-size:11px
+    }
+    .cobros-workspace{
+        margin-left:88px
+    }
+    .cobros-main{
+        padding:28px 24px 40px
+    }
+    .cobros-header{
+        padding:16px 24px
+    }
+    .cobros-header-company img{
+        display:none
+    }
+}
+@media(min-width:1024px){
+    .cobros-sidebar{
+        width:248px;
+        padding:24px 16px
+    }
+    .cobros-brand{
+        justify-content:flex-start
+    }
+    .cobros-brand-copy{
+        display:block;
+        min-width:0;
+        color:white
+    }
+    .cobros-brand-copy strong{
+        font-size:17px
+    }
+    .cobros-brand-copy span{
+        display:block;
+        font-size:11px;
+        color:#cbd5e1;
+        margin-top:4px
+    }
+    .cobros-company{
+        display:block;
+        margin-top:28px;
+        padding:16px 8px;
+        border-top:1px solid #ffffff26;
+        overflow-wrap:anywhere
+    }
+    .cobros-company>span{
+        color:#cbd5e1
+    }
+    .cobros-company strong{
+        display:block;
+        color:white;
+        font-size:14px;
+        margin-top:6px
+    }
+    .cobros-navigation{
+        padding-top:8px
+    }
+    .cobros-nav-item{
+        flex-direction:row;
+        justify-content:flex-start;
+        gap:12px;
+        padding:12px;
+        min-height:48px;
+        font-size:14px;
+        text-align:left
+    }
+    .cobros-sidebar-footer{
+        display:block;
+        margin-top:auto;
+        padding:20px 8px;
+        color:#cbd5e1;
+        font-size:11px
+    }
+    .cobros-workspace{
+        margin-left:248px
+    }
+    .cobros-metrics{
+        grid-template-columns:repeat(3,minmax(0,1fr))
+    }
+}
