@@ -22,7 +22,7 @@
             </div>
             <div class="cobros-account">
                 <span class="cobros-user">{{ auth()->user()->name }}</span>
-                <form method="POST" action="{{ route('logout') }}">
+                <form method="POST" action="{{ route('cobros.logout') }}">
                     @csrf
                     <button type="submit" class="cobros-logout">Salir</button>
                 </form>
@@ -51,7 +51,7 @@
         <div class="cobros-company"><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
         <p class="cobros-panel-user">{{ auth()->user()->name }}</p>
         @include('cobros.components.navigation', ['panel' => true])
-        <form method="POST" action="{{ route('logout') }}" class="cobros-panel-exit">
+        <form method="POST" action="{{ route('cobros.logout') }}" class="cobros-panel-exit">
             @csrf
             <button type="submit" class="cobros-logout">Salir</button>
         </form>

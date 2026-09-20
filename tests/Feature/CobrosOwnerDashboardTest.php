@@ -95,7 +95,7 @@ class CobrosOwnerDashboardTest extends TestCase
 
     public function test_guest_is_redirected_to_login(): void
     {
-        $this->get(route('cobros.owner.dashboard'))->assertRedirect(route('login'));
+        $this->get(route('cobros.owner.dashboard'))->assertRedirect(route('cobros.login'));
     }
 
     public function test_metrics_dates_payments_and_tenant_isolation_are_read_only(): void

@@ -23,19 +23,19 @@ class LoginController extends Controller
      */
     public function store(Request $request)
     {
-        $key = Str::lower($request->input('email')) . '|' . $request->ip();
+        $key = Str::lower($request->input('email')).'|'.$request->ip();
 
-if (RateLimiter::tooManyAttempts($key, 5)) {
-    $seconds = RateLimiter::availableIn($key);
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
 
-    return back()
-        ->withErrors([
-            'email' => "Demasiados intentos de inicio de sesión. Inténtalo nuevamente en {$seconds} segundos.",
-        ])
-        ->onlyInput('email');
-}
+            return $this->failedLoginRedirect()
+                ->withErrors([
+                    'email' => "Demasiados intentos de inicio de sesión. Inténtalo nuevamente en {$seconds} segundos.",
+                ])
+                ->onlyInput('email');
+        }
         $credentials = $request->validate([
-            'email'    => ['required', 'email'],
+            'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
 
@@ -43,7 +43,8 @@ if (RateLimiter::tooManyAttempts($key, 5)) {
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             RateLimiter::hit($key, 60);
-            return back()
+
+            return $this->failedLoginRedirect()
                 ->withErrors([
                     'email' => 'Las credenciales son incorrectas o el usuario está inactivo.',
                 ])
@@ -51,11 +52,16 @@ if (RateLimiter::tooManyAttempts($key, 5)) {
         }
 
         RateLimiter::clear($key);
-        
+
         $request->session()->regenerate();
 
         $request->user()->updateLastLogin();
 
+        return $this->authenticated($request);
+    }
+
+    protected function authenticated(Request $request)
+    {
         if ($request->user()->isPlatformAdmin()) {
             return redirect()->route('platform.index');
         }
@@ -78,6 +84,16 @@ if (RateLimiter::tooManyAttempts($key, 5)) {
 
         $request->session()->regenerateToken();
 
+        return $this->loggedOut();
+    }
+
+    protected function failedLoginRedirect()
+    {
+        return back();
+    }
+
+    protected function loggedOut()
+    {
         return redirect('/login');
     }
 }

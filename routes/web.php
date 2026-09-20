@@ -128,6 +128,30 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
+// CobrOS authentication uses the existing web guard with product-specific entry/exit.
+Route::prefix('cobros')->name('cobros.')->group(function () {
+    Route::middleware(App\Http\Middleware\Cobros\RedirectIfAuthenticated::class)->group(function () {
+        Route::get('/login', [App\Http\Controllers\Cobros\LoginController::class, 'create'])->name('login');
+        Route::post('/login', [App\Http\Controllers\Cobros\LoginController::class, 'authenticate'])
+            ->middleware('throttle:10,1')->name('login.store');
+    });
+    Route::post('/logout', [App\Http\Controllers\Cobros\LoginController::class, 'destroy'])
+        ->middleware(App\Http\Middleware\Cobros\Authenticate::class)->name('logout');
+});
+
+// Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
+// Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
+Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', App\Http\Middleware\Cobros\EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
+    Route::get('/supervisor', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'supervisor'])
+        ->middleware('permission:cobros.supervisar')->name('supervisor.index');
+    Route::get('/collector', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'collector'])
+        ->middleware('permission:cobros.cobrar')->name('collector.index');
+    Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
+    Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
+        ->name('index');
+});
+
 Route::middleware('auth')->group(function () {
     Route::get('/empresa/create', [CompanyController::class, 'create'])->name('empresa.create');
     Route::post('/empresa', [CompanyController::class, 'store'])->name('empresa.store');
@@ -253,25 +277,6 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     */
     Route::middleware(['active.branch', 'permission:routeos.acceder'])->prefix('routeos')->name('routeos.')->group(function () {
         Route::get('/', [RouteosController::class, 'index'])
-            ->name('index');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | MVS CobrOS — Cobranza Operativa
-    |--------------------------------------------------------------------------
-    */
-
-    // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
-    // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
-    Route::middleware(['auth', 'active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', App\Http\Middleware\Cobros\EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
-        Route::get('/supervisor', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'supervisor'])
-            ->middleware('permission:cobros.supervisar')->name('supervisor.index');
-        Route::get('/collector', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'collector'])
-            ->middleware('permission:cobros.cobrar')->name('collector.index');
-        Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
-            ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
-        Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
             ->name('index');
     });
 

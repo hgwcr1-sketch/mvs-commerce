@@ -23,7 +23,7 @@ class CobrosModuleAccessTest extends TestCase
 
     public function test_guest_is_sent_to_login(): void
     {
-        $this->get(route('cobros.index'))->assertRedirect(route('login'));
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.login'));
     }
 
     public function test_company_without_cobros_module_is_rejected(): void

@@ -307,3 +307,60 @@ pivote/permisos y UI de alta: no se implementa esa previsión en esta fase.
 - Vite sigue ausente; no se hizo build nuevo. CSS/JS CobrOS públicos versionados
   cargan directamente. Sin 1E, BD persistente, migraciones, seeders, cambios
   Commerce/RuteOS, push ni merge. tmp_generate_cobros_icons.php intacto.
+
+## Fase 1E — Autenticación propia (2026-09-20)
+
+Login standalone de CobrOS reutilizando auth web/User existente. Sin duplicación
+de User, passwords, guard ni autenticación.
+
+### Archivos creados
+
+- `app/Http/Controllers/Cobros/LoginController.php` — extiende el controlador
+  compartido de Commerce, sobrescribe `authenticated()`, `failedLoginRedirect()`
+  y `loggedOut()` para rutas CobrOS.
+- `app/Http/Middleware/Cobros/Authenticate.php` — middleware de autenticación
+  que redirige no autenticados a `cobros.login`.
+- `app/Http/Middleware/Cobros/RedirectIfAuthenticated.php` — redirige
+  usuarios autenticados desde login a `cobros.index`.
+- `app/Http/Requests/Cobros/LoginRequest.php` — validación con redirect
+  a `cobros.login`.
+- `resources/views/cobros/auth/login.blade.php` — vista standalone con
+  branding CobrOS, sin elementos visuales de Commerce.
+- `public/css/cobros-auth.css` — estilos exclusivos del login CobrOS.
+- `tests/Feature/CobrosAuthenticationTest.php` — 16 pruebas, 179 aserciones.
+- `tests/js/cobros-login-browser.cjs` — prueba visual Chrome headless.
+
+### Archivos modificados
+
+- `app/Http/Controllers/Auth/LoginController.php` — refactor para sobreescribir
+  con hooks (`authenticated()`, `failedLoginRedirect()`, `loggedOut()`) que
+  CobrOS aprovecha sin duplicar lógica.
+- `resources/views/cobros/layout.blade.php` — logout apunta a `cobros.logout`.
+- `routes/web.php` — rutas de login/logout CobrOS fuera del grupo `auth`
+  compartido; rutas protegidas migradas con middleware propio.
+- `tests/Feature/CobrosModuleAccessTest.php` — redirección invitado → `cobros.login`.
+- `tests/Feature/CobrosOwnerDashboardTest.php` — redirección invitado → `cobros.login`.
+
+### Comportamiento
+
+- `/cobros/login` autónomo: branding CobrOS, CSRF, rate limiting, regeneración
+  de sesión, recordar-me. Sin enlaces a Commerce ni recuperación de contraseña.
+- Login exitoso → `/cobros/index` resuelve permisos (dueño/supervisor/cobrador).
+- Logout desde CobrOS → `/cobros/login` (invalida sesión, regenera token).
+- Login/logout normales de Commerce intactos, rutas y rutas protegidas no
+  afectadas. Rate limiter compartido (misma clave email+IP).
+- Usuario ya autenticado en `/cobros/login` → redirige a `/cobros`.
+- Responsive 360/768/1280 verificada con Chrome headless.
+
+### Validación
+
+- CobrosAuthenticationTest: **16/16, 179 aserciones**.
+- CobrosModuleAccessTest: **13/13, 77 aserciones**.
+- CobrosOwnerDashboardTest: **9/9, 81 aserciones**.
+- CobrosManifestTest: **1/1, 30 aserciones**.
+- Total CobrOS: **39/39, 367 aserciones**.
+- Regresión CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test: **13/13, 78 aserciones**.
+- ResponsiveNavigationTest: **10/11** (fallo preexistente del logo Company
+  documentado desde Fase 1A.1, no relacionado).
+- Sin migraciones ni cambios de BD. Sin push ni merge.
+- `tmp_generate_cobros_icons.php` intacto.
