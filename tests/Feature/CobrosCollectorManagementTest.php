@@ -172,6 +172,31 @@ class CobrosCollectorManagementTest extends TestCase
             ->assertSee('0');
     }
 
+    public function test_individual_mode_full_contract_persists_and_renders_ui(): void
+    {
+        [$company, $admin] = $this->individualContext();
+
+        $module = $company->modules()->where('module_key', 'cobros')->first();
+        $this->assertNotNull($module, 'cobros module must exist');
+        $this->assertSame('individual', $module->license_mode);
+        $this->assertNull($module->collector_limit);
+
+        $cobrosService = app(\App\Services\CompanyLicenseService::class);
+        $contract = $cobrosService->getCobrosContract($company);
+        $this->assertNotNull($contract);
+        $this->assertSame('individual', $contract['license_mode']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('platform.companies.show', $company));
+
+        $response->assertOk();
+        $response->assertSee('Cobradores con licencia individual');
+        $response->assertSee('Registrar cobrador');
+        $response->assertSee(route('platform.collectors.store', $company));
+        $response->assertDontSee('Límite contratado');
+        $response->assertDontSee('Cupos disponibles');
+    }
+
     public function test_platform_admin_can_create_collector_in_individual_mode(): void
     {
         [$company, $admin] = $this->individualContext();
