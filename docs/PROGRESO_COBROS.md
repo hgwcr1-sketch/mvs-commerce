@@ -445,3 +445,55 @@ Base contractual/licenciamiento con dos modalidades controladas por Panel Maestr
 - CompanyLicenseTest|CompanyModuleAccessTest: **6/6, 20 aserciones**.
 - Sin cambios en rutas/auth/dashboard Commerce.
 - Sin 1E-B, 1E-C, 2A ni pagos.
+
+## 1E-B — Gestión de cobradores según contrato (2026-09-21)
+
+Gestión de cobradores controlada por la modalidad de licenciamiento de la empresa.
+
+### Modalidades
+
+**A) company_cupo:** El dueño crea y administra cobradores hasta el `collector_limit`.
+**B) individual:** Solo Platform Admin gestiona cobradores; el dueño ve una vista de solo lectura.
+
+### Archivos creados
+
+- `app/Services/Cobros/CollectorManagementService.php` — servicio centralizado
+  de gestión: getContract, listCollectors, getCollectorCount, getRemainingSlots,
+  canCreateCollector, isOwnerReadOnly, createCollector (nuevos y existentes),
+  toggleCollector, assignBranches.
+- `app/Http/Controllers/Cobros/OwnerCollectorController.php` — controlador
+  del portal del dueño: index, store, toggle, updateBranches.
+- `resources/views/cobros/owner/collectors.blade.php` — vista de gestión
+  con tarjetas de cobradores, modal de creación y acciones de activar/desactivar.
+- `tests/Feature/CobrosCollectorManagementTest.php` — 16 pruebas, 37 aserciones.
+
+### Archivos modificados
+
+- `app/Services/Cobros/CollectorAccessService.php` — getListingsByCompany
+  adaptado para incluir coletores inactivos con estado visual.
+- `app/Http/Controllers/PlatformAdminController.php` — sección de cobradores
+  en la vista de detalle de empresa para Platform Admin.
+- `resources/views/platform/show.blade.php` — sección de cobradores con
+  conteo y enlace a gestión.
+- `routes/web.php` — rutas CRUD de cobradores del dueño.
+- `resources/views/components/navigation/sidebar.blade.php` — enlace
+  "Cobradores" para dueños con permiso `cobros.portal_dueno`.
+
+### Comportamiento
+
+- OwnerCollectorController valida `isOwnerReadOnly()` antes de escrituras.
+- createCollector: email existente dentro de la empresa → reutiliza el usuario.
+- company_cupo: createCollector valida `canCreateCollector()` antes de crear.
+- toggleCollector: activa/desactiva el usuario; inactivos no cuentan para el cupo.
+- assignBranches: valida que las sucursales pertenezcan a la empresa.
+- Platform Admin ve en su panel: conteo de cobradores y enlace a gestión.
+- Sin migraciones nuevas. Sin push ni merge. Sin 1E-C, 2A ni pagos.
+- `tmp_generate_cobros_icons.php` intacto.
+
+### Validación
+
+- CobrosCollectorManagementTest: **16/16, 37 aserciones**.
+- CobrOS suite completa: **98/98, 638 aserciones**.
+- Regresión CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test
+  y responsive: **13/13, 78 aserciones**.
+- Sin cambios en rutas/auth/dashboard Commerce.

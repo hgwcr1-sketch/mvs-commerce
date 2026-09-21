@@ -148,6 +148,14 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'active.compa
         ->middleware('permission:cobros.cobrar')->name('collector.index');
     Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
+    Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
+    Route::post('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'store'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.store');
+    Route::patch('/owner/collectors/{user}/toggle', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'toggle'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.toggle');
+    Route::put('/owner/collectors/{user}/branches', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'updateBranches'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
     Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
         ->name('index');
 });

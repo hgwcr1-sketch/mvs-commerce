@@ -9,6 +9,7 @@ use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
+use App\Services\Cobros\CollectorManagementService;
 use App\Services\Modules\ModuleRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -87,7 +88,7 @@ class PlatformAdminController extends Controller
         ]);
     }
 
-    public function show(Company $company, CompanyLicenseService $licenses): View
+    public function show(Company $company, CompanyLicenseService $licenses, CollectorManagementService $collectorService): View
     {
         $company->load([
             'branches' => fn ($query) => $query->orderBy('name'),
@@ -100,11 +101,17 @@ class PlatformAdminController extends Controller
         $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
         $company->license->load(['events.actor']);
 
+        $cobrosContract = $licenses->getCobrosContract($company);
+        $collectors = $cobrosContract ? $collectorService->listCollectors($company) : [];
+        $collectorCount = $cobrosContract ? $collectorService->getCollectorCount($company) : 0;
+
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
-            'cobrosContract' => $licenses->getCobrosContract($company),
+            'cobrosContract' => $cobrosContract,
+            'collectors' => $collectors,
+            'collectorCount' => $collectorCount,
         ]);
     }
 
