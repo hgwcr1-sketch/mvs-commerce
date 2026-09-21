@@ -36,22 +36,22 @@
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label class="text-sm font-semibold">
                 Modalidad
-                <select name="license_mode" class="mt-2 min-h-11 w-full rounded-xl border px-4" required>
+                <select name="license_mode" id="cobros-license-mode" class="mt-2 min-h-11 w-full rounded-xl border px-4" required>
                     <option value="">Seleccionar modalidad</option>
-                    <option value="individual" @selected(($cobrosContract['license_mode'] ?? '') === 'individual')>Individual — licencias por cobrador</option>
-                    <option value="company_cupo" @selected(($cobrosContract['license_mode'] ?? '') === 'company_cupo')>Company cupo — cupo global de cobradores</option>
+                    <option value="individual" @selected(($cobrosContract['license_mode'] ?? '') === 'individual')>Licencias individuales — cada cobrador tiene su licencia</option>
+                    <option value="company_cupo" @selected(($cobrosContract['license_mode'] ?? '') === 'company_cupo')>Licencia por empresa + cupo de cobradores</option>
                 </select>
             </label>
             <label class="text-sm font-semibold">
                 Límite de cobradores
-                <input type="number" name="collector_limit" min="1" max="999" value="{{ $cobrosContract['collector_limit'] ?? '' }}" placeholder="Requerido si company_cupo" class="mt-2 min-h-11 w-full rounded-xl border px-4">
-                <span class="mt-1 block text-xs text-slate-500">Obligatorio en modalidad company_cupo. Vacío = sin límite en individual.</span>
+                <input type="number" name="collector_limit" id="cobros-collector-limit" min="1" max="999" value="{{ $cobrosContract['collector_limit'] ?? '' }}" class="mt-2 min-h-11 w-full rounded-xl border px-4">
+                <span id="cobros-limit-help" class="mt-1 block text-xs text-slate-500"></span>
             </label>
             <label class="text-sm font-semibold">
                 Licencia administrador/dueño
                 <select name="admin_license_charged" class="mt-2 min-h-11 w-full rounded-xl border px-4" required>
-                    <option value="1" @selected(($cobrosContract['admin_license_charged'] ?? false) === true)>Se cobra — el dueño/admin tiene licencia facturada</option>
-                    <option value="0" @selected(($cobrosContract['admin_license_charged'] ?? false) === false)>No se cobra — el dueño/admin opera sin costo</option>
+                    <option value="1" @selected(($cobrosContract['admin_license_charged'] ?? false) === true)>Se cobra como licencia adicional</option>
+                    <option value="0" @selected(($cobrosContract['admin_license_charged'] ?? false) === false)>Incluida sin costo</option>
                 </select>
             </label>
         </div>
@@ -61,12 +61,29 @@
         @if($cobrosContract)
         <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
             <strong>Estado actual:</strong>
-            Modalidad {{ ucfirst(str_replace('_', ' ', $cobrosContract['license_mode'])) }} ·
-            @if($cobrosContract['collector_limit'])Límite: {{ $cobrosContract['collector_limit'] }} cobradores · @else Sin límite de cobradores · @endif
-            Licencia admin: {{ $cobrosContract['admin_license_charged'] ? 'Se cobra' : 'No se cobra' }}
+            @if($cobrosContract['license_mode'] === 'individual')Licencias individuales · @elseLicencia por empresa + cupo · @endif
+            @if($cobrosContract['collector_limit'])Límite: {{ $cobrosContract['collector_limit'] }} cobradores · @endif
+            Licencia admin: {{ $cobrosContract['admin_license_charged'] ? 'Se cobra como licencia adicional' : 'Incluida sin costo' }}
         </div>
         @endif
     </form>
+    <script>
+    (function(){
+        var mode=document.getElementById('cobros-license-mode');
+        var limit=document.getElementById('cobros-collector-limit');
+        var help=document.getElementById('cobros-limit-help');
+        if(!mode||!limit)return;
+        function sync(){
+            var isCupo=mode.value==='company_cupo';
+            limit.disabled=!isCupo;
+            limit.required=isCupo;
+            if(!isCupo){limit.value='';}
+            help.textContent=isCupo?'Define la cantidad máxima de cobradores que podrá administrar el dueño.':'Los cobradores son habilitados individualmente desde el Panel Maestro.';
+        }
+        mode.addEventListener('change',sync);
+        sync();
+    })();
+    </script>
     @endif
 </div>
 @endsection
