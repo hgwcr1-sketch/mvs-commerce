@@ -2,15 +2,14 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Worktree CobrOS — UI base recuperada (2026-09-20)
+## Worktree CobrOS — 1E-B completada (2026-09-20)
 
-En este worktree la rama verificada es feature/cobros-v1; base a8fb2a8.
-Shell corregido sobre f0e31be: barra horizontal + Más en todos los tamaños,
-sin sidebar permanente; ₡ y 2 decimales solo en importes. Dashboard aprobado
-conservado. Suite CobrOS: 49/49, 360 aserciones; finanzas 1C y permisos 1D
-intactos. Chrome headless con fixtures PASS 360/768/1280 y apertura/cierres.
-Detalle en docs/PROGRESO_COBROS.md, corrección exacta de navegación.
-Vite no instalado; build y prueba manual/PWA pendientes. 1E no iniciada.
+En este worktree la rama verificada es feature/cobros-v1; HEAD `4dd4ca4`.
+Shell responsive, ₡ y 2 decimales solo en importes. Dashboard aprobado.
+Suite CobrOS: **105/105, 658 aserciones**; finanzas 1C y permisos 1D intactos.
+1E-B (gestión de cobradores con contratos) completada: servicio, controlador propietario,
+Panel Maestro individual con crear/toggle/sucursales, 23 tests de cobradores.
+Detalle en docs/PROGRESO_COBROS.md. Vite no instalado; build y prueba manual/PWA pendientes.
 tmp_generate_cobros_icons.php preservado fuera del commit; sin push ni merge.
 Las entradas Commerce siguientes son contexto heredado de la rama base.
 

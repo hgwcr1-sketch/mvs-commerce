@@ -446,7 +446,7 @@ Base contractual/licenciamiento con dos modalidades controladas por Panel Maestr
 - Sin cambios en rutas/auth/dashboard Commerce.
 - Sin 1E-B, 1E-C, 2A ni pagos.
 
-## 1E-B — Gestión de cobradores según contrato (2026-09-21)
+## 1E-B — Gestión de cobradores según contrato (2026-09-21) — COMPLETADO
 
 Gestión de cobradores controlada por la modalidad de licenciamiento de la empresa.
 
@@ -459,23 +459,26 @@ Gestión de cobradores controlada por la modalidad de licenciamiento de la empre
 
 - `app/Services/Cobros/CollectorManagementService.php` — servicio centralizado
   de gestión: getContract, listCollectors, getCollectorCount, getRemainingSlots,
-  canCreateCollector, isOwnerReadOnly, createCollector (nuevos y existentes),
-  toggleCollector, assignBranches.
+  canCreateCollector, isOwnerReadOnly, createCollector (nuevos y existentes,
+  con $skipLimit para Platform Admin), toggleCollector, assignBranches, replaceBranches.
 - `app/Http/Controllers/Cobros/OwnerCollectorController.php` — controlador
   del portal del dueño: index, store, toggle, updateBranches.
 - `resources/views/cobros/owner/collectors.blade.php` — vista de gestión
   con tarjetas de cobradores, modal de creación y acciones de activar/desactivar.
-- `tests/Feature/CobrosCollectorManagementTest.php` — 16 pruebas, 37 aserciones.
+- `tests/Feature/CobrosCollectorManagementTest.php` — 23 pruebas, 57 aserciones.
 
 ### Archivos modificados
 
 - `app/Services/Cobros/CollectorAccessService.php` — getListingsByCompany
   adaptado para incluir coletores inactivos con estado visual.
 - `app/Http/Controllers/PlatformAdminController.php` — sección de cobradores
-  en la vista de detalle de empresa para Platform Admin.
+  en la vista de detalle de empresa para Platform Admin; storeCollector,
+  toggleCollector y updateCollectorBranches para gestión individual.
 - `resources/views/platform/show.blade.php` — sección de cobradores con
-  conteo y enlace a gestión.
-- `routes/web.php` — rutas CRUD de cobradores del dueño.
+  conteo, tabla, formulario de creación y acciones de toggle/sucursales
+  para modalidad individual; solo lectura para company_cupo.
+- `routes/web.php` — rutas CRUD de cobradores del dueño + 3 rutas Platform
+  Admin (store, toggle, branches) bajo prefijo `platform.`.
 - `resources/views/components/navigation/sidebar.blade.php` — enlace
   "Cobradores" para dueños con permiso `cobros.portal_dueno`.
 
@@ -486,14 +489,17 @@ Gestión de cobradores controlada por la modalidad de licenciamiento de la empre
 - company_cupo: createCollector valida `canCreateCollector()` antes de crear.
 - toggleCollector: activa/desactiva el usuario; inactivos no cuentan para el cupo.
 - assignBranches: valida que las sucursales pertenezcan a la empresa.
-- Platform Admin ve en su panel: conteo de cobradores y enlace a gestión.
+- replaceBranches: reemplaza sucursales del cobrador (Platform Admin).
+- Platform Admin en panel individual: crear, activar/desactivar y gestionar
+  sucursales de cobradores; validación de licencia `individual` en cada mutación.
+- Platform Admin en panel company_cupo: solo vista de conteo (lectura).
 - Sin migraciones nuevas. Sin push ni merge. Sin 1E-C, 2A ni pagos.
 - `tmp_generate_cobros_icons.php` intacto.
 
 ### Validación
 
-- CobrosCollectorManagementTest: **16/16, 37 aserciones**.
-- CobrOS suite completa: **98/98, 638 aserciones**.
+- CobrosCollectorManagementTest: **23/23, 57 aserciones**.
+- CobrOS suite completa: **105/105, 658 aserciones**.
 - Regresión CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test
   y responsive: **13/13, 78 aserciones**.
 - Sin cambios en rutas/auth/dashboard Commerce.
