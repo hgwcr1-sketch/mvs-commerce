@@ -191,4 +191,57 @@ class PlatformAdminController extends Controller
 
         return back()->with('success', 'Contrato CobrOS actualizado.');
     }
+
+    public function storeCollector(Request $request, Company $company, CollectorManagementService $collectorService): RedirectResponse
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+
+        $contract = $collectorService->getContract($company);
+        abort_unless($contract && $contract['license_mode'] === 'individual', 422, 'Solo disponible en modalidad de licencias individuales.');
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'password' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        if (empty($data['password'])) {
+            $data['password'] = \Illuminate\Support\Str::random(16);
+        }
+
+        $collectorService->createCollector($company, $data, $request->user(), true);
+
+        return back()->with('success', "Cobrador {$data['name']} registrado exitosamente.");
+    }
+
+    public function toggleCollector(Request $request, Company $company, User $user, CollectorManagementService $collectorService): RedirectResponse
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+
+        $contract = $collectorService->getContract($company);
+        abort_unless($contract && $contract['license_mode'] === 'individual', 422, 'Solo disponible en modalidad de licencias individuales.');
+
+        $collectorService->toggleCollector($user, $company, ! $user->is_active);
+
+        $status = $user->fresh()->is_active ? 'activado' : 'desactivado';
+
+        return back()->with('success', "Cobrador {$user->name} {$status}.");
+    }
+
+    public function updateCollectorBranches(Request $request, Company $company, User $user, CollectorManagementService $collectorService): RedirectResponse
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+
+        $contract = $collectorService->getContract($company);
+        abort_unless($contract && $contract['license_mode'] === 'individual', 422, 'Solo disponible en modalidad de licencias individuales.');
+
+        $data = $request->validate([
+            'branch_ids' => ['required', 'array'],
+            'branch_ids.*' => ['integer', 'exists:branches,id'],
+        ]);
+
+        $collectorService->replaceBranches($user, $company, $data['branch_ids']);
+
+        return back()->with('success', "Sucursales de {$user->name} actualizadas.");
+    }
 }

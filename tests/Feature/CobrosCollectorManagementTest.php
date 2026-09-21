@@ -157,6 +157,102 @@ class CobrosCollectorManagementTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
+     | PLATFORM ADMIN: individual mode management
+     | --------------------------------------------------------------------- */
+
+    public function test_platform_admin_sees_individual_collector_section(): void
+    {
+        [$company, $admin] = $this->individualContext();
+
+        $this->actingAs($admin)
+            ->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertSee('Cobradores con licencia individual')
+            ->assertSee('Registrar cobrador')
+            ->assertSee('0');
+    }
+
+    public function test_platform_admin_can_create_collector_in_individual_mode(): void
+    {
+        [$company, $admin] = $this->individualContext();
+
+        $this->actingAs($admin)
+            ->post(route('platform.collectors.store', $company), [
+                'name' => 'Cobrador Individual',
+                'email' => 'ci@test.com',
+                'password' => 'password123',
+            ])->assertRedirect();
+
+        $collector = User::where('email', 'ci@test.com')->first();
+        $this->assertNotNull($collector);
+        $this->assertTrue($collector->hasPermission('cobros.cobrar', $company));
+    }
+
+    public function test_platform_admin_can_toggle_collector_in_individual_mode(): void
+    {
+        [$company, $admin, $collector] = $this->individualContextWithCollector();
+
+        $this->actingAs($admin)
+            ->patch(route('platform.collectors.toggle', [$company, $collector]))
+            ->assertRedirect();
+
+        $this->assertFalse($collector->fresh()->is_active);
+
+        $this->patch(route('platform.collectors.toggle', [$company, $collector->fresh()]))
+            ->assertRedirect();
+
+        $this->assertTrue($collector->fresh()->is_active);
+    }
+
+    public function test_platform_admin_can_manage_branches_in_individual_mode(): void
+    {
+        [$company, $admin, $collector] = $this->individualContextWithCollector();
+        $branch = $company->branches->first();
+
+        $this->actingAs($admin)
+            ->put(route('platform.collectors.branches', [$company, $collector]), [
+                'branch_ids' => [$branch->id],
+            ])->assertRedirect();
+
+        $this->assertTrue($collector->fresh()->branches->contains($branch->id));
+    }
+
+    public function test_owner_cannot_create_collector_in_individual_mode(): void
+    {
+        [$company, $admin, $owner] = $this->individualContext();
+
+        $this->actingAs($owner)
+            ->post(route('platform.collectors.store', $company), [
+                'name' => 'Test',
+                'email' => 'test@test.com',
+            ])->assertForbidden();
+    }
+
+    public function test_cupo_mode_does_not_show_individual_management(): void
+    {
+        [$company, $admin] = $this->cupoContext();
+
+        $this->actingAs($admin)
+            ->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertDontSee('Cobradores con licencia individual')
+            ->assertDontSee('Registrar cobrador')
+            ->assertSee('Cobradores CobrOS')
+            ->assertSee('El dueño administra sus cobradores');
+    }
+
+    public function test_platform_admin_cannot_create_collector_in_cupo_mode(): void
+    {
+        [$company, $admin] = $this->cupoContext();
+
+        $this->actingAs($admin)
+            ->post(route('platform.collectors.store', $company), [
+                'name' => 'Test',
+                'email' => 'test@test.com',
+            ])->assertStatus(422);
+    }
+
+    /* ---------------------------------------------------------------------
      | Security: tenant isolation
      | --------------------------------------------------------------------- */
 

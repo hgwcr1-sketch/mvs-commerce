@@ -88,13 +88,95 @@
 
     @if($cobrosContract)
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 class="font-bold">Cobradores CobrOS</h2>
-        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div class="rounded-xl bg-slate-50 p-4 text-center">
-                <p class="text-sm text-slate-500">Cobradores registrados</p>
-                <p class="mt-1 text-3xl font-bold">{{ $collectorCount }}</p>
+        @if($cobrosContract['license_mode'] === 'individual')
+            <h2 class="font-bold">Cobradores con licencia individual</h2>
+            <p class="mt-1 text-sm text-slate-500">Los cobradores son habilitados individualmente desde el Panel Maestro. Cada cobrador obtiene/paga su licencia directamente con MVS.</p>
+
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="rounded-xl bg-slate-50 p-4 text-center">
+                    <p class="text-sm text-slate-500">Cobradores vinculados</p>
+                    <p class="mt-1 text-3xl font-bold">{{ $collectorCount }}</p>
+                </div>
+                <div class="rounded-xl bg-slate-50 p-4 text-center">
+                    <p class="text-sm text-slate-500">Sucursales asignadas</p>
+                    <p class="mt-1 text-3xl font-bold">{{ $collectors ? collect($collectors)->sum(fn($c) => $c['branches']->count()) : 0 }}</p>
+                </div>
             </div>
-            @if($cobrosContract['license_mode'] === 'company_cupo')
+
+            <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <h3 class="text-sm font-bold text-amber-800">Registrar cobrador</h3>
+                <form method="POST" action="{{ route('platform.collectors.store', $company) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+                    @csrf
+                    <input name="name" required placeholder="Nombre completo" class="min-h-11 rounded-xl border px-4 text-sm">
+                    <input name="email" required type="email" placeholder="Correo electrónico" class="min-h-11 rounded-xl border px-4 text-sm">
+                    <input name="password" type="password" placeholder="Contraseña (opcional)" class="min-h-11 rounded-xl border px-4 text-sm">
+                    <button class="min-h-11 rounded-xl bg-amber-500 px-5 font-bold text-white">Crear cobrador</button>
+                </form>
+            </div>
+
+            @if(count($collectors))
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-slate-500">
+                                <th class="p-3">Nombre</th>
+                                <th class="p-3 hidden md:table-cell">Correo</th>
+                                <th class="p-3">Estado</th>
+                                <th class="p-3 hidden lg:table-cell">Sucursales</th>
+                                <th class="p-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($collectors as $collector)
+                                <tr class="border-t">
+                                    <td class="p-3 font-semibold">{{ $collector['name'] }}<br><span class="text-xs text-slate-400 md:hidden">{{ $collector['email'] }}</span></td>
+                                    <td class="p-3 hidden md:table-cell">{{ $collector['email'] }}</td>
+                                    <td class="p-3">
+                                        <span class="rounded-full {{ $collector['is_active'] ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }} px-2 py-1 text-xs font-bold">
+                                            {{ $collector['is_active'] ? 'Activo' : 'Inactivo' }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3 hidden lg:table-cell text-xs text-slate-500">
+                                        @forelse($collector['branches'] as $branchName)
+                                            <span class="inline-block rounded-full bg-slate-100 px-2 py-0.5 mr-1 mb-1">{{ $branchName }}</span>
+                                        @empty
+                                            Sin sucursales
+                                        @endforelse
+                                    </td>
+                                    <td class="p-3">
+                                        <div class="flex flex-wrap gap-2">
+                                            <form method="POST" action="{{ route('platform.collectors.toggle', [$company, $collector['id']]) }}">
+                                                @csrf @method('PATCH')
+                                                <button class="min-h-9 rounded-lg px-3 text-xs font-semibold {{ $collector['is_active'] ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}">
+                                                    {{ $collector['is_active'] ? 'Desactivar' : 'Activar' }}
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ route('platform.collectors.branches', [$company, $collector['id']]) }}" class="inline-flex items-center gap-1">
+                                                @csrf @method('PUT')
+                                                <select name="branch_ids[]" multiple class="min-h-9 rounded-lg border px-2 text-xs">
+                                                    @foreach($company->branches as $branch)
+                                                        <option value="{{ $branch->id }}" @selected($collector['branches']->keys()->contains($branch->id))>{{ $branch->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <button class="min-h-9 rounded-lg bg-slate-100 px-3 text-xs font-semibold hover:bg-slate-200">Sucursales</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <p class="mt-4 text-sm text-slate-500">No hay cobradores registrados. Use el formulario superior para crear el primero.</p>
+            @endif
+        @else
+            <h2 class="font-bold">Cobradores CobrOS</h2>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="rounded-xl bg-slate-50 p-4 text-center">
+                    <p class="text-sm text-slate-500">Cobradores registrados</p>
+                    <p class="mt-1 text-3xl font-bold">{{ $collectorCount }}</p>
+                </div>
                 <div class="rounded-xl bg-slate-50 p-4 text-center">
                     <p class="text-sm text-slate-500">Límite contratado</p>
                     <p class="mt-1 text-3xl font-bold">{{ $cobrosContract['collector_limit'] }}</p>
@@ -103,43 +185,38 @@
                     <p class="text-sm text-slate-500">Cupos disponibles</p>
                     <p class="mt-1 text-3xl font-bold {{ $collectorCount >= $cobrosContract['collector_limit'] ? 'text-red-600' : 'text-emerald-600' }}">{{ max(0, $cobrosContract['collector_limit'] - $collectorCount) }}</p>
                 </div>
-            @else
-                <div class="rounded-xl bg-slate-50 p-4 text-center md:col-span-2">
-                    <p class="text-sm text-slate-500">Modalidad</p>
-                    <p class="mt-1 text-lg font-bold">Licencias individuales</p>
-                    <p class="mt-1 text-xs text-slate-400">Los cobradores son habilitados individualmente desde el Panel Maestro.</p>
-                </div>
-            @endif
-        </div>
-        @if(count($collectors))
-            <div class="mt-4 overflow-x-auto">
-                <table class="min-w-full text-sm">
-                    <thead>
-                        <tr class="text-left text-slate-500">
-                            <th class="p-3">Nombre</th>
-                            <th class="p-3">Correo</th>
-                            <th class="p-3">Estado</th>
-                            <th class="p-3">Rol</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($collectors as $collector)
-                            <tr class="border-t">
-                                <td class="p-3 font-semibold">{{ $collector['name'] }}</td>
-                                <td class="p-3">{{ $collector['email'] }}</td>
-                                <td class="p-3">
-                                    <span class="rounded-full {{ $collector['is_active'] ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }} px-2 py-1 text-xs font-bold">
-                                        {{ $collector['is_active'] ? 'Activo' : 'Inactivo' }}
-                                    </span>
-                                </td>
-                                <td class="p-3">{{ $collector['role'] }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
             </div>
-        @else
-            <p class="mt-4 text-sm text-slate-500">No hay cobradores registrados.</p>
+            @if(count($collectors))
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-slate-500">
+                                <th class="p-3">Nombre</th>
+                                <th class="p-3">Correo</th>
+                                <th class="p-3">Estado</th>
+                                <th class="p-3">Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($collectors as $collector)
+                                <tr class="border-t">
+                                    <td class="p-3 font-semibold">{{ $collector['name'] }}</td>
+                                    <td class="p-3">{{ $collector['email'] }}</td>
+                                    <td class="p-3">
+                                        <span class="rounded-full {{ $collector['is_active'] ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }} px-2 py-1 text-xs font-bold">
+                                            {{ $collector['is_active'] ? 'Activo' : 'Inactivo' }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3">{{ $collector['role'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <p class="mt-4 text-sm text-slate-500">No hay cobradores registrados.</p>
+            @endif
+            <p class="mt-3 text-xs text-slate-400">El dueño administra sus cobradores desde el portal de CobrOS respetando el cupo contratado.</p>
         @endif
     </section>
     @endif

@@ -120,9 +120,9 @@ class CollectorManagementService
         })->toArray();
     }
 
-    public function createCollector(Company $company, array $data, User $actor): User
+    public function createCollector(Company $company, array $data, User $actor, bool $skipLimit = false): User
     {
-        if (! $this->canCreateCollector($company)) {
+        if (! $skipLimit && ! $this->canCreateCollector($company)) {
             $contract = $this->getContract($company);
             throw ValidationException::withMessages([
                 'collector' => "Límite de cobradores alcanzado ({$contract['collector_limit']}).",
@@ -188,6 +188,15 @@ class CollectorManagementService
             ->whereIn('id', $branchIds)
             ->pluck('id');
         $user->branches()->syncWithoutDetaching($validBranchIds);
+    }
+
+    public function replaceBranches(User $user, Company $company, array $branchIds): void
+    {
+        $this->validateUserIsCollector($user, $company);
+        $validBranchIds = Branch::where('company_id', $company->id)
+            ->whereIn('id', $branchIds)
+            ->pluck('id');
+        $user->branches()->sync($validBranchIds);
     }
 
     public function removeBranch(User $user, Company $company, int $branchId): void

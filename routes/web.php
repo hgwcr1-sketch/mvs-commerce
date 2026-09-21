@@ -226,6 +226,9 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
     Route::patch('/empresas/{company}/cobros-contrato', [PlatformAdminController::class, 'updateCobrosContract'])->name('cobros-contract.update');
+    Route::post('/empresas/{company}/cobradores', [PlatformAdminController::class, 'storeCollector'])->name('collectors.store');
+    Route::patch('/empresas/{company}/cobradores/{user}/toggle', [PlatformAdminController::class, 'toggleCollector'])->name('collectors.toggle');
+    Route::put('/empresas/{company}/cobradores/{user}/branches', [PlatformAdminController::class, 'updateCollectorBranches'])->name('collectors.branches');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
 });
 
