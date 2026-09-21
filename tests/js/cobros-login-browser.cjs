@@ -62,6 +62,8 @@ let browser, server, ws;
         top:card.top, logoLoaded:logo.naturalWidth>0, logoRatio:logo.width/logo.height,
         logoW:logo.naturalWidth, logoH:logo.naturalHeight,
         toggleExists:!!toggle, toggleHeight:toggle?toggle.getBoundingClientRect().height:0,
+        toggleIconW:toggle?toggle.querySelector('svg').getBoundingClientRect().width:0,
+        toggleIconH:toggle?toggle.querySelector('svg').getBoundingClientRect().height:0,
         title:document.querySelector('h1').textContent,method:form.method,action:new URL(form.action).pathname,
         csrf:!!form.querySelector('input[name="_token"]'),
         targets:[...document.querySelectorAll('.cobros-login-field input,button,.cobros-login-remember')].map(e=>({height:e.getBoundingClientRect().height,width:e.getBoundingClientRect().width})),
@@ -75,7 +77,8 @@ let browser, server, ws;
     assert.equal(state.logoLoaded,true);assert.equal(state.logoRatio,1);
     assert.ok(state.logoW>=96&&state.logoH>=96,'logo >= 96px');
     assert.equal(state.toggleExists,true,'password toggle exists');
-    assert.ok(state.toggleHeight>=44,'toggle >= 44px');
+    assert.ok(state.toggleHeight>=44,'toggle touch area >= 44px');
+    assert.ok(state.toggleIconW<=24&&state.toggleIconH<=24,'toggle icon visually small');
     assert.equal(state.title,'Bienvenido a MVS CobrOS');
     assert.equal(state.method,'post');assert.equal(state.action,'/cobros/login');assert.equal(state.csrf,true);
     state.targets.forEach(t=>assert.ok(t.height>=44&&t.width>=44));

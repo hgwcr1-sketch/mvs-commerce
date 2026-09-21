@@ -52,13 +52,14 @@
 .cobros-login-errors { margin-bottom: 20px; padding: 12px; border: 1px solid #fecaca; border-radius: 10px; background: #fef2f2; color: #991b1b; font-size: 14px; }
 .cobros-login-errors p { margin: 0; }
 .cobros-login-password-wrap { position: relative; }
-.cobros-login-password-wrap input { padding-right: 52px; }
+.cobros-login-password-wrap input { padding-right: 48px; }
 .cobros-login-toggle {
-    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-    min-width: 44px; min-height: 44px; display: grid; place-items: center;
-    background: transparent; border: 0; color: #64748b; cursor: pointer;
+    position: absolute; right: 0; top: 0; bottom: 0; width: 48px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; color: #94a3b8; cursor: pointer;
+    padding: 0;
 }
-.cobros-login-toggle:hover { color: #14263d; }
+.cobros-login-toggle:hover { color: #475569; }
 .cobros-login-toggle .cobros-login-eye-closed { display: none; }
 .cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-open { display: none; }
 .cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-closed { display: block; }
