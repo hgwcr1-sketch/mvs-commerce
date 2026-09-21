@@ -2,17 +2,18 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Notas de Crédito — Fase 4A vigencia configurable — RECUPERADA POST-APAGADO, LOCAL, SIN PUSH/DEPLOY (2026-09-20)
+## Notas de Crédito — Fase 4A vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20)
 
-**Commit `9b55929`** en `feature/notas-credito` (`mvs-commerce-paralelo-3`), base `a5ed4ae`. Fase 4A completa tras apagado (CASO B: implementación parcial sin commit; se recuperó, completó y commitó localmente). Producción NO autorizada; no hacer push.
+Cadena certificada: feature `9b55929` (`feat(credit-notes): add configurable expiration`) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** (`fix(pos): restore payment method active states`) → **deploy producción certificado** (2026-09-20). PRODUCTION_HEAD: **`5246e38c15d214132e54641c7883fd219c81cad8`**.
 
-- **Política por empresa**: `credit_note_expiration_policy` `none/30/60/90/custom` + `credit_note_custom_expiration_days` en `companies` (migración `2026_09_20_000002`, default `none`). `Company::ncExpirationDays()` traduce la política a días.
-- **Vigencia fijada al emitir**: `CreditNoteService::issueFromReturn` calcula `expires_at` UNA vez (`issued_at + días`); cambios posteriores de configuración NO alteran NC existentes. Migración `2026_09_20_000001`: `credit_notes.expires_at` nullable + `customer_id` nullable en `credit_notes` y `credit_note_applications` (preparación Consumer Final; FK preservadas).
-- **Comportamiento**: NC sin `expires_at` = vigencia ilimitada (backward compatible; NC locales existentes conservan `NULL`). `CreditNote::isExpired()` y `scopeAvailable` excluye vencidas; el backend rechaza aplicación de vencidas (mensaje `ValidationException`) en `applyToSale` y `applyBatchToSale`. La reversión de una aplicación NO valida vencimiento (restaura saldo; la NC permanece vencida/indisponible).
-- **Administración**: permiso `notas_credito.configurar` (asignado vía bloque existente `notas_credito.%` a Administrador/Administrador Local; Cajero NO). Ruta `PUT configuracion/notas-credito`, `UpdateCreditNoteExpirationRequest`, `SettingController::updateCreditNoteExpiration`, pestaña "Notas de Crédito" en `settings/index.blade.php` (radios dorados, campo personalizado deshabilitado salvo `custom`, responsive 44px).
-- **NO implementado por diseño/roadmap**: status `expired`, Consumer Final habilitado, `is_consumer_final`, `application_code` — pendientes de la fase correspondiente.
-- **Relevo previo pendiente**: Fase 2C reversión NC↔CxC y demo `5c889f9` del agente previo están integradas en `feature/notas-credito` (base `a5ed4ae`); el punto de recuperación F45 no se tocó.
-- **Validación**: `CreditNoteExpirationTest` **22/22 (73 aserciones)**; regresión NC `CreditNoteTest`+`CreditNoteReconciliationTest`+`OrderPermissionSeederTest`+`DevolucionesIndexTest` **55/55 (295)**; `PosCreditNoteTest`+`DemoCompanyProvisionerTest` **105/105 (608)**; settings/Loyalty/WhatsApp **35/35 (167)**. `npm run build` OK; `git diff --check` limpio. Pendiente auditoría del usuario y despliegue controlado.
+- **Vencimiento configurable por empresa**: `credit_note_expiration_policy` en `companies` con opciones `none` (Sin vencimiento), `30` (30 días), `60` (60 días), `90` (90 días) y `custom` (Personalizado, `credit_note_custom_expiration_days` 1–3650). Migración `2026_09_20_000002`, default `none`. `Company::ncExpirationDays()` traduce la política a días.
+- **`expires_at` persistido al emitir**: se calcula UNA vez al emitir la NC; los cambios posteriores de configuración NO son retroactivos (no alteran NC ya emitidas).
+- **NC vencida**: conserva historial y saldo pero no puede aplicarse. NO existe status persisted `expired`. Enforcement backend dentro de la transacción: `applyToSale`/`applyBatchToSale` rechazan NC vencidas. La reversión de una aplicación NO elimina `expires_at`.
+- **Preparación estructural futura**: `credit_notes.customer_id` nullable y `credit_note_applications.customer_id` nullable (migración `2026_09_20_000001`, FK preservadas).
+- **CONSUMER FINAL: NO HABILITADO EN FASE 4A.** **APPLICATION CODE: NO IMPLEMENTADO EN FASE 4A.** Fase siguiente: **4B — Consumer Final + mecanismo seguro de autorización/aplicación**.
+- **Permiso**: `notas_credito.configurar` — Administrador / Administrador Local según modelo de permisos; Cajero NO lo recibe automáticamente.
+- **Hotfix visual POS (`5246e38`)**: mientras exista saldo pendiente, Efectivo/Tarjeta/SINPE (y Crédito cuando es elegible) → `primary`/dorado + texto negro + habilitado + `cursor-pointer`; cuando el saldo queda cubierto → neutro + `disabled` + `cursor-not-allowed`. Los pagos parciales mantienen los métodos disponibles.
+- **Deploy producción**: backup predeploy `/home/mvsadmin/backups/mvscommerce_predeploy5246e38_20260920_201843.dump` (2,369,193 bytes; `pg_restore --list` PASS; PostgreSQL 16.15). Migraciones `2026_09_20_000001` y `2026_09_20_000002` **Ran**. Resultado: migraciones PASS, build PASS, smoke Demo PASS, configuración NC PASS, POS visual PASS, NC nominativa preservada, NEW_HTTP_500 = 0, datos reales preservados, MVS Print preservado, cotizaciones preservadas, apartados preservados.
 
 ## Notas de Crédito Nominativa — IMPLEMENTADA Y CERTIFICADA (2026-09-19)
 
@@ -318,7 +319,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3` (HEAD `9b55929`, Fase 4A vigencia configurable). Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929`. `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93`; integración `645e564` + hotfix `5246e38` en `integration/notas-credito`, ya desplegados a producción (PRODUCTION_HEAD `5246e38`). `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -337,7 +338,7 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
-- **Fase 4A vigencia configurable NC: commit `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones; local, sin push ni deploy);
+- **Fase 4A vigencia configurable NC: feature `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** → **deploy producción CERTIFICADO** (2026-09-20, PRODUCTION_HEAD `5246e38`);
 - **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
 - Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
 - **Fase 3A NC-POS: commit `3f55ba9`** (integración backend NC con POS, 9 archivos, 1351 insertions);
@@ -353,7 +354,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito Nominativa — CERTIFICADA Y CONGELADA** (`a734f5d`). Flujo completo POS/UI/receipt/reversals. Pendiente deploy producción.
+- **Notas de Crédito — Fase 4A (vigencia configurable) y NC Nominativa: CERTIFICADAS Y DESPLEGADAS** (`5246e38` en producción). Flujo completo POS/UI/receipt/reversals + vencimiento configurable. Fase 4A cerrada documentalmente.
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.

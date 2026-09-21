@@ -483,11 +483,11 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ## Notas de Crédito
 
-Estado: **COMPLETADA Y CERTIFICADA** — commit `a734f5d` en `feature/notas-credito`
+Estado: **COMPLETADA Y CERTIFICADA — DESPLEGADA EN PRODUCCIÓN** (2026-09-20, PRODUCTION_HEAD `5246e38c15d214132e54641c7883fd219c81cad8`)
 
-**Estado de deploy: CÓDIGO CERTIFICADO, PENDIENTE DEPLOY PRODUCCIÓN**
+**Estado de deploy: FASE 4A CERTIFICADA EN PRODUCCIÓN** (migraciones Ran, build PASS, smoke PASS, NEW_HTTP_500 = 0, datos reales preservados)
 
-Cadena completa (rama `feature/notas-credito`):
+Cadena completa (rama `feature/notas-credito` + integración `integration/notas-credito`):
 
 | Fase | Commit | Descripción | Estado |
 |------|--------|-------------|--------|
@@ -498,7 +498,10 @@ Cadena completa (rama `feature/notas-credito`):
 | 3A | `3f55ba9` | feat(credit-notes): integrate credit notes with pos backend | CERRADA |
 | 3B | `58bc902` | docs: record POS backend certification | CERRADA |
 | **final** | **`a734f5d`** | **feat(credit-notes): complete pos workflow and reversals** | **CERTIFICADA** |
-| 4A | `9b55929` | feat(credit-notes): add configurable expiration | **LOCAL, SIN PUSH/DEPLOY** |
+| docs | `4737a93` | docs: record credit-notes 4A recovery state | CERRADA |
+| 4A | `9b55929` | feat(credit-notes): add configurable expiration | CERTIFICADA |
+| integración | `645e564` | integración Fase 4A + NC | CERRADA |
+| hotfix | `5246e38` | fix(pos): restore payment method active states | **PRODUCCIÓN** |
 
 ### Funcionalidad certificada
 
@@ -536,15 +539,15 @@ Cadena completa (rama `feature/notas-credito`):
 - Certificación backend documentada.
 - Estado de módulo registrado.
 
-**Fase 4A — Vigencia configurable (commit local `9b55929`, post-apagado):**
-- Política por empresa `none/30/60/90/custom` + días personalizados en `companies` (migración `2026_09_20_000002`, default `none`).
-- `expires_at` en `credit_notes` calculado UNA VEZ al emitir; cambios posteriores NO alteran NC existentes (migración `2026_09_20_000001`, además `customer_id` nullable en NC y aplicaciones preparando Consumer Final).
-- NC sin `expires_at` = vigencia ilimitada (backward compatible).
-- `CreditNote::isExpired()` + `scopeAvailable` excluye vencidas; backend rechaza aplicación (mensaje claro) en `applyToSale`/`applyBatchToSale`.
-- Reversión de aplicación NO valida vencimiento (restaura saldo; la NC sigue vencida/indisponible).
-- Permiso `notas_credito.configurar` (Administrador/Administrador Local; Cajero NO) + ruta `PUT configuracion/notas-credito` + pestaña "Notas de Crédito" en Configuración (responsive, dorado).
-- NO implementado (roadmap): status `expired`, Consumer Final habilitado, `application_code`.
-- Validación: `CreditNoteExpirationTest` 22/22 (73 aserciones); regresión NC/POS/permisos/demo/settings en verde; `npm run build` OK. Pendiente auditoría del usuario y despliegue controlado.
+**Fase 4A — Vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20):**
+- Política por empresa `none` (Sin vencimiento) / `30` (30 días) / `60` (60 días) / `90` (90 días) / `custom` (Personalizado, `credit_note_custom_expiration_days` 1–3650) en `companies` (migración `2026_09_20_000002`, default `none`).
+- `expires_at` en `credit_notes` persistido al emitir (calculado UNA vez); los cambios posteriores de configuración NO son retroactivos (migración `2026_09_20_000001`, además `customer_id` nullable en `credit_notes` y `credit_note_applications` como preparación estructural futura).
+- NC vencida conserva historial y saldo pero no puede aplicarse; NO existe status persisted `expired`. Enforcement backend dentro de la transacción en `applyToSale`/`applyBatchToSale`. La reversión de una aplicación NO elimina `expires_at`.
+- `CreditNote::isExpired()` + `scopeAvailable` excluye vencidas; NC sin `expires_at` = vigencia ilimitada (backward compatible).
+- Permiso `notas_credito.configurar` (Administrador / Administrador Local según modelo de permisos; Cajero NO) + ruta `PUT configuracion/notas-credito` + pestaña "Notas de Crédito" en Configuración (responsive, dorado).
+- **CONSUMER FINAL: NO HABILITADO EN FASE 4A. APPLICATION CODE: NO IMPLEMENTADO EN FASE 4A.** Fase siguiente: **4B — Consumer Final + mecanismo seguro de autorización/aplicación**.
+- Hotfix visual POS `5246e38`: con saldo pendiente, métodos → `primary`/dorado + texto negro + habilitado + `cursor-pointer`; al cubrirse → neutro + `disabled` + `cursor-not-allowed`; pagos parciales mantienen métodos disponibles.
+- Deploy producción: migraciones `2026_09_20_000001`/`000002` Ran; backup `mvscommerce_predeploy5246e38_20260920_201843.dump` verificado (PG 16.15); build/smoke/configuración/visual/permisos PASS; NC nominativa preservada; cotizaciones y apartados preservados. Validación: `CreditNoteExpirationTest` 22/22 (73 aserciones); regresión NC/POS/permisos/demo/settings en verde.
 
 **Fase final — Flujo completo POS/UI/receipt/reversals:**
 - POS UI: `creditNotes`, `fetchCreditNotes`, `toggleCreditNote`, `applyMaxCreditNote` en `pos/index.blade.php`.
