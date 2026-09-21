@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyLicense;
+use App\Models\CompanyModule;
 use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\Modules\ModuleRegistry;
@@ -187,5 +188,75 @@ class CompanyLicenseService
         if ($limit !== null && $used >= $limit) {
             throw ValidationException::withMessages([$resource => "La licencia alcanzó el límite de {$resource} ({$limit})."]);
         }
+    }
+
+    public function updateCobrosContract(Company $company, User $actor, array $data): void
+    {
+        abort_unless($actor->isPlatformAdmin(), 403);
+
+        $validated = \Illuminate\Support\Facades\Validator::make($data, [
+            'license_mode' => ['required', 'string', 'in:individual,company_cupo'],
+            'collector_limit' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'admin_license_charged' => ['required', 'boolean'],
+        ], [
+            'license_mode.required' => 'Debe seleccionar una modalidad de licenciamiento.',
+            'license_mode.in' => 'La modalidad debe ser individual o company_cupo.',
+            'collector_limit.min' => 'El límite de cobradores debe ser al menos 1.',
+            'collector_limit.max' => 'El límite de cobradores no puede exceder 999.',
+            'admin_license_charged.required' => 'Debe indicar si la licencia del administrador se cobra.',
+        ])->validate();
+
+        $mode = $validated['license_mode'];
+
+        if ($mode === 'individual') {
+            $validated['collector_limit'] = null;
+        }
+
+        if ($mode === 'company_cupo' && empty($validated['collector_limit'])) {
+            throw ValidationException::withMessages([
+                'collector_limit' => 'La modalidad company_cupo requiere un límite de cobradores.',
+            ]);
+        }
+
+        DB::transaction(function () use ($company, $actor, $validated, $mode) {
+            $module = $company->modules()->updateOrCreate(
+                ['module_key' => 'cobros'],
+                ['is_enabled' => true],
+            );
+
+            $module->update([
+                'license_mode' => $mode,
+                'collector_limit' => $validated['collector_limit'],
+                'admin_license_charged' => $validated['admin_license_charged'],
+            ]);
+
+            $license = $this->ensure($company);
+            $license->events()->create([
+                'company_id' => $company->id,
+                'actor_id' => $actor->id,
+                'action' => 'cobros_contract',
+                'from_status' => $license->status,
+                'to_status' => $license->status,
+                'snapshot' => [
+                    ...$license->only(['status', 'plan', 'user_limit', 'branch_limit']),
+                    'cobros_contract' => $module->only(['license_mode', 'collector_limit', 'admin_license_charged']),
+                ],
+                'changes' => [
+                    'cobros_contract' => ['from' => null, 'to' => $module->only(['license_mode', 'collector_limit', 'admin_license_charged'])],
+                ],
+                'notes' => "Contrato CobrOS configurado: modalidad {$mode}.",
+            ]);
+        });
+    }
+
+    public function getCobrosContract(Company $company): ?array
+    {
+        $module = $company->modules()->where('module_key', 'cobros')->first();
+
+        if (! $module || ! $module->license_mode) {
+            return null;
+        }
+
+        return $module->only(['license_mode', 'collector_limit', 'admin_license_charged']);
     }
 }

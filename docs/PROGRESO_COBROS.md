@@ -390,3 +390,58 @@ Correcciones puntuales de UI sin rediseño ni cambio funcional.
   show/hide, controles >=44px, sin overflow, branding aislado.
 - Sin 1E, BD, migraciones, push ni merge.
 - `tmp_generate_cobros_icons.php` intacto.
+
+## 1E-A — Contrato de licenciamiento CobrOS (2026-09-20)
+
+Base contractual/licenciamiento con dos modalidades controladas por Panel Maestro.
+
+### Modalidades
+
+**A) Individual:**
+- Licencias individuales por cobrador.
+- 3 cobradores + 1 dueño/admin = 4 licencias potenciales.
+- Platform Admin controla cobradores/licencias.
+- Campo `admin_license_charged` indica si la licencia del dueño se cobra.
+- Dueño NO crea cobradores (eso es 1E-B).
+
+**B) Company cupo:**
+- Una licencia empresa.
+- Platform Admin define `collector_limit`.
+- Dueño podrá crear cobradores hasta ese límite en 1E-B.
+- Dueño NO puede modificar modalidad ni límite.
+
+### Archivos creados
+
+- `database/migrations/2026_09_20_000001_add_cobros_contract_fields_to_company_modules_table.php` —
+  migración aditiva: `license_mode`, `collector_limit`, `admin_license_charged`.
+- `tests/Feature/CobrosLicensingContractTest.php` — 17 pruebas, 60 aserciones.
+
+### Archivos modificados
+
+- `app/Models/CompanyModule.php` — fillable, casts, const LICENSE_MODES.
+- `app/Services/CompanyLicenseService.php` — `updateCobrosContract()`,
+  `getCobrosContract()`.
+- `app/Http/Controllers/PlatformAdminController.php` — `updateCobrosContract()`,
+  `show()` pasa `cobrosContract`.
+- `resources/views/platform/show.blade.php` — sección de contrato CobrOS.
+- `routes/web.php` — ruta `platform.cobros-contract.update`.
+
+### Comportamiento
+
+- Solo Platform Admin puede configurar el contrato CobrOS.
+- Modalidad individual: `collector_limit` se limpia a null.
+- Modalidad company_cupo: `collector_limit` es obligatorio (min:1, max:999).
+- `admin_license_charged` siempre requerido (boolean).
+- Configurar el contrato habilita automáticamente el módulo cobros.
+- Cada cambio genera evento de auditoría con snapshot completo.
+- Aislamiento multiempresa: contrato A no afecta contrato B.
+- Sin migraciones destructivas. Sin push ni merge.
+- `tmp_generate_cobros_icons.php` intacto.
+
+### Validación
+
+- CobrosLicensingContractTest: **17/17, 60 aserciones**.
+- CobrOS suite completa: **82/82, 599 aserciones**.
+- CompanyLicenseTest|CompanyModuleAccessTest: **6/6, 20 aserciones**.
+- Sin cambios en rutas/auth/dashboard Commerce.
+- Sin 1E-B, 1E-C, 2A ni pagos.

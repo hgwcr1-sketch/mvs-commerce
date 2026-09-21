@@ -27,5 +27,46 @@
     </form>
 
     <form method="POST" action="{{ route('platform.modules.update', $company) }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">@csrf @method('PATCH')<h2 class="font-bold">Módulos del contrato efectivo</h2><div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">@foreach($moduleCatalog as $key=>$module)<label class="flex min-h-14 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="modules[]" value="{{ $key }}" @checked($company->isModuleEnabled($key)) class="h-5 w-5"> {{ $module['label'] }}</label>@endforeach</div><button class="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar módulos</button></form>
+
+    @if($company->isModuleEnabled('cobros'))
+    <form method="POST" action="{{ route('platform.cobros-contract.update', $company) }}" class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+        @csrf @method('PATCH')
+        <h2 class="font-bold">Contrato CobrOS · Modalidad de licenciamiento</h2>
+        <p class="mt-2 text-sm text-slate-600">Configure la modalidad de cobro de licencias para MVS CobrOS. Solo Platform Admin puede modificar este contrato.</p>
+        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label class="text-sm font-semibold">
+                Modalidad
+                <select name="license_mode" class="mt-2 min-h-11 w-full rounded-xl border px-4" required>
+                    <option value="">Seleccionar modalidad</option>
+                    <option value="individual" @selected(($cobrosContract['license_mode'] ?? '') === 'individual')>Individual — licencias por cobrador</option>
+                    <option value="company_cupo" @selected(($cobrosContract['license_mode'] ?? '') === 'company_cupo')>Company cupo — cupo global de cobradores</option>
+                </select>
+            </label>
+            <label class="text-sm font-semibold">
+                Límite de cobradores
+                <input type="number" name="collector_limit" min="1" max="999" value="{{ $cobrosContract['collector_limit'] ?? '' }}" placeholder="Requerido si company_cupo" class="mt-2 min-h-11 w-full rounded-xl border px-4">
+                <span class="mt-1 block text-xs text-slate-500">Obligatorio en modalidad company_cupo. Vacío = sin límite en individual.</span>
+            </label>
+            <label class="text-sm font-semibold">
+                Licencia administrador/dueño
+                <select name="admin_license_charged" class="mt-2 min-h-11 w-full rounded-xl border px-4" required>
+                    <option value="1" @selected(($cobrosContract['admin_license_charged'] ?? false) === true)>Se cobra — el dueño/admin tiene licencia facturada</option>
+                    <option value="0" @selected(($cobrosContract['admin_license_charged'] ?? false) === false)>No se cobra — el dueño/admin opera sin costo</option>
+                </select>
+            </label>
+        </div>
+        <div class="mt-5 flex flex-wrap gap-3">
+            <button class="min-h-11 rounded-xl bg-amber-500 px-5 font-bold">Guardar contrato CobrOS</button>
+        </div>
+        @if($cobrosContract)
+        <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
+            <strong>Estado actual:</strong>
+            Modalidad {{ ucfirst(str_replace('_', ' ', $cobrosContract['license_mode'])) }} ·
+            @if($cobrosContract['collector_limit'])Límite: {{ $cobrosContract['collector_limit'] }} cobradores · @else Sin límite de cobradores · @endif
+            Licencia admin: {{ $cobrosContract['admin_license_charged'] ? 'Se cobra' : 'No se cobra' }}
+        </div>
+        @endif
+    </form>
+    @endif
 </div>
 @endsection

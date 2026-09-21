@@ -104,6 +104,7 @@ class PlatformAdminController extends Controller
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+            'cobrosContract' => $licenses->getCobrosContract($company),
         ]);
     }
 
@@ -169,5 +170,18 @@ class PlatformAdminController extends Controller
         $licenses->updateModules($company, $request->user(), $enabled);
 
         return back()->with('success', 'Módulos contratados actualizados.');
+    }
+
+    public function updateCobrosContract(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
+    {
+        $data = $request->validate([
+            'license_mode' => ['required', 'string', Rule::in(['individual', 'company_cupo'])],
+            'collector_limit' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'admin_license_charged' => ['required', 'boolean'],
+        ]);
+
+        $licenses->updateCobrosContract($company, $request->user(), $data);
+
+        return back()->with('success', 'Contrato CobrOS actualizado.');
     }
 }
