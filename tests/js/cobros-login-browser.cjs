@@ -56,9 +56,12 @@ let browser, server, ws;
       const card=document.querySelector('main').getBoundingClientRect();
       const form=document.querySelector('form');
       const logo=document.querySelector('.cobros-login-logo');
+      const toggle=document.querySelector('.cobros-login-toggle');
       return {overflow:document.documentElement.scrollWidth>innerWidth,
         centered:Math.abs(card.x+card.width/2-document.documentElement.clientWidth/2)<2,
         top:card.top, logoLoaded:logo.naturalWidth>0, logoRatio:logo.width/logo.height,
+        logoW:logo.naturalWidth, logoH:logo.naturalHeight,
+        toggleExists:!!toggle, toggleHeight:toggle?toggle.getBoundingClientRect().height:0,
         title:document.querySelector('h1').textContent,method:form.method,action:new URL(form.action).pathname,
         csrf:!!form.querySelector('input[name="_token"]'),
         targets:[...document.querySelectorAll('.cobros-login-field input,button,.cobros-login-remember')].map(e=>({height:e.getBoundingClientRect().height,width:e.getBoundingClientRect().width})),
@@ -69,7 +72,11 @@ let browser, server, ws;
         valid:form.checkValidity(),commerce:document.body.textContent.includes('MVS Commerce')};
     })()`);
     assert.equal(state.overflow,false);assert.equal(state.centered,true);assert.ok(state.top>=0);
-    assert.equal(state.logoLoaded,true);assert.equal(state.logoRatio,1);assert.equal(state.title,'Bienvenido a MVS CobrOS');
+    assert.equal(state.logoLoaded,true);assert.equal(state.logoRatio,1);
+    assert.ok(state.logoW>=96&&state.logoH>=96,'logo >= 96px');
+    assert.equal(state.toggleExists,true,'password toggle exists');
+    assert.ok(state.toggleHeight>=44,'toggle >= 44px');
+    assert.equal(state.title,'Bienvenido a MVS CobrOS');
     assert.equal(state.method,'post');assert.equal(state.action,'/cobros/login');assert.equal(state.csrf,true);
     state.targets.forEach(t=>assert.ok(t.height>=44&&t.width>=44));
     assert.equal(state.font,'16px');assert.equal(state.emailAutocomplete,'username');
@@ -84,6 +91,13 @@ let browser, server, ws;
     assert.equal(await evaluate("document.querySelector('form').checkValidity()"),true);
     await evaluate("document.getElementById('remember').click()");
     assert.equal(await evaluate("document.getElementById('remember').checked"),true);
+    assert.equal(await evaluate("document.getElementById('password').type"),'password');
+    await evaluate("document.querySelector('.cobros-login-toggle').click()");
+    assert.equal(await evaluate("document.getElementById('password').type"),'text');
+    assert.equal(await evaluate("document.querySelector('.cobros-login-toggle').getAttribute('aria-pressed')"),'true');
+    await evaluate("document.querySelector('.cobros-login-toggle').click()");
+    assert.equal(await evaluate("document.getElementById('password').type"),'password');
+    assert.equal(await evaluate("document.querySelector('.cobros-login-toggle').getAttribute('aria-pressed')"),'false');
     const screenshot=await send('Page.captureScreenshot',{format:'png'});
     fs.writeFileSync(path.join(temp,'cobros-login-'+width+'.png'),Buffer.from(screenshot.data,'base64'));
     if(width===360){
@@ -93,7 +107,7 @@ let browser, server, ws;
       const reduced=await evaluate("({overflow:document.documentElement.scrollWidth>innerWidth,bottom:document.querySelector('button[type=submit]').getBoundingClientRect().bottom})");
       assert.equal(reduced.overflow,false);assert.ok(reduced.bottom<=420);
     }
-    console.log(JSON.stringify({width,result:'PASS',checks:'centered; no overflow; 44px targets; logo; email/password keyboard entry; remember; native form validation; isolated branding'}));
+    console.log(JSON.stringify({width,result:'PASS',checks:'centered; no overflow; 44px targets; logo 120px; password toggle; email/password keyboard entry; toggle show/hide; remember; native form validation; isolated branding'}));
   }
   assert.deepEqual(errors,[],'Browser runtime errors');
   await send('Browser.close').catch(()=>{});

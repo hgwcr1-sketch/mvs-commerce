@@ -364,3 +364,29 @@ de User, passwords, guard ni autenticación.
   documentado desde Fase 1A.1, no relacionado).
 - Sin migraciones ni cambios de BD. Sin push ni merge.
 - `tmp_generate_cobros_icons.php` intacto.
+
+## Ajustes visuales finales (2026-09-20)
+
+Correcciones puntuales de UI sin rediseño ni cambio funcional.
+
+### Cambios
+
+- Login: botón ojo mostrar/ocultar contraseña con SVG, aria-label y
+  aria-pressed. Táctil >=44px. JS inline, sin dependencias. Logo aumentado
+  a 120×120px. CSS versionado v2.
+- Navegación inferior: item activo cambiado de bloque dorado sólido a
+  cambio de color textual discreto (`color: var(--cobros-gold)`), imitando
+  el patrón de navegación Commerce (text-amber-600).
+- Panel "Más": botón cerrar sesión reestilizado con fondo transparente,
+  borde sutil, color coherente con el panel oscuro e icono SVG inline.
+  Eliminado el rectángulo blanco vacío.
+
+### Validación
+
+- CobrOS suite: **65/65, 539 aserciones**.
+- Regresión CompanyLicense|CompanyModuleAccess|RouteosR01|UserRoleSecurity:
+  **9/9, 36 aserciones**.
+- Chrome headless 360/768/1280: PASS con logo 120px, password toggle
+  show/hide, controles >=44px, sin overflow, branding aislado.
+- Sin 1E, BD, migraciones, push ni merge.
+- `tmp_generate_cobros_icons.php` intacto.

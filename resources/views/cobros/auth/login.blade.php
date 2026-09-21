@@ -8,12 +8,12 @@
     <link rel="icon" type="image/png" href="{{ asset('icons/cobros/favicon-32x32.png') }}">
     <link rel="apple-touch-icon" href="{{ asset('icons/cobros/apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
-    <link rel="stylesheet" href="{{ asset('css/cobros-auth.css') }}?v=1">
+    <link rel="stylesheet" href="{{ asset('css/cobros-auth.css') }}?v=2">
 </head>
 <body class="cobros-auth">
     <main class="cobros-login-card">
         <header>
-            <img class="cobros-login-logo" src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="96" height="96">
+            <img class="cobros-login-logo" src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" width="120" height="120">
             <p class="cobros-login-eyebrow">Cobranza Operativa</p>
             <h1>Bienvenido a MVS CobrOS</h1>
             <p class="cobros-login-intro">Ingrese con sus credenciales para continuar.</p>
@@ -33,10 +33,16 @@
                        required autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false"
                        @if($errors->has('email')) aria-invalid="true" aria-describedby="login-errors" @endif>
             </div>
-            <div class="cobros-login-field">
+            <div class="cobros-login-field cobros-login-field--password">
                 <label for="password">Contraseña</label>
-                <input id="password" type="password" name="password" required autocomplete="current-password"
-                       @if($errors->has('password')) aria-invalid="true" aria-describedby="login-errors" @endif>
+                <div class="cobros-login-password-wrap">
+                    <input id="password" type="password" name="password" required autocomplete="current-password"
+                           @if($errors->has('password')) aria-invalid="true" aria-describedby="login-errors" @endif>
+                    <button type="button" class="cobros-login-toggle" aria-label="Mostrar contraseña" aria-pressed="false" tabindex="-1">
+                        <svg class="cobros-login-eye-open" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg class="cobros-login-eye-closed" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
             </div>
             <label class="cobros-login-remember" for="remember">
                 <input id="remember" type="checkbox" name="remember" value="1"> Recordarme
@@ -45,5 +51,18 @@
         </form>
         <footer>MVS CobrOS · Cobranza Operativa</footer>
     </main>
+    <script>
+    (function(){
+        var btn=document.querySelector('.cobros-login-toggle');
+        if(!btn)return;
+        btn.addEventListener('click',function(){
+            var input=document.getElementById('password');
+            var show=input.type==='password';
+            input.type=show?'text':'password';
+            btn.setAttribute('aria-pressed',show?'true':'false');
+            btn.setAttribute('aria-label',show?'Ocultar contraseña':'Mostrar contraseña');
+        });
+    })();
+    </script>
 </body>
 </html>

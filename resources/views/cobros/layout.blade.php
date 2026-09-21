@@ -10,7 +10,7 @@
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
     <meta name="theme-color" content="#D4AF37">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=3">
 </head>
 <body class="cobros-app">
     <a class="cobros-skip" href="#cobros-main">Ir al contenido</a>

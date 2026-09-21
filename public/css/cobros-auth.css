@@ -26,7 +26,7 @@
     overflow-wrap: anywhere;
 }
 .cobros-login-card header { text-align: center; }
-.cobros-login-logo { display: block; margin: 0 auto 12px; object-fit: contain; }
+.cobros-login-logo { display: block; margin: 0 auto 16px; object-fit: contain; width: 120px; height: 120px; }
 .cobros-login-eyebrow { margin: 0 0 8px; color: #64748b; font-size: 12px; letter-spacing: .06em; }
 .cobros-login-card h1 { margin: 0; font-size: 24px; line-height: 1.25; }
 .cobros-login-intro { margin: 12px 0 24px; color: #64748b; font-size: 14px; }
@@ -51,6 +51,17 @@
 .cobros-login-card input:focus-visible, .cobros-login-card button:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 3px; }
 .cobros-login-errors { margin-bottom: 20px; padding: 12px; border: 1px solid #fecaca; border-radius: 10px; background: #fef2f2; color: #991b1b; font-size: 14px; }
 .cobros-login-errors p { margin: 0; }
+.cobros-login-password-wrap { position: relative; }
+.cobros-login-password-wrap input { padding-right: 52px; }
+.cobros-login-toggle {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    min-width: 44px; min-height: 44px; display: grid; place-items: center;
+    background: transparent; border: 0; color: #64748b; cursor: pointer;
+}
+.cobros-login-toggle:hover { color: #14263d; }
+.cobros-login-toggle .cobros-login-eye-closed { display: none; }
+.cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-open { display: none; }
+.cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-closed { display: block; }
 .cobros-login-card footer { margin-top: 24px; text-align: center; font-size: 12px; color: #64748b; }
 @media (min-width: 640px) {
     .cobros-auth { padding: 32px; }

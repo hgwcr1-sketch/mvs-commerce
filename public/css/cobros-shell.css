@@ -73,8 +73,7 @@ gold reuses the shared brand token. */
     background:#f1f5f9
 }
 .cobros-nav-item[aria-current=page]{
-    background:var(--cobros-gold);
-    color:#14263d;
+    color:var(--cobros-gold);
     font-weight:700
 }
 .cobros-workspace{
@@ -358,6 +357,32 @@ gold reuses the shared brand token. */
 .cobros-panel-navigation .cobros-nav-item[aria-current=page]{
     background:var(--cobros-gold);
     color:#14263d
+}
+.cobros-panel-exit{
+    margin-top:12px
+}
+.cobros-panel-exit .cobros-logout{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width:100%;
+    padding:12px;
+    background:transparent;
+    color:#e2e8f0;
+    border:1px solid #ffffff30;
+    border-radius:10px;
+    font-size:14px;
+    font-weight:600
+}
+.cobros-panel-exit .cobros-logout::before{
+    content:"";
+    width:20px;
+    height:20px;
+    flex-shrink:0;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4'/%3E%3Cpolyline points='16 17 21 12 16 7'/%3E%3Cline x1='21' y1='12' x2='9' y2='12'/%3E%3C/svg%3E") center/contain no-repeat
+}
+.cobros-panel-exit .cobros-logout:hover{
+    background:#253b55
 }
 .cobros-sidebar-footer{
     margin-top:24px
