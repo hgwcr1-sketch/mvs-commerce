@@ -733,7 +733,7 @@
                                         </template>
                                     </div>
                                     @endcan
-                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-primary bg-primary text-black ring-4 ring-primary/30 hover:bg-primary-hover hover:border-primary' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400')" class="min-h-24 cursor-pointer rounded-2xl border-2 p-3 text-left transition-colors focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'bg-white text-primary' : 'bg-slate-100 text-slate-600')" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-slate-600'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="paymentMethodDisabled(method)" :class="paymentMethodClasses(method).button" class="min-h-24 cursor-pointer rounded-2xl border-2 p-3 text-left transition-colors focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="paymentMethodClasses(method).badge" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="paymentMethodClasses(method).caption" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
                                 </div>
 
                                 <div x-show="selectedPaymentMethod" x-transition class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4">
@@ -1512,6 +1512,13 @@ document.addEventListener('alpine:init', () => {
         },
         unsupportedPaymentMethod(method) { return method.type === 'loyalty_points'; },
         methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0 || (method.type === 'credit' && this.checkout.payments.length > 0); },
+        paymentMethodDisabled(method) { return this.checkout.processing || this.methodUnavailable(method) || (method.type === 'credit' && !this.creditEligible); },
+        paymentMethodClasses(method) {
+            if (this.paymentMethodDisabled(method)) return { button: 'border-slate-300 bg-slate-100 text-slate-500', badge: 'bg-slate-200 text-slate-500', caption: 'text-slate-500' };
+            return this.selectedPaymentMethod?.id === method.id
+                ? { button: 'border-primary bg-primary text-black ring-4 ring-primary/30 hover:bg-primary-hover hover:border-primary', badge: 'bg-white text-primary', caption: 'text-black/85' }
+                : { button: 'border-primary bg-primary text-black hover:bg-primary-hover hover:border-primary', badge: 'bg-white text-primary', caption: 'text-black/85' };
+        },
         methodInitial(method) { return (method.name || '?').trim().charAt(0).toUpperCase(); },
         selectPaymentMethod(method) {
             if (this.methodUnavailable(method) || this.checkout.processing) return;
