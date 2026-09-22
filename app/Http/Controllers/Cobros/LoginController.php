@@ -23,6 +23,10 @@ class LoginController extends SharedLoginController
         // Entry always resolves CobrOS permissions, never a cross-product intended URL.
         $request->session()->forget('url.intended');
 
+        if ($request->user()->must_change_password) {
+            return redirect()->route('cobros.password.force');
+        }
+
         return redirect()->route('cobros.index');
     }
 

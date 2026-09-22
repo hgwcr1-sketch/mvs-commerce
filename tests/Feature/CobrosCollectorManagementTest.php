@@ -355,8 +355,8 @@ class CobrosCollectorManagementTest extends TestCase
             'password' => 'password123',
         ], $admin);
 
-        $this->assertSame($existing->id, $result->id);
-        $this->assertTrue($result->hasPermission('cobros.cobrar', $company));
+        $this->assertSame($existing->id, $result['user']->id);
+        $this->assertTrue($result['user']->hasPermission('cobros.cobrar', $company));
     }
 
     public function test_service_assign_branches_validates_company_scope(): void
@@ -443,11 +443,12 @@ class CobrosCollectorManagementTest extends TestCase
     {
         [$company, $admin, $owner] = $this->cupoContext($overrides);
         $service = app(CollectorManagementService::class);
-        $collector = $service->createCollector($company, [
+        $result = $service->createCollector($company, [
             'name' => 'Cobrador Test',
             'email' => 'cobtest@test.com',
             'password' => 'password123',
         ], $admin);
+        $collector = $result['user'];
 
         $company->refresh();
 

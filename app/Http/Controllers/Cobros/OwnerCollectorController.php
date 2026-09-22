@@ -43,19 +43,37 @@ class OwnerCollectorController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'password' => ['nullable', 'string', 'min:8'],
             'phone' => ['nullable', 'string', 'max:50'],
             'branch_ids' => ['nullable', 'array'],
             'branch_ids.*' => ['integer', 'exists:branches,id'],
         ]);
 
-        if (empty($data['password'])) {
-            $data['password'] = \Illuminate\Support\Str::random(16);
+        $result = $service->createCollector($company, $data, $request->user());
+
+        return back()
+            ->with('success', "Cobrador {$result['user']->name} registrado exitosamente.")
+            ->with('collector_plain_password', $result['plain_password'])
+            ->with('collector_email', $result['user']->email)
+            ->with('collector_name', $result['user']->name)
+            ->with('collector_phone', $result['user']->phone);
+    }
+
+    public function regenerateAccess(User $user, CollectorManagementService $service): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+
+        if ($service->isOwnerReadOnly($company)) {
+            abort(403, 'No puede modificar cobradores en modalidad de licencias individuales.');
         }
 
-        $user = $service->createCollector($company, $data, $request->user());
+        $plainPassword = $service->regenerateAccess($user, $company);
 
-        return back()->with('success', "Cobrador {$user->name} registrado exitosamente.");
+        return back()
+            ->with('success', "Nuevo acceso generado para {$user->name}.")
+            ->with('collector_plain_password', $plainPassword)
+            ->with('collector_email', $user->email)
+            ->with('collector_name', $user->name)
+            ->with('collector_phone', $user->phone);
     }
 
     public function toggle(User $user, CollectorManagementService $service): RedirectResponse

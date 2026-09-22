@@ -496,10 +496,72 @@ Gestión de cobradores controlada por la modalidad de licenciamiento de la empre
 - Sin migraciones nuevas. Sin push ni merge. Sin 1E-C, 2A ni pagos.
 - `tmp_generate_cobros_icons.php` intacto.
 
+### Completado: onboarding de credenciales temporales (2026-09-21)
+
+Cierre del onboarding de cobradores 1E-B: contraseña temporal, primer login
+forzado y envío por WhatsApp en ambas modalidades.
+
+**Archivos creados:**
+- `app/Services/Cobros/CollectorPasswordService.php` — generación segura de
+  contraseña temporal: 6 caracteres, 1 mayúscula + 1 minúscula + 4 dígitos,
+  sin caracteres especiales, Fisher-Yates shuffle.
+- `app/Http/Controllers/Cobros/ForceChangePasswordController.php` — vista y
+  POST de cambio obligatorio de contraseña en primer ingreso.
+- `resources/views/cobros/auth/force-change.blade.php` — vista standalone
+  con branding CobrOS, ojo mostrar/ocultar en ambos campos, validación
+  `min:8 + mixedCase + numbers + confirmed`.
+- `database/migrations/2026_09_21_000001_add_must_change_password_to_users_table.php` —
+  columna boolean `must_change_password` en tabla `users` (pendiente de
+  ejecutar en BD de desarrollo).
+- `tests/Feature/CobrosCollectorOnboardingTest.php` — 26 pruebas, 589
+  aserciones.
+
+**Archivos modificados:**
+- `app/Models/User.php` — atributo `must_change_password` en fillable y cast
+  boolean; cast `hashed` en password garantiza que la temporal nunca se
+  persista en texto plano.
+- `app/Services/Cobros/CollectorManagementService.php` — createCollector y
+  regenerateAccess generan contraseña temporal, setean `must_change_password`
+  y retornan `plain_password` solo en memoria.
+- `app/Http/Controllers/Cobros/LoginController.php` — `authenticated()`:
+  si `must_change_password` es true, redirige a `cobros.password.force`.
+- `app/Http/Controllers/Cobros/OwnerCollectorController.php` — store y
+  regenerateAccess envían `collector_plain_password`, `collector_email`,
+  `collector_name`, `collector_phone` por session flash.
+- `app/Http/Controllers/PlatformAdminController.php` — storeCollector y
+  regenerateCollectorAccess envían los mismos datos por session flash.
+- `resources/views/cobros/owner/collectors.blade.php` — muestra tarjeta
+  "Acceso generado" con contraseña visible, botón copiar, WhatsApp normalizado
+  con prefijo 506 y mensaje de bienvenida.
+- `resources/views/platform/show.blade.php` — misma tarjeta para Platform
+  Admin en modalidad individual.
+- `routes/web.php` — rutas `cobros.password.force` y `cobros.password.force.store`.
+- `tests/Feature/CobrosCollectorManagementTest.php` — adaptado al cambio de
+  firma de createCollector (retorna array con plain_password).
+
+**Comportamiento verificado:**
+- Contraseña temporal: 1 upper + 1 lower + 4 digits, exactamente 6 chars.
+- Validación de formato rechaza cadenas inválidas.
+- Hash bcrypt nunca almacena texto plano; `password` cast `hashed` en User.
+- Primer login → redirección a cambio obligatorio; tras cambiar, temporal
+  inoperativa; nueva contraseña funciona.
+- "Nuevo acceso" regenera temporal, invalida la anterior, setea must_change.
+- Ojo SVG en campos de contraseña (login y force-change) con aria-label.
+- WhatsApp: normalización 8 dígitos → 506+; mensaje con URL login, usuario,
+  temporal e instrucción de cambio; botón `wa.me` solo si hay teléfono.
+- Modalidad individual: Platform Admin crea/cambia; dueño solo lectura.
+- Modalidad company_cupo: dueño crea/cambia dentro del cupo.
+
+**Migración pendiente en BD de desarrollo:**
+- `2026_09_21_000001_add_must_change_password_to_users_table` — ejecutar
+  `php artisan migrate` antes de usar en BD real. Tests usan
+  `RefreshDatabase` y no lo necesitan.
+
 ### Validación
 
-- CobrosCollectorManagementTest: **23/23, 57 aserciones**.
-- CobrOS suite completa: **105/105, 658 aserciones**.
+- CobrosCollectorOnboardingTest: **26/26, 589 aserciones**.
+- CobrOS suite completa: **132/132, 1258 aserciones**.
+- Auth/Login regression: **27/27, 165 aserciones**.
 - Regresión CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test
   y responsive: **13/13, 78 aserciones**.
-- Sin cambios en rutas/auth/dashboard Commerce.
+- `git diff --check` limpio. Sin cambios en rutas/auth/dashboard Commerce.

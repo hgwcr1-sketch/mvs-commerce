@@ -137,6 +137,12 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
     });
     Route::post('/logout', [App\Http\Controllers\Cobros\LoginController::class, 'destroy'])
         ->middleware(App\Http\Middleware\Cobros\Authenticate::class)->name('logout');
+
+    // Forced password change — only requires auth + active user, not full CobrOS permissions.
+    Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, App\Http\Middleware\Cobros\EnsureActiveUser::class])->group(function () {
+        Route::get('/cambiar-contrasena', [App\Http\Controllers\Cobros\ForceChangePasswordController::class, 'show'])->name('password.force');
+        Route::post('/cambiar-contrasena', [App\Http\Controllers\Cobros\ForceChangePasswordController::class, 'store'])->name('password.force.store');
+    });
 });
 
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
@@ -156,6 +162,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'active.compa
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.toggle');
     Route::put('/owner/collectors/{user}/branches', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'updateBranches'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
+    Route::post('/owner/collectors/{user}/regenerate-access', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'regenerateAccess'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.regenerate');
     Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
         ->name('index');
 });
@@ -229,6 +237,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/empresas/{company}/cobradores', [PlatformAdminController::class, 'storeCollector'])->name('collectors.store');
     Route::patch('/empresas/{company}/cobradores/{user}/toggle', [PlatformAdminController::class, 'toggleCollector'])->name('collectors.toggle');
     Route::put('/empresas/{company}/cobradores/{user}/branches', [PlatformAdminController::class, 'updateCollectorBranches'])->name('collectors.branches');
+    Route::post('/empresas/{company}/cobradores/{user}/regenerate-access', [PlatformAdminController::class, 'regenerateCollectorAccess'])->name('collectors.regenerate');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
 });
 

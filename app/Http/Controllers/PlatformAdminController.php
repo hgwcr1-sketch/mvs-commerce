@@ -202,16 +202,34 @@ class PlatformAdminController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
-            'password' => ['nullable', 'string', 'min:8'],
+            'phone' => ['nullable', 'string', 'max:50'],
         ]);
 
-        if (empty($data['password'])) {
-            $data['password'] = \Illuminate\Support\Str::random(16);
-        }
+        $result = $collectorService->createCollector($company, $data, $request->user(), true);
 
-        $collectorService->createCollector($company, $data, $request->user(), true);
+        return back()
+            ->with('success', "Cobrador {$data['name']} registrado exitosamente.")
+            ->with('collector_plain_password', $result['plain_password'])
+            ->with('collector_email', $result['user']->email)
+            ->with('collector_name', $result['user']->name)
+            ->with('collector_phone', $result['user']->phone);
+    }
 
-        return back()->with('success', "Cobrador {$data['name']} registrado exitosamente.");
+    public function regenerateCollectorAccess(Request $request, Company $company, User $user, CollectorManagementService $collectorService): RedirectResponse
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+
+        $contract = $collectorService->getContract($company);
+        abort_unless($contract && $contract['license_mode'] === 'individual', 422, 'Solo disponible en modalidad de licencias individuales.');
+
+        $plainPassword = $collectorService->regenerateAccess($user, $company);
+
+        return back()
+            ->with('success', "Nuevo acceso generado para {$user->name}.")
+            ->with('collector_plain_password', $plainPassword)
+            ->with('collector_email', $user->email)
+            ->with('collector_name', $user->name)
+            ->with('collector_phone', $user->phone);
     }
 
     public function toggleCollector(Request $request, Company $company, User $user, CollectorManagementService $collectorService): RedirectResponse

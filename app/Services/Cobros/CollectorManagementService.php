@@ -15,6 +15,7 @@ class CollectorManagementService
 {
     public function __construct(
         private CompanyLicenseService $licenseService,
+        private CollectorPasswordService $passwordService,
     ) {}
 
     public function getContract(Company $company): ?array
@@ -120,7 +121,13 @@ class CollectorManagementService
         })->toArray();
     }
 
-    public function createCollector(Company $company, array $data, User $actor, bool $skipLimit = false): User
+    /**
+     * Create a collector and return ['user' => User, 'plain_password' => string].
+     *
+     * The plain password is only available at creation time and must be
+     * delivered to the admin (WhatsApp / clipboard) immediately.
+     */
+    public function createCollector(Company $company, array $data, User $actor, bool $skipLimit = false): array
     {
         if (! $skipLimit && ! $this->canCreateCollector($company)) {
             $contract = $this->getContract($company);
@@ -129,15 +136,21 @@ class CollectorManagementService
             ]);
         }
 
+        $plainPassword = $data['password'] ?? $this->passwordService->generate();
         $existingUser = User::where('email', $data['email'])->first();
 
         if ($existingUser) {
             $this->validateUserNotAlreadyCollector($existingUser, $company);
 
-            return DB::transaction(function () use ($company, $data, $existingUser) {
+            DB::transaction(function () use ($company, $data, $existingUser, $plainPassword) {
                 $role = $this->ensureCollectorRole($company);
                 $existingUser->companies()->syncWithoutDetaching([
                     $company->id => ['role_id' => $role->id],
+                ]);
+
+                $existingUser->update([
+                    'password' => $plainPassword,
+                    'must_change_password' => true,
                 ]);
 
                 if (! empty($data['branch_ids'])) {
@@ -146,20 +159,21 @@ class CollectorManagementService
                         ->pluck('id');
                     $existingUser->branches()->syncWithoutDetaching($branchIds);
                 }
-
-                return $existingUser;
             });
+
+            return ['user' => $existingUser->fresh(), 'plain_password' => $plainPassword];
         }
 
-        return DB::transaction(function () use ($company, $data) {
+        return DB::transaction(function () use ($company, $data, $plainPassword) {
             $role = $this->ensureCollectorRole($company);
 
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => $data['password'] ?? \Illuminate\Support\Str::random(16),
+                'password' => $plainPassword,
                 'phone' => $data['phone'] ?? null,
                 'is_active' => true,
+                'must_change_password' => true,
             ]);
 
             $user->companies()->attach($company->id, ['role_id' => $role->id]);
@@ -171,7 +185,7 @@ class CollectorManagementService
                 $user->branches()->syncWithoutDetaching($branchIds);
             }
 
-            return $user;
+            return ['user' => $user, 'plain_password' => $plainPassword];
         });
     }
 
@@ -203,6 +217,23 @@ class CollectorManagementService
     {
         $this->validateUserIsCollector($user, $company);
         $user->branches()->detach($branchId);
+    }
+
+    /**
+     * Generate a new temporary password for an existing collector.
+     * Returns the plain password for immediate delivery.
+     */
+    public function regenerateAccess(User $user, Company $company): string
+    {
+        $this->validateUserIsCollector($user, $company);
+
+        $plainPassword = $this->passwordService->generate();
+        $user->update([
+            'password' => $plainPassword,
+            'must_change_password' => true,
+        ]);
+
+        return $plainPassword;
     }
 
     private function ensureCollectorRole(Company $company): Role
