@@ -38,6 +38,7 @@ class EscPosSaleTicket
         $lines = array_merge($lines, $this->headerLines($data));
         $lines = array_merge($lines, $this->detailLines($data, $paperWidth));
         $lines = array_merge($lines, $this->totalsLines($data, $paperWidth));
+        $lines = array_merge($lines, $this->creditNoteLines($data, $paperWidth));
         $lines = array_merge($lines, $this->paymentLines($data, $paperWidth));
         $lines = array_merge($lines, $this->loyaltyLines($data, $paperWidth));
         $lines = array_merge($lines, $this->cashSessionLines($data));
@@ -203,6 +204,27 @@ class EscPosSaleTicket
         $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => '₡' . $data->totals['total'], 'emphasized' => true, 'size' => 'double'];
         $lines[] = ['type' => 'empty'];
         $lines[] = ['type' => 'separator'];
+
+        return $lines;
+    }
+
+    /**
+     * Notas de crédito aplicadas (4B-1/4B-3): número + monto únicamente.
+     * Nunca se imprime el código de aplicación ni hashes.
+     */
+    private function creditNoteLines(SaleReceiptData $data, string $paperWidth): array
+    {
+        if (empty($data->credit_note_applications)) {
+            return [];
+        }
+
+        $lines = [];
+        $align = $paperWidth === '58' ? self::ALIGN_LEFT : self::ALIGN_RIGHT;
+
+        $lines[] = ['type' => 'text', 'align' => self::ALIGN_CENTER, 'value' => 'Notas de crédito aplicadas', 'emphasized' => true];
+        foreach ($data->credit_note_applications as $application) {
+            $lines[] = ['type' => 'text', 'align' => $align, 'value' => $application['credit_note_number'].': ₡'.$application['amount']];
+        }
 
         return $lines;
     }

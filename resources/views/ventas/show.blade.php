@@ -19,7 +19,7 @@
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h3 class="text-lg font-bold text-amber-900">Nota de Crédito para Consumer Final</h3>
-                <p class="text-sm text-amber-800">Entregue este código al cliente. Por seguridad no podrá consultarse nuevamente.</p>
+                <p class="text-sm text-amber-800">Conserve este código. Será necesario para utilizar la nota de crédito. Por seguridad no podrá consultarse nuevamente.</p>
             </div>
             <button type="button" onclick="window.print()"
                 class="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-amber-300">

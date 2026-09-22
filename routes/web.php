@@ -230,6 +230,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('/pos/notas-credito/disponibles', [PosController::class, 'searchCreditNotes'])
             ->middleware('permission:notas_credito.aplicar')
             ->name('pos.credit-notes.available');
+        Route::post('/pos/notas-credito/validar-portador', [PosController::class, 'validateBearerCreditNote'])
+            ->middleware('permission:notas_credito.aplicar')
+            ->name('pos.credit-notes.bearer-validate');
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
             ->middleware(['permission:ventas.crear', 'pos.cash-session'])
             ->name('pos.checkout');

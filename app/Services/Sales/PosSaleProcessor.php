@@ -1195,8 +1195,12 @@ class PosSaleProcessor
      * número + código de NC Consumer Final (10 intentos / 60 s por
      * usuario + empresa). No bloquea permanentemente la NC ni altera
      * saldo/estado; el límite decae solo.
+     *
+     * Público porque la prevalidación de 4B-3 (`pos.credit-notes.bearer-validate`)
+     * comparte la misma superficie y la misma clave: el atacante no gana
+     * intentos extra combinando ambos endpoints.
      */
-    private function guardBearerAttemptRateLimit(int $companyId, int $userId): void
+    public function guardBearerAttemptRateLimit(int $companyId, int $userId): void
     {
         $key = 'cn-bearer:'.$companyId.':'.$userId;
 

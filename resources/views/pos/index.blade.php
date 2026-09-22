@@ -598,7 +598,7 @@
                                 <div class="rounded-2xl border border-[#B9BDC2] p-4">
                                     <div class="flex items-center justify-between"><h3 class="font-black">Pagos aplicados</h3><span x-show="checkout.payments.length > 1" class="rounded-full bg-[#B1922D]/15 px-3 py-1 text-xs font-black text-[#806817]">Pago mixto</span></div>
                                     <p x-show="checkout.payments.length === 0 && loyaltyRequestedPoints === 0 && totalCreditNotesApplied === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
-                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template><template x-for="(app, idx) in creditNotes.selected.filter(a => numberValue(a.amount) > 0)" :key="'nc-'+app.credit_note_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong class="text-emerald-800">Nota de crédito</strong><span class="font-black text-emerald-700" x-text="money(app.amount)"></span></div><p class="text-xs text-emerald-600" x-text="creditNotes.available.find(n => n.id === app.credit_note_id)?.number || 'NC'"></p></div><button type="button" @click="removeCreditNote(idx)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
+                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template><template x-for="(app, idx) in creditNotes.selected.filter(a => numberValue(a.amount) > 0)" :key="'nc-'+app.credit_note_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong class="text-emerald-800">Nota de crédito</strong><span class="font-black text-emerald-700" x-text="money(app.amount)"></span></div><p class="text-xs text-emerald-600"><span x-show="app.bearer" class="font-black">Portador · </span><span x-text="app.bearer ? app.credit_note_number : (creditNotes.available.find(n => n.id === app.credit_note_id)?.number || app.credit_note_number || 'NC')"></span></p></div><button type="button" @click="removeCreditNote(idx)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
                                 </div>
                             </section>
 
@@ -691,7 +691,46 @@
                                         </template>
                                     </div>
                                     @endcan
-                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-black ring-4 ring-amber-500/30 hover:bg-amber-600' : 'border-amber-500 bg-amber-500 text-black hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? paymentMethodActiveClasses(method) : paymentMethodClasses(method))" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-primary'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    @can('notas_credito.aplicar')
+                                    @if($company->consumerFinalCreditNotesEnabled())
+                                    <div class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div>
+                                                <h4 class="text-sm font-black text-[#111111]">Nota de crédito sin cliente</h4>
+                                                <p class="text-xs text-slate-500">Canje con el código entregado al cliente.</p>
+                                            </div>
+                                            <button type="button" @click="toggleBearerPanel" :disabled="checkout.processing" class="min-h-11 shrink-0 rounded-xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-black text-[#806817] hover:bg-primary/20 disabled:opacity-50">
+                                                <span x-text="bearerNC.open ? 'Cerrar' : 'Añadir'"></span>
+                                            </button>
+                                        </div>
+                                        <div x-show="bearerNC.open" class="mt-3 space-y-3 rounded-xl border border-[#B9BDC2] bg-slate-50/70 p-3 sm:p-4">
+                                            <input type="text" inputmode="text" autocomplete="off" maxlength="60" placeholder="Número (ej. NC-00000001)" x-model="bearerNC.number" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
+                                            <div class="flex items-center gap-2">
+                                                <input :type="bearerNC.showCode ? 'text' : 'password'" inputmode="text" autocomplete="off" maxlength="40" placeholder="Código (ej. XXXX-XXXX-XXXX)" x-model="bearerNC.code" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
+                                                <button type="button" @click="bearerNC.showCode = !bearerNC.showCode" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-[#806817] hover:bg-slate-50">
+                                                    <span x-text="bearerNC.showCode ? 'Ocultar' : 'Mostrar'"></span>
+                                                </button>
+                                            </div>
+                                            <div>
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <label for="bearer-amount" class="text-xs font-black uppercase text-slate-500">Monto a aplicar</label>
+                                                    <button type="button" @click="bearerNC.amount = String(pendingBalance)" :disabled="checkout.processing || bearerNC.validating" class="text-xs font-bold text-[#806817] underline">Usar saldo pendiente</button>
+                                                </div>
+                                                <div class="mt-1 flex min-w-0 items-center rounded-lg border border-slate-300 bg-white px-3">
+                                                    <span class="shrink-0 text-lg font-black text-[#806817]">₡</span>
+                                                    <input id="bearer-amount" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0" x-model="bearerNC.amount" :disabled="checkout.processing || bearerNC.validating" class="min-w-0 w-full border-0 bg-transparent py-3 pl-2 text-right text-lg font-black text-[#111111] focus:ring-0 sm:text-xl">
+                                                </div>
+                                            </div>
+                                            <button type="button" @click="applyBearerNote" :disabled="!bearerCanValidate" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <span x-show="!bearerNC.validating">Aplicar nota de crédito</span>
+                                                <span x-show="bearerNC.validating">Validando…</span>
+                                            </button>
+                                            <p x-show="bearerNC.error" x-text="bearerNC.error" class="text-xs font-semibold text-red-600" role="alert"></p>
+                                        </div>
+                                    </div>
+                                    @endif
+                                    @endcan
                                 </div>
 
                                 <div x-show="selectedPaymentMethod" x-transition class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4">
@@ -947,6 +986,10 @@ document.addEventListener('alpine:init', () => {
         loyaltyRequestNumber: 0,
         loyalty: { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' },
         creditNotes: { loading: false, available: [], selected: [], error: '', requestNumber: 0 },
+        // 4B-3: NC Consumer Final por número + código (portador). El código vive
+        // únicamente en esta memoria Alpine mientras se prepara el cobro; nunca se
+        // renderiza al DOM, ni se persiste, ni viaja por URL ni por almacenamiento.
+        bearerNC: { open: false, validating: false, showCode: false, number: '', code: '', amount: '', error: '' },
         // R02-B: escáner por cámara (capa de entrada; sin estado propio de carrito).
         cameraScannerAvailable: false,
         cameraScannerOpen: false,
@@ -1144,6 +1187,18 @@ document.addEventListener('alpine:init', () => {
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
         get totalCreditNotesApplied() { return this.decimal4(this.creditNotes.selected.reduce((sum, app) => sum + this.numberValue(app.amount), 0)); },
         get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && !this.loyalty.loading && !this.loyaltyInputError && (this.checkout.payments.length > 0 || this.loyaltyRequestedPoints > 0 || this.totalCreditNotesApplied > 0) && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
+        // 4B-3: el botón "Aplicar" del panel portador solo se habilita con
+        // entrada coherente; la validación real (saldo/vencimiento/estado)
+        // ocurre en el servidor durante la prevalidación Y en checkout.
+        get bearerCanValidate() {
+            return !this.checkout.processing &&
+                !this.bearerNC.validating &&
+                /^NC-\d+$/i.test(this.bearerNC.number.trim()) &&
+                /^[A-Za-z0-9-]{1,40}$/.test(this.bearerNC.code.trim()) &&
+                /^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim()) &&
+                this.numberValue(this.bearerNC.amount) > 0 &&
+                this.numberValue(this.bearerNC.amount) <= this.pendingBalance;
+        },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
@@ -1439,6 +1494,14 @@ document.addEventListener('alpine:init', () => {
             this.$nextTick(() => this.focusSearch());
         },
         unsupportedPaymentMethod(method) { return method.type === 'loyalty_points'; },
+        paymentMethodClasses(method) {
+            if (this.unsupportedPaymentMethod(method)) return 'border-slate-300 bg-slate-100 text-slate-500';
+            return 'border-primary bg-primary text-black hover:bg-primary-hover';
+        },
+        paymentMethodActiveClasses(method) {
+            if (this.unsupportedPaymentMethod(method)) return 'border-slate-300 bg-slate-100 text-slate-500';
+            return 'border-[#111111] bg-primary text-black ring-4 ring-primary/30 hover:bg-primary-hover';
+        },
         methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0 || (method.type === 'credit' && this.checkout.payments.length > 0); },
         methodInitial(method) { return (method.name || '?').trim().charAt(0).toUpperCase(); },
         selectPaymentMethod(method) {
@@ -1489,7 +1552,8 @@ document.addEventListener('alpine:init', () => {
             if (!this.checkoutCanConfirm) return;
             this.checkout.processing = true;
             this.checkout.error = '';
-            const creditNoteApplications = this.creditNotes.selected.filter(app => this.numberValue(app.amount) > 0).map(app => ({ credit_note_id: app.credit_note_id, amount: String(app.amount) }));
+            const creditNoteApplications = this.creditNotes.selected.filter(app => !app.bearer && this.numberValue(app.amount) > 0).map(app => ({ credit_note_id: app.credit_note_id, amount: String(app.amount) }));
+            const creditNoteBearerApplications = this.creditNotes.selected.filter(app => app.bearer && this.numberValue(app.amount) > 0).map(app => ({ credit_note_number: app.credit_note_number, application_code: app.code, amount: String(app.amount) }));
             try {
                 const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout', [], false)) }}, {
                     method: 'POST',
@@ -1508,6 +1572,7 @@ document.addEventListener('alpine:init', () => {
                         ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, received_amount_usd, change_currency, reference }) => ({ payment_method_id, amount, received_amount, ...(received_amount_usd ? { received_amount_usd, change_currency } : {}), reference })),
                         ...(creditNoteApplications.length > 0 ? { credit_note_applications: creditNoteApplications } : {}),
+                        ...(creditNoteBearerApplications.length > 0 ? { credit_note_bearer_applications: creditNoteBearerApplications } : {}),
                         items: this.cart.map(item => ({
                             product_id: item.id,
                             quantity: item.quantity,
@@ -1652,7 +1717,7 @@ document.addEventListener('alpine:init', () => {
                 const notes = await response.json();
                 if (currentRequest !== this.creditNotes.requestNumber) return;
                 const validIds = new Set(notes.map(n => n.id));
-                this.creditNotes.selected = this.creditNotes.selected.filter(app => validIds.has(app.credit_note_id));
+                this.creditNotes.selected = this.creditNotes.selected.filter(app => app.bearer || validIds.has(app.credit_note_id));
                 this.creditNotes.available = notes;
                 this.creditNotes.error = '';
                 this.creditNotes.loading = false;
@@ -1679,6 +1744,61 @@ document.addEventListener('alpine:init', () => {
         },
         removeCreditNote(index) {
             this.creditNotes.selected.splice(index, 1);
+        },
+        // ── 4B-3: NC Consumer Final por número + código (portador) ──
+        toggleBearerPanel() {
+            if (this.checkout.processing) return;
+            if (this.bearerNC.open) {
+                this.closeBearerPanel();
+            } else {
+                this.openBearerPanel();
+            }
+        },
+        openBearerPanel() {
+            this.bearerNC.open = true;
+            this.bearerNC.error = '';
+            this.bearerNC.amount = String(this.pendingBalance);
+        },
+        closeBearerPanel() {
+            this.bearerNC.open = false;
+            this.bearerNC.validating = false;
+            this.bearerNC.showCode = false;
+            this.bearerNC.number = '';
+            this.bearerNC.code = '';
+            this.bearerNC.amount = '';
+            this.bearerNC.error = '';
+        },
+        async applyBearerNote() {
+            if (!this.bearerCanValidate || this.bearerNC.validating) return;
+            this.bearerNC.validating = true;
+            this.bearerNC.error = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.credit-notes.bearer-validate', [], false)) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({
+                        credit_note_number: this.bearerNC.number.trim(),
+                        application_code: this.bearerNC.code.trim(),
+                        amount: String(this.bearerNC.amount).trim(),
+                    }),
+                });
+                const payload = await this.readFetchResponse(response);
+                this.creditNotes.selected.push({
+                    credit_note_id: payload.credit_note_id,
+                    credit_note_number: payload.credit_note_number,
+                    amount: String(this.bearerNC.amount).trim(),
+                    balance: String(payload.balance),
+                    issued_at: payload.issued_at,
+                    expires_at: payload.expires_at,
+                    bearer: true,
+                    code: this.bearerNC.code.trim(),
+                });
+                this.closeBearerPanel();
+            } catch (error) {
+                this.bearerNC.error = error.message || 'No se pudo validar la nota de crédito.';
+            } finally {
+                this.bearerNC.validating = false;
+            }
         },
         applyMaxCreditNote(index) {
             const app = this.creditNotes.selected[index];
@@ -1857,7 +1977,9 @@ document.addEventListener('alpine:init', () => {
         this.notice = '';
     }
 
-    this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
+    const preservedBearer = this.creditNotes.selected.filter(app => app.bearer);
+
+    this.creditNotes = { loading: false, available: [], selected: preservedBearer, error: '', requestNumber: 0 };
     this.closeCustomerResults();
     this.fetchCreditNotes();
 },
@@ -1865,7 +1987,8 @@ document.addEventListener('alpine:init', () => {
             this.customerId = null;
             this.selectedCustomer = null;
             this.suspended.customerInvalid = false;
-            this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
+            const preservedBearer = this.creditNotes.selected.filter(app => app.bearer);
+            this.creditNotes = { loading: false, available: [], selected: preservedBearer, error: '', requestNumber: 0 };
             this.closeCustomerResults();
             this.$nextTick(() => this.$refs.customerSearchInput.focus());
         },
