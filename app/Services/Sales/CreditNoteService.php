@@ -77,6 +77,30 @@ class CreditNoteService
     }
 
     /**
+     * Normaliza estrictamente un número de NC digitado por el cajero.
+     *
+     * Solo acepta el sufijo numérico con o sin prefijo "NC-" (case-insensitive):
+     *   "4" | "00000004" | "NC-00000004" | "nc-00000004" → "NC-00000004"
+     *
+     * Sigue el formato canónico NC-%08d (CompanySequence::nextCreditNoteNumber).
+     * Cualquier entrada con caracteres no numéricos se rechaza con el error
+     * genérico: nunca se extraen dígitos de texto arbitrario ni se permite un
+     * formato distinto al canónico.
+     */
+    public static function normalizeCreditNoteNumber(string $value): string
+    {
+        $value = strtoupper(trim($value));
+
+        if (preg_match('/^(?:NC-)?(\d{1,16})$/', $value, $matches) !== 1) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
+            ]);
+        }
+
+        return sprintf('NC-%08d', (int) $matches[1]);
+    }
+
+    /**
      * Genera un código de aplicación secreto de 12 caracteres con CSPRNG.
      *
      * Formato visible XXXX-XXXX-XXXX. Distribución uniforme vía random_int
@@ -259,7 +283,7 @@ class CreditNoteService
     public const BEARER_GENERIC_ERROR = 'No se pudo validar la nota de crédito.';
 
     /**
-     * Autoriza una NC Consumer Final por número + código secreto + monto.
+     * Autoriza una NC Consumer Final por número + código secreto + monto (opcional).
      *
      * Es una PREvalidación sin locks: sirve para resolver de forma segura el
      * credit_note_id canónico antes del checkout. La validación definitiva
@@ -267,12 +291,14 @@ class CreditNoteService
      * de la transacción de checkout bajo lock (applyBatchToSale).
      *
      * Reglas:
-     *  - lookup estricto por company_id + credit_note_number (multitenancy).
+     *  - lookup estricto por company_id + numero normalizado (multitenancy).
      *  - solo NC Consumer Final (customer_id null, application_code_hash presente).
      *  - comparación constant-time hash_equals del código normalizado.
      *  - empresa debe tener credit_note_consumer_final activo (toggle OFF = rechazo).
      *  - estado aplicable, saldo > 0, vigente (expires_at null o futuro).
-     *  - monto > 0 y <= saldo disponible.
+     *  - si se envía monto: monto > 0 y <= saldo disponible. Sin monto, se
+     *    resuelven únicamente credenciales y se devuelve la nota con su saldo
+     *    para que la UI proponga MIN(saldo NC, pendiente venta) sin aplicarlo.
      *
      * Toda falla devuelve el error genérico; jamás el hash ni el código.
      */
@@ -280,15 +306,17 @@ class CreditNoteService
         int $companyId,
         string $creditNoteNumber,
         string $applicationCode,
-        string $amount,
+        ?string $amount = null,
     ): CreditNote {
         $candidateHash = self::applicationCodeHash($applicationCode);
         $dummyHash = str_repeat('f', 64);
-        $requested = bcadd((string) $amount, '0', self::SCALE);
+        $requested = $amount === null
+            ? null
+            : bcadd((string) $amount, '0', self::SCALE);
 
         $note = CreditNote::query()
             ->where('company_id', $companyId)
-            ->where('credit_note_number', trim($creditNoteNumber))
+            ->where('credit_note_number', self::normalizeCreditNoteNumber($creditNoteNumber))
             ->first();
 
         if ($note === null || $note->isConsumerFinal() === false || $note->application_code_hash === null) {
@@ -315,8 +343,9 @@ class CreditNoteService
         if (in_array($note->status, [CreditNote::STATUS_VOIDED, CreditNote::STATUS_APPLIED], true)
             || bccomp((string) $note->balance, '0', self::SCALE) <= 0
             || $note->isExpired()
-            || bccomp($requested, '0', self::SCALE) <= 0
-            || bccomp($requested, (string) $note->balance, self::SCALE) > 0) {
+            || ($requested !== null
+                && (bccomp($requested, '0', self::SCALE) <= 0
+                    || bccomp($requested, (string) $note->balance, self::SCALE) > 0))) {
             throw ValidationException::withMessages([
                 'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
             ]);

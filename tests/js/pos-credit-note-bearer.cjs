@@ -17,7 +17,7 @@ const fetch = (url, options) => {
     const path = String(url);
     if (path.includes('validar-portador')) {
         const body = options ? JSON.parse(options.body) : {};
-        if (body.application_code === 'WRONG-0000-0000') {
+        if (String(body.application_code || '').includes('WRONG')) {
             return Promise.resolve({ ok: false, redirected: false, headers: { get: () => 'application/json' }, json: () => Promise.resolve({ message: 'No se pudo validar la nota de crédito.' }) });
         }
         return Promise.resolve({ ok: true, redirected: false, headers: { get: () => 'application/json' }, json: () => Promise.resolve(bearerPayload) });
@@ -39,69 +39,126 @@ pos.$nextTick = (fn) => fn();
 pos.cart = [{ id: 1, quantity: 1, sale_price: 10000, tax_rate: 0, _discount: 0, _discountType: 'fixed', _unitPrice: '' }];
 
 (async () => {
-    // 1) Gating del botón "Aplicar" (bearerCanValidate).
-    pos.bearerNC.number = 'NC-00000001';
-    pos.bearerNC.code = 'ABCD-EFGH-IJKL';
-    pos.bearerNC.amount = '10000';
-    assert.equal(pos.bearerCanValidate, true);
-    for (const [n, c, a] of [['', 'ABCD-EFGH-IJKL', '10000'], ['NC-00000001', '', '10000'], ['NC-00000001', 'ABCD-EFGH-IJKL', ''], ['XYZ-00000001', 'ABCD-EFGH-IJKL', '10000'], ['NC-00000001', 'ABCD-EFGH-IJKL', '0'], ['NC-00000001', 'ABCD-EFGH-IJKL', '10001'], ['NC-00000001', 'ABCD-EFGH-IJKL', '10000.00001'], ['NC-00000001', 'INVALID_CODE_WITH_MANY_REPEATED_CHARACTERS_123456789', '10000']]) {
-        pos.bearerNC.number = n; pos.bearerNC.code = c; pos.bearerNC.amount = a;
-        assert.equal(pos.bearerCanValidate, false, JSON.stringify([n, c, a]));
-    }
-    pos.bearerNC.number = 'NC-00000001'; pos.bearerNC.code = 'ABCD-EFGH-IJKL'; pos.bearerNC.amount = '10000';
-    pos.checkout.processing = true;
-    assert.equal(pos.bearerCanValidate, false);
-    pos.checkout.processing = false;
+    // 1) Prefijo NC- fijo: la UI muestra "NC-" estático y el input solo edita
+    //    el sufijo numérico.
+    assert.ok(html.includes('>NC-</span>'));
+    pos.sanitizeBearerNumber('NC-00000004');
+    assert.equal(pos.bearerNC.number, '00000004');
+    assert.equal(pos.bearerNormalizedNumber, 'NC-00000004');
+    pos.sanitizeBearerNumber('4');
+    assert.equal(pos.bearerNormalizedNumber, 'NC-00000004');
+    pos.sanitizeBearerNumber('00000004');
+    assert.equal(pos.bearerNormalizedNumber, 'NC-00000004');
+    pos.sanitizeBearerNumber('nc-00000004');
+    assert.equal(pos.bearerNormalizedNumber, 'NC-00000004');
 
-    // 2) El panel abre con el saldo pendiente y cierra limpiando el código.
+    // 2) Normalización estricta: texto arbitrario no se convierte en número.
+    pos.sanitizeBearerNumber('ABC123');
+    assert.equal(pos.bearerNormalizedNumber, null);
+    pos.sanitizeBearerNumber('');
+    assert.equal(pos.bearerNormalizedNumber, null);
+
+    // 3) Código autoformateado en mayúsculas con guiones cada 4.
+    pos.sanitizeBearerCode('6cnua5a3uj28');
+    assert.equal(pos.bearerNC.code, '6CNU-A5A3-UJ28');
+    assert.equal(pos.bearerRawCode, '6CNUA5A3UJ28');
+    pos.sanitizeBearerCode('6CNU-A5A3-UJ28');
+    assert.equal(pos.bearerRawCode, '6CNUA5A3UJ28');
+    pos.sanitizeBearerCode('ABCDEFGHIJKLMNOP');
+    assert.equal(pos.bearerRawCode, 'ABCDEFGHIJKL');
+    assert.equal(pos.bearerCodeValid, true);
+
+    // 4) Validar credenciales SIN monto previo.
     pos.openBearerPanel();
-    assert.equal(pos.bearerNC.open, true);
-    assert.equal(pos.bearerNC.amount, '10000');
-    pos.bearerNC.code = 'ABCD-EFGH-IJKL';
-    pos.closeBearerPanel();
-    assert.equal(pos.bearerNC.open, false);
-    assert.equal(pos.bearerNC.code, '');
+    assert.equal(pos.bearerNC.amount, '');
+    pos.sanitizeBearerNumber('1');
+    pos.sanitizeBearerCode('ABCDEFGHIJKL');
+    assert.equal(pos.bearerCanValidate, true);
+    assert.equal(pos.bearerCanApply, false);
+    await pos.validateBearerNote();
+    const validateCall = calls[calls.length - 1];
+    assert.ok(validateCall.url.includes('validar-portador'));
+    assert.ok(!('amount' in (validateCall.body || {})), 'la validación no debe enviar monto');
+    assert.ok(pos.bearerNC.validated);
+    assert.equal(pos.bearerNC.amount, '10000'); // MIN(saldo 10000, pendiente 10000)
 
-    // 3) Aplicar NC valida, agrega la línea portador y limpia el formulario,
-    //    dejando el código únicamente en memoria.
-    pos.bearerNC.number = 'NC-00000001';
-    pos.bearerNC.code = 'ABCD-EFGH-IJKL';
+    // 5) Monto automático editable hacia abajo y límites.
+    pos.bearerNC.amount = '2000';
+    assert.equal(pos.bearerCanApply, true);
+    pos.bearerNC.amount = '10001';
+    assert.equal(pos.bearerCanApply, false); // monto > saldo NC
+    pos.bearerNC.amount = '0';
+    assert.equal(pos.bearerCanApply, false); // monto <= 0
+    pos.bearerNC.amount = '';
+    assert.equal(pos.bearerCanApply, false);
     pos.bearerNC.amount = '10000';
+    assert.equal(pos.bearerCanApply, true);
+
+    // 6) Aplicación parcial conserva saldo y mismo código.
     await pos.applyBearerNote();
     assert.equal(pos.creditNotes.selected.length, 1);
     assert.equal(pos.creditNotes.selected[0].bearer, true);
     assert.equal(pos.creditNotes.selected[0].credit_note_number, 'NC-00000001');
-    assert.equal(pos.creditNotes.selected[0].code, 'ABCD-EFGH-IJKL');
-    assert.equal(pos.bearerNC.open, false);
-    assert.equal(pos.bearerNC.number, '');
-    assert.equal(pos.bearerNC.code, '');
+    assert.equal(pos.creditNotes.selected[0].code, 'ABCDEFGHIJKL');
+    assert.equal(pos.creditNotes.selected[0].amount, '10000');
     assert.equal(pos.totalCreditNotesApplied, 10000);
-    assert.equal(pos.pendingBalance, 0);
+    assert.equal(pos.bearerNC.open, false);
 
-    // 4) Error genérico mostrado cuando la prevalidación falla (saldo liberado).
-    assert.equal(pos.creditNotes.selected.filter(a => a.bearer).length, 1);
+    // 7) Siguiente uso recalcula MIN(saldo actual NC, pendiente venta).
     pos.creditNotes.selected = [];
-    assert.equal(pos.pendingBalance, 10000);
+    bearerPayload.balance = '56274.0000';
+    pos.cart = [{ id: 1, quantity: 1, sale_price: 71981, tax_rate: 0, _discount: 0, _discountType: 'fixed', _unitPrice: '' }];
+    assert.equal(pos.pendingBalance, 71981);
     pos.openBearerPanel();
-    assert.equal(pos.bearerNC.open, true);
-    pos.bearerNC.number = 'NC-00000002'; pos.bearerNC.code = 'WRONG-0000-0000'; pos.bearerNC.amount = '5000';
-    assert.equal(pos.bearerCanValidate, true);
+    pos.sanitizeBearerNumber('NC-00000004');
+    pos.sanitizeBearerCode('6CNUA5A3UJ28');
+    await pos.validateBearerNote();
+    assert.equal(pos.bearerNC.validated.balance, '56274.0000');
+    assert.equal(pos.bearerNC.amount, '56274'); // MIN(56274, 71981)
+
+    // 7b) El cajero reduce el monto: se aplica el menor y el resto queda en saldo.
+    pos.bearerNC.amount = '20000';
+    assert.equal(pos.bearerSaldoDespues, '36274');
     await pos.applyBearerNote();
+    assert.equal(pos.creditNotes.selected[0].amount, '20000');
+    assert.equal(pos.pendingBalance, 71981 - 20000);
+
+    // 7c) Segunda venta con el saldo restante: recálculo automático.
+    pos.creditNotes.selected = [];
+    pos.cart = [{ id: 1, quantity: 1, sale_price: 15000, tax_rate: 0, _discount: 0, _discountType: 'fixed', _unitPrice: '' }];
+    bearerPayload.balance = '36274.0000';
+    pos.openBearerPanel();
+    pos.sanitizeBearerNumber('NC-00000004');
+    pos.sanitizeBearerCode('6CNUA5A3UJ28');
+    await pos.validateBearerNote();
+    assert.equal(pos.bearerNC.amount, '15000'); // MIN(36274, 15000)
+    await pos.applyBearerNote();
+    assert.equal(pos.creditNotes.selected[0].amount, '15000');
+
+    // 8) Error genérico: código incorrecto (sin línea agregada).
+    pos.creditNotes.selected = [];
+    pos.cart = [{ id: 1, quantity: 1, sale_price: 10000, tax_rate: 0, _discount: 0, _discountType: 'fixed', _unitPrice: '' }];
+    pos.openBearerPanel();
+    pos.sanitizeBearerNumber('NC-00000002');
+    pos.sanitizeBearerCode('WRONG00000000');
+    await pos.validateBearerNote();
     assert.equal(pos.bearerNC.error, 'No se pudo validar la nota de crédito.');
+    assert.equal(pos.bearerNC.validated, null);
     assert.equal(pos.creditNotes.selected.filter(a => a.bearer).length, 0);
     assert.equal(pos.bearerNC.open, true);
     pos.closeBearerPanel();
 
-    // 4b) Re-aplicación de la nota válida para dejarla preparada en memoria.
+    // 9) Preparar línea completa para el checkout.
     pos.openBearerPanel();
-    pos.bearerNC.number = 'NC-00000001'; pos.bearerNC.code = 'ABCD-EFGH-IJKL'; pos.bearerNC.amount = '10000';
+    pos.sanitizeBearerNumber('NC-00000001');
+    pos.sanitizeBearerCode('ABCDEFGHIJKL');
+    bearerPayload.balance = '10000.0000';
+    await pos.validateBearerNote();
     await pos.applyBearerNote();
     assert.equal(pos.creditNotes.selected.length, 1);
-    assert.equal(pos.creditNotes.selected[0].bearer, true);
     assert.equal(pos.totalCreditNotesApplied, 10000);
 
-    // 5) La línea preparada nunca expone el código y el payload checkout usa
-    //    los campos secretos únicamente en el cuerpo de la petición.
+    // 10) El payload checkout usa el código únicamente en el cuerpo.
     pos.fetch = fetch;
     pos.creditNotes.selected.push({ credit_note_id: 9, credit_note_number: 'NC-00000009', amount: '10000', balance: '10000.0000', issued_at: '2026-01-01T10:00:00-06:00', expires_at: null, bearer: false });
     pos.cart = [{ id: 1, quantity: 2, sale_price: 10000, tax_rate: 0, _discount: 0, _discountType: 'fixed', _unitPrice: '' }];
@@ -112,15 +169,14 @@ pos.cart = [{ id: 1, quantity: 1, sale_price: 10000, tax_rate: 0, _discount: 0, 
     await pos.confirmCheckout();
     const checkoutCall = calls.find(c => c.url.includes('cobrar'));
     assert.ok(checkoutCall);
-    assert.deepEqual(checkoutCall.body.credit_note_bearer_applications, [{ credit_note_number: 'NC-00000001', application_code: 'ABCD-EFGH-IJKL', amount: '10000' }]);
+    assert.deepEqual(checkoutCall.body.credit_note_bearer_applications, [{ credit_note_number: 'NC-00000001', application_code: 'ABCDEFGHIJKL', amount: '10000' }]);
     assert.deepEqual(checkoutCall.body.credit_note_applications, [{ credit_note_id: 9, amount: '10000' }]);
-    // Tras confirmar, el código desaparece de toda la memoria de la terminal.
     assert.ok(!pos.creditNotes.selected.some(a => a.bearer));
-    assert.ok(!JSON.stringify(pos).includes('ABCD-EFGH-IJKL'), 'el código no debe permanecer en el estado tras confirmar');
+    assert.ok(!JSON.stringify(pos).includes('ABCDEFGHIJKL'), 'el código no debe permanecer en el estado tras confirmar');
 
-    // 6) El secreto nunca se persiste ni se vincula como salida: solo viaja en el
-    //    cuerpo de la petición y se captura en el campo enmascarado.
-    assert.ok(html.includes('x-model="bearerNC.code"'));
+    // 11) El secreto nunca se persiste ni se vincula como salida: solo viaja en
+    //     el cuerpo de la petición y se captura en el campo enmascarado.
+    assert.ok(html.includes(':value="bearerNC.code"'));
     assert.ok(!html.includes('x-text="bearerNC.code"'));
     assert.ok(!html.includes('localStorage'));
     assert.ok(!html.includes('sessionStorage'));

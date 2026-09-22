@@ -291,6 +291,22 @@ class CreditNoteBearerApplicationTest extends TestCase
         return ['credit_note_number' => $number, 'application_code' => $code, 'amount' => $amount];
     }
 
+    private function bearerValidate(User $user, Company $company, Branch $branch, string $number, string $code, ?string $amount = null): TestResponse
+    {
+        $body = [
+            'credit_note_number' => $number,
+            'application_code' => $code,
+        ];
+
+        if ($amount !== null) {
+            $body['amount'] = $amount;
+        }
+
+        return $this->actingAs($user)
+            ->withSession($this->activeSession($company, $branch))
+            ->postJson(route('pos.credit-notes.bearer-validate'), $body);
+    }
+
     private function paymentMethod(Company $company, string $type)
     {
         return \App\Models\PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
@@ -873,7 +889,7 @@ class CreditNoteBearerApplicationTest extends TestCase
         [$companyA, $branchA, $userA] = $this->context('Empresa A');
         [$companyB, $branchB, $userB, $productB] = $this->context('Empresa B');
 
-        $sharedNumber = 'NC-COMPARTIDO-42';
+        $sharedNumber = 'NC-00000001';
 
         [$noteA, $codeA] = $this->consumerFinalNote($companyA, $branchA, $userA, 10000, ['credit_note_number' => $sharedNumber]);
         [$noteB, $codeB] = $this->consumerFinalNote($companyB, $branchB, $userB, 10000, ['credit_note_number' => $sharedNumber]);
@@ -976,5 +992,43 @@ class CreditNoteBearerApplicationTest extends TestCase
         $note->refresh();
         $this->assertSame('0.0000', (string) $note->balance);
         $this->assertSame(CreditNote::STATUS_APPLIED, $note->status);
+    }
+
+    public function test_prevalidate_without_amount_returns_balance(): void
+    {
+        [$company, $branch, $user] = $this->context('Empresa', ['pos.acceder', 'notas_credito.aplicar']);
+        $company->update(['credit_note_consumer_final' => true]);
+        [$note, $code] = $this->consumerFinalNote($company, $branch, $user, 10000);
+
+        $response = $this->bearerValidate($user, $company, $branch, $note->credit_note_number, $code);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('credit_note_id', $note->id)
+            ->assertJsonPath('credit_note_number', $note->credit_note_number)
+            ->assertJsonPath('balance', (string) $note->balance);
+
+        $note->refresh();
+        $this->assertSame('10000.0000', (string) $note->balance);
+        $this->assertSame(CreditNote::STATUS_ISSUED, $note->status);
+    }
+
+    public function test_prevalidate_number_variants_authorize_without_amount(): void
+    {
+        [$company, $branch, $user] = $this->context('Empresa', ['pos.acceder', 'notas_credito.aplicar']);
+        $company->update(['credit_note_consumer_final' => true]);
+        [$note, $code] = $this->consumerFinalNote($company, $branch, $user, 10000);
+
+        $digits = Str::after($note->credit_note_number, 'NC-');
+        $this->assertNotEmpty($digits);
+
+        $response = $this->bearerValidate($user, $company, $branch, $digits, $code);
+        $response->assertOk()->assertJsonPath('credit_note_id', $note->id);
+
+        $response = $this->bearerValidate($user, $company, $branch, strtolower('nc-'.$digits), $code);
+        $response->assertOk()->assertJsonPath('credit_note_id', $note->id);
+
+        $this->bearerValidate($user, $company, $branch, 'NC-ABC-123', $code)
+            ->assertUnprocessable()->assertJsonPath('message', self::GENERIC);
     }
 }
