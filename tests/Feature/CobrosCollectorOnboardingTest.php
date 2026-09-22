@@ -199,6 +199,65 @@ class CobrosCollectorOnboardingTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
+     | FULL FLOW: temp password → login → force change → access
+     | --------------------------------------------------------------------- */
+
+    public function test_full_flow_temp_login_force_change_access(): void
+    {
+        [$company, $admin] = $this->cupoContext();
+        $service = app(CollectorManagementService::class);
+
+        // Step 1: Create collector — generates temp password
+        $result = $service->createCollector($company, [
+            'name' => 'Flow Test',
+            'email' => 'flow@test.com',
+        ], $admin);
+        $tempPassword = $result['plain_password'];
+        $collector = $result['user'];
+
+        $this->assertSame(6, strlen($tempPassword));
+        $this->assertTrue($collector->must_change_password);
+
+        // Step 2: Login with temp password → forced to change
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => $tempPassword,
+        ])->assertRedirect(route('cobros.password.force'));
+
+        // Step 3: Force change view renders
+        $this->actingAs($collector)->get(route('cobros.password.force'))
+            ->assertOk()
+            ->assertSee('Crea tu nueva contraseña');
+
+        // Step 4: Submit new password
+        $this->actingAs($collector)->post(route('cobros.password.force.store'), [
+            'password' => 'NuevaClave1',
+            'password_confirmation' => 'NuevaClave1',
+        ])->assertRedirect(route('cobros.index'));
+
+        // Step 5: Verify flag cleared and new password works
+        $collector->refresh();
+        $this->assertFalse($collector->must_change_password);
+        $this->assertTrue(Hash::check('NuevaClave1', $collector->password));
+
+        // Step 6: Temp password no longer works
+        Auth::logout();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => $tempPassword,
+        ])->assertRedirect(route('cobros.login'));
+        $this->assertGuest();
+
+        // Step 7: New password grants access
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => 'NuevaClave1',
+        ]);
+        $this->assertAuthenticated();
+    }
+
+    /* ---------------------------------------------------------------------
      | PLATFORM ADMIN: individual mode with temp password
      | --------------------------------------------------------------------- */
 
@@ -426,9 +485,7 @@ class CobrosCollectorOnboardingTest extends TestCase
         preg_match('/<input[^>]*id="password"[^>]*>/i', $html, $matches);
         $this->assertNotEmpty($matches, 'Password input not found');
         $this->assertStringNotContainsString('value=', $matches[0], 'Password input must not have a value attribute');
-
-        // Must be readonly (removed by JS on focus) to block browser autofill
-        $this->assertStringContainsString('readonly', $matches[0]);
+        $this->assertStringNotContainsString('readonly', $matches[0], 'Password input must not be readonly');
         $this->assertStringContainsString('autocomplete="new-password"', $html);
     }
 
