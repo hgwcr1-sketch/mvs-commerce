@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\Company;
 use App\Models\CreditNote;
 use App\Services\Sales\CreditNoteService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -125,8 +127,13 @@ class CreditNoteCodeController extends Controller
             return redirect()->route('notas-credito.codes.index');
         }
 
+        $company = Company::find((int) session('active_company_id'));
+        $branch = Branch::find((int) session('active_branch_id'));
+
         return response(view('notas-credito.codes.delivered', [
             'delivery' => $delivery,
+            'company' => $company,
+            'branch' => $branch,
         ]))->header('Cache-Control', 'no-store');
     }
 }

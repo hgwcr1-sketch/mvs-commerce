@@ -747,6 +747,10 @@ Route::resource('transferencias', TransferController::class)
         ->middleware(['active.branch', 'permission:devoluciones.crear'])
         ->name('ventas.return.store');
 
+    Route::get('/notas-credito/consumer-final/entregado', [ReturnController::class, 'delivered'])
+        ->middleware(['active.branch', 'permission:devoluciones.crear'])
+        ->name('notas-credito.consumer-final.delivered');
+
     Route::get('/notas-credito/codigos', [CreditNoteCodeController::class, 'index'])
         ->middleware('permission:notas_credito.regenerar_codigo')
         ->name('notas-credito.codes.index');
