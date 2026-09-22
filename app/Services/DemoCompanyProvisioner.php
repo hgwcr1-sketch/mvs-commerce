@@ -215,6 +215,7 @@ class DemoCompanyProvisioner
     {
         $cid = $company->id;
 
+        DB::table('credit_note_code_rotations')->where('company_id', $cid)->delete();
         DB::table('credit_note_applications')->where('company_id', $cid)->delete();
         DB::table('accounts_receivable_adjustments')->where('company_id', $cid)->delete();
         DB::table('credit_notes')->where('company_id', $cid)->delete();

@@ -135,6 +135,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'notas_credito.crear', 'label' => 'Crear notas de crédito', 'module' => 'Notas de Crédito'],
             ['name' => 'notas_credito.aplicar', 'label' => 'Aplicar notas de crédito', 'module' => 'Notas de Crédito'],
             ['name' => 'notas_credito.configurar', 'label' => 'Configurar vigencia de notas de crédito', 'module' => 'Notas de Crédito'],
+            ['name' => 'notas_credito.regenerar_codigo', 'label' => 'Regenerar códigos de notas de crédito a consumidor final', 'module' => 'Notas de Crédito'],
 
             // Cuentas por cobrar
             ['name' => 'cuentas_cobrar.ver', 'label' => 'Ver cuentas por cobrar', 'module' => 'Cuentas por Cobrar'],
@@ -267,6 +268,24 @@ class PermissionSeeder extends Seeder
             ->where('is_active', true)
             ->each(function (Role $role) use ($ncPermissionIds) {
                 $role->permissions()->syncWithoutDetaching($ncPermissionIds);
+            });
+
+        // Notas de crédito: el rol Cajero únicamente puede aplicar notas de
+        // crédito (incluidas las emitidas a consumidor final). No crea,
+        // configura ni regenera; la emisión de devoluciones sigue su propio
+        // permiso devoluciones.crear.
+        $cashierApplyId = Permission::query()
+            ->where('is_active', true)
+            ->where('name', 'notas_credito.aplicar')
+            ->value('id');
+
+        Role::query()
+            ->where('name', 'Cajero')
+            ->where('is_active', true)
+            ->each(function (Role $role) use ($cashierApplyId) {
+                if ($cashierApplyId !== null) {
+                    $role->permissions()->syncWithoutDetaching([$cashierApplyId]);
+                }
             });
     }
 }

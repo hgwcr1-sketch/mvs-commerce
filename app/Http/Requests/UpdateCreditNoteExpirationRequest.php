@@ -16,6 +16,7 @@ class UpdateCreditNoteExpirationRequest extends FormRequest
         return [
             'credit_note_expiration_policy' => ['required', 'in:none,30,60,90,custom'],
             'credit_note_custom_expiration_days' => ['required_if:credit_note_expiration_policy,custom', 'integer', 'min:1', 'max:3650'],
+            'credit_note_consumer_final' => ['sometimes', 'boolean'],
         ];
     }
 

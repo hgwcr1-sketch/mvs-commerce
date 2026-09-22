@@ -26,6 +26,7 @@ use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
 use App\Http\Controllers\ControlCenterController;
+use App\Http\Controllers\CreditNoteCodeController;
 use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
@@ -261,6 +262,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('/pos/notas-credito/disponibles', [PosController::class, 'searchCreditNotes'])
             ->middleware('permission:notas_credito.aplicar')
             ->name('pos.credit-notes.available');
+        Route::post('/pos/notas-credito/validar-portador', [PosController::class, 'validateBearerCreditNote'])
+            ->middleware('permission:notas_credito.aplicar')
+            ->name('pos.credit-notes.bearer-validate');
         Route::post('/pos/cobrar', [PosController::class, 'checkout'])
             ->middleware(['permission:ventas.crear', 'pos.cash-session'])
             ->name('pos.checkout');
@@ -776,6 +780,19 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::post('/ventas/{venta}/devolucion', [ReturnController::class, 'store'])
         ->middleware(['active.branch', 'permission:devoluciones.crear'])
         ->name('ventas.return.store');
+
+    Route::get('/notas-credito/codigos', [CreditNoteCodeController::class, 'index'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->name('notas-credito.codes.index');
+
+    Route::get('/notas-credito/codigos/entregado', [CreditNoteCodeController::class, 'delivered'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->name('notas-credito.codes.delivered');
+
+    Route::post('/notas-credito/{creditNote}/codigo/regenerar', [CreditNoteCodeController::class, 'regenerate'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->whereNumber('creditNote')
+        ->name('notas-credito.codes.regenerate');
     /*
     |--------------------------------------------------------------------------
     | Finanzas

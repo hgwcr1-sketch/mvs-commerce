@@ -22,6 +22,7 @@ use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
+use App\Services\Sales\CreditNoteService;
 use App\Services\Sales\LayawayService;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
@@ -453,6 +454,57 @@ class PosController extends Controller
             'branch_name' => $note->branch?->name,
             'sale_return_reason' => $note->saleReturn?->reason,
         ])->values());
+    }
+
+    /**
+     * Prevalidación de NC Consumer Final por número + código + monto (4B-3).
+     *
+     * Es una validación SIN locks y SIN writes: reutiliza la misma autorización
+     * lock-free del backend certificado 4B-2 y comparte su rate limit. La
+     * validación definitiva (saldo, estado, toggle, vencimiento, empresa)
+     * ocurre SIEMPRE dentro del checkout bajo lock (applyBatchToSale).
+     *
+     * Devuelve datos NO secretos (id, número, saldo) para que el cajero pueda
+     * preparar la línea y sugerir el monto; jamás el código ni el hash.
+     */
+    public function validateBearerCreditNote(Request $request, PosSaleProcessor $processor, CreditNoteService $creditNotes): JsonResponse
+    {
+        $validated = $request->validate([
+            'credit_note_number' => ['required', 'string', 'max:60'],
+            'application_code' => ['required', 'string', 'max:40'],
+            'amount' => ['required', 'numeric', 'regex:/^\d+(?:\.\d{1,4})?$/', 'gt:0'],
+        ]);
+
+        $companyId = (int) session('active_company_id');
+
+        if (! $request->user()->hasPermission('notas_credito.aplicar', Company::query()->findOrFail($companyId))) {
+            abort(403);
+        }
+
+        $processor->guardBearerAttemptRateLimit($companyId, $request->user()->id);
+
+        try {
+            $note = $creditNotes->authorizeBearerApplication(
+                $companyId,
+                $validated['credit_note_number'],
+                $validated['application_code'],
+                (string) $validated['amount'],
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => collect($exception->errors())->flatten()->first() ?? 'No se pudo validar la nota de crédito.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'credit_note_id' => $note->id,
+            'credit_note_number' => $note->credit_note_number,
+            'balance' => $note->balance,
+            'issued_at' => $note->issued_at?->toIso8601String(),
+            'expires_at' => $note->expires_at?->toDateString(),
+        ]);
     }
 
     public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse

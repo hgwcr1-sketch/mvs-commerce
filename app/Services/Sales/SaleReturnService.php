@@ -29,11 +29,19 @@ class SaleReturnService
      * Registra una devolución de mercancía sobre una venta completada
      * o parcialmente devuelta. NO realiza reembolso financiero ni de caja.
      *
+     * Emisión de Nota de Crédito dentro de la misma transacción:
+     * - venta identificada: NC nominativa (flujo existente).
+     * - venta Consumer Final y empresa habilitada: NC Consumer Final con
+     *   código de aplicación; el resultado temporal se expone por el
+     *   parámetro $creditNoteResult para la entrega única.
+     * - Consumer Final sin toggle: sin NC (comportamiento previo).
+     *
      * @param  array<int, array{sale_item_id: int, quantity: float|string}>  $lines
+     * @param  IssuedCreditNoteResult|null  $creditNoteResult  Salida por referencia
      */
-    public function store(Sale $sale, User $user, string $reason, array $lines): SaleReturn
+    public function store(Sale $sale, User $user, string $reason, array $lines, ?IssuedCreditNoteResult &$creditNoteResult = null): SaleReturn
     {
-        return DB::transaction(function () use ($sale, $user, $reason, $lines) {
+        return DB::transaction(function () use ($sale, $user, $reason, $lines, &$creditNoteResult) {
             $sale = Sale::query()
                 ->whereKey($sale->id)
                 ->lockForUpdate()
@@ -206,11 +214,14 @@ class SaleReturnService
                     : Sale::STATUS_RETURNED,
             ]);
 
-            // Fase 1 Notas de Crédito: NC nominativa dentro de la misma
-            // transacción de devolución. Sin cliente identificado no se emite
-            // NC y la devolución continúa con su comportamiento actual.
+            // Fase 1 Notas de Crédito: NC dentro de la misma transacción
+            // de devolución. Sin cliente identificado solo se emite NC
+            // Consumer Final si la empresa tiene el toggle habilitado;
+            // de lo contrario no se emite NC.
             if ($sale->customer_id !== null) {
-                $this->creditNotes->issueFromReturn($saleReturn, $user);
+                $creditNoteResult = $this->creditNotes->issueFromReturnWithResult($saleReturn, $user);
+            } elseif ($sale->company?->consumerFinalCreditNotesEnabled()) {
+                $creditNoteResult = $this->creditNotes->issueFromReturnWithResult($saleReturn, $user);
             }
 
             return $saleReturn->fresh(['items']);

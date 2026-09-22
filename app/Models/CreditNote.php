@@ -34,6 +34,7 @@ class CreditNote extends Model
         'issued_by',
         'issued_at',
         'expires_at',
+        'application_code_hash',
         'voided_by',
         'voided_at',
         'void_reason',
@@ -96,6 +97,11 @@ class CreditNote extends Model
         return $this->hasMany(CreditNoteApplication::class);
     }
 
+    public function codeRotations(): HasMany
+    {
+        return $this->hasMany(CreditNoteCodeRotation::class);
+    }
+
     public function arAdjustments(): HasMany
     {
         return $this->hasMany(AccountReceivableAdjustment::class);
@@ -135,5 +141,32 @@ class CreditNote extends Model
     {
         return in_array($this->status, [self::STATUS_ISSUED, self::STATUS_PARTIALLY_APPLIED], true)
             && bccomp((string) $this->balance, '0', 4) > 0;
+    }
+
+    /**
+     * NC Consumer Final: emitida a partir de una venta sin cliente
+     * identificado (customer_id null). Es valor al portador: se autoriza
+     * únicamente presentando número + código secreto (4B-2) y su único
+     * secreto persistido es application_code_hash.
+     */
+    public function isConsumerFinal(): bool
+    {
+        return $this->customer_id === null;
+    }
+
+    /**
+     * Elegibilidad para regenerar el código secreto (Fase 4B-4).
+     *
+     * Únicamente NC Consumer Final con código emitido, vigente, no anulada,
+     * no aplicada por completo y con saldo disponible. La regeneración NO
+     * reactiva notas vencidas: se exige además que no haya expirado.
+     */
+    public function canRegenerateCode(): bool
+    {
+        return $this->isConsumerFinal()
+            && $this->application_code_hash !== null
+            && in_array($this->status, [self::STATUS_ISSUED, self::STATUS_PARTIALLY_APPLIED], true)
+            && bccomp((string) $this->balance, '0', 4) > 0
+            && ! $this->isExpired();
     }
 }

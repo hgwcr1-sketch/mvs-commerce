@@ -101,6 +101,7 @@ class SettingController extends Controller
             'credit_note_custom_expiration_days' => $request->validated('credit_note_expiration_policy') === 'custom'
                 ? (int) $request->validated('credit_note_custom_expiration_days')
                 : null,
+            'credit_note_consumer_final' => $request->boolean('credit_note_consumer_final'),
         ]);
 
         return redirect()->to(route('configuracion.index').'#notas-credito')
