@@ -705,26 +705,52 @@
                                             </button>
                                         </div>
                                         <div x-show="bearerNC.open" class="mt-3 space-y-3 rounded-xl border border-[#B9BDC2] bg-slate-50/70 p-3 sm:p-4">
-                                            <input type="text" inputmode="text" autocomplete="off" maxlength="60" placeholder="Número (ej. NC-00000001)" x-model="bearerNC.number" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
-                                            <div class="flex items-center gap-2">
-                                                <input :type="bearerNC.showCode ? 'text' : 'password'" inputmode="text" autocomplete="off" maxlength="40" placeholder="Código (ej. XXXX-XXXX-XXXX)" x-model="bearerNC.code" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
-                                                <button type="button" @click="bearerNC.showCode = !bearerNC.showCode" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-[#806817] hover:bg-slate-50">
-                                                    <span x-text="bearerNC.showCode ? 'Ocultar' : 'Mostrar'"></span>
-                                                </button>
+                                            <div>
+                                                <label for="bearer-number" class="text-xs font-black uppercase text-slate-500">Número de nota</label>
+                                                <div class="mt-1 flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30">
+                                                    <span class="flex min-h-11 shrink-0 select-none items-center border-r border-slate-200 bg-slate-100 px-3 text-sm font-black text-[#806817]">NC-</span>
+                                                    <input id="bearer-number" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="00000004" :value="bearerNC.number" @input="sanitizeBearerNumber($event.target.value)" :disabled="checkout.processing || bearerNC.validating" class="min-w-0 w-full border-0 bg-transparent px-3 py-2 text-sm font-semibold text-[#111111] focus:ring-0">
+                                                </div>
                                             </div>
                                             <div>
+                                                <label for="bearer-code" class="text-xs font-black uppercase text-slate-500">Código</label>
+                                                <div class="mt-1 flex items-center gap-2">
+                                                    <input id="bearer-code" :type="bearerNC.showCode ? 'text' : 'password'" inputmode="text" autocomplete="off" maxlength="14" placeholder="XXXX-XXXX-XXXX" :value="bearerNC.code" @input="sanitizeBearerCode($event.target.value)" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
+                                                    <button type="button" @click="bearerNC.showCode = !bearerNC.showCode" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-[#806817] hover:bg-slate-50">
+                                                        <span x-text="bearerNC.showCode ? 'Ocultar' : 'Mostrar'"></span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div x-show="bearerNC.validated" class="space-y-1 rounded-lg border border-primary/40 bg-primary/10 p-3">
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-xs font-black uppercase tracking-wide text-slate-500">Saldo disponible</span>
+                                                    <strong class="text-[#806817]" x-text="money(bearerNC.validated.balance)"></strong>
+                                                </div>
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-xs font-black uppercase tracking-wide text-slate-500">Saldo pendiente de la venta</span>
+                                                    <strong x-text="money(pendingBalance)"></strong>
+                                                </div>
+                                            </div>
+                                            <div x-show="bearerNC.validated">
                                                 <div class="flex items-center justify-between gap-2">
                                                     <label for="bearer-amount" class="text-xs font-black uppercase text-slate-500">Monto a aplicar</label>
-                                                    <button type="button" @click="bearerNC.amount = String(pendingBalance)" :disabled="checkout.processing || bearerNC.validating" class="text-xs font-bold text-[#806817] underline">Usar saldo pendiente</button>
+                                                    <span x-show="bearerAutoAmount !== ''" class="text-xs font-bold text-[#806817]" x-text="'Automático: ' + money(bearerAutoAmount)"></span>
                                                 </div>
                                                 <div class="mt-1 flex min-w-0 items-center rounded-lg border border-slate-300 bg-white px-3">
                                                     <span class="shrink-0 text-lg font-black text-[#806817]">₡</span>
                                                     <input id="bearer-amount" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0" x-model="bearerNC.amount" :disabled="checkout.processing || bearerNC.validating" class="min-w-0 w-full border-0 bg-transparent py-3 pl-2 text-right text-lg font-black text-[#111111] focus:ring-0 sm:text-xl">
                                                 </div>
+                                                <div x-show="bearerSaldoDespues !== ''" class="flex items-center justify-between text-xs text-slate-600">
+                                                    <span>Saldo después de aplicar</span>
+                                                    <strong x-text="money(bearerSaldoDespues)"></strong>
+                                                </div>
                                             </div>
-                                            <button type="button" @click="applyBearerNote" :disabled="!bearerCanValidate" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
-                                                <span x-show="!bearerNC.validating">Aplicar nota de crédito</span>
+                                            <button type="button" x-show="!bearerNC.validated" @click="validateBearerNote" :disabled="!bearerCanValidate" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <span x-show="!bearerNC.validating">Validar nota de crédito</span>
                                                 <span x-show="bearerNC.validating">Validando…</span>
+                                            </button>
+                                            <button type="button" x-show="bearerNC.validated" @click="applyBearerNote" :disabled="!bearerCanApply" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
+                                                Aplicar nota de crédito
                                             </button>
                                             <p x-show="bearerNC.error" x-text="bearerNC.error" class="text-xs font-semibold text-red-600" role="alert"></p>
                                         </div>
@@ -989,7 +1015,7 @@ document.addEventListener('alpine:init', () => {
         // 4B-3: NC Consumer Final por número + código (portador). El código vive
         // únicamente en esta memoria Alpine mientras se prepara el cobro; nunca se
         // renderiza al DOM, ni se persiste, ni viaja por URL ni por almacenamiento.
-        bearerNC: { open: false, validating: false, showCode: false, number: '', code: '', amount: '', error: '' },
+        bearerNC: { open: false, validating: false, showCode: false, number: '', code: '', amount: '', error: '', validated: null },
         // R02-B: escáner por cámara (capa de entrada; sin estado propio de carrito).
         cameraScannerAvailable: false,
         cameraScannerOpen: false,
@@ -1187,17 +1213,46 @@ document.addEventListener('alpine:init', () => {
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
         get totalCreditNotesApplied() { return this.decimal4(this.creditNotes.selected.reduce((sum, app) => sum + this.numberValue(app.amount), 0)); },
         get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && !this.loyalty.loading && !this.loyaltyInputError && (this.checkout.payments.length > 0 || this.loyaltyRequestedPoints > 0 || this.totalCreditNotesApplied > 0) && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
-        // 4B-3: el botón "Aplicar" del panel portador solo se habilita con
-        // entrada coherente; la validación real (saldo/vencimiento/estado)
-        // ocurre en el servidor durante la prevalidación Y en checkout.
+        // 4B-3: la validación de credenciales (número + código) es independiente
+        // del "Monto a aplicar". El número se normaliza estrictamente a NC-XXXXXXXX
+        // y el código a 12 caracteres alfanuméricos mayúsculas (los guiones son
+        // solo visuales). La validación real (saldo/vencimiento/estado) ocurre
+        // siempre en el servidor durante la prevalidación Y en checkout.
+        get bearerRawCode() { return this.bearerNC.code.trim().replace(/-/g, '').toUpperCase(); },
+        get bearerNormalizedNumber() {
+            const digits = this.bearerNC.number.trim();
+            return /^\d{1,12}$/.test(digits) ? 'NC-' + digits.padStart(8, '0') : null;
+        },
+        get bearerNumberValid() { return this.bearerNormalizedNumber !== null; },
+        get bearerCodeValid() { return /^[A-Z0-9]{12}$/.test(this.bearerRawCode); },
         get bearerCanValidate() {
             return !this.checkout.processing &&
                 !this.bearerNC.validating &&
-                /^NC-\d+$/i.test(this.bearerNC.number.trim()) &&
-                /^[A-Za-z0-9-]{1,40}$/.test(this.bearerNC.code.trim()) &&
-                /^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim()) &&
-                this.numberValue(this.bearerNC.amount) > 0 &&
-                this.numberValue(this.bearerNC.amount) <= this.pendingBalance;
+                !this.bearerNC.validated &&
+                this.bearerNumberValid &&
+                this.bearerCodeValid;
+        },
+        get bearerCanApply() {
+            const validated = this.bearerNC.validated;
+            if (!validated || this.checkout.processing || this.bearerNC.validating) return false;
+            const amount = this.numberValue(this.bearerNC.amount);
+            const balance = this.numberValue(validated.balance);
+            return /^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim()) &&
+                amount > 0 &&
+                amount <= balance &&
+                amount <= this.pendingBalance;
+        },
+        get bearerAutoAmount() {
+            if (!this.bearerNC.validated) return '';
+            const min = Math.min(this.numberValue(this.bearerNC.validated.balance), this.pendingBalance);
+            return min > 0 ? String(Number(min.toFixed(4))) : '';
+        },
+        get bearerSaldoDespues() {
+            if (!this.bearerNC.validated || !/^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim())) return '';
+            const balance = this.numberValue(this.bearerNC.validated.balance);
+            const amount = this.numberValue(this.bearerNC.amount);
+            if (amount <= 0 || amount >= balance) return '';
+            return String(Number((balance - amount).toFixed(4)));
         },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
@@ -1757,7 +1812,7 @@ document.addEventListener('alpine:init', () => {
         openBearerPanel() {
             this.bearerNC.open = true;
             this.bearerNC.error = '';
-            this.bearerNC.amount = String(this.pendingBalance);
+            this.bearerNC.amount = '';
         },
         closeBearerPanel() {
             this.bearerNC.open = false;
@@ -1767,8 +1822,21 @@ document.addEventListener('alpine:init', () => {
             this.bearerNC.code = '';
             this.bearerNC.amount = '';
             this.bearerNC.error = '';
+            this.bearerNC.validated = null;
         },
-        async applyBearerNote() {
+        sanitizeBearerNumber(value) {
+            const trimmed = String(value).trim();
+            const match = /^(?:NC-)?(\d{1,12})$/i.exec(trimmed);
+            this.bearerNC.number = match ? match[1] : trimmed.slice(0, 12);
+            this.bearerNC.validated = null;
+        },
+        sanitizeBearerCode(value) {
+            const raw = String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+            const chunks = raw.match(/.{1,4}/g) || [];
+            this.bearerNC.code = chunks.join('-');
+            this.bearerNC.validated = null;
+        },
+        async validateBearerNote() {
             if (!this.bearerCanValidate || this.bearerNC.validating) return;
             this.bearerNC.validating = true;
             this.bearerNC.error = '';
@@ -1777,28 +1845,41 @@ document.addEventListener('alpine:init', () => {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
                     body: JSON.stringify({
-                        credit_note_number: this.bearerNC.number.trim(),
-                        application_code: this.bearerNC.code.trim(),
-                        amount: String(this.bearerNC.amount).trim(),
+                        credit_note_number: this.bearerNormalizedNumber,
+                        application_code: this.bearerRawCode,
                     }),
                 });
                 const payload = await this.readFetchResponse(response);
-                this.creditNotes.selected.push({
+                this.bearerNC.validated = {
                     credit_note_id: payload.credit_note_id,
                     credit_note_number: payload.credit_note_number,
-                    amount: String(this.bearerNC.amount).trim(),
                     balance: String(payload.balance),
                     issued_at: payload.issued_at,
                     expires_at: payload.expires_at,
-                    bearer: true,
-                    code: this.bearerNC.code.trim(),
-                });
-                this.closeBearerPanel();
+                };
+                this.bearerNC.amount = this.bearerAutoAmount;
             } catch (error) {
                 this.bearerNC.error = error.message || 'No se pudo validar la nota de crédito.';
+                this.bearerNC.validated = null;
+                this.bearerNC.amount = '';
             } finally {
                 this.bearerNC.validating = false;
             }
+        },
+        async applyBearerNote() {
+            if (!this.bearerCanApply || this.bearerNC.validating) return;
+            const validated = this.bearerNC.validated;
+            this.creditNotes.selected.push({
+                credit_note_id: validated.credit_note_id,
+                credit_note_number: validated.credit_note_number,
+                amount: String(this.bearerNC.amount).trim(),
+                balance: validated.balance,
+                issued_at: validated.issued_at,
+                expires_at: validated.expires_at,
+                bearer: true,
+                code: this.bearerRawCode,
+            });
+            this.closeBearerPanel();
         },
         applyMaxCreditNote(index) {
             const app = this.creditNotes.selected[index];

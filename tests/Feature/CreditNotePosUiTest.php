@@ -380,7 +380,7 @@ public function test_pos_page_keeps_consumer_final_code_out_of_storage_and_outpu
         $this->assertStringNotContainsString('localStorage', $html);
         $this->assertStringNotContainsString('sessionStorage', $html);
         $this->assertStringNotContainsString('x-text="bearerNC.code"', $html);
-        $this->assertStringContainsString('x-model="bearerNC.code"', $html);
+        $this->assertStringContainsString(':value="bearerNC.code"', $html);
         $this->assertStringContainsString('\\/pos\\/notas-credito\\/validar-portador', $html);
     }
 

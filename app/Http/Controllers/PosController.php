@@ -453,12 +453,17 @@ class PosController extends Controller
     }
 
     /**
-     * Prevalidación de NC Consumer Final por número + código + monto (4B-3).
+     * Prevalidación de NC Consumer Final por número + código (4B-3).
      *
      * Es una validación SIN locks y SIN writes: reutiliza la misma autorización
      * lock-free del backend certificado 4B-2 y comparte su rate limit. La
      * validación definitiva (saldo, estado, toggle, vencimiento, empresa)
      * ocurre SIEMPRE dentro del checkout bajo lock (applyBatchToSale).
+     *
+     * El monto es OPCIONAL: la resolución de credenciales (número + código) es
+     * independiente del "Monto a aplicar". Sin monto, el endpoint devuelve el
+     * saldo disponible para que la UI proponga MIN(saldo NC, pendiente venta).
+     * Si se envía monto, valida también 0 < monto <= saldo.
      *
      * Devuelve datos NO secretos (id, número, saldo) para que el cajero pueda
      * preparar la línea y sugerir el monto; jamás el código ni el hash.
@@ -468,7 +473,7 @@ class PosController extends Controller
         $validated = $request->validate([
             'credit_note_number' => ['required', 'string', 'max:60'],
             'application_code' => ['required', 'string', 'max:40'],
-            'amount' => ['required', 'numeric', 'regex:/^\d+(?:\.\d{1,4})?$/', 'gt:0'],
+            'amount' => ['nullable', 'numeric', 'regex:/^\d+(?:\.\d{1,4})?$/', 'gt:0'],
         ]);
 
         $companyId = (int) session('active_company_id');
@@ -479,12 +484,16 @@ class PosController extends Controller
 
         $processor->guardBearerAttemptRateLimit($companyId, $request->user()->id);
 
+        $amount = array_key_exists('amount', $validated) && $validated['amount'] !== null && $validated['amount'] !== ''
+            ? (string) $validated['amount']
+            : null;
+
         try {
             $note = $creditNotes->authorizeBearerApplication(
                 $companyId,
                 $validated['credit_note_number'],
                 $validated['application_code'],
-                (string) $validated['amount'],
+                $amount,
             );
         } catch (ValidationException $exception) {
             return response()->json([

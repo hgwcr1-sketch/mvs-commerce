@@ -1228,10 +1228,18 @@ class PosSaleProcessor
     private function resolveBearerIdsForFingerprint(array $entries, int $companyId): array
     {
         return array_values(array_map(function (array $entry) use ($companyId): array {
-            $note = CreditNote::query()
-                ->where('company_id', $companyId)
-                ->where('credit_note_number', trim($entry['credit_note_number']))
-                ->first();
+            try {
+                $number = CreditNoteService::normalizeCreditNoteNumber(trim($entry['credit_note_number']));
+            } catch (ValidationException) {
+                $number = '';
+            }
+
+            $note = $number !== ''
+                ? CreditNote::query()
+                    ->where('company_id', $companyId)
+                    ->where('credit_note_number', $number)
+                    ->first()
+                : null;
 
             return [
                 'credit_note_id' => $note !== null ? (int) $note->id : null,
