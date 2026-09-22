@@ -7,6 +7,7 @@ use App\Models\AccountReceivableAdjustment;
 use App\Models\CompanySequence;
 use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
+use App\Models\CreditNoteCodeRotation;
 use App\Models\Sale;
 use App\Models\SaleReturn;
 use App\Models\User;
@@ -322,6 +323,79 @@ class CreditNoteService
         }
 
         return $note;
+    }
+
+    /**
+     * Regenera el código secreto de una NC Consumer Final (Fase 4B-4).
+     *
+     * Solo NC Consumer Final (customer_id null) con application_code_hash
+     * emitido pueden regenerar. La operación:
+     *  - localiza la NC EXCLUSIVAMENTE dentro de company_id (multitenancy),
+     *  - la bloquea con lockForUpdate,
+     *  - valida elegibilidad (vigente, no voided, no applied, balance > 0),
+     *  - genera un NUEVO código con EXACTAMENTE el generador certificado 4B-1,
+     *  - normaliza y persiste únicamente su SHA-256 reemplazando el hash anterior
+     *    (el código anterior queda inválido inmediatamente tras el commit),
+     *  - registra auditoría en credit_note_code_rotations sin secretos,
+     *  - devuelve el plaintext nuevo SOLO temporalmente para la entrega única.
+     *
+     * NO modifica saldo, montos, vencimiento, estado monetario, número, cliente
+     * ni historial de aplicaciones. NO crea CreditNoteApplication, SalePayment
+     * ni CashMovement.
+     *
+     * @return array{credit_note: CreditNote, application_code: string}
+     */
+    public function regenerateApplicationCode(
+        int $companyId,
+        int $creditNoteId,
+        User $user,
+        string $reason,
+    ): array {
+        $reason = trim($reason);
+
+        if (mb_strlen($reason) < 3) {
+            throw ValidationException::withMessages([
+                'reason' => 'Debe indicar un motivo (mínimo 3 caracteres) para regenerar el código.',
+            ]);
+        }
+
+        if (mb_strlen($reason) > 500) {
+            throw ValidationException::withMessages([
+                'reason' => 'El motivo no puede superar los 500 caracteres.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($companyId, $creditNoteId, $user, $reason): array {
+            $note = CreditNote::query()
+                ->forCompany($companyId)
+                ->whereKey($creditNoteId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $note->canRegenerateCode()) {
+                throw ValidationException::withMessages([
+                    'credit_note' => 'La Nota de Crédito no está disponible para regenerar su código.',
+                ]);
+            }
+
+            $newCode = $this->generateApplicationCode();
+
+            $note->update([
+                'application_code_hash' => self::applicationCodeHash($newCode),
+            ]);
+
+            CreditNoteCodeRotation::create([
+                'company_id' => $note->company_id,
+                'credit_note_id' => $note->id,
+                'user_id' => $user->id,
+                'reason' => $reason,
+            ]);
+
+            return [
+                'credit_note' => $note->fresh(),
+                'application_code' => $newCode,
+            ];
+        });
     }
 
     /**

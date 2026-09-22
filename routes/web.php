@@ -28,6 +28,7 @@ use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
 use App\Http\Controllers\ControlCenterController;
+use App\Http\Controllers\CreditNoteCodeController;
 use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 use App\Http\Controllers\CustomerAddressController;
 // Inventario
@@ -745,6 +746,19 @@ Route::resource('transferencias', TransferController::class)
     Route::post('/ventas/{venta}/devolucion', [ReturnController::class, 'store'])
         ->middleware(['active.branch', 'permission:devoluciones.crear'])
         ->name('ventas.return.store');
+
+    Route::get('/notas-credito/codigos', [CreditNoteCodeController::class, 'index'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->name('notas-credito.codes.index');
+
+    Route::get('/notas-credito/codigos/entregado', [CreditNoteCodeController::class, 'delivered'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->name('notas-credito.codes.delivered');
+
+    Route::post('/notas-credito/{creditNote}/codigo/regenerar', [CreditNoteCodeController::class, 'regenerate'])
+        ->middleware('permission:notas_credito.regenerar_codigo')
+        ->whereNumber('creditNote')
+        ->name('notas-credito.codes.regenerate');
     /*
     |--------------------------------------------------------------------------
     | Finanzas

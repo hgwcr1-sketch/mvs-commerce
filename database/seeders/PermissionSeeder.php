@@ -135,6 +135,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'notas_credito.crear', 'label' => 'Crear notas de crédito', 'module' => 'Notas de Crédito'],
             ['name' => 'notas_credito.aplicar', 'label' => 'Aplicar notas de crédito', 'module' => 'Notas de Crédito'],
             ['name' => 'notas_credito.configurar', 'label' => 'Configurar vigencia de notas de crédito', 'module' => 'Notas de Crédito'],
+            ['name' => 'notas_credito.regenerar_codigo', 'label' => 'Regenerar códigos de notas de crédito a consumidor final', 'module' => 'Notas de Crédito'],
 
             // Cuentas por cobrar
             ['name' => 'cuentas_cobrar.ver', 'label' => 'Ver cuentas por cobrar', 'module' => 'Cuentas por Cobrar'],

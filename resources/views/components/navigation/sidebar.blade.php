@@ -124,6 +124,10 @@
                 <x-navigation.submenu route="devoluciones.index" label="Nota de Crédito" :active="request()->routeIs('devoluciones.*')" />
             @endcan
 
+            @can('notas_credito.regenerar_codigo')
+                <x-navigation.submenu route="notas-credito.codes.index" label="Códigos de NC" :active="request()->routeIs('notas-credito.codes.*')" />
+            @endcan
+
         </x-navigation.dropdown>
     @endcanany
     </div>

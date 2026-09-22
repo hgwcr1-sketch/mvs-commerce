@@ -112,15 +112,25 @@ class OrderPermissionSeederTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->assertDatabaseHas('permissions', [
+            'name' => 'notas_credito.regenerar_codigo',
+            'label' => 'Regenerar códigos de notas de crédito a consumidor final',
+            'module' => 'Notas de Crédito',
+            'is_active' => true,
+        ]);
+
         $this->assertTrue($adminRole->fresh()->permissions()->where('name', 'notas_credito.crear')->exists());
         $this->assertTrue($adminRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
+        $this->assertTrue($adminRole->fresh()->permissions()->where('name', 'notas_credito.regenerar_codigo')->exists());
         $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'notas_credito.crear')->exists());
         $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
+        $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'notas_credito.regenerar_codigo')->exists());
         $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'pos.acceder')->exists());
         $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.crear')->exists());
         $this->assertTrue($cashierRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
         // Cajero NUNCA configura ni regenera créditos.
         $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.configurar')->exists());
+        $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.regenerar_codigo')->exists());
 
         $this->assertTrue($user->can('notas_credito.crear'));
         $this->assertTrue($user->can('notas_credito.aplicar'));
@@ -128,5 +138,6 @@ class OrderPermissionSeederTest extends TestCase
         // Administrador Regional NO debe recibir permisos NC automáticamente
         $this->assertFalse($regionalAdminRole->fresh()->permissions()->where('name', 'notas_credito.crear')->exists());
         $this->assertFalse($regionalAdminRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
+        $this->assertFalse($regionalAdminRole->fresh()->permissions()->where('name', 'notas_credito.regenerar_codigo')->exists());
     }
 }
