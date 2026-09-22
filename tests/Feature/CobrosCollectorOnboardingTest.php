@@ -411,6 +411,28 @@ class CobrosCollectorOnboardingTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
+     | Login view: no hardcoded credentials
+     | --------------------------------------------------------------------- */
+
+    public function test_cobros_login_html_has_no_hardcoded_password_value(): void
+    {
+        $response = $this->get(route('cobros.login'));
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertStringNotContainsString('MVS2026', $html);
+
+        // Password input must not carry a value= attribute
+        preg_match('/<input[^>]*id="password"[^>]*>/i', $html, $matches);
+        $this->assertNotEmpty($matches, 'Password input not found');
+        $this->assertStringNotContainsString('value=', $matches[0], 'Password input must not have a value attribute');
+
+        // Must be readonly (removed by JS on focus) to block browser autofill
+        $this->assertStringContainsString('readonly', $matches[0]);
+        $this->assertStringContainsString('autocomplete="new-password"', $html);
+    }
+
+    /* ---------------------------------------------------------------------
      | Regenerate invalidates old temp password
      | --------------------------------------------------------------------- */
 
