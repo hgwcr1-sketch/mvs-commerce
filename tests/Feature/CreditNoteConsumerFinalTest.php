@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Customer;
+use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -127,7 +128,7 @@ class CreditNoteConsumerFinalTest extends TestCase
 
     private function paymentMethodId(Company $company): int
     {
-        return \App\Models\PaymentMethod::firstOrCreate(
+        return PaymentMethod::firstOrCreate(
             ['company_id' => $company->id, 'code' => 'EFECTIVO-CF-'.$company->id],
             [
                 'name' => 'Efectivo',
@@ -345,7 +346,23 @@ class CreditNoteConsumerFinalTest extends TestCase
         $this->assertSame($note->credit_note_number, $flash['credit_note_number']);
         $this->assertSame($note->application_code_hash, hash('sha256', CreditNoteService::normalizeApplicationCode($flash['application_code'])));
 
-        $response->assertRedirect(route('ventas.show', $sale));
+        $response->assertRedirect(route('notas-credito.consumer-final.delivered'));
+
+        $page = $this->actingAs($user)
+            ->withSession([
+                'active_company_id' => $company->id,
+                'active_branch_id' => $branch->id,
+            ])
+            ->get(route('notas-credito.consumer-final.delivered'))
+            ->assertOk();
+
+        $page->assertSee('NOTA DE CRÉDITO GENERADA');
+        $page->assertSee($note->credit_note_number);
+        $page->assertSee($flash['application_code']);
+        $page->assertSee('Copiar código');
+        $page->assertSee('Imprimir comprobante');
+        $page->assertSee('Cerrar');
+        $this->assertStringContainsString('no-store', $page->headers->get('Cache-Control'));
 
         $this->assertSame(12, (int) (float) DB::table('branch_product')->where('product_id', $product->id)->value('stock'));
     }
@@ -405,7 +422,8 @@ class CreditNoteConsumerFinalTest extends TestCase
         $response = $this->postReturn($user, $company, $branch, $sale, [
             'reason' => 'Devolución nominativa',
             'items' => [['sale_item_id' => $sale->items->first()->id, 'quantity' => 1]],
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()
+            ->assertRedirect(route('ventas.show', $sale));
 
         $note = CreditNote::sole();
         $this->assertNotNull($note->customer_id);
@@ -507,8 +525,83 @@ class CreditNoteConsumerFinalTest extends TestCase
                 'reason' => 'Entrega única',
                 'items' => [['sale_item_id' => $sale->items->first()->id, 'quantity' => 2]],
             ])
-            ->assertRedirect(route('ventas.show', $sale))
+            ->assertRedirect(route('notas-credito.consumer-final.delivered'))
             ->assertSessionHas('consumer_final_delivery');
+
+        $code = session()->get('consumer_final_delivery.application_code');
+        $this->assertNotEmpty($code);
+
+        $first = $this->actingAs($user)
+            ->withSession([
+                'active_company_id' => $company->id,
+                'active_branch_id' => $branch->id,
+            ])
+            ->get(route('notas-credito.consumer-final.delivered'))
+            ->assertOk();
+        $first->assertSee($code);
+        $this->assertStringContainsString('no-store', $first->headers->get('Cache-Control'));
+
+        $second = $this->actingAs($user)
+            ->withSession([
+                'active_company_id' => $company->id,
+                'active_branch_id' => $branch->id,
+            ])
+            ->get(route('notas-credito.consumer-final.delivered'));
+        $second->assertRedirect(route('dashboard'));
+    }
+
+    public function test_delivery_direct_access_without_flash_redirects_without_secret(): void
+    {
+        [$company, $branch, $user] = $this->scenario();
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'active_company_id' => $company->id,
+                'active_branch_id' => $branch->id,
+            ])
+            ->get(route('notas-credito.consumer-final.delivered'));
+
+        $response->assertRedirect(route('dashboard'));
+
+        $this->assertStringNotContainsString(
+            '-',
+            $response->headers->get('Location'),
+            'El código jamás debe viajar en la URL de redirección.',
+        );
+    }
+
+    public function test_delivery_print_sheet_contains_number_amount_and_code(): void
+    {
+        [$company, $branch, $user] = $this->scenario();
+        $company->update(['credit_note_consumer_final' => true]);
+
+        $product = $this->product($company);
+        $this->seedStock($branch, $product, 10);
+        $sale = $this->completedSale($company, $branch, $user, $product->id, 4, null);
+
+        $this->postReturn($user, $company, $branch, $sale, [
+            'reason' => 'Comprobante de emisión',
+            'items' => [['sale_item_id' => $sale->items->first()->id, 'quantity' => 2]],
+        ])->assertSessionHasNoErrors();
+
+        $code = session()->get('consumer_final_delivery.application_code');
+        $number = session()->get('consumer_final_delivery.credit_note_number');
+
+        $page = $this->actingAs($user)
+            ->withSession([
+                'active_company_id' => $company->id,
+                'active_branch_id' => $branch->id,
+            ])
+            ->get(route('notas-credito.consumer-final.delivered'))
+            ->assertOk();
+
+        $page->assertSee('Código de aplicación');
+        $page->assertSee($code);
+        $page->assertSee($number);
+        $page->assertSee('Conserve este número y este código');
+
+        $this->assertStringContainsString('#delivery-print-sheet', $page->getContent());
+        $this->assertStringContainsString('@media print', $page->getContent());
     }
 
     private function scenario(string $suffix = ''): array

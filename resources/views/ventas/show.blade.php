@@ -14,49 +14,6 @@
     </div>
 @endif
 
-@if(session('consumer_final_delivery'))
-    <div class="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 sm:p-5">
-        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h3 class="text-lg font-bold text-amber-900">Nota de Crédito para Consumer Final</h3>
-                <p class="text-sm text-amber-800">Conserve este código. Será necesario para utilizar la nota de crédito. Por seguridad no podrá consultarse nuevamente.</p>
-            </div>
-            <button type="button" onclick="window.print()"
-                class="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-amber-300">
-                Imprimir constancia
-            </button>
-        </div>
-        <dl class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-                <dt class="font-semibold text-amber-900">Nota de Crédito</dt>
-                <dd class="text-amber-800">{{ session('consumer_final_delivery.credit_note_number') }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-amber-900">Código</dt>
-                <dd class="font-mono text-2xl font-bold tracking-widest text-black">{{ session('consumer_final_delivery.application_code') }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-amber-900">Monto</dt>
-                <dd class="text-amber-900">₡ {{ number_format((float) session('consumer_final_delivery.issued_amount'), 2) }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-amber-900">Fecha de emisión</dt>
-                <dd class="text-amber-800">{{ \Illuminate\Support\Carbon::parse(session('consumer_final_delivery.issued_at'))->format('d/m/Y H:i') }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-amber-900">Vencimiento</dt>
-                <dd class="text-amber-800">
-                    @if(session('consumer_final_delivery.expires_at'))
-                        {{ \Illuminate\Support\Carbon::parse(session('consumer_final_delivery.expires_at'))->format('d/m/Y') }}
-                    @else
-                        Sin vencimiento
-                    @endif
-                </dd>
-            </div>
-        </dl>
-    </div>
-@endif
-
 @if($errors->any())
     <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
         {{ $errors->first() }}
