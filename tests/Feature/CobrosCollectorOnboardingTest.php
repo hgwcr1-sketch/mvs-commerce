@@ -486,7 +486,7 @@ class CobrosCollectorOnboardingTest extends TestCase
         $this->assertNotEmpty($matches, 'Password input not found');
         $this->assertStringNotContainsString('value=', $matches[0], 'Password input must not have a value attribute');
         $this->assertStringNotContainsString('readonly', $matches[0], 'Password input must not be readonly');
-        $this->assertStringContainsString('autocomplete="new-password"', $html);
+        $this->assertStringContainsString('autocomplete="current-password"', $html);
     }
 
     /* ---------------------------------------------------------------------

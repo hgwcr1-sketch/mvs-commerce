@@ -51,22 +51,29 @@
 .cobros-login-card input:focus-visible, .cobros-login-card button:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 3px; }
 .cobros-login-errors { margin-bottom: 20px; padding: 12px; border: 1px solid #fecaca; border-radius: 10px; background: #fef2f2; color: #991b1b; font-size: 14px; }
 .cobros-login-errors p { margin: 0; }
-.cobros-login-password-wrap { position: relative; }
+.cobros-login-password-wrap { display: flex; align-items: stretch; }
 .cobros-login-password-wrap input {
-    padding-right: 48px;
+    flex: 1;
+    min-width: 0;
     min-height: 48px;
-    background: white;
+    padding: 12px;
     border: 1px solid #cbd5e1;
-    border-radius: 10px;
+    border-radius: 10px 0 0 10px;
+    border-right: 0;
+    background: white;
 }
 .cobros-login-toggle {
-    position: absolute; right: 0; top: 0; bottom: 0; width: 48px;
-    display: flex; align-items: center; justify-content: flex-end; padding-right: 14px;
-    background: transparent !important; border: 0 !important; border-radius: 0 !important;
-    min-height: 0 !important;
-    color: #94a3b8; cursor: pointer; font-weight: 400;
+    width: 48px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-left: 0;
+    border-radius: 0 10px 10px 0;
+    color: #94a3b8; cursor: pointer;
+    min-height: 48px;
 }
-.cobros-login-toggle:hover { color: #475569; background: transparent !important; }
+.cobros-login-toggle:hover { color: #475569; }
 .cobros-login-toggle .cobros-login-eye-closed { display: none; }
 .cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-open { display: none; }
 .cobros-login-toggle[aria-pressed="true"] .cobros-login-eye-closed { display: block; }

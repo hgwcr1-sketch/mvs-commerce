@@ -36,7 +36,7 @@
             <div class="cobros-login-field cobros-login-field--password">
                 <label for="password">Contraseña</label>
                 <div class="cobros-login-password-wrap">
-                    <input id="password" type="password" name="password" required autocomplete="new-password"
+                    <input id="password" type="password" name="password" required autocomplete="current-password"
                            @if($errors->has('password')) aria-invalid="true" aria-describedby="login-errors" @endif>
                     <button type="button" class="cobros-login-toggle" aria-label="Mostrar contraseña" aria-pressed="false" tabindex="-1">
                         <svg class="cobros-login-eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
