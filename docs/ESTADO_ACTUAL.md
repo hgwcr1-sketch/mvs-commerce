@@ -2,15 +2,11 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Notas de Crédito — Fase 4B Consumer Final — IMPLEMENTADA Y CERTIFICADA (2026-09-22)
+## Notas de Crédito — Fase 4B Consumer Final — COMPLETADA / CERTIFICADA / PRODUCCIÓN (2026-09-22)
 
-**Estado: CERTIFICADA. Pendiente integración controlada a `integration/notas-credito`; NO desplegada.** Rama `feature/notas-credito`, HEAD `3f59e67`.
+**Estado: PRODUCCIÓN.** Fuente certificada `5ca8389` (`feature/notas-credito`) → merge integración certificado `40685e86a086c152d178e511af1c0ba454fadb24`. Producción actual: **`40685e86a086c152d178e511af1c0ba454fadb24`** (deploy 2026-09-22).
 
-Cadena:
-- `82c82db` — 4B-1 emisión segura (Consumer Final).
-- `93aa4cc` — 4B-2 aplicación segura (número + código).
-- `e682e9a` — 4B-3 POS + comprobantes integrados.
-- `3f59e67` — 4B-4 regeneración segura (motivo/auditoría, código anterior invalidado).
+Cadena 4B: `82c82db` (4B-1 emisión segura) → `93aa4cc` (4B-2 aplicación número+código) → `e682e9a` (4B-3 POS + comprobantes) → `3f59e67` (4B-4 regeneración segura) → `5ca8389` (cierre documental).
 
 Puntos certificados:
 - Activación opcional por empresa.
@@ -26,9 +22,22 @@ Puntos certificados:
 - Cajero únicamente `notas_credito.aplicar`.
 - NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
 
+Verificación en producción (smoke 2026-09-22, únicamente Empresa Demo): Consumer Final emisión PASS; aplicación POS bearer PASS; rotación segura PASS; reversión PASS; NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados. Migraciones 4B aplicadas Ran: `2026_09_20_000003` (application_code_hash + toggle empresa) y `2026_09_22_000001` (rotación); 4A (`2026_09_20_000001/000002`) sin cambios.
+
 Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
 
 Deuda PREEXISTENTE (no causada por 4B, no corregida): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
+
+### Incidente de deploy 2026-09-22
+- 6 HTTP 500 transitorios durante la ventana **10:30:16–10:32:33 CST** (usuarios reales de empresa).
+- Causa: swap no atómico del árbol de trabajo + regeneración de route-cache durante el despliegue (ViewException "Route not defined"); rutas presentes en código y caché, sin efectos posteriores.
+- 0 HTTP 500 posteriores; **no fue defecto funcional de 4B; producción estable desde 10:32 CST.**
+
+### Decisión operativa de deploy (futuro)
+- Los deploys de producción deben anunciarse previamente.
+- El usuario acepta una ventana aproximada de hasta 2 minutos.
+- NO iniciar la ventana de interrupción sin confirmación del usuario.
+- Futuro recomendado: deploy atómico; posteriormente soporte Offline.
 
 ## Notas de Crédito — Fase 4A vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20)
 
@@ -347,7 +356,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93 → 82c82db → 93aa4cc → e682e9a → 3f59e67`; integración `645e564` + hotfix `5246e38` en `integration/notas-credito`, ya desplegados a producción (PRODUCTION_HEAD `5246e38`). **Fase 4B (Consumer Final) certificada en `feature/notas-credito`, PENDIENTE integración controlada a `integration/notas-credito`.** `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93 → 82c82db → 93aa4cc → e682e9a → 3f59e67 → 5ca8389`; integración `645e564` + hotfix `5246e38` (4A) y merge 4B `40685e86a086c152d178e511af1c0ba454fadb24` en `integration/notas-credito`, **Fase 4A y 4B desplegadas a producción (PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`)**. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -366,7 +375,7 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
-- **Fase 4B Consumer Final NC: certificada en `feature/notas-credito`** (HEAD `3f59e67`, cadena `82c82db → 93aa4cc → e682e9a → 3f59e67`). Activación opcional por empresa, código `XXXX-XXXX-XXXX` solo hash SHA-256, aplicación número+código, rate limiting/idempotencia/doble gasto, POS integrado, regeneración administrativa con auditoría. **406 tests PASS auditados; pendiente integración controlada.**
+- **Fase 4B Consumer Final NC: PRODUCCIÓN** (2026-09-22). Fuente certificada `5ca8389` (cierre documental, cadena `82c82db → 93aa4cc → e682e9a → 3f59e67 → 5ca8389`); merge integración certificado `40685e86a086c152d178e511af1c0ba454fadb24`; producción actual `40685e86a086c152d178e511af1c0ba454fadb24`. Migraciones `2026_09_20_000003` + `2026_09_22_000001` aplicadas; smoke Demo PASS (emisión Consumer Final, aplicación POS bearer, rotación, reversión); NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados; smoke únicamente Empresa Demo. Incidente de deploy documentado (6 HTTP 500 transitorios 10:30–10:32 CST, swap no atómico + route-cache; 0 posteriores, no defecto 4B).
 - **Fase 4A vigencia configurable NC: feature `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** → **deploy producción CERTIFICADO** (2026-09-20, PRODUCTION_HEAD `5246e38`);
 - **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
 - Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
@@ -383,7 +392,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito — Fase 4B Consumer Final: CERTIFICADA** (2026-09-22, HEAD `3f59e67`). **SIGUIENTE: integración controlada de `feature/notas-credito`.** 4A/Nominativa ya desplegadas (`5246e38` en producción).
+- **Notas de Crédito — Fase 4B Consumer Final: PRODUCCIÓN** (2026-09-22, PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`). 4A/Nominativa `5246e38` y 4B Consumer Final `40685e86` desplegadas. Incidente deploy registrado (ventana 10:30:16–10:32:33 CST, causa swap no atómico + route-cache, 0 posteriores). **Regla operativa futura: deploys anunciados previamente, ventana aceptada ≤2 min, no iniciar ventana sin confirmación; futuro: deploy atómico + soporte Offline.**
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
@@ -401,7 +410,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: integración controlada de `feature/notas-credito` (Fase 4B). Siguiente módulo funcional pendiente según prioridades del proyecto.**
+**Prioridad siguiente según `docs/CRONOGRAMA_PRODUCCION.md`: P26 — Nombres claros 58 mm, 80 mm, Carta, etc. (siguiente bloque oficial). Fidelización F01–F45 completo; R04 siguiente fase responsive.**
 
 **P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
 
