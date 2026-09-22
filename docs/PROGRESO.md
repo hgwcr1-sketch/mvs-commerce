@@ -502,6 +502,10 @@ Cadena completa (rama `feature/notas-credito` + integración `integration/notas-
 | 4A | `9b55929` | feat(credit-notes): add configurable expiration | CERTIFICADA |
 | integración | `645e564` | integración Fase 4A + NC | CERRADA |
 | hotfix | `5246e38` | fix(pos): restore payment method active states | **PRODUCCIÓN** |
+| 4B-1 | `82c82db` | feat(credit-notes): issue consumer final credit notes securely | CERTIFICADA |
+| 4B-2 | `93aa4cc` | feat(credit-notes): apply consumer final credit notes securely | CERTIFICADA |
+| 4B-3 | `e682e9a` | feat(credit-notes): add consumer final pos workflow | CERTIFICADA |
+| 4B-4 | `3f59e67` | feat(credit-notes): add secure application code rotation | **CERTIFICADA** |
 
 ### Funcionalidad certificada
 
@@ -606,6 +610,18 @@ Antes del deploy:
 - NO implementar antes de estabilizar NC nominativa.
 
 ---
+
+**Fase 4B — Consumer Final — IMPLEMENTADA Y CERTIFICADA (2026-09-22):**
+- Activación opcional por empresa; Consumer Final identificado internamente por `customer_id NULL`.
+- Emisión exclusivamente desde devolución válida; NC nominativa preservada.
+- Código secreto 12 caracteres efectivos, formato `XXXX-XXXX-XXXX`; solo SHA-256 persistido; plaintext de entrega única.
+- Vencimiento reutiliza configuración 4A. Aplicación por número+código; parcial/total/pagos mixtos.
+- Multitenancy, rate limiting, idempotencia y protección de doble gasto.
+- POS integrado. Regeneración administrativa con motivo/auditoría; código anterior invalidado inmediatamente.
+- Cajero únicamente `notas_credito.aplicar`. NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
+- Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
+- Deuda preexistente (no causada por 4B): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
+- **Pendiente: integración controlada de `feature/notas-credito` a `integration/notas-credito`. NO desplegada.**
 
 ## Cuentas por pagar
 

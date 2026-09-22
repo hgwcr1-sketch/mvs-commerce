@@ -2,6 +2,34 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Notas de Crédito — Fase 4B Consumer Final — IMPLEMENTADA Y CERTIFICADA (2026-09-22)
+
+**Estado: CERTIFICADA. Pendiente integración controlada a `integration/notas-credito`; NO desplegada.** Rama `feature/notas-credito`, HEAD `3f59e67`.
+
+Cadena:
+- `82c82db` — 4B-1 emisión segura (Consumer Final).
+- `93aa4cc` — 4B-2 aplicación segura (número + código).
+- `e682e9a` — 4B-3 POS + comprobantes integrados.
+- `3f59e67` — 4B-4 regeneración segura (motivo/auditoría, código anterior invalidado).
+
+Puntos certificados:
+- Activación opcional por empresa.
+- Consumer Final identificado internamente por `customer_id NULL`.
+- Emisión exclusivamente desde devolución válida.
+- Código secreto de 12 caracteres efectivos, formato `XXXX-XXXX-XXXX`.
+- Solo SHA-256 persistido del código; plaintext de entrega única.
+- Vencimiento reutiliza configuración 4A.
+- Aplicación por número + código; parcial/total/pagos mixtos.
+- Multitenancy, rate limiting, idempotencia y protección de doble gasto.
+- POS integrado; NC nominativa preservada.
+- Regeneración administrativa con motivo/auditoría; código anterior invalidado inmediatamente.
+- Cajero únicamente `notas_credito.aplicar`.
+- NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
+
+Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
+
+Deuda PREEXISTENTE (no causada por 4B, no corregida): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
+
 ## Notas de Crédito — Fase 4A vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20)
 
 Cadena certificada: feature `9b55929` (`feat(credit-notes): add configurable expiration`) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** (`fix(pos): restore payment method active states`) → **deploy producción certificado** (2026-09-20). PRODUCTION_HEAD: **`5246e38c15d214132e54641c7883fd219c81cad8`**.
@@ -319,7 +347,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93`; integración `645e564` + hotfix `5246e38` en `integration/notas-credito`, ya desplegados a producción (PRODUCTION_HEAD `5246e38`). `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93 → 82c82db → 93aa4cc → e682e9a → 3f59e67`; integración `645e564` + hotfix `5246e38` en `integration/notas-credito`, ya desplegados a producción (PRODUCTION_HEAD `5246e38`). **Fase 4B (Consumer Final) certificada en `feature/notas-credito`, PENDIENTE integración controlada a `integration/notas-credito`.** `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -338,6 +366,7 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
+- **Fase 4B Consumer Final NC: certificada en `feature/notas-credito`** (HEAD `3f59e67`, cadena `82c82db → 93aa4cc → e682e9a → 3f59e67`). Activación opcional por empresa, código `XXXX-XXXX-XXXX` solo hash SHA-256, aplicación número+código, rate limiting/idempotencia/doble gasto, POS integrado, regeneración administrativa con auditoría. **406 tests PASS auditados; pendiente integración controlada.**
 - **Fase 4A vigencia configurable NC: feature `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** → **deploy producción CERTIFICADO** (2026-09-20, PRODUCTION_HEAD `5246e38`);
 - **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
 - Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
@@ -354,7 +383,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito — Fase 4A (vigencia configurable) y NC Nominativa: CERTIFICADAS Y DESPLEGADAS** (`5246e38` en producción). Flujo completo POS/UI/receipt/reversals + vencimiento configurable. Fase 4A cerrada documentalmente.
+- **Notas de Crédito — Fase 4B Consumer Final: CERTIFICADA** (2026-09-22, HEAD `3f59e67`). **SIGUIENTE: integración controlada de `feature/notas-credito`.** 4A/Nominativa ya desplegadas (`5246e38` en producción).
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
@@ -372,7 +401,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: deploy de Notas de Crédito Nominativa a producción (certificada `a734f5d`). Siguiente módulo funcional pendiente según prioridades del proyecto.**
+**Prioridad inmediata: integración controlada de `feature/notas-credito` (Fase 4B). Siguiente módulo funcional pendiente según prioridades del proyecto.**
 
 **P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
 
