@@ -17,6 +17,7 @@ use App\Models\SaleReturn;
 use App\Models\User;
 use App\Services\Loyalty\LoyaltyPortalAccessService;
 use App\Services\Loyalty\LoyaltySaleReceiptService;
+use App\Services\MvsPrint\EscPosSaleTicket;
 use App\Services\Sales\SaleReceiptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,9 @@ class SaleReceiptProductionTest extends TestCase
                 ->assertSee('data-receipt-format="'.$format.'"', false)->assertSee('TOTAL')->assertSee('grand', false)
                 ->assertSee($company->trade_name)->assertSee($branch->name);
         }
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $sale))
+            ->assertOk()->assertSee('80 mm')->assertSee('58 mm')->assertSee('Carta')->assertDontSee('Grande');
     }
 
     public function test_exact_cash_payment_keeps_received_and_zero_change_and_customer_identification(): void
@@ -47,7 +51,7 @@ class SaleReceiptProductionTest extends TestCase
         $this->assertSame('1.017', $data->payments[0]['received_amount']);
         $this->assertSame('0', $data->payments[0]['change_amount']);
         foreach (['58', '80'] as $width) {
-            $ticket = app(\App\Services\MvsPrint\EscPosSaleTicket::class)->build($data, $width);
+            $ticket = app(EscPosSaleTicket::class)->build($data, $width);
             $text = collect($ticket['lines'])->pluck('value')->implode("\n");
             $this->assertStringContainsString('Recibido: ₡ 1.017', $text);
             $this->assertStringContainsString('Vuelto:   ₡ 0', $text);
@@ -70,6 +74,8 @@ class SaleReceiptProductionTest extends TestCase
     public function test_branch_configuration_selects_default_format_and_optional_direct_print(): void
     {
         [$company, $branch, $user, $sale] = $this->context();
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('branches.edit', $branch))->assertOk()->assertSee('80 mm')->assertSee('58 mm')->assertSee('Carta');
         $payload = ['name' => $branch->name, 'code' => $branch->code, 'phone' => '2222-2222', 'address' => 'Centro', 'is_active' => 1, 'receipt_format' => '58mm', 'receipt_auto_print' => 1];
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->put(route('branches.update', $branch), $payload)->assertRedirect();

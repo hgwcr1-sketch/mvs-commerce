@@ -204,7 +204,7 @@
     </form>
     <nav class="actions" aria-label="Acciones del comprobante">
         <button type="button" onclick="window.print()">Imprimir</button>
-        @foreach(['80mm' => '80 mm', '58mm' => '58 mm', 'letter' => 'Grande'] as $value => $label)
+        @foreach(\App\Services\Sales\SaleReceiptService::FORMAT_LABELS as $value => $label)
             <a href="{{ route('pos.receipt', $sale) }}?format={{ $value }}">{{ $label }}</a>
         @endforeach
         <a href="{{ route('pos.receipt.pdf', $sale) }}?format={{ $format }}">Descargar PDF</a>
