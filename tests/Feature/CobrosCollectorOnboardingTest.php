@@ -258,6 +258,103 @@ class CobrosCollectorOnboardingTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
+     | FULL INTEGRATION: create → login → change → landing (both modes)
+     | --------------------------------------------------------------------- */
+
+    public function test_full_integration_individual_mode_collector_landing(): void
+    {
+        [$company, $admin] = $this->individualContext();
+        $service = app(CollectorManagementService::class);
+
+        // Platform Admin creates collector in individual mode
+        $result = $service->createCollector($company, [
+            'name' => 'Individual Collector',
+            'email' => 'indicollector@test.com',
+            'phone' => '88881234',
+        ], $admin, true);
+
+        $tempPassword = $result['plain_password'];
+        $collector = $result['user'];
+
+        // Verify role has both operational permissions
+        $this->assertTrue($collector->hasPermission('cobros.acceder', $company));
+        $this->assertTrue($collector->hasPermission('cobros.cobrar', $company));
+        $this->assertFalse($collector->hasPermission('cobros.portal_dueno', $company));
+
+        // Login with temp password → forced to change
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => $tempPassword,
+        ])->assertRedirect(route('cobros.password.force'));
+
+        // Change password
+        $this->actingAs($collector)->post(route('cobros.password.force.store'), [
+            'password' => 'NuevaClave1',
+            'password_confirmation' => 'NuevaClave1',
+        ])->assertRedirect(route('cobros.index'));
+
+        // Login again with new password
+        Auth::logout();
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => 'NuevaClave1',
+        ]);
+
+        // Collector lands on collector dashboard (200, not 403)
+        $this->get(route('cobros.collector.index'))
+            ->assertOk()
+            ->assertSee('Portal del cobrador');
+    }
+
+    public function test_full_integration_cupo_mode_collector_landing(): void
+    {
+        [$company, $admin, $owner] = $this->cupoContext();
+        $service = app(CollectorManagementService::class);
+
+        // Owner creates collector in cupo mode
+        $result = $service->createCollector($company, [
+            'name' => 'Cupo Collector',
+            'email' => 'cupocollector@test.com',
+            'phone' => '88885678',
+        ], $admin);
+
+        $tempPassword = $result['plain_password'];
+        $collector = $result['user'];
+
+        // Verify role has both operational permissions
+        $this->assertTrue($collector->hasPermission('cobros.acceder', $company));
+        $this->assertTrue($collector->hasPermission('cobros.cobrar', $company));
+
+        // Login with temp password → forced to change
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => $tempPassword,
+        ])->assertRedirect(route('cobros.password.force'));
+
+        // Change password
+        $this->actingAs($collector)->post(route('cobros.password.force.store'), [
+            'password' => 'NuevaClave1',
+            'password_confirmation' => 'NuevaClave1',
+        ])->assertRedirect(route('cobros.index'));
+
+        // Login again with new password
+        Auth::logout();
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => 'NuevaClave1',
+        ]);
+
+        // Collector lands on collector dashboard (200, not 403)
+        $this->get(route('cobros.collector.index'))
+            ->assertOk()
+            ->assertSee('Portal del cobrador');
+    }
+
+    /* ---------------------------------------------------------------------
      | PLATFORM ADMIN: individual mode with temp password
      | --------------------------------------------------------------------- */
 

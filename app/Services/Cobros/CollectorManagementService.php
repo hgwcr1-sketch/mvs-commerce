@@ -243,10 +243,17 @@ class CollectorManagementService
             ['is_active' => true]
         );
 
-        $collectorPermissions = ['cobros.acceder', 'cobros.cobrar'];
-        $permissionIds = Permission::whereIn('name', $collectorPermissions)
-            ->where('is_active', true)
-            ->pluck('id');
+        $collectorPermissions = [
+            ['name' => 'cobros.acceder', 'label' => 'Acceder a CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
+        ];
+
+        $permissionIds = collect($collectorPermissions)->map(fn (array $perm) =>
+            Permission::firstOrCreate(
+                ['name' => $perm['name']],
+                ['label' => $perm['label'], 'module' => $perm['module'], 'is_active' => true]
+            )->id
+        );
 
         $role->permissions()->syncWithoutDetaching($permissionIds);
 
