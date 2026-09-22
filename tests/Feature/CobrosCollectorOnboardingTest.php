@@ -80,6 +80,60 @@ class CobrosCollectorOnboardingTest extends TestCase
         $this->assertSame(6, strlen($plain));
     }
 
+    /* ---------------------------------------------------------------------
+     | COLLECTOR PERMISSIONS: never supervisor
+     | --------------------------------------------------------------------- */
+
+    public function test_collector_role_never_has_supervisor_permission(): void
+    {
+        [$company, $admin] = $this->cupoContext();
+        $service = app(CollectorManagementService::class);
+
+        $result = $service->createCollector($company, [
+            'name' => 'Perm Test',
+            'email' => 'permtest@test.com',
+        ], $admin);
+
+        $collector = $result['user'];
+
+        $this->assertTrue($collector->hasPermission('cobros.acceder', $company));
+        $this->assertTrue($collector->hasPermission('cobros.cobrar', $company));
+        $this->assertFalse($collector->hasPermission('cobros.supervisar', $company));
+        $this->assertFalse($collector->hasPermission('cobros.portal_dueno', $company));
+    }
+
+    public function test_individual_mode_collector_never_has_supervisor_permission(): void
+    {
+        [$company, $admin] = $this->individualContext();
+        $service = app(CollectorManagementService::class);
+
+        $result = $service->createCollector($company, [
+            'name' => 'Indiv Perm',
+            'email' => 'indivperm@test.com',
+        ], $admin, true);
+
+        $collector = $result['user'];
+
+        $this->assertTrue($collector->hasPermission('cobros.acceder', $company));
+        $this->assertTrue($collector->hasPermission('cobros.cobrar', $company));
+        $this->assertFalse($collector->hasPermission('cobros.supervisar', $company));
+        $this->assertFalse($collector->hasPermission('cobros.portal_dueno', $company));
+    }
+
+    public function test_collector_never_routed_to_supervisor_portal(): void
+    {
+        [$company, $admin, $collector] = $this->cupoContextWithCollector();
+
+        $this->app['auth']->forgetGuards();
+        $this->post(route('cobros.login.store'), [
+            'email' => $collector->email,
+            'password' => 'password123',
+        ]);
+
+        $this->get(route('cobros.index'))
+            ->assertRedirect(route('cobros.collector.index'));
+    }
+
     public function test_create_existing_user_sets_must_change_password(): void
     {
         [$company, $admin] = $this->setupCompany();
