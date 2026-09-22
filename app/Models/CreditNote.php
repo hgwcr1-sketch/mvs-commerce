@@ -137,4 +137,15 @@ class CreditNote extends Model
         return in_array($this->status, [self::STATUS_ISSUED, self::STATUS_PARTIALLY_APPLIED], true)
             && bccomp((string) $this->balance, '0', 4) > 0;
     }
+
+    /**
+     * NC Consumer Final: emitida a partir de una venta sin cliente
+     * identificado (customer_id null). Es valor al portador: se autoriza
+     * únicamente presentando número + código secreto (4B-2) y su único
+     * secreto persistido es application_code_hash.
+     */
+    public function isConsumerFinal(): bool
+    {
+        return $this->customer_id === null;
+    }
 }

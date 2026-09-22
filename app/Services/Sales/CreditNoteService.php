@@ -249,6 +249,82 @@ class CreditNoteService
     }
 
     /**
+     * Error genérico de NO autorización para NC Consumer Final por portador.
+     *
+     * No revela si el número existe, si el código es incorrecto, si la NC
+     * pertenece a otra empresa, si es nominativa, si está vencida o si el
+     * hash falta. Mismo mensaje para todos los fallos de autorización.
+     */
+    public const BEARER_GENERIC_ERROR = 'No se pudo validar la nota de crédito.';
+
+    /**
+     * Autoriza una NC Consumer Final por número + código secreto + monto.
+     *
+     * Es una PREvalidación sin locks: sirve para resolver de forma segura el
+     * credit_note_id canónico antes del checkout. La validación definitiva
+     * (saldo, estado, vencimiento, toggle, empresa) se revalida SIEMPRE dentro
+     * de la transacción de checkout bajo lock (applyBatchToSale).
+     *
+     * Reglas:
+     *  - lookup estricto por company_id + credit_note_number (multitenancy).
+     *  - solo NC Consumer Final (customer_id null, application_code_hash presente).
+     *  - comparación constant-time hash_equals del código normalizado.
+     *  - empresa debe tener credit_note_consumer_final activo (toggle OFF = rechazo).
+     *  - estado aplicable, saldo > 0, vigente (expires_at null o futuro).
+     *  - monto > 0 y <= saldo disponible.
+     *
+     * Toda falla devuelve el error genérico; jamás el hash ni el código.
+     */
+    public function authorizeBearerApplication(
+        int $companyId,
+        string $creditNoteNumber,
+        string $applicationCode,
+        string $amount,
+    ): CreditNote {
+        $candidateHash = self::applicationCodeHash($applicationCode);
+        $dummyHash = str_repeat('f', 64);
+        $requested = bcadd((string) $amount, '0', self::SCALE);
+
+        $note = CreditNote::query()
+            ->where('company_id', $companyId)
+            ->where('credit_note_number', trim($creditNoteNumber))
+            ->first();
+
+        if ($note === null || $note->isConsumerFinal() === false || $note->application_code_hash === null) {
+            hash_equals($dummyHash, $candidateHash);
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
+            ]);
+        }
+
+        $company = $note->company;
+
+        if (! hash_equals($note->application_code_hash, $candidateHash)) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
+            ]);
+        }
+
+        if ($company === null || ! $company->consumerFinalCreditNotesEnabled()) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
+            ]);
+        }
+
+        if (in_array($note->status, [CreditNote::STATUS_VOIDED, CreditNote::STATUS_APPLIED], true)
+            || bccomp((string) $note->balance, '0', self::SCALE) <= 0
+            || $note->isExpired()
+            || bccomp($requested, '0', self::SCALE) <= 0
+            || bccomp($requested, (string) $note->balance, self::SCALE) > 0) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => self::BEARER_GENERIC_ERROR,
+            ]);
+        }
+
+        return $note;
+    }
+
+    /**
      * Notas de crédito disponibles (saldo > 0) para un cliente de una empresa.
      *
      * Orden FIFO por fecha de emisión. Exclusivamente NC con saldo disponible
@@ -352,6 +428,12 @@ class CreditNoteService
                 ]);
             }
 
+            if ($note->isConsumerFinal()) {
+                throw ValidationException::withMessages([
+                    'customer' => 'La Nota de Crédito a consumidor final solo puede aplicarse en el POS presentando su código secreto.',
+                ]);
+            }
+
             if ($target->customer_id === null || (int) $target->customer_id !== (int) $note->customer_id) {
                 throw ValidationException::withMessages([
                     'customer' => 'La venta destino debe pertenecer al mismo cliente de la Nota de Crédito.',
@@ -410,7 +492,7 @@ class CreditNoteService
      * Valida TODAS las NC antes de empezar writes económicos.
      * Preserva invariante: issued_amount = offset_amount + applied_amount + balance.
      *
-     * @param array<int, array{credit_note_id: int, amount: string}> $canonicalNC
+     * @param array<int, array{credit_note_id: int, amount: string, bearer?: bool}> $canonicalNC
      * @return CreditNoteApplication[]
      */
     public function applyBatchToSale(
@@ -454,7 +536,27 @@ class CreditNoteService
                     ]);
                 }
 
-                if ($target->customer_id === null || (int) $note->customer_id !== (int) $target->customer_id) {
+                if ($note->isConsumerFinal()) {
+                    // NC Consumer Final (valor al portador). Únicamente puede
+                    // ingresar por la vía autorizada con número + código (4B-2);
+                    // la bandera bearer se marca durante esa autorización. El
+                    // toggle de empresa se REvalida aquí, dentro de la
+                    // transacción de checkout, aunque ya esté en true.
+                    // Ambos rechazos usan el mensaje genérico para no revelar,
+                    // por la vía nominativa con un id adivinado, que existe una
+                    // NC consumidor final ni su número.
+                    if (empty($ncReq['bearer'])) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => self::BEARER_GENERIC_ERROR,
+                        ]);
+                    }
+
+                    if (! $note->company?->consumerFinalCreditNotesEnabled()) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => self::BEARER_GENERIC_ERROR,
+                        ]);
+                    }
+                } elseif ($target->customer_id === null || (int) $note->customer_id !== (int) $target->customer_id) {
                     throw ValidationException::withMessages([
                         'credit_note_applications' => 'La NC '.$note->credit_note_number.' no pertenece a este cliente.',
                     ]);
@@ -521,7 +623,7 @@ class CreditNoteService
                     'company_id' => $note->company_id,
                     'credit_note_id' => $note->id,
                     'sale_id' => $target->id,
-                    'customer_id' => $note->customer_id,
+                    'customer_id' => $note->isConsumerFinal() ? $target->customer_id : $note->customer_id,
                     'amount' => $applied,
                     'application_token' => $applicationToken,
                     'applied_by' => $user->id,
