@@ -34,6 +34,7 @@ class CreditNote extends Model
         'issued_by',
         'issued_at',
         'expires_at',
+        'application_code_hash',
         'voided_by',
         'voided_at',
         'void_reason',

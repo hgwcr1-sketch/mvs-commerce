@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSaleReturnRequest;
 use App\Models\Sale;
 use App\Models\SaleReturnItem;
+use App\Services\Sales\IssuedCreditNoteResult;
 use App\Services\Sales\SaleReturnService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -52,19 +53,34 @@ class ReturnController extends Controller
     ): RedirectResponse {
         $this->assertIsolatedContext($venta);
 
+        $creditNoteResult = null;
         $saleReturn = $service->store(
             $venta,
             $request->user(),
             $request->validated('reason'),
             $request->validated('items'),
+            $creditNoteResult,
         );
 
-        return redirect()
+        $response = redirect()
             ->route('ventas.show', $venta)
             ->with(
                 'success',
                 "Devolución {$saleReturn->return_number} registrada correctamente.",
             );
+
+        if ($creditNoteResult instanceof IssuedCreditNoteResult && $creditNoteResult->applicationCode !== null) {
+            $note = $creditNoteResult->creditNote;
+            $response->with('consumer_final_delivery', [
+                'credit_note_number' => $note->credit_note_number,
+                'application_code' => $creditNoteResult->applicationCode,
+                'issued_amount' => $note->issued_amount,
+                'issued_at' => optional($note->issued_at)?->toDateTimeString(),
+                'expires_at' => optional($note->expires_at)?->toDateString(),
+            ]);
+        }
+
+        return $response;
     }
 
     private function assertIsolatedContext(Sale $venta): void

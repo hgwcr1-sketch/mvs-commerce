@@ -118,7 +118,9 @@ class OrderPermissionSeederTest extends TestCase
         $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
         $this->assertTrue($localAdminRole->fresh()->permissions()->where('name', 'pos.acceder')->exists());
         $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.crear')->exists());
-        $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
+        $this->assertTrue($cashierRole->fresh()->permissions()->where('name', 'notas_credito.aplicar')->exists());
+        // Cajero NUNCA configura ni regenera créditos.
+        $this->assertFalse($cashierRole->fresh()->permissions()->where('name', 'notas_credito.configurar')->exists());
 
         $this->assertTrue($user->can('notas_credito.crear'));
         $this->assertTrue($user->can('notas_credito.aplicar'));

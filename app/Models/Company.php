@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Model;
     'payable_alert_days',
     'credit_note_expiration_policy',
     'credit_note_custom_expiration_days',
+    'credit_note_consumer_final',
     'is_active',
 ])]
 
@@ -46,6 +47,7 @@ class Company extends Model
             'layaway_alert_days' => 'integer',
             'payable_alert_days' => 'integer',
             'credit_note_custom_expiration_days' => 'integer',
+            'credit_note_consumer_final' => 'boolean',
         ];
     }
 
@@ -66,6 +68,18 @@ class Company extends Model
                 : null,
             default => null,
         };
+    }
+
+    /**
+     * Indica si la empresa está habilitada para emitir Notas de Crédito
+     * para Consumer Final (ventas sin cliente identificado).
+     *
+     * Desactivado por defecto. Solo una empresa habilitada explícitamente
+     * puede emitir NC Consumer Final desde una devolución válida.
+     */
+    public function consumerFinalCreditNotesEnabled(): bool
+    {
+        return (bool) $this->credit_note_consumer_final;
     }
 
     public function users()

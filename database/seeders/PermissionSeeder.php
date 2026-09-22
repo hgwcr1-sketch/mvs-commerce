@@ -253,5 +253,23 @@ class PermissionSeeder extends Seeder
             ->each(function (Role $role) use ($ncPermissionIds) {
                 $role->permissions()->syncWithoutDetaching($ncPermissionIds);
             });
+
+        // Notas de crédito: el rol Cajero únicamente puede aplicar notas de
+        // crédito (incluidas las emitidas a consumidor final). No crea,
+        // configura ni regenera; la emisión de devoluciones sigue su propio
+        // permiso devoluciones.crear.
+        $cashierApplyId = Permission::query()
+            ->where('is_active', true)
+            ->where('name', 'notas_credito.aplicar')
+            ->value('id');
+
+        Role::query()
+            ->where('name', 'Cajero')
+            ->where('is_active', true)
+            ->each(function (Role $role) use ($cashierApplyId) {
+                if ($cashierApplyId !== null) {
+                    $role->permissions()->syncWithoutDetaching([$cashierApplyId]);
+                }
+            });
     }
 }

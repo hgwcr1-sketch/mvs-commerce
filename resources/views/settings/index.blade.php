@@ -251,6 +251,20 @@
                     <p class="mt-2 text-sm text-slate-500">Plazo en días para la política personalizada.</p>
                 </div>
 
+                <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0">
+                        <label for="credit_note_consumer_final" class="text-sm font-semibold text-slate-700">Permitir notas de crédito a consumidor final</label>
+                        <p class="mt-1 text-sm text-slate-500">Si está activo, las devoluciones sobre ventas sin cliente identificado emiten una Nota de Crédito con código de aplicación entregado una sola vez.</p>
+                    </div>
+                    <label class="inline-flex shrink-0 cursor-pointer items-center">
+                        <input id="credit_note_consumer_final" name="credit_note_consumer_final" type="checkbox" value="1"
+                            @checked(old('credit_note_consumer_final', $company->credit_note_consumer_final ?? false))
+                            class="h-6 w-6 shrink-0 cursor-pointer rounded accent-amber-500 focus:ring-2 focus:ring-amber-400">
+                        <span class="ml-2 text-sm font-semibold text-slate-700">Activado</span>
+                    </label>
+                    @error('credit_note_consumer_final')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+
                 <button type="submit" class="rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar configuración de Notas de Crédito</button>
             </form>
         </x-card>
