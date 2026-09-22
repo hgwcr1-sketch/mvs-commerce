@@ -61,7 +61,7 @@
         @if($cobrosContract)
         <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
             <strong>Estado actual:</strong>
-            @if($cobrosContract['license_mode'] === 'individual')Licencias individuales · @elseLicencia por empresa + cupo · @endif
+            {{ $cobrosContract['license_mode'] === 'individual' ? 'Licencias individuales' : 'Licencia por empresa + cupo' }} · 
             @if($cobrosContract['collector_limit'])Límite: {{ $cobrosContract['collector_limit'] }} cobradores · @endif
             Licencia admin: {{ $cobrosContract['admin_license_charged'] ? 'Se cobra como licencia adicional' : 'Incluida sin costo' }}
         </div>

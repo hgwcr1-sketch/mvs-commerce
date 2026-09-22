@@ -2,6 +2,25 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — FASE 1E-B COMPLETADA / CERTIFICADA (2026-09-22)
+
+**FASE 1E-B = COMPLETADA / CERTIFICADA.** Auditoría CLINE PASS; validación manual
+individual + company_cupo PASS (cupo 1→2/3, contraseñas, WhatsApp, aislamiento).
+Suite final Cobros: **145/145, 1330 aserciones**. Commit local
+`fix(cobros): isolate tenant flow and close collector management` sobre
+baseline `f9124be`. Sin push/merge/deploy; `tmp_generate_cobros_icons.php` fuera.
+Deuda futura NO bloqueante: `is_super_admin` puede heredar `cobros.cobrar`
+y afectar conteo de cupos — revisar después, sin modificar aún.
+
+## Worktree CobrOS — recuperación post-apagado 1E-B (2026-09-22)
+
+Rama `feature/cobros-v1`; HEAD previo `f9124be`.
+Causa del 404 `/cobros/login`: servidor caído (tras apagado); rutas correctas.
+Caches `route/config/view/cache` limpias; `GET/POST /cobros/login` = 200/419
+(CSRF) sin auth ni `active.company`/`cobros.active.company` en login.
+Aislamiento `cobros.active.company` aplicado (alias + middleware + rutas).
+Fix `@else` en `platform/show.blade.php` aplicado.
+
 ## Worktree CobrOS — 1E-B completada (2026-09-20)
 
 En este worktree la rama verificada es feature/cobros-v1; HEAD `4dd4ca4`.

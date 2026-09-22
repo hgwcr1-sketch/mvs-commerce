@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,
+            'cobros.active.company' => \App\Http\Middleware\Cobros\EnsureActiveCompany::class,
             'company.licensed' => EnsureCompanyLicense::class,
             'company.module' => EnsureCompanyModule::class,
 

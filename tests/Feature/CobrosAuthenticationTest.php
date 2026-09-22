@@ -230,4 +230,100 @@ class CobrosAuthenticationTest extends TestCase
             $company->license()->first()->toJson(),
         ];
     }
+
+    /* ------------------------------------------------------------------
+     | COBROS ISOLATION: login/password/portal NEVER redirect to Commerce
+     | ------------------------------------------------------------------ */
+
+    public function test_cobros_login_never_redirects_to_commerce_onboarding(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Secure123',
+        ])->assertRedirect(route('cobros.index'));
+
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
+
+        $this->get(route('cobros.owner.dashboard'))->assertOk();
+    }
+
+    public function test_cobros_password_change_never_redirects_to_commerce(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+        $user->update(['must_change_password' => true, 'password' => 'Temp1234']);
+
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Temp1234',
+        ])->assertRedirect(route('cobros.password.force'));
+
+        $this->post(route('cobros.password.force.store'), [
+            'password' => 'NewSecure789',
+            'password_confirmation' => 'NewSecure789',
+        ])->assertRedirect(route('cobros.index'));
+
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
+        $this->assertFalse($user->fresh()->must_change_password);
+    }
+
+    public function test_cobros_owner_resolves_to_owner_portal_not_commerce_dashboard(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Secure123',
+        ]);
+
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
+        $this->get(route('cobros.owner.dashboard'))->assertOk()
+            ->assertSee('Cartera del dueño')
+            ->assertSee('MVS CobrOS');
+    }
+
+    public function test_cobros_collector_resolves_to_collector_portal_not_commerce_dashboard(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.cobrar']);
+
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Secure123',
+        ]);
+
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
+        $this->get(route('cobros.collector.index'))->assertOk()
+            ->assertSee('Portal del cobrador')
+            ->assertDontSee('Dashboard general');
+    }
+
+    public function test_cobros_user_without_company_gets_403_not_commerce_onboarding(): void
+    {
+        $user = User::factory()->create(['is_active' => true, 'password' => 'Secure123']);
+        // No company attached at all
+
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Secure123',
+        ]);
+
+        $this->get(route('cobros.index'))->assertForbidden();
+    }
+
+    public function test_cobros_active_company_middleware_never_redirects_to_empresa_create(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+
+        // Clear session to force auto-resolution
+        $this->post(route('cobros.login.store'), [
+            'email' => $user->email,
+            'password' => 'Secure123',
+        ]);
+
+        $this->session(['active_company_id' => null, 'active_branch_id' => null]);
+
+        $response = $this->get(route('cobros.index'));
+        $response->assertRedirect(route('cobros.owner.dashboard'));
+    }
 }
