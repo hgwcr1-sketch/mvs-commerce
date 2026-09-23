@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Data\Purchases\PurchaseData;
 use App\Data\Purchases\PurchaseLineData;
+use App\Models\Branch;
 use App\Models\InventoryMovement;
 use App\Models\PurchaseItem;
 use Illuminate\Support\Facades\Auth;
@@ -215,6 +216,39 @@ class PurchaseController extends Controller
     ) {
         return response()->json([
             'message' => 'Debe indicar la fecha de vencimiento.',
+        ], 422);
+    }
+
+    //
+    // La compra debe registarse en la sucursal que el usuario ve en el selector.
+    // Se acepta branch_id explícito (validado: pertenencia a la empresa activa,
+    // activa y asignada al usuario); si no viene, se usa la sucursal activa.
+    //
+    $validatedBranchId = $request->integer('branch_id');
+    if ($validatedBranchId > 0 && $validatedBranchId !== (int) $branchId) {
+        $ownsBranch = \Illuminate\Support\Facades\DB::table('branch_user')
+            ->where('user_id', Auth::id())
+            ->where('branch_id', $validatedBranchId)
+            ->exists();
+
+        $branchValid = Branch::query()
+            ->where('id', $validatedBranchId)
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $branchValid || ! $ownsBranch) {
+            return response()->json([
+                'message' => 'La sucursal indicada no está disponible para esta empresa.',
+            ], 422);
+        }
+
+        $branchId = $validatedBranchId;
+    }
+
+    if (empty($branchId)) {
+        return response()->json([
+            'message' => 'Debe seleccionar una sucursal antes de guardar la compra.',
         ], 422);
     }
 

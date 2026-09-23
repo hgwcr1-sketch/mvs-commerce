@@ -20,7 +20,31 @@ window.purchaseEdit = {
     data-purchase-show-url="{{ route('compras.show', ['compra' => '__PURCHASE_ID__']) }}"
     data-search-suppliers="{{ route('proveedores.search') }}"
     data-search-products="{{ route('compras.search-products') }}"
+    data-active-branch-id="{{ session('active_branch_id') }}"
     class="space-y-6">
+
+@php($comprasKeepBranch = request()->routeIs('compras.create', 'compras.edit'))
+@if($comprasKeepBranch)
+<script>
+window.__mvsKeepBranch = true;
+window.__mvsPurchaseBranchId = {{ (int) session('active_branch_id') ?: 'null' }};
+// La vista anula la lectura en tiempo de registro con el valor vigente y
+// escucha el cambio de sucursal SIN navegación del selector del header.
+document.addEventListener('alpine:init', function () {
+    var currentBranch = window.__mvsPurchaseBranchId;
+    document.addEventListener('mvs-branch-changed', function (event) {
+        if (!event.detail || !event.detail.branch_id) return;
+        currentBranch = event.detail.branch_id;
+        document.querySelectorAll('[x-data="purchaseForm()"]').forEach(function (root) {
+            var data = window.Alpine && window.Alpine.$data ? window.Alpine.$data(root) : null;
+            if (!data) return;
+            data.activeBranchId = currentBranch;
+            data.persistDraft();
+        });
+    });
+});
+</script>
+@endif
 
     {{-- VOLVER --}}
     <div class="flex justify-end">

@@ -124,9 +124,17 @@
             </div>
         @endcan
 
+        {{-- En Nueva Compra / Editar Compra el cambio de sucursal NO recarga
+             la página: se actualiza la sesión por fetch y el estado Alpine de
+             la vista toma la nueva sucursal en vivo, sin perder el borrador. --}}
+        @php($mvsFreezeBranchSelector = request()->routeIs('compras.create', 'compras.edit'))
+
         @if($headerBranches->isNotEmpty() && (!$canConsolidate || !request()->routeIs('dashboard')))
 
-            <form method="POST" action="{{ route('branch.active.update') }}">
+            <form
+                method="POST"
+                action="{{ route('branch.active.update') }}"
+                @if($mvsFreezeBranchSelector) onsubmit="return false" @endif>
 
                 @csrf
 
@@ -135,7 +143,7 @@
                 <select
                     id="header-branch"
                     name="branch_id"
-                    onchange="this.form.submit()"
+                    onchange="@if($mvsFreezeBranchSelector) mvsOnBranchChange(event) @else this.form.submit() @endif"
                     class="min-h-11 max-w-[8.5rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-700 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 sm:max-w-[12rem]">
 
                     <option value="" disabled @selected(!session('active_branch_id'))>
@@ -154,6 +162,51 @@
 
             </form>
 
+        @endif
+
+        @if($mvsFreezeBranchSelector)
+            <script>
+            (function () {
+                // Cambio de sucursal SIN navegación: la compra en curso nunca
+                // se pierde. La sesión se actualiza por fetch y el formulario
+                // (Alpine) toma la nueva sucursal en vivo.
+                window.__mvsKeepBranch = true;
+                window.mvsOnBranchChange = function (event) {
+                    event.preventDefault();
+                    var select = event.target;
+                    var branchId = select.value;
+                    if (!branchId) return Promise.resolve();
+                    var csrf = document.querySelector('meta[name="csrf-token"]');
+                    var previousValue = select.getAttribute('data-current-branch');
+                    select.disabled = true;
+                    // Se retorna la promesa para que el cambio sea determinista
+                    // y ningún guardado posterior corra antes de la sesión.
+                    return fetch('{{ route('branch.active.update') }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRF-TOKEN': csrf ? csrf.content : '',
+                            'Accept': 'application/json',
+                        },
+                        body: new URLSearchParams({ _token: csrf ? csrf.content : '', branch_id: branchId }),
+                    }).then(function (response) {
+                        if (!response.ok && response.status !== 302) {
+                            throw new Error('No se pudo cambiar la sucursal.');
+                        }
+                        select.setAttribute('data-current-branch', branchId);
+                        document.dispatchEvent(new CustomEvent('mvs-branch-changed', {
+                            detail: { branch_id: parseInt(branchId, 10) },
+                        }));
+                    }).catch(function () {
+                        if (previousValue) select.value = previousValue;
+                        alert('No se pudo cambiar la sucursal. Intente nuevamente.');
+                    }).finally(function () {
+                        select.disabled = false;
+                    });
+                };
+            })();
+            </script>
         @endif
 
         <form method="POST" action="{{ route('logout') }}" class="hidden md:block">
