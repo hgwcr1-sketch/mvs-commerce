@@ -8,8 +8,10 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductCategory;
+use App\Models\ProductSupplier;
 use App\Models\Size;
 use App\Models\Style;
+use App\Models\Supplier;
 use App\Models\Unit;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -32,9 +34,12 @@ class ProductImportService
 
     private array $colorCache = [];
 
+    private array $supplierCache = [];
+
     public const HEADERS = [
         'codigo_interno*', 'nombre*', 'categoria*', 'subcategoria_subrubro', 'marca', 'unidad*', 'tipo_producto*',
         'estilo', 'talla', 'color',
+        'proveedor', 'codigo_producto_proveedor',
         'codigo_barras_principal', 'codigos_barras_adicionales', 'cabys', 'descripcion_corta',
         'descripcion', 'costo*', 'precio_venta*', 'precio_mayorista', 'precio_especial',
         'precio_a', 'precio_b', 'precio_c', 'impuesto*', 'controla_inventario',
@@ -46,6 +51,8 @@ class ProductImportService
         'categoria' => 'category', 'subcategoria_subrubro' => 'subcategory', 'subcategoria' => 'subcategory',
         'subrubro' => 'subcategory', 'marca' => 'brand', 'unidad' => 'unit', 'tipo_producto' => 'product_type',
         'tipo' => 'product_type', 'estilo' => 'style', 'talla' => 'size', 'color' => 'color',
+        'proveedor' => 'supplier_name', 'codigo_producto_proveedor' => 'supplier_product_code',
+        'codigo_proveedor' => 'supplier_product_code',
         'codigo_barras_principal' => 'barcode', 'codigo_de_barras_principal' => 'barcode',
         'codigo_barras' => 'barcode', 'codigos_barras_adicionales' => 'additional_barcodes',
         'codigos_de_barras_adicionales' => 'additional_barcodes', 'cabys' => 'cabys_code',
@@ -61,7 +68,8 @@ class ProductImportService
         'internal_code' => 'codigo_interno', 'name' => 'nombre', 'category_name' => 'categoria',
         'subcategory_name' => 'subcategoria_subrubro', 'brand_name' => 'marca', 'unit_name' => 'unidad',
         'product_type' => 'tipo_producto', 'style_name' => 'estilo', 'size_name' => 'talla',
-        'color_name' => 'color',
+        'color_name' => 'color', 'supplier_name' => 'proveedor',
+        'supplier_product_code' => 'codigo_producto_proveedor',
         'barcode' => 'codigo_barras_principal', 'additional_barcodes' => 'codigos_barras_adicionales',
         'cabys_code' => 'cabys', 'short_description' => 'descripcion_corta', 'description' => 'descripcion',
         'cost' => 'costo', 'sale_price' => 'precio_venta', 'wholesale_price' => 'precio_mayorista',
@@ -144,6 +152,16 @@ class ProductImportService
                         'is_active' => true,
                     ]);
                 }
+                if ($row['supplier_id'] !== null) {
+                    ProductSupplier::create([
+                        'company_id' => $companyId,
+                        'product_id' => $product->id,
+                        'supplier_id' => $row['supplier_id'],
+                        'supplier_product_code' => $row['supplier_product_code'],
+                        'is_primary' => true,
+                        'is_active' => true,
+                    ]);
+                }
             }
 
             return count($rows);
@@ -178,6 +196,8 @@ class ProductImportService
         $styleName = $this->catalogName($data['style'] ?? null);
         $sizeName = $this->catalogName($data['size'] ?? null);
         $colorName = $this->catalogName($data['color'] ?? null);
+        $supplierName = $this->catalogName($data['supplier_name'] ?? null);
+        $supplierProductCode = $this->nullable($data['supplier_product_code'] ?? null);
         $category = $this->category($companyId, $categoryName);
         $subcategory = $this->subcategory($companyId, $category, $subcategoryName);
         $brand = $this->brand($companyId, $brandName);
@@ -185,6 +205,7 @@ class ProductImportService
         $style = $this->style($companyId, $styleName);
         $size = $this->size($companyId, $sizeName);
         $color = $this->color($companyId, $colorName);
+        $supplierResolution = $this->resolveSupplier($companyId, $supplierName);
         $primary = $this->nullable($data['barcode'] ?? null);
         $additional = collect(preg_split('/\s*\|\s*/', $this->nullable($data['additional_barcodes'] ?? null) ?? ''))
             ->map(fn ($barcode) => trim((string) $barcode))->filter()->unique()->values()->all();
@@ -215,6 +236,10 @@ class ProductImportService
             'color_name' => $colorName,
             'color_id' => $color?->id,
             'color_will_create' => $colorName !== null && $color === null,
+            'supplier_name' => $supplierName,
+            'supplier_product_code' => $supplierProductCode,
+            'supplier_id' => $supplierResolution['supplier_id'],
+            'supplier_match' => $supplierResolution['match'],
             'product_type' => Str::lower($this->nullable($data['product_type'] ?? null) ?? ''),
             'barcode' => $primary,
             'additional_barcodes' => $additional,
@@ -286,6 +311,20 @@ class ProductImportService
             }
             if ($row['brand_id'] !== null && ! isset($brandIds[(int) $row['brand_id']])) {
                 $row['errors'][] = ['field' => 'marca', 'message' => 'La marca ya no está activa o no pertenece a la empresa activa.'];
+            }
+
+            if ($row['supplier_name'] !== null) {
+                if ($row['supplier_match'] === 'missing') {
+                    $row['errors'][] = ['field' => 'proveedor', 'message' => 'El proveedor no existe o no está activo en la empresa activa.'];
+                } elseif ($row['supplier_match'] === 'ambiguous') {
+                    $row['errors'][] = ['field' => 'proveedor', 'message' => 'El proveedor es ambiguo: coincide con más de un proveedor activo de la empresa.'];
+                }
+            }
+            if ($row['supplier_product_code'] !== null && $row['supplier_name'] === null) {
+                $row['errors'][] = ['field' => 'codigo_producto_proveedor', 'message' => 'Indique el proveedor para poder asignar el código de producto del proveedor.'];
+            }
+            if ($row['supplier_product_code'] !== null && mb_strlen($row['supplier_product_code']) > 100) {
+                $row['errors'][] = ['field' => 'codigo_producto_proveedor', 'message' => 'El código de producto del proveedor admite máximo 100 caracteres.'];
             }
 
             $codeKey = Str::lower((string) $row['internal_code']);
@@ -396,6 +435,8 @@ class ProductImportService
                 'is_active' => true,
             ])));
 
+        $supplierResolution = $this->resolveSupplier($companyId, $row['supplier_name']);
+
         $effectiveCategory = $subcategory ?? $category;
 
         return [...$row,
@@ -405,6 +446,8 @@ class ProductImportService
             'style_id' => $style?->id, 'style_will_create' => false,
             'size_id' => $size?->id, 'size_will_create' => false,
             'color_id' => $color?->id, 'color_will_create' => false,
+            'supplier_id' => $supplierResolution['supplier_id'],
+            'supplier_match' => $supplierResolution['match'],
         ];
     }
 
@@ -475,6 +518,40 @@ class ProductImportService
             ->where('is_active', true)->get()->keyBy(fn (Color $c) => $this->catalogKey($c->name))->all();
 
         return $this->colorCache[$companyId][$this->catalogKey($name)] ?? null;
+    }
+
+    /**
+     * @return array{supplier_id: int|null, match: string}
+     */
+    private function resolveSupplier(int $companyId, ?string $name): array
+    {
+        if ($name === null) {
+            return ['supplier_id' => null, 'match' => 'none'];
+        }
+
+        $key = $this->catalogKey($name);
+        $this->supplierCache[$companyId] ??= [];
+        if (! array_key_exists($key, $this->supplierCache[$companyId])) {
+            $matches = Supplier::query()
+                ->where('company_id', $companyId)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->get()
+                ->filter(function (Supplier $supplier) use ($key) {
+                    return $this->catalogKey($supplier->name) === $key
+                        || ($supplier->commercial_name !== null && $this->catalogKey($supplier->commercial_name) === $key);
+                })
+                ->unique('id')
+                ->values();
+
+            $this->supplierCache[$companyId][$key] = match ($matches->count()) {
+                0 => ['supplier_id' => null, 'match' => 'missing'],
+                1 => ['supplier_id' => (int) $matches->first()->id, 'match' => 'unique'],
+                default => ['supplier_id' => null, 'match' => 'ambiguous'],
+            };
+        }
+
+        return $this->supplierCache[$companyId][$key];
     }
 
     private function unit(int $companyId, ?string $name): ?Unit
