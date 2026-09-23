@@ -15,7 +15,11 @@ class DashboardController extends Controller
     {
         $company = Company::find(session('active_company_id'));
         $branchId = session('active_branch_id');
-        $request->validate(['period' => ['sometimes', 'in:today,week,month']]);
+        $request->validate([
+            'period' => ['sometimes', 'in:today,week,month,year,custom'],
+            'date_from' => ['nullable', 'required_if:period,custom', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'required_if:period,custom', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+        ]);
         if ($request->user()->hasPermission('dashboard.admin', $company)) {
             $request->validate(['branch_id' => ['sometimes', 'nullable', 'regex:/^(all|[0-9]+)$/']]);
             $filter = $request->input('branch_id', 'all');
@@ -24,7 +28,13 @@ class DashboardController extends Controller
                 : null;
         }
         $dashboardSummary = $request->user()->hasPermission('dashboard.admin', $company)
-            ? $dashboard->summarize($company, $branchId ? (int) $branchId : null, $request->input('period', 'today'))
+            ? $dashboard->summarize(
+                $company,
+                $branchId ? (int) $branchId : null,
+                $request->input('period', 'today'),
+                $request->input('date_from'),
+                $request->input('date_to'),
+            )
             : null;
 
         $alertDays = (int) ($company->credit_alert_days ?? 5);

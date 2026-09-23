@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CreditNote;
+use App\Models\Customer;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sale;
+use App\Models\SaleReturn;
 use App\Models\User;
 use App\Services\CompanyCashSettingsProvisioner;
 use Carbon\Carbon;
@@ -41,12 +44,108 @@ class AdministrativeDashboardTest extends TestCase
         $this->sale($company, $branch, $user, '2026-09-09 06:00:00', '500.50');
         $this->sale($company, $branch, $user, '2026-10-01 06:00:00', '900.90');
         $this->sale($company, $branch, $user, '2026-09-08 12:00:00', '999.00', Sale::STATUS_VOIDED);
+        // Sale in the previous year to confirm year boundary excludes it.
+        $this->sale($company, $branch, $user, '2025-12-31 06:00:00', '77.70');
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
-        foreach (['today' => ['100.1000', 1], 'week' => ['800.8000', 3], 'month' => ['1101.1000', 4]] as $period => [$total,$count]) {
+        foreach (['today' => ['100.1000', 1], 'week' => ['800.8000', 3], 'month' => ['1101.1000', 4], 'year' => ['2402.4000', 6]] as $period => [$total, $count]) {
             $this->get(route('dashboard', ['period' => $period]))->assertOk()
                 ->assertViewHas('dashboardSummary', fn ($summary) => $summary['sales_total'] === $total && $summary['sales_count'] === $count);
         }
-        $this->get(route('dashboard', ['period' => 'year']))->assertRedirect()->assertSessionHasErrors('period');
+    }
+
+    public function test_custom_period_filters_by_date_range_in_company_timezone(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->travelTo(Carbon::parse('2026-09-08 18:00:00', 'UTC'));
+        $this->sale($company, $branch, $user, '2026-09-01 06:00:00', '300.30');
+        $this->sale($company, $branch, $user, '2026-09-08 05:59:59', '200.20');
+        $this->sale($company, $branch, $user, '2026-09-08 06:00:00', '100.10');
+        $this->sale($company, $branch, $user, '2026-09-09 06:00:00', '500.50');
+        $this->sale($company, $branch, $user, '2025-12-31 06:00:00', '77.70');
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $this->get(route('dashboard', ['period' => 'custom', 'date_from' => '2026-09-01', 'date_to' => '2026-09-08']))->assertOk()
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '600.6000' && $s['sales_count'] === 3);
+        $this->get(route('dashboard', ['period' => 'custom', 'date_from' => '2026-09-07', 'date_to' => '2026-09-07']))->assertOk()
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '200.2000' && $s['sales_count'] === 1);
+        $this->get(route('dashboard', ['period' => 'custom', 'date_from' => '2026-01-01', 'date_to' => '2026-12-31']))->assertOk()
+            ->assertViewHas('dashboardSummary', fn ($s) => $s['sales_total'] === '1101.1000' && $s['sales_count'] === 4);
+    }
+
+    public function test_custom_period_requires_valid_date_range_and_period_is_validated(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $this->get(route('dashboard', ['period' => 'custom']))->assertRedirect()->assertSessionHasErrors(['date_from', 'date_to']);
+        $this->get(route('dashboard', ['period' => 'custom', 'date_from' => '2026-09-08', 'date_to' => '2026-09-01']))->assertRedirect()->assertSessionHasErrors('date_to');
+        $this->get(route('dashboard', ['period' => 'custom', 'date_from' => 'invalid', 'date_to' => '2026-09-01']))->assertRedirect()->assertSessionHasErrors('date_from');
+        $this->get(route('dashboard', ['period' => 'invalid']))->assertRedirect()->assertSessionHasErrors('period');
+    }
+
+    public function test_period_selector_shows_year_custom_and_date_inputs_and_keeps_branch(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertSee('Año')
+            ->assertSee('Personalizado')
+            ->assertSee('name="date_from"', false)
+            ->assertSee('name="date_to"', false);
+        $this->get(route('dashboard', ['branch_id' => $branch->id, 'period' => 'week']))->assertOk()
+            ->assertSee('branch_id='.$branch->id)
+            ->assertSee('value="'.$branch->id.'"', false);
+    }
+
+    public function test_account_summaries_do_not_change_with_period(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $today = $this->get(route('dashboard'))->assertOk()->viewData('creditSummary');
+        $year = $this->get(route('dashboard', ['period' => 'year']))->assertOk()->viewData('creditSummary');
+        $this->assertSame($today, $year);
+    }
+
+    public function test_movements_include_credit_notes_for_the_period(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->travelTo(Carbon::parse('2026-09-08 18:00:00', 'UTC'));
+        $sale = $this->sale($company, $branch, $user, '2026-09-08 06:00:00', '100.10');
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente NC', 'is_active' => true]);
+        $return = SaleReturn::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'sale_id' => $sale->id,
+            'user_id' => $user->id,
+            'return_number' => 'DEV-DASH-1',
+            'reason' => 'Prueba dashboard',
+            'status' => SaleReturn::STATUS_COMPLETED,
+            'returned_at' => '2026-09-08 08:00:00',
+        ]);
+        CreditNote::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $customer->id,
+            'sale_id' => $sale->id,
+            'sale_return_id' => $return->id,
+            'credit_note_number' => 'NC-DASH-TEST',
+            'currency_code' => 'CRC',
+            'issued_amount' => '50.0000',
+            'offset_amount' => '0.0000',
+            'applied_amount' => '0.0000',
+            'balance' => '50.0000',
+            'status' => CreditNote::STATUS_ISSUED,
+            'reason' => 'Nota de prueba',
+            'issued_by' => $user->id,
+            'issued_at' => '2026-09-08 10:00:00',
+            'requires_ar_review' => false,
+        ]);
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertSee('Movimientos del período')
+            ->assertSee('Nota de crédito')
+            ->assertSee('NC-DASH-TEST')
+            ->assertSee('Emitida')
+            ->assertSee('Venta')
+            ->assertSee($sale->sale_number);
     }
 
     public function test_branch_and_consolidated_dashboard_are_isolated_by_company(): void
