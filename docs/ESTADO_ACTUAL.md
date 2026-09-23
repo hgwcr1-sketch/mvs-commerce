@@ -2,6 +2,34 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — FASE 1E-C COMPLETADA / CERTIFICADA (2026-09-23)
+
+**FASE 1E-C = COMPLETADA / CERTIFICADA.** Asignación de cartera por CLIENTE
+(`cobros_assignments` UNIQUE company+customer, log append-only
+`cobros_assignment_logs`, `PortfolioAssignmentService`, permiso `cobros.asignar`,
+pantalla Owner/Supervisor mobile-first). CxC/saldos/pagos solo lectura.
+
+- **Validación manual:** Andrés 200 / cobrador 403; ciclo completo
+  Sin asignar → Mario Vega → Juan Prueba → Sin asignar; saldos
+  ₡25,000.00 y ₡40,000.00 intactos; cliente 2 sin asignar; filtros y
+  Asignar/Reasignar con combobox buscable (IDs internos en hidden).
+- **Auditoría final:** PASS (migraciones aditivas, tenant, permisos,
+  transacción/unique/locking, logs, UI, sin escritura financiera).
+- **Suite Cobros:** **168/168, 1408 aserciones.**
+- **Riesgos no bloqueantes:** `catch (QueryException)` amplio en assign;
+  deuda `is_super_admin` hereda `cobros.asignar`; huecos test filtro
+  `branch_id` / cobrador inactivo en lista.
+- Provisioning `2026_09_22_000003` aditivo e idempotente; solo roles
+  `portal_dueno`/`supervisar` (nunca Cobrador). `tmp_generate_cobros_icons.php`
+  fuera del commit. Sin push/merge/deploy/2A.
+
+**Hallazgo entorno:** hay DOS `php -S` en `127.0.0.1:8000` — PID 5588
+(worktree cobros) y PID 13808 (worktree main, APP_KEY y SQLite distintas).
+La main no tiene ruta `owner/assignments` (sería 404, no 403 con ese
+mensaje). Requests `/cobros/*` han respondido siempre desde 5588. No
+prohibido; si el navegador da 404 intermitente, cerrar el servidor main
+stray.
+
 ## Worktree CobrOS — FASE 1E-B COMPLETADA / CERTIFICADA (2026-09-22)
 
 **FASE 1E-B = COMPLETADA / CERTIFICADA.** Auditoría CLINE PASS; validación manual

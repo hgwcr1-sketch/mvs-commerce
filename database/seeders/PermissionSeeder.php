@@ -226,6 +226,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'cobros.portal_dueno', 'label' => 'Acceder al Portal del Dueño', 'module' => 'CobrOS'],
             ['name' => 'cobros.supervisar', 'label' => 'Supervisar CobrOS', 'module' => 'CobrOS'],
             ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'cobros.asignar', 'label' => 'Asignar cartera en CobrOS', 'module' => 'CobrOS'],
         ];
 
         foreach ($permissions as $permission) {
@@ -263,5 +264,16 @@ class PermissionSeeder extends Seeder
                     $administratorPermissionIds
                 );
             });
+
+        // 1E-C: cobros.asignar solo a roles que ya operan portal del dueño o supervisión.
+        $asignar = Permission::query()->where('name', 'cobros.asignar')->first();
+        if ($asignar) {
+            Role::query()
+                ->where('is_active', true)
+                ->whereHas('permissions', function ($q) {
+                    $q->whereIn('permissions.name', ['cobros.portal_dueno', 'cobros.supervisar']);
+                })
+                ->each(fn (Role $role) => $role->permissions()->syncWithoutDetaching([$asignar->id]));
+        }
     }
 }

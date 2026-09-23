@@ -165,6 +165,12 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
     Route::post('/owner/collectors/{user}/regenerate-access', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'regenerateAccess'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.regenerate');
+    Route::get('/owner/assignments', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'index'])
+        ->middleware('permission:cobros.asignar')->name('owner.assignments');
+    Route::post('/owner/assignments', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'store'])
+        ->middleware('permission:cobros.asignar')->name('owner.assignments.store');
+    Route::delete('/owner/assignments/{customer}', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'destroy'])
+        ->middleware('permission:cobros.asignar')->name('owner.assignments.destroy');
     Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
         ->name('index');
 });
