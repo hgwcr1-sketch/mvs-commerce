@@ -118,15 +118,24 @@ class PosController extends Controller
                             ->where('barcode', $likeOperator, $like);
                     });
             })
-            ->with(['unit:id,abbreviation,allows_decimals', 'barcodes' => function ($query) use ($like, $likeOperator) {
-                $query
-                    ->where('is_active', true)
-                    ->where('barcode', $likeOperator, $like)
-                    ->select(['id', 'product_id', 'barcode']);
-            }])
+            ->with([
+                'unit:id,abbreviation,allows_decimals',
+                'style:id,name',
+                'size:id,name',
+                'color:id,name',
+                'barcodes' => function ($query) use ($like, $likeOperator) {
+                    $query
+                        ->where('is_active', true)
+                        ->where('barcode', $likeOperator, $like)
+                        ->select(['id', 'product_id', 'barcode']);
+                },
+            ])
             ->select([
                 'products.id',
                 'products.unit_id',
+                'products.style_id',
+                'products.size_id',
+                'products.color_id',
                 'products.name',
                 'products.internal_code',
                 'products.barcode',
@@ -218,6 +227,9 @@ class PosController extends Controller
                 'available_stock' => $availableStock,
                 'unit' => $product->unit?->abbreviation,
                 'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'style_name' => $product->style?->name,
+                'size_name' => $product->size?->name,
+                'color_name' => $product->color?->name,
                 'can_add_to_cart' => ! $product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
                 'image_url' => $hasImage ? asset('storage/'.$imagePath) : null,

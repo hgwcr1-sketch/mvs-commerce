@@ -89,6 +89,17 @@
                     </div>
                     <div>
                         <p class="font-semibold text-slate-800" x-text="product.name"></p>
+                        <p class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                            <template x-if="product.style_name">
+                                <span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="product.style_name"></span>
+                            </template>
+                            <template x-if="product.size_name">
+                                <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.size_name"></span>
+                            </template>
+                            <template x-if="product.color_name">
+                                <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.color_name"></span>
+                            </template>
+                        </p>
                         <p class="text-xs text-slate-500">
                             Código: <span x-text="product.internal_code || '—'"></span>
                             <template x-if="product.matched_barcode">
@@ -152,6 +163,17 @@
                                             </button>
                                             <div>
                                                 <p class="font-semibold text-slate-800" x-text="item.name"></p>
+                                                <p class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                                    <template x-if="item.style_name">
+                                                        <span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="item.style_name"></span>
+                                                    </template>
+                                                    <template x-if="item.size_name">
+                                                        <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.size_name"></span>
+                                                    </template>
+                                                    <template x-if="item.color_name">
+                                                        <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.color_name"></span>
+                                                    </template>
+                                                </p>
                                                 <p class="text-xs text-slate-500" x-text="item.internal_code"></p>
                                                 <span x-show="item.is_offer" class="mt-0.5 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 lg:hidden">Oferta</span>
                                                 <p x-show="exceedsStock(item)" class="mt-1 text-xs font-semibold text-red-600">Cantidad superior al stock de esta sucursal.</p>
@@ -515,7 +537,15 @@
                                 <p x-show="orderRequest.loading" class="p-4 text-slate-500">Buscando…</p>
                                 <template x-for="product in orderRequest.results" :key="product.id">
                                     <button type="button" @click="addOrderProduct(product)" class="flex w-full items-center justify-between gap-4 border-b border-slate-100 p-4 text-left hover:bg-emerald-50">
-                                        <span class="min-w-0"><strong class="block truncate" x-text="product.name"></strong><small class="text-slate-500" x-text="`${product.internal_code || 'Sin código'} · ${product.unit || 'Unidad'}`"></small></span>
+                                        <span class="min-w-0">
+                                            <strong class="block truncate" x-text="product.name"></strong>
+                                            <span class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                                <template x-if="product.style_name"><span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="product.style_name"></span></template>
+                                                <template x-if="product.size_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.size_name"></span></template>
+                                                <template x-if="product.color_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.color_name"></span></template>
+                                            </span>
+                                            <small class="text-slate-500" x-text="`${product.internal_code || 'Sin código'} · ${product.unit || 'Unidad'}`"></small>
+                                        </span>
                                         <span class="shrink-0 text-right text-xs"><span class="block" x-text="`Existencia: ${formatQuantity(product.available_stock)}`"></span><strong class="text-emerald-700" x-text="money(product.sale_price)"></strong></span>
                                     </button>
                                 </template>
@@ -528,7 +558,7 @@
                             <p x-show="orderRequest.items.length === 0" class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center text-slate-500">Busque y agregue al menos un producto.</p>
                             <template x-for="(item, index) in orderRequest.items" :key="item.id">
                                 <article class="grid gap-3 rounded-2xl border border-slate-200 p-4 lg:grid-cols-[1.5fr_.7fr_.7fr_.65fr_1.3fr_auto] lg:items-end">
-                                    <div><span class="text-xs font-bold uppercase text-slate-500">Producto</span><strong class="block" x-text="item.name"></strong><small class="text-slate-500" x-text="`${item.internal_code || 'Sin código'} · ${item.unit || 'Unidad'}`"></small></div>
+                                    <div><span class="text-xs font-bold uppercase text-slate-500">Producto</span><strong class="block" x-text="item.name"></strong><span class="flex flex-wrap items-center gap-1 text-xs text-slate-500"><template x-if="item.style_name"><span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="item.style_name"></span></template><template x-if="item.size_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.size_name"></span></template><template x-if="item.color_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.color_name"></span></template></span><small class="text-slate-500" x-text="`${item.internal_code || 'Sin código'} · ${item.unit || 'Unidad'}`"></small></div>
                                     <div><span class="text-xs font-bold uppercase text-slate-500">Existencia actual</span><strong class="block" x-text="formatQuantity(item.available_stock)"></strong></div>
                                     <div><span class="text-xs font-bold uppercase text-slate-500">Precio de venta</span><strong class="block" x-text="money(item.sale_price)"></strong></div>
                                     <label class="text-xs font-bold uppercase text-slate-500">Cantidad solicitada<input type="number" x-model="item.requested_quantity" :step="item.allows_decimals ? 0.0001 : 1" :min="item.allows_decimals ? 0.0001 : 1" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base font-normal text-slate-900"></label>
@@ -1375,7 +1405,7 @@ document.addEventListener('alpine:init', () => {
         addOrderProduct(product) {
             const existing = this.orderRequest.items.find(item => item.id === product.id);
             if (existing) existing.requested_quantity = Number(existing.requested_quantity) + 1;
-            else this.orderRequest.items.push({ id: product.id, name: product.name, internal_code: product.internal_code, available_stock: Number(product.available_stock), sale_price: Number(product.sale_price), unit: product.unit, allows_decimals: !!product.allows_decimals, requested_quantity: 1, request_note: '' });
+            else this.orderRequest.items.push({ id: product.id, name: product.name, internal_code: product.internal_code, style_name: product.style_name || null, size_name: product.size_name || null, color_name: product.color_name || null, available_stock: Number(product.available_stock), sale_price: Number(product.sale_price), unit: product.unit, allows_decimals: !!product.allows_decimals, requested_quantity: 1, request_note: '' });
             this.orderRequest.query = '';
             this.orderRequest.results = [];
             this.orderRequest.requestNumber += 1;
@@ -1960,7 +1990,7 @@ document.addEventListener('alpine:init', () => {
                 this.quoteId = payload.quote_id;
                 this.quoteMode = true;
                 this.closeResults();
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, style_name: item.style_name || null, size_name: item.size_name || null, color_name: item.color_name || null, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
                 this.customerId = payload.customer_id || payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada. Puede editar y guardar cambios.`;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
@@ -2010,7 +2040,7 @@ document.addEventListener('alpine:init', () => {
                 if (this.suspended.activeId && this.suspended.activeId !== sale.id && !(await this.releaseCurrentRecovery())) return;
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, style_name: item.style_name || null, size_name: item.size_name || null, color_name: item.color_name || null, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
                 this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = generateUUID(); this.checkout.payments = []; this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 }; this.suspended.open = false; this.fetchCreditNotes(); this.$nextTick(() => this.focusSearch());
             } catch (error) { this.suspended.error = error.message; }
         },

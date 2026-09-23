@@ -41,7 +41,7 @@
                         class="rounded border-slate-300">
                         <option value="">Producto</option>
                         @foreach($products as $p)
-                            <option value="{{$p->id}}">{{$p->name}} · Stock {{number_format((float)$p->branches->first()?->pivot->stock,4,',','.')}} · ₡{{number_format((float)$p->sale_price,0,',','.')}}</option>
+                            <option value="{{$p->id}}">{{$p->name}}@php($label = \App\Support\ProductVariantFormatter::label($p))@if($label) · {{ $label }}@endif · Stock {{number_format((float)$p->branches->first()?->pivot->stock,4,',','.')}} · ₡{{number_format((float)$p->sale_price,0,',','.')}}</option>
                         @endforeach
                     </select>
 
