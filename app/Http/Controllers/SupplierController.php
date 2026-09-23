@@ -8,6 +8,7 @@ use App\Models\Province;
 use App\Models\Canton;
 use App\Models\District;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Http\Requests\StoreSupplierRequest;
 use App\Http\Requests\UpdateSupplierRequest;
 
@@ -237,22 +238,28 @@ public function toggleStatus(Supplier $proveedore)
     public function search(Request $request)
 {
     $companyId = session('active_company_id');
-    $search = $request->get('search');
+    $search = trim((string) $request->get('search'));
 
-    if (!$search) {
+    if ($search === '') {
         return response()->json([]);
     }
 
+    // Case-insensitive en cualquier motor: en PostgreSQL LIKE distingue
+    // mayúsculas y minúsculas, por lo que "victoria" no encontraba
+    // "Victoria Limon". Mismo patrón que el resto de buscadores.
+    $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
     $suppliers = Supplier::query()
         ->where('company_id', $companyId)
-        ->where(function ($query) use ($search) {
-            $query->where('name', 'like', "%{$search}%")
-                ->orWhere('commercial_name', 'like', "%{$search}%")
-                ->orWhere('identification', 'like', "%{$search}%")
-                ->orWhere('contact_name', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%")
-                ->orWhere('mobile', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%");
+        ->where('is_active', true)
+        ->where(function ($query) use ($search, $likeOperator) {
+            $query->where('name', $likeOperator, "%{$search}%")
+                ->orWhere('commercial_name', $likeOperator, "%{$search}%")
+                ->orWhere('identification', $likeOperator, "%{$search}%")
+                ->orWhere('contact_name', $likeOperator, "%{$search}%")
+                ->orWhere('phone', $likeOperator, "%{$search}%")
+                ->orWhere('mobile', $likeOperator, "%{$search}%")
+                ->orWhere('email', $likeOperator, "%{$search}%");
         })
         ->orderBy('name')
         ->limit(8)
