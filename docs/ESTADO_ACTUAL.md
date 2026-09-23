@@ -2,6 +2,40 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Variantes (estilo / talla / color) en POS, cotizaciones, devoluciones y apartados — COMPLETADO (2026-09-23)
+
+**Commit `1241c53`** en `feature/notas-credito`.
+
+Se añadió la identificación clara de variantes en los flujos de venta del POS y sus derivados, sin cambiar lógica de negocio, caja, dashboard ni producción.
+
+### Cambios principales
+
+- `PosController::searchProducts()` incluye eager load de `style`, `size`, `color` y devuelve `style_name`, `size_name`, `color_name`.
+- POS muestra variantes en: resultados de búsqueda, líneas del carrito, pedidos internos, carga de cotizaciones y recuperación de ventas suspendidas.
+- `QuoteController::load()`/`show()`/`print()` cargan variantes; el payload de carga en POS las incluye.
+- `ReturnController::create()` y `devoluciones/crear.blade.php` muestran variantes.
+- `LayawayController::create()`/`show()` y vistas `layaways/create.blade.php`/`layaways/show.blade.php` muestran variantes.
+- Helper reutilizable: `app/Support/ProductVariantFormatter.php` y partial `resources/views/partials/product-variant.blade.php`.
+
+### Verificación
+
+- `PosAccessAndSearchTest` (excepto fallo preexistente de modal): 33/33 ✅
+- `SaleReturnTest`: 20/20 ✅
+- `LayawayV1Test`: 8/8 ✅
+- `DevolucionesIndexTest`: 18/18 ✅
+- `QuoteTest` (excepto fallo preexistente de JS de cotización): 12/12 ✅
+
+### Deuda preexistente (no causada por este bloque)
+
+- `PosAccessAndSearchTest::test_checkout_modal_has_responsive_permanent_summary_and_dynamic_direct_payment_flow` — espera `Puntos futuros` en respuesta.
+- `QuoteTest::test_quote_mode_executes_frontend_transitions_stock_rules_and_save_contract` — test JS espera clases antiguas del botón `Cotizar`.
+
+### Pendiente / siguiente paso
+
+No se inicia otro bloque hasta instrucción del usuario.
+
+---
+
 ## Notas de Crédito — Fase 4B Consumer Final — COMPLETADA / CERTIFICADA / PRODUCCIÓN (2026-09-22)
 
 **Estado: PRODUCCIÓN.** Fuente certificada `5ca8389` (`feature/notas-credito`) → merge integración certificado `40685e86a086c152d178e511af1c0ba454fadb24`. Producción actual: **`40685e86a086c152d178e511af1c0ba454fadb24`** (deploy 2026-09-22).
