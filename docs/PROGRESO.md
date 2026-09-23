@@ -1528,6 +1528,24 @@ No recrear funcionalidad contable sin revisar primero ese trabajo.
 
 ---
 
+## Cierre B1–B7 — integración revisada (2026-09-23)
+
+**Rama:** `feature/notas-credito` @ `ff1fd58`. **LISTO PARA INTEGRACIÓN a rama destino.** Sin merge, push, deploy ni producción.
+
+| Bloque | Commit | Descripción |
+|--------|--------|-------------|
+| B6 Ventas/NC | `3b56a89` | Fecha de anulación + filtro por cliente en Ventas/Devoluciones |
+| B4 Productos | `a4c2be1` | Atributos en listado, filtro categoría, proveedor principal, formato costo |
+| B5 Dashboard/períodos | `9eecdfb` | Selector año/personalizado, NC en movimientos, tarjetas reorganizadas |
+| B2 Variantes | `1241c53` + `4e046e4` | Variantes en POS, cotizaciones, devoluciones y apartados |
+| B7 Carga masiva | `17b346e` | Proveedor opcional en importación de productos |
+| B1 Analítico de caja | `7b4ece7` | Analítico por medio de pago en historial de caja |
+| B3 Pagos mixtos apartados | `ff1fd58` | Pagos mixtos en apartados |
+
+Evidencia: integración focal **253 tests, 250 PASS, 2F+1E**; focales por bloque en verde (B3 19/19, B1 7/7 + Cash 89/89, B7 31/31). Sin regresiones nuevas. **3 fallos preexistentes:** `PosAccessAndSearchTest` (modal `Puntos futuros`), `QuoteTest` JS (clases antiguas `Cotizar`), `AdministrativeDashboardTest` (mensaje caja vs métodos de pago). Detalle en `docs/ESTADO_ACTUAL.md`.
+
+---
+
 ## Prioridad actual del proyecto
 
 Prioridades conocidas:

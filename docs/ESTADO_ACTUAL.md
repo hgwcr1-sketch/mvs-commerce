@@ -2,6 +2,38 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Cierre documental B1–B7 — LISTO PARA INTEGRACIÓN A RAMA DESTINO (2026-09-23)
+
+**Rama:** `feature/notas-credito` @ `ff1fd58`. Sin merge, push, deploy ni producción.
+
+| Bloque | Commit | Descripción |
+|--------|--------|-------------|
+| B6 Ventas/NC | `3b56a89` | Fecha de anulación visible + filtro por cliente en Ventas/Devoluciones |
+| B4 Productos | `a4c2be1` | Atributos en listado, filtro categoría, proveedor principal, formato costo |
+| B5 Dashboard/períodos | `9eecdfb` | Selector año/personalizado, NC en movimientos, reorganización de tarjetas |
+| B2 Variantes | `1241c53` + `4e046e4` | Variantes estilo/talla/color en POS, cotizaciones, devoluciones y apartados |
+| B7 Carga masiva | `17b346e` | Proveedor opcional en importación de productos |
+| B1 Analítico de caja | `7b4ece7` | Analítico por medio de pago en historial de caja |
+| B3 Pagos mixtos apartados | `ff1fd58` | Pagos mixtos en apartados (LayawayService + vistas + tests) |
+
+### Verificación de integración
+
+- Integración focal revisada: **253 tests, 250 PASS, 2F + 1E**.
+- Focales por bloque (corridas finales): B3 19/19, B1 7/7 + Cash 89/89, B7 31/31 — PASS.
+- Sin regresiones nuevas atribuibles a B1–B7.
+
+### 3 fallos preexistentes documentados (no causados por B1–B7)
+
+- `PosAccessAndSearchTest::test_checkout_modal_has_responsive_permanent_summary_and_dynamic_direct_payment_flow` — espera `Puntos futuros`.
+- `QuoteTest::test_quote_mode_executes_frontend_transitions_stock_rules_and_save_contract` — JS espera clases antiguas del botón `Cotizar`.
+- `AdministrativeDashboardTest::test_admin_can_consult_without_cash_but_pos_and_checkout_still_require_it` — expectativa de mensaje de caja vs métodos de pago.
+
+### Estado
+
+**LISTO PARA INTEGRACIÓN a rama destino.** No se ejecuta merge/push/deploy sin instrucción explícita.
+
+---
+
 ## Variantes (estilo / talla / color) en POS, cotizaciones, devoluciones y apartados — COMPLETADO (2026-09-23)
 
 **Commit `1241c53`** en `feature/notas-credito`.
