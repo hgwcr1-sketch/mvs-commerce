@@ -4,6 +4,7 @@ document.addEventListener('alpine:init', () => {
 
     purchaseSaving: false,
     editingPurchase: window.location.pathname.includes('/edit'),
+    activeBranchId: Number(document.querySelector('[x-data="purchaseForm()"]')?.dataset.activeBranchId) || null,
 
     purchaseDate: window.purchaseEdit?.date || new Date().toISOString().slice(0, 10),
     supplierInvoiceNumber: '',
@@ -43,9 +44,47 @@ newProduct: {
     cost: 0,
     sale_price: 0,
     tax_rate: 13,
-},
+},        items: window.purchaseEdit?.items || [],
 
-items: window.purchaseEdit?.items || [],
+        init() {
+            // Restaurar borrador conservado al cambiar de sucursal en Nueva Compra.
+            if (window.purchaseEdit) return;
+            try {
+                const raw = window.sessionStorage.getItem('mvs_purchase_draft');
+                if (!raw) return;
+                window.sessionStorage.removeItem('mvs_purchase_draft');
+                const draft = JSON.parse(raw);
+                if (!draft || typeof draft !== 'object') return;
+                if (Array.isArray(draft.items) && draft.items.length > 0) this.items = draft.items;
+                if (draft.selected_supplier) this.selectedSupplier = draft.selected_supplier;
+                if (draft.purchase_date) this.purchaseDate = draft.purchase_date;
+                if (draft.supplier_invoice_number) this.supplierInvoiceNumber = draft.supplier_invoice_number;
+                if (draft.payment_type) this.paymentType = draft.payment_type;
+                if (draft.due_date) this.dueDate = draft.due_date;
+                if (draft.notes) this.purchaseNotes = draft.notes;
+            } catch (error) {
+                // Borrador corrupto: ignorarlo sin romper el formulario.
+            }
+        },
+
+        persistDraft() {
+            // Conservar el estado digitado antes de que un cambio de sucursal
+            // recargue la página. Se libera al restaurarse en init().
+            if (!this.items || this.items.length === 0) return;
+            try {
+                window.sessionStorage.setItem('mvs_purchase_draft', JSON.stringify({
+                    items: this.items,
+                    selected_supplier: this.selectedSupplier,
+                    purchase_date: this.purchaseDate,
+                    supplier_invoice_number: this.supplierInvoiceNumber,
+                    payment_type: this.paymentType,
+                    due_date: this.dueDate,
+                    notes: this.purchaseNotes,
+                }));
+            } catch (error) {
+                // Sin almacenamiento disponible: no interrumpir al usuario.
+            }
+        },
 
         async searchSuppliers() {
 
@@ -437,6 +476,18 @@ const data = JSON.parse(responseText);
 
 async savePurchase() {
 
+    // La sucursal destino es obligatoria: valor vigente de la vista/sesión,
+    // del selector del header o la fijada al momento de la carga.
+    const branchId = window.__mvsPurchaseBranchId
+        ?? this.activeBranchId
+        ?? document.querySelector('#header-branch')?.value
+        ?? null;
+
+    if (!branchId) {
+        alert('Debe seleccionar una sucursal antes de guardar la compra.');
+        return;
+    }
+
     if (!this.selectedSupplier) {
         alert('Debe seleccionar un proveedor.');
         return;
@@ -483,10 +534,11 @@ const response = await fetch(url, {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document
                     .querySelector('meta[name="csrf-token"]')
-                    .getAttribute('content')
+                    ?.getAttribute?.('content') ?? ''
             },
 
             body: JSON.stringify({
+                branch_id: Number(branchId),
                 supplier_id: this.selectedSupplier.id,
                 supplier_invoice_number:
                     this.supplierInvoiceNumber || null,
