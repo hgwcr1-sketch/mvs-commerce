@@ -71,7 +71,7 @@ class CobrosModuleAccessTest extends TestCase
         $this->get(route('cobros.collector.index'))
             ->assertOk()
             ->assertSee('MVS CobrOS')
-            ->assertSee('Portal del cobrador')
+            ->assertSee('Mi cartera')
             ->assertSee('src="'.asset('images/logo-mvs-cobros.png').'"', false)
             ->assertSee('href="'.asset('icons/cobros/favicon-32x32.png').'"', false)
             ->assertSee('href="'.asset('icons/cobros/apple-touch-icon.png').'"', false)

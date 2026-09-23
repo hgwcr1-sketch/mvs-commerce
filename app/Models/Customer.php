@@ -134,6 +134,11 @@ class Customer extends Model
         return $this->hasMany(AccountReceivable::class);
     }
 
+    public function cobrosAssignments(): HasMany
+    {
+        return $this->hasMany(CobrosAssignment::class);
+    }
+
     public function loyaltyContacts(): HasMany
     {
         return $this->hasMany(LoyaltyCustomerContact::class);

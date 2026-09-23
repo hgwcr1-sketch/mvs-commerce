@@ -294,7 +294,7 @@ class CobrosAuthenticationTest extends TestCase
 
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
         $this->get(route('cobros.collector.index'))->assertOk()
-            ->assertSee('Portal del cobrador')
+            ->assertSee('Mi cartera')
             ->assertDontSee('Dashboard general');
     }
 

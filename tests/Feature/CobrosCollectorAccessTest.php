@@ -39,7 +39,7 @@ class CobrosCollectorAccessTest extends TestCase
         $this->assertFalse($service->canCollectIn($u, $c, $b->id));
         $this->assertTrue($service->branchesForCollecting($u, $c)->isEmpty());
         $this->actingAs($u)->get(route('cobros.collector.index'))->assertOk()
-            ->assertSee('No hay sucursales disponibles')->assertViewHas('branches', fn ($rows) => $rows->isEmpty());
+            ->assertViewHas('customers', fn ($rows) => $rows->getCollection()->isEmpty());
     }
 
     public function test_foreign_branch_pivot_contamination_never_grants_access(): void
@@ -136,7 +136,7 @@ class CobrosCollectorAccessTest extends TestCase
         $this->get(route('cobros.supervisor.index'))->assertOk()->assertSee('Disponible próximamente');
         $role->permissions()->detach(Permission::where('name', 'cobros.supervisar')->first()->id);
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
-        $this->get(route('cobros.collector.index'))->assertOk()->assertSee('Disponible próximamente')
+        $this->get(route('cobros.collector.index'))->assertOk()->assertSee('Mi cartera')
             ->assertDontSee('Total por cobrar')->assertDontSee('MVS Commerce');
         $role->permissions()->detach(Permission::where('name', 'cobros.cobrar')->first()->id);
         $this->get(route('cobros.index'))->assertForbidden();
@@ -211,7 +211,7 @@ class CobrosCollectorAccessTest extends TestCase
                 $href = $link->getAttribute('href');
                 $this->assertTrue(str_starts_with($href, '#') || str_starts_with($href, url('/cobros')), $href);
             }
-            if ($selected !== 'owner.dashboard') {
+            if ($selected === 'supervisor.index') {
                 $response->assertSee('Disponible próximamente')->assertDontSee('Total por cobrar')->assertDontSee('Clientes con saldo');
             }
         }

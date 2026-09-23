@@ -359,7 +359,7 @@ class CobrosCollectorOnboardingTest extends TestCase
         // Collector lands on collector dashboard (200, not 403)
         $this->get(route('cobros.collector.index'))
             ->assertOk()
-            ->assertSee('Portal del cobrador');
+            ->assertSee('Mi cartera');
     }
 
     public function test_full_integration_cupo_mode_collector_landing(): void
@@ -405,7 +405,7 @@ class CobrosCollectorOnboardingTest extends TestCase
         // Collector lands on collector dashboard (200, not 403)
         $this->get(route('cobros.collector.index'))
             ->assertOk()
-            ->assertSee('Portal del cobrador');
+            ->assertSee('Mi cartera');
     }
 
     /* ---------------------------------------------------------------------

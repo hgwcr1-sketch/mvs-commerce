@@ -565,3 +565,54 @@ forzado y envío por WhatsApp en ambas modalidades.
 - Regresión CompanyLicenseTest|CompanyModuleAccessTest|RouteosR01Test
   y responsive: **13/13, 78 aserciones**.
 - `git diff --check` limpio. Sin cambios en rutas/auth/dashboard Commerce.
+
+## 2A — Mi Cartera (2026-09-23) — COMPLETADA / CERTIFICADA.
+
+Certificación: BUILD completo; validación manual PASS (Mario ve solo
+CLIENTE PRUEBA COBROS 1 ₡25,000.00; no asignado ₡40,000.00 oculto; detalle
+CxC/saldo/sucursal/emisión/vencimiento correcto); IDOR manual
+/cobros/collector/portfolio/3 → 404 PASS; auditoría final PASS; tests 2A
+10/10; suite CobrOS 178/178, 1453 aserciones. Sin migraciones.
+
+**Alcance entregado (solo lectura, sin cobros):**
+- `app/Services/Cobros/CollectorPortfolioService.php` — cartera real del
+  cobrador: autoridad SIEMPRE empresa activa de sesión + collector_user_id =
+  auth()->id(); nunca acepta collector_id del request. Saldos con BCMath
+  (escala 4, presentación CRC 2 decimales vía Money). Excluye
+  paid/cancelled/balance_due<=0. Último pago solo con fuente fiable
+  (payment_method_id y cash_session_id presentes).
+- `app/Http/Controllers/Cobros/CollectorPortfolioController.php` — index/show.
+- Rutas: `cobros.collector.index` = `/cobros/collector` (ahora cartera real,
+  reemplaza la pantalla "próximamente") y `cobros.collector.portfolio` +
+  `cobros.collector.portfolio.show` = `/cobros/collector/portfolio/{customer}`,
+  ambas con `permission:cobros.cobrar`. Cliente ajeno, sin asignar o
+  cross-company → 404 (nunca 403, no revela existencia).
+- Vistas mobile-first 360/768/1280 con identidad CobrOS:
+  `cobros/collector/portfolio.blade.php` (buscador superior ?q= por
+  nombre/comercial/identificación/teléfono, tarjetas compactas, saldo
+  destacado, CxC abiertas, sucursal(es), próximo vencimiento con due_date
+  real, último pago, paginación 20, botón "Ver cliente") y
+  `cobros/collector/customer.blade.php` (identificación/contacto, saldo total,
+  CxC con sale_number/issued_at/due_date/balance_due/sucursal, pagos históricos
+  solo lectura; SIN enlaces a clientes.show de Commerce; SIN botones
+  Cobrar/Pagar).
+- `app/Models/Customer.php` — relación `cobrosAssignments()` (solo lectura).
+
+**Pruebas:**
+- Nuevo `tests/Feature/CobrosCollectorPortfolioTest.php` — 10/10, 49
+  aserciones: aislamiento Mario/Juan, sin asignar oculto, cross-company
+  oculto, IDOR detalle 404 (incl. collector_id en request ignorado),
+  búsqueda no amplía cartera y usa campos reales, multi-CxC con saldos
+  BCMath correctos, exclusión paid/cancelled/0, detalle con pagos fiables,
+  snapshots AR/pagos/assignments intactos, permisos/navegación.
+- `CobrosCollectorAccessTest` — adaptado a la nueva vista real
+  (`branches` se conserva como contrato del shell; 13/13).
+- `CobrosAuthenticationTest`, `CobrosCollectorOnboardingTest`,
+  `CobrosModuleAccessTest` — actualizados de "Portal del cobrador"
+  (pantalla previa) a "Mi cartera" (landing real del cobrador).
+
+**Suite CobrOS completa: 178/178, 1453 aserciones (VERDE).**
+
+**Fuera de alcance (no implementado):** botones Cobrar/Pagar, comprobantes,
+tarjetas, impresión, WhatsApp, agenda/visitas/geolocalización, 2B/2C.
+Sin migraciones, sin commit, sin push. `tmp_generate_cobros_icons.php` intacto.

@@ -151,8 +151,12 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
 Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', App\Http\Middleware\Cobros\EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
     Route::get('/supervisor', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'supervisor'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
-    Route::get('/collector', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'collector'])
+    Route::get('/collector', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
         ->middleware('permission:cobros.cobrar')->name('collector.index');
+    Route::get('/collector/portfolio', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
+        ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
+    Route::get('/collector/portfolio/{customer}', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'show'])
+        ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
     Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
     Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
