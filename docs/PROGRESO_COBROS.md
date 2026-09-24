@@ -616,3 +616,74 @@ CxC/saldo/sucursal/emisión/vencimiento correcto); IDOR manual
 **Fuera de alcance (no implementado):** botones Cobrar/Pagar, comprobantes,
 tarjetas, impresión, WhatsApp, agenda/visitas/geolocalización, 2B/2C.
 Sin migraciones, sin commit, sin push. `tmp_generate_cobros_icons.php` intacto.
+
+## 2B — Agenda diaria y gestión de visitas (2026-09-23) — COMPLETADA / CERTIFICADA.
+
+**Cierre:** validación manual PASS + auditoría final PASS. Tests 2B y suite focal CobrOS verdes. Commit `feat(cobros): complete visits agenda phase 2B`.
+
+**Resumen certificado:**
+- Agenda de hoy con acciones Visitado / No estaba / Promesa / Otro día.
+- Programación simple desde historial: solo fecha + observación; estado `pendiente` forzado server-side.
+- Historial y trazabilidad (`cobros_visit_logs`); reprogramación conserva visita original y crea nueva.
+- Aislamiento company/collector, cartera asignada, `collector_id` ignorado, IDOR/cross-company → 404.
+- 2B NO modifica AR, saldos ni pagos.
+
+**Alcance entregado (sin tocar dinero):**
+- Migración aditiva `2026_09_23_000001_create_cobros_visits_tables.php`:
+  `cobros_visits` (company/branch/customer/collector, scheduled_for,
+  visited_at, status, promise_date, promise_amount informativo, notes,
+  rescheduled_from_visit_id, account_receivable_id nullable) +
+  `cobros_visit_logs` (trazabilidad quién/cuándo/de-a qué estado). Modelos
+  `CobrosVisit` y `CobrosVisitLog`.
+- `Cobros\VisitService`: schedule/record/reschedule/today/historyFor +
+  closePendingForCustomer. Autoridad SIEMPRE sesión + auth()->id();
+  collector_id del request ignorado; cliente ajeno/sin asignar/cross-company
+  y visita ajena → 404. Reprogramación trazada: original queda
+  `reprogramada` y nace visita nueva pendiente vinculada. Al reasignar o
+  desasignar cartera, las visitas pendientes NO se transfieren: se cierran
+  como `reprogramada` con log e historial preservado.
+- `VisitController` + rutas CobrOS (`cobros.visits.today`,
+  `cobros.visits.customer` GET/POST, `cobros.visits.update` PATCH), todas con
+  stack completo + `permission:cobros.cobrar` (reutilizado; NO se creó
+  cobros.visitas). Supervisores/dueño: solo lectura de facto (PATCH exige ser
+  el cobrador propietario de la visita → 404).
+- Vistas mobile-first 360/768/1280: `cobros/visits/today` (agenda de hoy =
+  SOLO visitas programadas hoy; botones táctiles ≥44px Visitado/No
+  localizado/Promesa/Reprogramar; promesa con fecha obligatoria y monto
+  opcional informativo; observaciones) y `cobros/visits/history`
+  (programar/registrar gestión + historial cronológico por cliente).
+  Enlace "Agenda hoy" en navegación CobrOS y CTA en ficha 2A.
+- Estados: pendiente, visitado, no_localizado, promesa_pago, reprogramada.
+  2B NO modifica AccountReceivable, balance_due, pagos, asignaciones ni
+  ventas; promise_amount es solo dato informativo. Sin cobro real, medios de
+  pago, recibos, impresión, envío, GPS/geocercas (2C/3A quedan fuera).
+
+**Pruebas:**
+- Nuevo `tests/Feature/CobrosVisitTest.php` — 9/9, 52 aserciones:
+  programar con fecha explícita; validaciones (fecha obligatoria, promesa
+  exige fecha); agenda de hoy solo visitas de hoy; transición de estados con
+  controles rápidos; promesa con monto BCMath; reprogramación trazada con
+  bitácora y visita nueva; historial cronológico aislado; IDOR 404
+  (cliente/visita ajena, no asignada, cross-company, collector_id ignorado);
+  reasignación cierra pendientes sin transferencia silenciosa; permisos y
+  snapshots financieros intactos (0 pagos/0 AR/1 asignación).
+- Regresión: asignaciones/reasignación de 1E verificadas contra el nuevo
+  cierre de visitas pendientes.
+
+**Suite CobrOS completa: 187/187, 1507 aserciones (VERDE).**
+`git diff --check` limpio. Sin commit, sin push. `tmp_generate_cobros_icons.php` intacto.
+
+### 2B.1 — Corrección UX de la Agenda (2026-09-23)
+- Agenda de hoy reescrita: 4 botones sólidos con identidad CobrOS
+  (✓ Visitado, ✕ No estaba, 🤝 Promesa, 📅 Otro día), ≥48px, hover/focus
+  visibles. Una decisión = una pantalla: los campos de promesa y
+  reprogramación son paneles mutuamente excluyentes que solo aparecen al
+  elegir la opción correspondiente (JS mínimo inline).
+- Corregido el texto Blade escapado (`@open(... ? true : false)` eliminado).
+- Etiquetas humanas en agenda e historial ("No estaba", "Otro día", "Pagará
+  el …"); gestión cerrada ya no muestra botones ni formularios, solo estado
+  y acceso al historial. Estados de BD y migraciones sin cambios.
+- Nuevo `CobrosVisitRenderTest` 4/4: botones presentes y con contraste,
+  expresiones Blade crudas prohibidas (regresión), gestión cerrada sin
+  formularios, paneles ocultos por defecto.
+- Suite CobrOS: 191/191, 1534 aserciones (VERDE).

@@ -157,6 +157,14 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
     Route::get('/collector/portfolio/{customer}', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
+    Route::get('/visits/today', [App\Http\Controllers\Cobros\VisitController::class, 'today'])
+        ->middleware('permission:cobros.cobrar')->name('visits.today');
+    Route::get('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'customerHistory'])
+        ->middleware('permission:cobros.cobrar')->name('visits.customer');
+    Route::post('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'store'])
+        ->middleware('permission:cobros.cobrar')->name('visits.store');
+    Route::patch('/visits/{visit}', [App\Http\Controllers\Cobros\VisitController::class, 'update'])
+        ->middleware('permission:cobros.cobrar')->name('visits.update');
     Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
     Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])

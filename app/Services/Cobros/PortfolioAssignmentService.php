@@ -37,6 +37,10 @@ class PortfolioAssignmentService
                     'assigned_at' => now(),
                 ]);
 
+                // 2B: al cambiar de cobrador, las visitas pendientes NO se transfieren
+                // silenciosamente; se cierran como reprogramadas preservando el historial.
+                app(VisitService::class)->closePendingForCustomer($customer, $actor, 'Cartera reasignada a otro cobrador');
+
                 $this->log($company, $customer, $from, $collector->id, CobrosAssignmentLog::ACTION_REASSIGN, $actor, $reason);
 
                 return $existing->fresh();
@@ -86,6 +90,9 @@ class PortfolioAssignmentService
 
             $from = (int) $existing->collector_user_id;
             $existing->delete();
+
+            // 2B: desasignar también cierra visitas pendientes sin transferirlas.
+            app(VisitService::class)->closePendingForCustomer($customer, $actor, 'Cliente desasignado de la cartera');
 
             $this->log($company, $customer, $from, null, CobrosAssignmentLog::ACTION_UNASSIGN, $actor, $reason);
         });

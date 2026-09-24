@@ -52,7 +52,10 @@
         </ul>
     </section>
 
-    @section('pagos')
+    <div class="flex flex-wrap gap-2">
+        <a href="{{ route('cobros.visits.customer', $customer) }}"
+           class="mt-3 inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-primary/10">Agenda / historial de visitas</a>
+    </div>
     <section aria-labelledby="pagos-historicos" class="mt-6">
         <h2 id="pagos-historicos" class="text-lg font-semibold text-slate-900">Pagos históricos</h2>
         @if($payments->isEmpty())
@@ -68,6 +71,5 @@
             </ul>
         @endif
     </section>
-    @show
 </div>
 @endsection
