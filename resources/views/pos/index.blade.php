@@ -420,15 +420,53 @@
                                class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm font-bold text-primary">
                     </div>
                     <div>
-                        <label for="layaway-method" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Forma de pago de la prima</label>
-                        <select id="layaway-method"
-                                x-model="layaway.payment_method_id"
-                                class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm font-bold text-primary">
-                            <option value="">Seleccione…</option>
-                            <template x-for="method in layawayPaymentMethods" :key="method.id">
-                                <option :value="method.id" x-text="method.name"></option>
+                        <div class="mb-1 flex items-center justify-between gap-2">
+                            <label class="block text-xs font-semibold uppercase text-slate-300">Pagos de la prima</label>
+                            <button type="button"
+                                    @click="layaway.payments.push({ method: '', amount: '', reference: '', notes: '' })"
+                                    class="min-h-[44px] rounded-lg border border-primary/50 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10">
+                                + Agregar medio
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <template x-for="(row, i) in layaway.payments" :key="i">
+                                <div class="space-y-2 rounded-lg border border-primary/30 p-2">
+                                    <div class="flex items-center gap-2">
+                                        <select x-model="row.method"
+                                                class="w-full min-h-[44px] rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm font-bold text-primary">
+                                            <option value="">Forma de pago…</option>
+                                            <template x-for="method in layawayPaymentMethods" :key="method.id">
+                                                <option :value="method.id" :disabled="!layawayMethodAvailable(method, i)" x-text="method.name"></option>
+                                            </template>
+                                        </select>
+                                        <button type="button"
+                                                x-show="layaway.payments.length > 1"
+                                                @click="layaway.payments.splice(i, 1)"
+                                                class="min-h-[44px] rounded-lg border border-red-400/50 px-3 text-xs font-bold text-red-300 hover:bg-red-400/10">
+                                            Quitar
+                                        </button>
+                                    </div>
+                                    <input x-model="row.amount"
+                                           type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           inputmode="decimal"
+                                           placeholder="Monto"
+                                           class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-right text-sm font-bold text-primary placeholder:text-primary/50">
+                                    <input x-model="row.reference"
+                                           type="text"
+                                           maxlength="150"
+                                           placeholder="Referencia (si aplica)"
+                                           class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm text-primary placeholder:text-primary/50">
+                                    <input x-model="row.notes"
+                                           type="text"
+                                           maxlength="2000"
+                                           placeholder="Notas"
+                                           class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm text-primary placeholder:text-primary/50">
+                                </div>
                             </template>
-                        </select>
+                        </div>
+                        <div class="mt-1 flex justify-between text-xs"><span class="text-slate-300">Suma de pagos</span><strong class="text-primary" x-text="money(layawayPaymentsTotal)"></strong></div>
                     </div>
                     <div x-show="selectedLayawayMethod?.allows_change">
                         <label for="layaway-received" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Monto recibido (efectivo)</label>
@@ -443,17 +481,9 @@
                         <div class="mt-1 flex justify-between"><span class="text-slate-300">Vuelto</span><strong class="text-primary" x-text="money(layawayChange)"></strong></div>
                         <p x-show="layawayReceivedError" class="text-xs font-semibold text-red-300">El monto recibido no puede ser menor que la prima.</p>
                     </div>
-                    <div>
-                        <label for="layaway-reference" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Referencia (opcional)</label>
-                        <input id="layaway-reference"
-                               x-model="layaway.reference"
-                               type="text"
-                               maxlength="150"
-                               class="w-full rounded-lg border border-primary/50 bg-slate-800 px-2 py-2 text-sm text-primary placeholder:text-primary/50"
-                               placeholder="Comprobante, nota…">
-                    </div>
                     <p x-show="!customerId" class="text-xs font-semibold text-primary">Seleccione un cliente para crear el apartado.</p>
                     <p x-show="numberValue(layaway.initial_amount) > apartadoGrandTotal" class="text-xs font-semibold text-red-300">La prima no puede superar el total del apartado.</p>
+                    <p x-show="layawayMode && numberValue(layaway.initial_amount) > 0 && layawayPaymentsTotal !== decimal4(numberValue(layaway.initial_amount))" class="text-xs font-semibold text-red-300">La suma de los pagos debe ser exactamente igual a la prima.</p>
                 </div>
                 <div class="my-3 border-t border-slate-700"></div>
                 <div x-show="!layawayMode" class="flex items-end justify-between"><span class="text-base">Total</span><strong class="text-2xl text-amber-400" x-text="money(grandTotal)"></strong></div>
@@ -1070,7 +1100,7 @@ document.addEventListener('alpine:init', () => {
         canCreateLayaway: @json($canCreateLayaway),
         creatingLayaway: false,
         layawayValidityDays: @json($layawayValidityDays),
-        layaway: { expires_at: '', initial_amount: '', payment_method_id: '', reference: '', received_amount: '' },
+        layaway: { expires_at: '', initial_amount: '', payments: [{ method: '', amount: '', reference: '', notes: '' }], received_amount: '' },
         lastLayaway: null,
         layawayPrint: { busy: false, message: '' },
         orderRequest: { open: false, saving: false, query: '', results: [], loading: false, requestNumber: 0, items: [], notes: '', error: '', result: null },
@@ -1233,10 +1263,27 @@ document.addEventListener('alpine:init', () => {
                 && this.apartadoGrandTotal > 0
                 && this.numberValue(this.layaway.initial_amount) > 0
                 && this.numberValue(this.layaway.initial_amount) <= this.apartadoGrandTotal
-                && !!this.layaway.payment_method_id
+                && this.layawayPaymentsValid
                 && !this.layawayReceivedError;
         },
-        get selectedLayawayMethod() { return this.paymentMethods.find(method => Number(method.id) === Number(this.layaway.payment_method_id)); },
+        layawayMethodById(id) { return this.paymentMethods.find(method => Number(method.id) === Number(id)); },
+        layawayMethodAvailable(method, index) { return !this.layaway.payments.some((row, i) => i !== index && Number(row.method) === Number(method.id)); },
+        get layawayPaymentsTotal() { return this.decimal4(this.layaway.payments.reduce((sum, row) => sum + this.numberValue(row.amount), 0)); },
+        get layawayPaymentsValid() {
+            const rows = this.layaway.payments;
+            if (rows.length === 0) return false;
+            const seen = new Set();
+            for (const row of rows) {
+                const method = this.layawayMethodById(row.method);
+                if (!method || this.numberValue(row.amount) <= 0) return false;
+                if (seen.has(Number(row.method))) return false;
+                seen.add(Number(row.method));
+                if (method.requires_reference && !(row.reference || '').trim()) return false;
+                if (method.affects_cash && !this.cashSessionId) return false;
+            }
+            return this.layawayPaymentsTotal === this.decimal4(this.numberValue(this.layaway.initial_amount));
+        },
+        get selectedLayawayMethod() { return this.layaway.payments.length === 1 ? this.layawayMethodById(this.layaway.payments[0].method) : null; },
         get layawayReceived() { return this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' ? this.numberValue(this.layaway.received_amount) : this.numberValue(this.layaway.initial_amount); },
         get layawayReceivedError() { return !!this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' && this.numberValue(this.layaway.received_amount) < this.numberValue(this.layaway.initial_amount); },
         get layawayChange() { return this.selectedLayawayMethod?.allows_change ? Math.max(0, this.layawayReceived - this.numberValue(this.layaway.initial_amount)) : 0; },
@@ -1867,7 +1914,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.canCreateLayaway || this.creatingLayaway || this.checkout.open || this.layawayMode) return;
             if (this.quoteMode) { await this.leaveQuoteMode(); }
             this.layawayMode = true;
-            this.layaway = { expires_at: this.defaultLayawayExpiration(), initial_amount: '', payment_method_id: '', reference: '', received_amount: '' };
+            this.layaway = { expires_at: this.defaultLayawayExpiration(), initial_amount: '', payments: [{ method: '', amount: '', reference: '', notes: '' }], received_amount: '' };
             this.notice = this.cart.some(item => this.exceedsStock(item)) ? 'Revise las cantidades: superan el stock disponible para apartar.' : '';
             this.results = [];
             await this.searchProducts(false);
@@ -1888,7 +1935,10 @@ document.addEventListener('alpine:init', () => {
                 else if (this.layawayMode && !this.customerId) { this.notice = 'Seleccione un cliente para crear el apartado.'; }
                 else if (this.layawayMode && this.numberValue(this.layaway.initial_amount) <= 0) { this.notice = 'Indique una prima mayor que cero.'; }
                 else if (this.layawayMode && this.numberValue(this.layaway.initial_amount) > this.apartadoGrandTotal) { this.notice = 'La prima no puede superar el total del apartado.'; }
-                else if (this.layawayMode && !this.layaway.payment_method_id) { this.notice = 'Seleccione la forma de pago de la prima.'; }
+                else if (this.layawayMode && !this.layaway.payments.some(row => row.method && this.numberValue(row.amount) > 0)) { this.notice = 'Seleccione la forma de pago de la prima.'; }
+                else if (this.layawayMode && this.layaway.payments.some(row => row.method && this.layawayMethodById(row.method)?.requires_reference && !(row.reference || '').trim())) { this.notice = 'La referencia es obligatoria para la forma de pago seleccionada.'; }
+                else if (this.layawayMode && this.layawayPaymentsTotal !== this.decimal4(this.numberValue(this.layaway.initial_amount))) { this.notice = 'La suma de los pagos debe ser exactamente igual a la prima.'; }
+                else if (this.layawayMode && !this.layawayPaymentsValid) { this.notice = 'Revise los medios de pago de la prima: no puede repetir formas de pago.'; }
                 return;
             }
             this.creatingLayaway = true;
@@ -1907,10 +1957,14 @@ document.addEventListener('alpine:init', () => {
                             ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}),
                         })),
                         initial_amount: this.numberValue(this.layaway.initial_amount),
-                        payment_method_id: this.layaway.payment_method_id,
+                        payments: this.layaway.payments.map(row => ({
+                            payment_method_id: Number(row.method),
+                            amount: this.numberValue(row.amount),
+                            reference: row.reference ? row.reference.trim() : null,
+                            notes: row.notes ? row.notes.trim() : null,
+                        })),
                         ...(this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' ? { received_amount: this.numberValue(this.layaway.received_amount) } : {}),
                         cash_session_id: this.cashSessionId || null,
-                        reference: this.layaway.reference ? this.layaway.reference.trim() : null,
                         client_token: this.checkoutToken,
                     }),
                 });
@@ -1920,7 +1974,7 @@ document.addEventListener('alpine:init', () => {
                 this.customerId = null;
                 this.selectedCustomer = null;
                 this.checkout.payments = [];
-                this.layaway = { expires_at: '', initial_amount: '', payment_method_id: '', reference: '', received_amount: '' };
+                this.layaway = { expires_at: '', initial_amount: '', payments: [{ method: '', amount: '', reference: '', notes: '' }], received_amount: '' };
                 this.lastLayaway = { id: payload.layaway_id, number: payload.layaway_number };
                 this.layawayPrint = { busy: false, message: '' };
                 this.checkoutToken = generateUUID();

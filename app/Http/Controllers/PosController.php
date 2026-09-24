@@ -65,7 +65,7 @@ class PosController extends Controller
         $paymentMethods = PaymentMethod::forCompany($companyId)
             ->active()
             ->ordered()
-            ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference']);
+            ->get(['id', 'code', 'name', 'type', 'allows_change', 'requires_reference', 'affects_cash']);
         $cashSettings = app(CompanyCashSettingsProvisioner::class)->provision($company);
         $cashSessions = $cashSessionResolver->applicable($request->user(), $companyId, $branchId);
         $cashSession = $cashSessions->count() === 1 ? $cashSessions->first() : null;
@@ -587,7 +587,12 @@ class PosController extends Controller
             'discount_total' => ['prohibited'],
             'discount_total_type' => ['prohibited'],
             'initial_amount' => ['required', 'numeric', 'gt:0'],
-            'payment_method_id' => ['required', 'integer'],
+            'payment_method_id' => ['nullable', 'required_without:payments', 'integer'],
+            'payments' => ['nullable', 'array', 'min:1'],
+            'payments.*.payment_method_id' => ['required', 'integer'],
+            'payments.*.amount' => ['required', 'numeric', 'gt:0'],
+            'payments.*.reference' => ['nullable', 'string', 'max:150'],
+            'payments.*.notes' => ['nullable', 'string', 'max:2000'],
             'received_amount' => ['nullable', 'numeric', 'gte:0'],
             'cash_session_id' => ['nullable', 'integer'],
             'reference' => ['nullable', 'string', 'max:150'],

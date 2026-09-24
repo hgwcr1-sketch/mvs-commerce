@@ -2,6 +2,16 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Pagos mixtos de apartado desde POS (2026-09-24)
+
+**Rama:** `feature/pos` @ `b89465d` + cambios locales sin commit. Sin migraciones ni producción.
+
+- `PosController::storeLayaway` acepta `payments[]` además del legacy `payment_method_id`; reutiliza `LayawayService` (sin duplicar lógica: suma exacta vs prima, sin método repetido, referencia obligatoria según método, `affects_cash` exige sesión, sin crédito/puntos).
+- Modal de apartado en `resources/views/pos/index.blade.php`: filas dinámicas `payments[i]` (método, monto, referencia, notas) + botón “+ Agregar medio”, validación client-side de suma exacta y referencias.
+- Tests: `tests/Feature/PosLayawayMixedPaymentsTest.php` (10 casos) + contrato JS `tests/js/pos-layaway-mode.cjs` actualizado (payload ahora `payments[]`). Corrida: 71/71 PASS (PosLayaway*, PosCheckout, Layaway*, MvsPrintLayawayTicket).
+- Reconciliación menor en `tests/js/pos-layaway-mode.cjs`: aserción de clases del botón “Apartar” (esperaba `bg-primary text-black` que ya no existen; fallo preexistente).
+- Preexistentes sin tocar (documentados abajo): `PosAccessAndSearchTest` (Puntos futuros), `PosSuspendedSalesTest` (125 vs '125.00'), `AdministrativeDashboardTest`.
+
 ## Cierre documental B1–B7 — LISTO PARA INTEGRACIÓN A RAMA DESTINO (2026-09-23)
 
 **Rama:** `feature/notas-credito` @ `ff1fd58`. Sin merge, push, deploy ni producción.

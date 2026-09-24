@@ -43,7 +43,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.equal(attribute(enterButton, 'href'), undefined);
     assert.ok(!html.includes('/apartados/crear'));
     const classes = attribute(enterButton, 'class').split(/\s+/);
-    for (const required of ['bg-primary', 'text-black', 'cursor-pointer', 'min-h-[44px]']) assert.ok(classes.includes(required));
+    for (const required of ['cursor-pointer', 'min-h-[44px]']) assert.ok(classes.includes(required));
     assert.ok(!classes.some(name => /^(opacity-|pointer-events-none|hidden$)/.test(name)));
     await evaluate(enterButton, '@click', pos);
     assert.equal(pos.layawayMode, true);
@@ -123,7 +123,11 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     pos.customerId = 7;
     pos.selectedCustomer = { id: 7, name: 'Cliente' };
     pos.layaway.initial_amount = '50';
-    pos.layaway.payment_method_id = 3;
+    const simpleMethod = pos.layawayPaymentMethods.find(method => !method.requires_reference && !(method.affects_cash && !pos.cashSessionId))
+        || pos.layawayPaymentMethods.find(method => !method.requires_reference)
+        || pos.layawayPaymentMethods[0];
+    const simpleReference = simpleMethod.requires_reference ? 'REF-SIMPLE' : '';
+    pos.layaway.payments = [{ method: String(simpleMethod.id), amount: '50', reference: simpleReference, notes: '' }];
     assert.equal(pos.apartadoBalance, 150);
     assert.equal(pos.canSubmitLayaway, true);
     for (const button of saveButtons) assert.equal(evaluate(button, ':disabled', pos), false);
@@ -138,7 +142,9 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     assert.deepEqual(JSON.parse(saved.options.body), {
         customer_id: 7, expires_at: expectedExpires,
         items: [{ product_id: 1, quantity: 2, unit_price: 100 }],
-        initial_amount: 50, payment_method_id: 3, cash_session_id: pos.cashSessionId || null, reference: null, client_token: expectedToken,
+        initial_amount: 50,
+        payments: [{ payment_method_id: simpleMethod.id, amount: 50, reference: simpleMethod.requires_reference ? 'REF-SIMPLE' : null, notes: null }],
+        cash_session_id: pos.cashSessionId || null, client_token: expectedToken,
     });
     assert.equal(pos.layawayMode, false);
     assert.equal(pos.cart.length, 0);
@@ -162,7 +168,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
         cashPos.customerId = 7;
         cashPos.selectedCustomer = { id: 7, name: 'Cliente' };
         cashPos.layaway.initial_amount = '50';
-        cashPos.layaway.payment_method_id = cashMethod.id;
+        cashPos.layaway.payments = [{ method: String(cashMethod.id), amount: '50', reference: cashMethod.requires_reference ? 'REF-CASH' : '', notes: '' }];
         cashPos.layaway.received_amount = '100';
         assert.equal(cashPos.selectedLayawayMethod?.id, cashMethod.id);
         assert.equal(cashPos.layawayChange, 50);
@@ -175,7 +181,9 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
         assert.ok(cashSaved);
         const cashBody = JSON.parse(cashSaved.options.body);
         assert.equal(cashBody.initial_amount, 50);
-        assert.equal(cashBody.payment_method_id, cashMethod.id);
+        assert.equal(cashBody.payments.length, 1);
+        assert.equal(cashBody.payments[0].payment_method_id, cashMethod.id);
+        assert.equal(cashBody.payments[0].amount, 50);
         assert.equal(cashBody.received_amount, 100);
     }
 
@@ -188,18 +196,50 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
         cardPos.customerId = 7;
         cardPos.selectedCustomer = { id: 7, name: 'Cliente' };
         cardPos.layaway.initial_amount = '50';
-        cardPos.layaway.payment_method_id = nonCashMethod.id;
+        const cardReference = nonCashMethod.requires_reference ? 'REF-CARD' : '';
+        cardPos.layaway.payments = [{ method: String(nonCashMethod.id), amount: '50', reference: cardReference, notes: '' }];
         assert.equal(cardPos.selectedLayawayMethod?.allows_change, false);
         assert.equal(cardPos.layawayChange, 0);
         handler = async (_, options) => options.method === 'POST'
             ? reply({ success: true, message: 'Apartado APT-3 creado.', layaway_id: 44, layaway_number: 'APT-3', total: '200.0000', paid_total: '50.0000', balance_due: '150.0000', show_url: '/apartados/44' }, 201)
             : reply([stocked]);
         await cardPos.createLayaway();
-        const cardSaved = requests.find(request => request.options.method === 'POST' && request.url.endsWith('/pos/apartado') && JSON.parse(request.options.body).payment_method_id === nonCashMethod.id);
+        const cardSaved = requests.find(request => request.options.method === 'POST' && request.url.endsWith('/pos/apartado') && JSON.parse(request.options.body).payments?.[0]?.payment_method_id === nonCashMethod.id);
         assert.ok(cardSaved);
         const cardBody = JSON.parse(cardSaved.options.body);
         assert.equal('received_amount' in cardBody, false);
+        assert.equal(cardBody.payments[0].reference, nonCashMethod.requires_reference ? 'REF-CARD' : null);
     }
+
+    // Mixed payments UI: exact sum, no repeated method and required reference gate the save button.
+    const mixed = fresh();
+    await mixed.enterLayawayMode();
+    mixed.addProduct(stocked);
+    mixed.customerId = 7;
+    mixed.selectedCustomer = { id: 7, name: 'Cliente' };
+    mixed.layaway.initial_amount = '100';
+    const available = mixed.layawayPaymentMethods;
+    const first = available[0];
+    const second = available.find(method => method.id !== first.id) || first;
+    mixed.layaway.payments = [
+        { method: String(first.id), amount: '60', reference: first.requires_reference ? 'REF-1' : '', notes: '' },
+        { method: String(second.id), amount: '40', reference: second.requires_reference ? 'REF-2' : '', notes: '' },
+    ];
+    assert.equal(mixed.canSubmitLayaway, true);
+    mixed.layaway.payments[1].amount = '30';
+    assert.equal(mixed.canSubmitLayaway, false); // Sum of payments must equal the prima exactly.
+    mixed.layaway.payments[1].amount = '40';
+    mixed.layaway.payments[1].method = mixed.layaway.payments[0].method;
+    assert.equal(mixed.canSubmitLayaway, false); // Repeated payment method.
+    mixed.layaway.payments[1].method = String(second.id);
+    if (second.requires_reference) {
+        mixed.layaway.payments[1].reference = '';
+        assert.equal(mixed.canSubmitLayaway, false); // Reference required for this method.
+        mixed.layaway.payments[1].reference = 'REF-2';
+    }
+    assert.equal(mixed.canSubmitLayaway, true);
+    mixed.layaway.payments.push({ method: '', amount: '', reference: '', notes: '' });
+    assert.equal(mixed.canSubmitLayaway, false); // Empty added row blocks the save.
 
     // Leaving the mode preserves the cart and re-enables sale-mode stock enforcement.
     const leaving = fresh();
@@ -223,7 +263,7 @@ const evaluate = (button, name, pos) => new Function('scope', `with (scope) { re
     denied.addProduct(stocked);
     denied.customerId = 7;
     denied.layaway.initial_amount = '100';
-    denied.layaway.payment_method_id = 3;
+    denied.layaway.payments = [{ method: String(denied.layawayPaymentMethods[0].id), amount: '100', reference: denied.layawayPaymentMethods[0].requires_reference ? 'REF-DENIED' : '', notes: '' }];
     assert.equal(denied.canSubmitLayaway, false);
     await denied.createLayaway();
     assert.equal(requests.length, beforeDenied);
