@@ -23,7 +23,7 @@ class ReturnController extends Controller
     {
         $this->assertIsolatedContext($venta);
 
-        $venta->load('items.product.unit');
+        $venta->load(['items.product.unit', 'items.product.style', 'items.product.size', 'items.product.color']);
 
         $lines = [];
 

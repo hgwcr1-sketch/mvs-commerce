@@ -2,15 +2,135 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Notas de Crédito — Fase 4B Consumer Final — IMPLEMENTADA Y CERTIFICADA (2026-09-22)
+## Cierre documental B1–B7 — LISTO PARA INTEGRACIÓN A RAMA DESTINO (2026-09-23)
 
-**Estado: CERTIFICADA. Pendiente integración controlada a `integration/notas-credito`; NO desplegada.** Rama `feature/notas-credito`, HEAD `3f59e67`.
+**Rama:** `feature/notas-credito` @ `ff1fd58`. Sin merge, push, deploy ni producción.
 
-Cadena:
-- `82c82db` — 4B-1 emisión segura (Consumer Final).
-- `93aa4cc` — 4B-2 aplicación segura (número + código).
-- `e682e9a` — 4B-3 POS + comprobantes integrados.
-- `3f59e67` — 4B-4 regeneración segura (motivo/auditoría, código anterior invalidado).
+| Bloque | Commit | Descripción |
+|--------|--------|-------------|
+| B6 Ventas/NC | `3b56a89` | Fecha de anulación visible + filtro por cliente en Ventas/Devoluciones |
+| B4 Productos | `a4c2be1` | Atributos en listado, filtro categoría, proveedor principal, formato costo |
+| B5 Dashboard/períodos | `9eecdfb` | Selector año/personalizado, NC en movimientos, reorganización de tarjetas |
+| B2 Variantes | `1241c53` + `4e046e4` | Variantes estilo/talla/color en POS, cotizaciones, devoluciones y apartados |
+| B7 Carga masiva | `17b346e` | Proveedor opcional en importación de productos |
+| B1 Analítico de caja | `7b4ece7` | Analítico por medio de pago en historial de caja |
+| B3 Pagos mixtos apartados | `ff1fd58` | Pagos mixtos en apartados (LayawayService + vistas + tests) |
+
+### Verificación de integración
+
+- Integración focal revisada: **253 tests, 250 PASS, 2F + 1E**.
+- Focales por bloque (corridas finales): B3 19/19, B1 7/7 + Cash 89/89, B7 31/31 — PASS.
+- Sin regresiones nuevas atribuibles a B1–B7.
+
+### 3 fallos preexistentes documentados (no causados por B1–B7)
+
+- `PosAccessAndSearchTest::test_checkout_modal_has_responsive_permanent_summary_and_dynamic_direct_payment_flow` — espera `Puntos futuros`.
+- `QuoteTest::test_quote_mode_executes_frontend_transitions_stock_rules_and_save_contract` — JS espera clases antiguas del botón `Cotizar`.
+- `AdministrativeDashboardTest::test_admin_can_consult_without_cash_but_pos_and_checkout_still_require_it` — expectativa de mensaje de caja vs métodos de pago.
+
+### Estado
+
+**LISTO PARA INTEGRACIÓN a rama destino.** No se ejecuta merge/push/deploy sin instrucción explícita.
+
+---
+
+## Pulido operativo P1–P4 — pre N10 / producción (2026-09-17)
+
+Base `feature/pos`, HEAD `7fe7e79`. Trabajo local sin commit, push ni producción.
+
+**Cambios realizados:**
+- **P1 — Scanner de cámara en productos (AUDITADO / YA EXISTÍA):** confirmado funcional en `resources/views/productos/_form.blade.php` vía `<x-scanner.mvs-scanner />`, escucha `@mvs-scan.window` y copia el código leído al campo de código de barras. Componente reutilizable en `resources/views/components/scanner/mvs-scanner.blade.php`, lógica en `resources/js/scanner/index.js`, importado en `resources/js/app.js`.
+- **P2 — Producto recién agregado arriba en Compras:** en `resources/js/modules/compras.js` `addProduct` ahora inserta nuevos ítems con `unshift` (arriba) y enfoca/selecciona el input de cantidad de la primera fila; si el producto ya existe, incrementa la cantidad y enfoca la línea existente. Se agregaron `data-item-id` y `data-field="quantity"` a los inputs de cantidad en `resources/views/compras/create.blade.php` y `resources/views/compras/edit.blade.php`. Ingreso de mercadería/verificación no aplica porque sus líneas vienen prefijadas por la compra.
+- **P3 — Reset Demo (CÓDIGO/SCHEDULER LOCAL VERIFICADO; PRODUCCIÓN PENDIENTE DE CERTIFICAR):** `routes/console.php` ya programa `demo:company --reset --force` a las 02:00 con `withoutOverlapping()` y `onOneServer()`. Se agregó `appendOutputTo(storage_path('logs/demo-reset.log'))` y un checklist de producción en comentario. `php artisan schedule:list` y `php artisan schedule:run` verifican que el scheduler responde; el comando no se ejecutó ahora porque `dailyAt('02:00')` aún no vence. No se corrió el reset destructivo en local. El reset nocturno de producción NO está certificado hasta comprobar el cron/scheduler del VPS.
+- **P4 — Icono propio MVS en móvil:** generados `public/icons/favicon-32x32.png`, `apple-touch-icon.png`, `icon-192x192.png` e `icon-512x512.png` desde `public/images/logo-mvs.png` usando GD; creado `public/manifest.json` con identidad dorada `#D4AF37`; agregados `<link rel="icon">`, `<link rel="apple-touch-icon">`, `<link rel="manifest">`, `theme-color` y capacidad web-app en `resources/views/layouts/app.blade.php`. El favicon `.ico` genérico/ vacío de Laravel queda sin uso.
+
+**Validación:**
+- `npm run build` correcto; `git diff --check` limpio.
+- `php artisan schedule:list` muestra el comando Demo programado.
+
+**Pendiente:**
+- Validación visual en navegador real (360/768/1280) para P2 y P4.
+- En producción: confirmar cron del scheduler y `APP_TIMEZONE` para P3; no autorizado deploy.
+
+## APARTADOS POS — RECIBIDO/VUELTO + MVS PRINT (2026-09-16 noche)
+
+Implementación local terminada para pre-commit; sin commit, push, deploy ni migración en producción.
+
+**Funcionalidad completada:**
+- Migración aditiva `received_amount` / `change_amount` en `layaway_payments` (DECIMAL 19,4 nullable).
+- Casts y validación backend en `LayawayService::receivedAndChange` con BCMath.
+- UI de Recibido/Vuelto en POS (`resources/views/pos/index.blade.php`) y vista de apartado (`resources/views/layaways/show.blade.php`).
+- Corrección del mojibake "Cambiar a cotización".
+- `EscPosLayawayTicket` para comprobantes 58/80 mm con símbolo `₡`, word-wrap y sin mojibake.
+- Endpoints MVS Print: `mvs.print.ticket.layaway` y `mvs.print.ticket.layaway.payment`.
+- Auto-print de apartado y abono desde POS, apertura de cajón solo para efectivo, reimpresión read-only sin drawer ni mutaciones.
+- Actualización de `AGENTS.md` y `docs/GUIA_VISUAL.md`.
+
+**Pruebas ejecutadas:**
+- `PosLayawayModeTest` 17/17, 167 aserciones.
+- `LayawayV1Test` 7/7, 42 aserciones.
+- `MvsPrintLayawayTicketTest` 11/11, 73 aserciones (nuevo).
+- `MvsPrintAutoPrintTest` 32/32, 309 aserciones.
+- `QuoteTest` 12/12, 159 aserciones.
+- `PosCheckoutTest` 17/17, 3 aserciones reportadas por PHPUnit (focalizado junto a los anteriores).
+- Suite focalizada total: **96 pruebas, 96 aprobadas, 753 aserciones, 0 fallos**.
+- Regresión POS + Apartados + Cotización + MVS Print: 298 pruebas, 292 aprobadas, 2036 aserciones, 6 fallos preexistentes documentados (no atribuibles a esta tarea).
+- Tests JS: `mvs-print-test.cjs` 20/20; `pos-layaway-mode.cjs` ejecutado vía `PosLayawayModeTest`.
+- `npm run build` correcto; `git diff --check` limpio; Pint aplicado a archivos PHP modificados.
+
+**Pendiente:**
+- Migración `2026_09_16_000002_add_received_change_to_layaway_payments_table.php` pendiente de ejecución en producción (NO autorizada todavía).
+- Prueba física con impresora térmica y cajón pendiente.
+
+## Modo Apartado integrado al POS — auditoría pre-commit (2026-09-16)
+
+Implementación local aprobada para pre-commit, todavía sin commit, push ni producción. El POS permite entrar a Apartado con `apartados.crear`, exige cliente y prima positiva, reserva únicamente stock real de la sucursal activa bajo `lockForUpdate`, admite precio manual sólo con `pos.cambiar_precio` y reutiliza las reglas de pago de `LayawayService` (sin crédito ni puntos). Cotización y Apartado son mutuamente exclusivos. La UI nueva usa el dorado oficial `bg-primary` (`#D4AF37`) y mantiene acciones de 44/48 px.
+
+Idempotencia: migración nueva nullable para `client_token` UUID y `request_fingerprint` SHA-256, con UNIQUE exacto `(company_id, client_token)`; los apartados históricos permanecen válidos. Replay idéntico devuelve el mismo apartado sin repetir reserva ni prima; el mismo token con payload distinto devuelve 409; empresas distintas pueden reutilizar el token. La migración fue auditada como compatible con PostgreSQL 16, pero no se ejecutó contra PostgreSQL en esta estación porque `pdo_pgsql` no está cargado.
+
+Integración existente verificada: el apartado creado en POS aparece en el listado, acepta abonos y entrega final; conserva el precio manual en `SaleItem`, mantiene descuento cero y no vuelve a descontar inventario al entregar. Descuentos quedan pendientes: requieren persistencia explícita de `discount_total`/`gross_total` y preservación durante entrega; cualquier payload de descuento se rechaza en esta fase.
+
+Validación: `PosLayawayModeTest` **14/14, 134 aserciones**; `LayawayV1Test` **7/7, 42**; `QuoteTest` **12/12, 159**; PosCheckout relacionados **46/46, 408**; MVS Print PHP **70/70, 348**, JS **41/41**; Vite build y `git diff --check` correctos. Regresión POS + Quote: **198 pruebas, 193 aprobadas, 1469 aserciones**, con exactamente los cinco fallos históricos ya documentados y sin fallos nuevos. Validación visual real a 360/768/1280 y PostgreSQL ejecutado quedan pendientes; no autorizado para producción.
+
+## Variantes (estilo / talla / color) en POS, cotizaciones, devoluciones y apartados — COMPLETADO (2026-09-23)
+
+**Commit `1241c53`** en `feature/notas-credito`.
+
+Se añadió la identificación clara de variantes en los flujos de venta del POS y sus derivados, sin cambiar lógica de negocio, caja, dashboard ni producción.
+
+### Cambios principales
+
+- `PosController::searchProducts()` incluye eager load de `style`, `size`, `color` y devuelve `style_name`, `size_name`, `color_name`.
+- POS muestra variantes en: resultados de búsqueda, líneas del carrito, pedidos internos, carga de cotizaciones y recuperación de ventas suspendidas.
+- `QuoteController::load()`/`show()`/`print()` cargan variantes; el payload de carga en POS las incluye.
+- `ReturnController::create()` y `devoluciones/crear.blade.php` muestran variantes.
+- `LayawayController::create()`/`show()` y vistas `layaways/create.blade.php`/`layaways/show.blade.php` muestran variantes.
+- Helper reutilizable: `app/Support/ProductVariantFormatter.php` y partial `resources/views/partials/product-variant.blade.php`.
+
+### Verificación
+
+- `PosAccessAndSearchTest` (excepto fallo preexistente de modal): 33/33 ✅
+- `SaleReturnTest`: 20/20 ✅
+- `LayawayV1Test`: 8/8 ✅
+- `DevolucionesIndexTest`: 18/18 ✅
+- `QuoteTest` (excepto fallo preexistente de JS de cotización): 12/12 ✅
+
+### Deuda preexistente (no causada por este bloque)
+
+- `PosAccessAndSearchTest::test_checkout_modal_has_responsive_permanent_summary_and_dynamic_direct_payment_flow` — espera `Puntos futuros` en respuesta.
+- `QuoteTest::test_quote_mode_executes_frontend_transitions_stock_rules_and_save_contract` — test JS espera clases antiguas del botón `Cotizar`.
+
+### Pendiente / siguiente paso
+
+No se inicia otro bloque hasta instrucción del usuario.
+
+---
+
+## Notas de Crédito — Fase 4B Consumer Final — COMPLETADA / CERTIFICADA / PRODUCCIÓN (2026-09-22)
+
+**Estado: PRODUCCIÓN.** Fuente certificada `5ca8389` (`feature/notas-credito`) → merge integración certificado `40685e86a086c152d178e511af1c0ba454fadb24`. Producción actual: **`40685e86a086c152d178e511af1c0ba454fadb24`** (deploy 2026-09-22).
+
+Cadena 4B: `82c82db` (4B-1 emisión segura) → `93aa4cc` (4B-2 aplicación número+código) → `e682e9a` (4B-3 POS + comprobantes) → `3f59e67` (4B-4 regeneración segura) → `5ca8389` (cierre documental).
 
 Puntos certificados:
 - Activación opcional por empresa.
@@ -26,9 +146,22 @@ Puntos certificados:
 - Cajero únicamente `notas_credito.aplicar`.
 - NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
 
+Verificación en producción (smoke 2026-09-22, únicamente Empresa Demo): Consumer Final emisión PASS; aplicación POS bearer PASS; rotación segura PASS; reversión PASS; NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados. Migraciones 4B aplicadas Ran: `2026_09_20_000003` (application_code_hash + toggle empresa) y `2026_09_22_000001` (rotación); 4A (`2026_09_20_000001/000002`) sin cambios.
+
 Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
 
 Deuda PREEXISTENTE (no causada por 4B, no corregida): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
+
+### Incidente de deploy 2026-09-22
+- 6 HTTP 500 transitorios durante la ventana **10:30:16–10:32:33 CST** (usuarios reales de empresa).
+- Causa: swap no atómico del árbol de trabajo + regeneración de route-cache durante el despliegue (ViewException "Route not defined"); rutas presentes en código y caché, sin efectos posteriores.
+- 0 HTTP 500 posteriores; **no fue defecto funcional de 4B; producción estable desde 10:32 CST.**
+
+### Decisión operativa de deploy (futuro)
+- Los deploys de producción deben anunciarse previamente.
+- El usuario acepta una ventana aproximada de hasta 2 minutos.
+- NO iniciar la ventana de interrupción sin confirmación del usuario.
+- Futuro recomendado: deploy atómico; posteriormente soporte Offline.
 
 ## Notas de Crédito — Fase 4A vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20)
 
@@ -131,63 +264,13 @@ Antes del deploy:
 - Debe admitir aplicación parcial y saldo.
 - NO implementar antes de estabilizar NC nominativa en producción.
 
-## Pulido operativo P1–P4 — pre N10 / producción (2026-09-17)
+## Notas de Crédito — Fase 2C reversión NC↔CxC (2026-09-17)
 
-Base `feature/pos`, HEAD `7fe7e79`. Trabajo local sin commit, push ni producción.
+Base `7bb6b2d` (Fase 2B commit), rama `feature/notas-credito`, trabajo local **sin commit** (así debe permanecer hasta orden explícita). Fase 2C implementada: mecanismo formal de reversión de compensaciones NC↔CxC según decisión D029. Mig `2026_09_17_000003_add_reversal_fields_to_ar_adjustments_table` agrega `reversed_amount` y `reversal_adjustment_id`. `AccountReceivableAdjustment` extiendido con constante `TYPE_CREDIT_NOTE_OFFSET_REVERSAL`, relaciones `reversalAdjustment`/`reversedBy` y helpers `isFullyReversed()`/`remainingAmount()`. `AccountsReceivableReconciliationService::reverseOffset()` implementado: validación, lock order AR→NC→adjustment, idempotencia, reversión idempotente, cap a `original_amount`, creación de reversal adjustment. `AccountsReceivableController::reverseAdjustment` con permiso `cuentas_cobrar.revertir`. Ruta `POST cuentas-por-cobrar/{ar}/revertir-ajuste/{adjustment}`. Vista `accounts-receivable/show.blade.php` actualizada con historial de reversas (badge violeta), formulario de reversión con motivo. Suite: `AccountsReceivableReversalTest` 23/23, 65 aserciones; `CreditNoteReconciliationTest` 18/18; `CreditNoteTest` 19/19; regresión broader 96/103 (7 fallos preexistentes loyalty). Pendiente: commit, push, documentación, revisión del usuario.
 
-**Cambios realizados:**
-- **P1 — Scanner de cámara en productos (AUDITADO / YA EXISTÍA):** confirmado funcional en `resources/views/productos/_form.blade.php` vía `<x-scanner.mvs-scanner />`, escucha `@mvs-scan.window` y copia el código leído al campo de código de barras. Componente reutilizable en `resources/views/components/scanner/mvs-scanner.blade.php`, lógica en `resources/js/scanner/index.js`, importado en `resources/js/app.js`.
-- **P2 — Producto recién agregado arriba en Compras:** en `resources/js/modules/compras.js` `addProduct` ahora inserta nuevos ítems con `unshift` (arriba) y enfoca/selecciona el input de cantidad de la primera fila; si el producto ya existe, incrementa la cantidad y enfoca la línea existente. Se agregaron `data-item-id` y `data-field="quantity"` a los inputs de cantidad en `resources/views/compras/create.blade.php` y `resources/views/compras/edit.blade.php`. Ingreso de mercadería/verificación no aplica porque sus líneas vienen prefijadas por la compra.
-- **P3 — Reset Demo (CÓDIGO/SCHEDULER LOCAL VERIFICADO; PRODUCCIÓN PENDIENTE DE CERTIFICAR):** `routes/console.php` ya programa `demo:company --reset --force` a las 02:00 con `withoutOverlapping()` y `onOneServer()`. Se agregó `appendOutputTo(storage_path('logs/demo-reset.log'))` y un checklist de producción en comentario. `php artisan schedule:list` y `php artisan schedule:run` verifican que el scheduler responde; el comando no se ejecutó ahora porque `dailyAt('02:00')` aún no vence. No se corrió el reset destructivo en local. El reset nocturno de producción NO está certificado hasta comprobar el cron/scheduler del VPS.
-- **P4 — Icono propio MVS en móvil:** generados `public/icons/favicon-32x32.png`, `apple-touch-icon.png`, `icon-192x192.png` e `icon-512x512.png` desde `public/images/logo-mvs.png` usando GD; creado `public/manifest.json` con identidad dorada `#D4AF37`; agregados `<link rel="icon">`, `<link rel="apple-touch-icon">`, `<link rel="manifest">`, `theme-color` y capacidad web-app en `resources/views/layouts/app.blade.php`. El favicon `.ico` genérico/ vacío de Laravel queda sin uso.
-
-**Validación:**
-- `npm run build` correcto; `git diff --check` limpio.
-- `php artisan schedule:list` muestra el comando Demo programado.
-
-**Pendiente:**
-- Validación visual en navegador real (360/768/1280) para P2 y P4.
-- En producción: confirmar cron del scheduler y `APP_TIMEZONE` para P3; no autorizado deploy.
-
-## APARTADOS POS — RECIBIDO/VUELTO + MVS PRINT (2026-09-16 noche)
-
-Implementación local terminada para pre-commit; sin commit, push, deploy ni migración en producción.
-
-**Funcionalidad completada:**
-- Migración aditiva `received_amount` / `change_amount` en `layaway_payments` (DECIMAL 19,4 nullable).
-- Casts y validación backend en `LayawayService::receivedAndChange` con BCMath.
-- UI de Recibido/Vuelto en POS (`resources/views/pos/index.blade.php`) y vista de apartado (`resources/views/layaways/show.blade.php`).
-- Corrección del mojibake "Cambiar a cotización".
-- `EscPosLayawayTicket` para comprobantes 58/80 mm con símbolo `₡`, word-wrap y sin mojibake.
-- Endpoints MVS Print: `mvs.print.ticket.layaway` y `mvs.print.ticket.layaway.payment`.
-- Auto-print de apartado y abono desde POS, apertura de cajón solo para efectivo, reimpresión read-only sin drawer ni mutaciones.
-- Actualización de `AGENTS.md` y `docs/GUIA_VISUAL.md`.
-
-**Pruebas ejecutadas:**
-- `PosLayawayModeTest` 17/17, 167 aserciones.
-- `LayawayV1Test` 7/7, 42 aserciones.
-- `MvsPrintLayawayTicketTest` 11/11, 73 aserciones (nuevo).
-- `MvsPrintAutoPrintTest` 32/32, 309 aserciones.
-- `QuoteTest` 12/12, 159 aserciones.
-- `PosCheckoutTest` 17/17, 3 aserciones reportadas por PHPUnit (focalizado junto a los anteriores).
-- Suite focalizada total: **96 pruebas, 96 aprobadas, 753 aserciones, 0 fallos**.
-- Regresión POS + Apartados + Cotización + MVS Print: 298 pruebas, 292 aprobadas, 2036 aserciones, 6 fallos preexistentes documentados (no atribuibles a esta tarea).
-- Tests JS: `mvs-print-test.cjs` 20/20; `pos-layaway-mode.cjs` ejecutado vía `PosLayawayModeTest`.
-- `npm run build` correcto; `git diff --check` limpio; Pint aplicado a archivos PHP modificados.
-
-**Pendiente:**
-- Migración `2026_09_16_000002_add_received_change_to_layaway_payments_table.php` pendiente de ejecución en producción (NO autorizada todavía).
-- Prueba física con impresora térmica y cajón pendiente.
-
-## Modo Apartado integrado al POS — auditoría pre-commit (2026-09-16)
-
-Implementación local aprobada para pre-commit, todavía sin commit, push ni producción. El POS permite entrar a Apartado con `apartados.crear`, exige cliente y prima positiva, reserva únicamente stock real de la sucursal activa bajo `lockForUpdate`, admite precio manual sólo con `pos.cambiar_precio` y reutiliza las reglas de pago de `LayawayService` (sin crédito ni puntos). Cotización y Apartado son mutuamente exclusivos. La UI nueva usa el dorado oficial `bg-primary` (`#D4AF37`) y mantiene acciones de 44/48 px.
-
-Idempotencia: migración nueva nullable para `client_token` UUID y `request_fingerprint` SHA-256, con UNIQUE exacto `(company_id, client_token)`; los apartados históricos permanecen válidos. Replay idéntico devuelve el mismo apartado sin repetir reserva ni prima; el mismo token con payload distinto devuelve 409; empresas distintas pueden reutilizar el token. La migración fue auditada como compatible con PostgreSQL 16, pero no se ejecutó contra PostgreSQL en esta estación porque `pdo_pgsql` no está cargado.
-
-Integración existente verificada: el apartado creado en POS aparece en el listado, acepta abonos y entrega final; conserva el precio manual en `SaleItem`, mantiene descuento cero y no vuelve a descontar inventario al entregar. Descuentos quedan pendientes: requieren persistencia explícita de `discount_total`/`gross_total` y preservación durante entrega; cualquier payload de descuento se rechaza en esta fase.
-
-Validación: `PosLayawayModeTest` **14/14, 134 aserciones**; `LayawayV1Test` **7/7, 42**; `QuoteTest` **12/12, 159**; PosCheckout relacionados **46/46, 408**; MVS Print PHP **70/70, 348**, JS **41/41**; Vite build y `git diff --check` correctos. Regresión POS + Quote: **198 pruebas, 193 aprobadas, 1469 aserciones**, con exactamente los cinco fallos históricos ya documentados y sin fallos nuevos. Validación visual real a 360/768/1280 y PostgreSQL ejecutado quedan pendientes; no autorizado para producción.
+Commits previos:
+- Fase 2B: `7bb6b2d` (conciliación NC↔CxC automática, 13 archivos, 1453 insertions).
+- Fase 1: `e035cea` (núcleo NC).
 
 ## MVS Print — instalador 1.0.2 en preparación (2026-09-16)
 
@@ -397,7 +480,7 @@ Fuente de verdad: `docs/centro-datos/CENTRO_DATOS_CRONOGRAMA.md` y `docs/centro-
 
 ## Rama actual
 
-`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93 → 82c82db → 93aa4cc → e682e9a → 3f59e67`; integración `645e564` + hotfix `5246e38` en `integration/notas-credito`, ya desplegados a producción (PRODUCTION_HEAD `5246e38`). **Fase 4B (Consumer Final) certificada en `feature/notas-credito`, PENDIENTE integración controlada a `integration/notas-credito`.** `feature/pos` continúa siendo la rama principal del resto del trabajo.
+`feature/notas-credito` en el worktree `mvs-commerce-paralelo-3`. Cadena NC: `b748c5d → e035cea → 7bb6b2d → 85907e9 → 3f55ba9 → 58bc902 → a734f5d → a5ed4ae → 9b55929 → 4737a93 → 82c82db → 93aa4cc → e682e9a → 3f59e67 → 5ca8389`; integración `645e564` + hotfix `5246e38` (4A) y merge 4B `40685e86a086c152d178e511af1c0ba454fadb24` en `integration/notas-credito`, **Fase 4A y 4B desplegadas a producción (PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`)**. `feature/pos` continúa siendo la rama principal del resto del trabajo.
 
 ## Estado del repositorio
 
@@ -416,7 +499,7 @@ Mantener Caja estable e integrar correctamente los módulos existentes.
 
 Según historial reciente de commits en esta rama:
 
-- **Fase 4B Consumer Final NC: certificada en `feature/notas-credito`** (HEAD `3f59e67`, cadena `82c82db → 93aa4cc → e682e9a → 3f59e67`). Activación opcional por empresa, código `XXXX-XXXX-XXXX` solo hash SHA-256, aplicación número+código, rate limiting/idempotencia/doble gasto, POS integrado, regeneración administrativa con auditoría. **406 tests PASS auditados; pendiente integración controlada.**
+- **Fase 4B Consumer Final NC: PRODUCCIÓN** (2026-09-22). Fuente certificada `5ca8389` (cierre documental, cadena `82c82db → 93aa4cc → e682e9a → 3f59e67 → 5ca8389`); merge integración certificado `40685e86a086c152d178e511af1c0ba454fadb24`; producción actual `40685e86a086c152d178e511af1c0ba454fadb24`. Migraciones `2026_09_20_000003` + `2026_09_22_000001` aplicadas; smoke Demo PASS (emisión Consumer Final, aplicación POS bearer, rotación, reversión); NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados; smoke únicamente Empresa Demo. Incidente de deploy documentado (6 HTTP 500 transitorios 10:30–10:32 CST, swap no atómico + route-cache; 0 posteriores, no defecto 4B).
 - **Fase 4A vigencia configurable NC: feature `9b55929`** (recuperado post-apagado, 11 archivos, 895 inserciones) → documentación previa `4737a93` → **integración `645e564`** → **hotfix visual POS `5246e38`** → **deploy producción CERTIFICADO** (2026-09-20, PRODUCTION_HEAD `5246e38`);
 - **Fase final NC: commit `a734f5d`** (flujo POS/UI/receipt/reversals, 18 archivos, 1605 insertions); documentación NC `a734f5d` (docs);
 - Fase 3B NC-POS: commit `58bc902` (documentación POS backend);
@@ -433,7 +516,7 @@ Según historial reciente de commits en esta rama:
 
 ## Trabajo en curso
 
-- **Notas de Crédito — Fase 4B Consumer Final: CERTIFICADA** (2026-09-22, HEAD `3f59e67`). **SIGUIENTE: integración controlada de `feature/notas-credito`.** 4A/Nominativa ya desplegadas (`5246e38` en producción).
+- **Notas de Crédito — Fase 4B Consumer Final: PRODUCCIÓN** (2026-09-22, PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`). 4A/Nominativa `5246e38` y 4B Consumer Final `40685e86` desplegadas. Incidente deploy registrado (ventana 10:30:16–10:32:33 CST, causa swap no atómico + route-cache, 0 posteriores). **Regla operativa futura: deploys anunciados previamente, ventana aceptada ≤2 min, no iniciar ventana sin confirmación; futuro: deploy atómico + soporte Offline.**
 - Puesta en Producción: **P01–P25 y P31–P40 COMPLETADOS** (P31–P40 adelantados por autorización expresa). P25 unificó la navegación tenant en barra inferior para escritorio/tablet/móvil, mantuvo Panel Maestro separado y corrigió geografía/logo del onboarding solicitados. **P26 SIGUIENTE BLOQUE OFICIAL**. **Regla producción: desarrollo → validación local del usuario → APROBADO PARA PRODUCCIÓN → despliegue controlado.**
 - Centro de Datos: D00, D02, D03, D09 y D10 completados; D01 continúa en paralelo con plantillas MYM. D04–D08 permanecen bloqueados por contratos; D11–D12 no se iniciaron.
 - Fidelización: **cronograma F01–F45 completo**; no existe una fase siguiente dentro del maestro vigente.
@@ -451,7 +534,7 @@ Antes de programar cualquier tarea nueva:
 3. inspeccionar el código real del módulo afectado;
 4. confirmar con el usuario cuál es la tarea concreta si no está definida.
 
-**Prioridad inmediata: integración controlada de `feature/notas-credito` (Fase 4B). Siguiente módulo funcional pendiente según prioridades del proyecto.**
+**Prioridad siguiente según `docs/CRONOGRAMA_PRODUCCION.md`: P26 — Nombres claros 58 mm, 80 mm, Carta, etc. (siguiente bloque oficial). Fidelización F01–F45 completo; R04 siguiente fase responsive.**
 
 **P26 — Nombres claros 58 mm, 80 mm, Carta, etc. P31–P40 quedaron completados adelantadamente por autorización expresa y no desplazan P26–P30.**
 

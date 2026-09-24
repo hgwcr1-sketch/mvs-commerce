@@ -497,9 +497,9 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ## Notas de Crédito
 
-Estado: **COMPLETADA Y CERTIFICADA — DESPLEGADA EN PRODUCCIÓN** (2026-09-20, PRODUCTION_HEAD `5246e38c15d214132e54641c7883fd219c81cad8`)
+Estado: **COMPLETADA Y CERTIFICADA — DESPLEGADA EN PRODUCCIÓN** (2026-09-22, PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`)
 
-**Estado de deploy: FASE 4A CERTIFICADA EN PRODUCCIÓN** (migraciones Ran, build PASS, smoke PASS, NEW_HTTP_500 = 0, datos reales preservados)
+**Estado de deploy: FASES 4A Y 4B CERTIFICADAS EN PRODUCCIÓN** — 4A (2026-09-20, `5246e38`): migraciones Ran, build PASS, smoke PASS, NEW_HTTP_500 = 0. 4B (2026-09-22, `40685e86`): migraciones `2026_09_20_000003` + `2026_09_22_000001` Ran; smoke Demo PASS (emisión Consumer Final, aplicación POS bearer, rotación, reversión); NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados; smoke únicamente Empresa Demo. Incidente de deploy registrado: 6 HTTP 500 transitorios en ventana 10:30:16–10:32:33 CST (swap no atómico + route-cache), 0 posteriores, producción estable desde 10:32 CST, no defecto funcional de 4B.
 
 Cadena completa (rama `feature/notas-credito` + integración `integration/notas-credito`):
 
@@ -519,7 +519,9 @@ Cadena completa (rama `feature/notas-credito` + integración `integration/notas-
 | 4B-1 | `82c82db` | feat(credit-notes): issue consumer final credit notes securely | CERTIFICADA |
 | 4B-2 | `93aa4cc` | feat(credit-notes): apply consumer final credit notes securely | CERTIFICADA |
 | 4B-3 | `e682e9a` | feat(credit-notes): add consumer final pos workflow | CERTIFICADA |
-| 4B-4 | `3f59e67` | feat(credit-notes): add secure application code rotation | **CERTIFICADA** |
+| 4B-4 | `3f59e67` | feat(credit-notes): add secure application code rotation | CERTIFICADA |
+| docs | `5ca8389` | docs(credit-notes): record certified consumer final workflow | CERTIFICADA |
+| merge 4B | `40685e86` | merge: integrate certified consumer final credit notes | **PRODUCCIÓN** |
 
 ### Funcionalidad certificada
 
@@ -599,11 +601,11 @@ Cadena completa (rama `feature/notas-credito` + integración `integration/notas-
 - `SaleReturnLoyaltyTest`: 2 fallos (diff 20-30 pts).
 - `PosAccessAndSearchTest`: 3 fallos (payload fields históricos).
 
-### Pendiente producción
+### Deploys de producción ejecutados (4A y 4B)
 
-Antes del deploy:
+Preparación aplicada en cada deploy de producción:
 - Backup PostgreSQL.
-- Migraciones ya existentes (no hay nuevas en commit final).
+- Migraciones Ran (4A: `2026_09_20_000001`/`000002`, deploy 2026-09-20 `5246e38`; 4B: `2026_09_20_000003` + `2026_09_22_000001`, deploy 2026-09-22 `40685e86`).
 - `PermissionSeeder` no destructivo (`updateOrCreate`).
 - `npm run build`.
 - Caches Laravel.
@@ -625,7 +627,7 @@ Antes del deploy:
 
 ---
 
-**Fase 4B — Consumer Final — IMPLEMENTADA Y CERTIFICADA (2026-09-22):**
+**Fase 4B — Consumer Final — COMPLETADA / CERTIFICADA / PRODUCCIÓN (2026-09-22):**
 - Activación opcional por empresa; Consumer Final identificado internamente por `customer_id NULL`.
 - Emisión exclusivamente desde devolución válida; NC nominativa preservada.
 - Código secreto 12 caracteres efectivos, formato `XXXX-XXXX-XXXX`; solo SHA-256 persistido; plaintext de entrega única.
@@ -635,7 +637,7 @@ Antes del deploy:
 - Cajero únicamente `notas_credito.aplicar`. NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
 - Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
 - Deuda preexistente (no causada por 4B): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
-- **Pendiente: integración controlada de `feature/notas-credito` a `integration/notas-credito`. NO desplegada.**
+- **PRODUCCIÓN:** fuente certificada `5ca8389`; merge integración `40685e86a086c152d178e511af1c0ba454fadb24`; producción actual `40685e86`. Migraciones `2026_09_20_000003` + `2026_09_22_000001` aplicadas; smoke Demo PASS (emisión, aplicación POS bearer, rotación segura, reversión); NC nominativa preservada; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados. Incidente deploy: 6 HTTP 500 transitorios (10:30:16–10:32:33 CST, swap no atómico + route-cache), 0 posteriores, producción estable desde 10:32 CST, no defecto 4B. **Decisión operativa futura: deploys anunciados previamente, ventana aceptada ≤2 min sin iniciar sin confirmación, futuro deploy atómico + soporte Offline.**
 
 ## Cuentas por pagar
 
@@ -1537,6 +1539,24 @@ Existe trabajo relacionado con contabilidad fuera del flujo principal de MVS Com
 Debe integrarse posteriormente mediante una arquitectura definida.
 
 No recrear funcionalidad contable sin revisar primero ese trabajo.
+
+---
+
+## Cierre B1–B7 — integración revisada (2026-09-23)
+
+**Rama:** `feature/notas-credito` @ `ff1fd58`. **LISTO PARA INTEGRACIÓN a rama destino.** Sin merge, push, deploy ni producción.
+
+| Bloque | Commit | Descripción |
+|--------|--------|-------------|
+| B6 Ventas/NC | `3b56a89` | Fecha de anulación + filtro por cliente en Ventas/Devoluciones |
+| B4 Productos | `a4c2be1` | Atributos en listado, filtro categoría, proveedor principal, formato costo |
+| B5 Dashboard/períodos | `9eecdfb` | Selector año/personalizado, NC en movimientos, tarjetas reorganizadas |
+| B2 Variantes | `1241c53` + `4e046e4` | Variantes en POS, cotizaciones, devoluciones y apartados |
+| B7 Carga masiva | `17b346e` | Proveedor opcional en importación de productos |
+| B1 Analítico de caja | `7b4ece7` | Analítico por medio de pago en historial de caja |
+| B3 Pagos mixtos apartados | `ff1fd58` | Pagos mixtos en apartados |
+
+Evidencia: integración focal **253 tests, 250 PASS, 2F+1E**; focales por bloque en verde (B3 19/19, B1 7/7 + Cash 89/89, B7 31/31). Sin regresiones nuevas. **3 fallos preexistentes:** `PosAccessAndSearchTest` (modal `Puntos futuros`), `QuoteTest` JS (clases antiguas `Cotizar`), `AdministrativeDashboardTest` (mensaje caja vs métodos de pago). Detalle en `docs/ESTADO_ACTUAL.md`.
 
 ---
 

@@ -254,14 +254,37 @@
         </h3>
     </x-slot:header>
 
+    @php
+        // R01 RouteOS: el crédito solo lo administra routeos.credito.administrar.
+        $routeosCompany = \App\Models\Company::find(session('active_company_id'));
+        $canManageCredit = auth()->user()?->hasPermission('routeos.credito.administrar', $routeosCompany);
+    @endphp
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <x-input
-    type="number"
-    step="1"
-    name="credit_limit"
-    label="Límite de Crédito"
-    :value="old('credit_limit', $customer->credit_limit ?? 0)"/>
+        <div>
+            <label class="form-label" for="credit_limit">
+                Límite de Crédito
+            </label>
+
+            <input
+                type="number"
+                step="1"
+                id="credit_limit"
+                name="credit_limit"
+                value="{{ old('credit_limit', $customer->credit_limit ?? 0) }}"
+                inputmode="decimal"
+                @unless($canManageCredit) readonly @endunless
+                class="form-input @unless($canManageCredit) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
+
+            @unless($canManageCredit)
+                <p class="mt-1 text-xs text-slate-500">
+                    El límite de crédito solo puede ser modificado por un usuario con permiso de crédito.
+                </p>
+            @endunless
+
+            @error('credit_limit')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
 
     <x-select
     name="price_level"
@@ -294,11 +317,28 @@
 
 </x-select>
 
-        <x-input
-            type="number"
-            name="credit_days"
-            label="Días de Crédito"
-            :value="old('credit_days', $customer->credit_days ?? 0)" />
+        <div>
+            <label class="form-label" for="credit_days">
+                Días de Crédito
+            </label>
+
+            <input
+                type="number"
+                id="credit_days"
+                name="credit_days"
+                value="{{ old('credit_days', $customer->credit_days ?? 0) }}"
+                inputmode="numeric"
+                @unless($canManageCredit) readonly @endunless
+                class="form-input @unless($canManageCredit) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
+
+            @unless($canManageCredit)
+                <p class="mt-1 text-xs text-slate-500">
+                    El plazo de crédito solo puede ser modificado por un usuario con permiso de crédito.
+                </p>
+            @endunless
+
+            @error('credit_days')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
 
         <div>
     <label class="form-label">
@@ -321,6 +361,120 @@
             :value="isset($customer->birth_date) ? $customer->birth_date->format('Y-m-d') : ''" />
 
     </div>
+
+</x-card>
+
+<x-card class="mt-6">
+
+    <x-slot:header>
+        <h3 class="text-lg font-semibold">
+            Ubicación
+        </h3>
+    </x-slot:header>
+
+    @php
+        $routeosHasLocation = $customer->exists && $customer->hasLocation();
+        $routeosMapsUrl = $customer->exists ? $customer->google_maps_url : null;
+        $routeosWazeUrl = $customer->exists ? $customer->waze_url : null;
+    @endphp
+
+    <p class="mb-4 text-sm text-slate-500">
+        Coordenadas de visita para RouteOS. Use el botón para capturar su ubicación actual desde el dispositivo, o escríbalas manualmente.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div>
+            <label class="form-label" for="geo-latitude">Latitud</label>
+            <input
+                type="number"
+                id="geo-latitude"
+                name="latitude"
+                value="{{ old('latitude', $customer->latitude ?? '') }}"
+                step="0.0000001"
+                min="-90"
+                max="90"
+                inputmode="decimal"
+                placeholder="-9.9281"
+                class="form-input" />
+            @error('latitude')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+            <label class="form-label" for="geo-longitude">Longitud</label>
+            <input
+                type="number"
+                id="geo-longitude"
+                name="longitude"
+                value="{{ old('longitude', $customer->longitude ?? '') }}"
+                step="0.0000001"
+                min="-180"
+                max="180"
+                inputmode="decimal"
+                placeholder="-84.0907"
+                class="form-input" />
+            @error('longitude')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        <div class="md:col-span-2">
+            <label class="form-label" for="geo-reference">Referencia de ubicación</label>
+            <input
+                type="text"
+                id="geo-reference"
+                name="location_reference"
+                value="{{ old('location_reference', $customer->location_reference ?? '') }}"
+                maxlength="500"
+                placeholder="Ej: 200 m oeste del parque, local con letrero azul"
+                class="form-input" />
+            @error('location_reference')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+    </div>
+
+    <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+
+        <button
+            type="button"
+            id="geo-capture"
+            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-slate-900 cursor-pointer hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60">
+
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0-5a4 4 0 100-8 4 4 0 000 8zm0-3.5a.5.5 0 100-1 .5.5 0 000 1z"/>
+            </svg>
+
+            <span id="geo-capture-label">Usar mi ubicación actual</span>
+        </button>
+
+        <p id="geo-status" class="hidden rounded-lg px-3 py-2 text-xs sm:text-sm"></p>
+
+        @if ($routeosHasLocation)
+            <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                @if ($routeosMapsUrl)
+                    <a href="{{ $routeosMapsUrl }}" target="_blank" rel="noopener"
+                        class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
+                        Google Maps
+                    </a>
+                @endif
+                @if ($routeosWazeUrl)
+                    <a href="{{ $routeosWazeUrl }}" target="_blank" rel="noopener"
+                        class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
+                        Waze
+                    </a>
+                @endif
+            </div>
+        @endif
+
+    </div>
+
+    @if ($routeosHasLocation && $customer->isLocationValidated())
+        <p class="mt-3 text-xs text-slate-500">
+            Ubicación validada
+            {{ $customer->location_validated_at?->format('d/m/Y H:i') }}
+            @if ($customer->locationValidatedBy)
+                por {{ $customer->locationValidatedBy->name }}
+            @endif
+        </p>
+    @endif
 
 </x-card>
 
@@ -378,4 +532,76 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+</script>
+
+<script>
+// R01 MVS RouteOS — Captura de ubicación del cliente (no silenciosa: requiere clic).
+(function () {
+    var captureButton = document.getElementById('geo-capture');
+    var statusElement = document.getElementById('geo-status');
+    var labelElement = document.getElementById('geo-capture-label');
+    var latitudeInput = document.getElementById('geo-latitude');
+    var longitudeInput = document.getElementById('geo-longitude');
+
+    if (!captureButton || !latitudeInput || !longitudeInput) return;
+
+    function showStatus(message, kind) {
+        if (!statusElement) return;
+        statusElement.textContent = message;
+        statusElement.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'bg-green-50', 'text-green-800', 'bg-slate-100', 'text-slate-600');
+        statusElement.classList.add(kind === 'error' ? 'bg-red-50' : (kind === 'success' ? 'bg-green-50' : 'bg-slate-100'),
+            kind === 'error' ? 'text-red-700' : (kind === 'success' ? 'text-green-800' : 'text-slate-600'));
+    }
+
+    function setBusy(busy) {
+        captureButton.disabled = busy;
+        if (labelElement) {
+            labelElement.textContent = busy ? 'Solicitando ubicación…' : 'Usar mi ubicación actual';
+        }
+    }
+
+    function roundCoordinate(value) {
+        return Math.round(value * 10000000) / 10000000;
+    }
+
+    function onSuccess(position) {
+        setBusy(false);
+        latitudeInput.value = roundCoordinate(position.coords.latitude);
+        longitudeInput.value = roundCoordinate(position.coords.longitude);
+
+        var accuracy = position.coords.accuracy
+            ? ' (precisión aproximada ±' + Math.round(position.coords.accuracy) + ' m)'
+            : '';
+        showStatus('Ubicación obtenida. Recuerde guardar los cambios.' + accuracy, 'success');
+    }
+
+    function onError(error) {
+        setBusy(false);
+        if (error && error.code === error.PERMISSION_DENIED) {
+            showStatus('Permiso de ubicación rechazado. Puede escribir las coordenadas manualmente o reintentar.', 'error');
+        } else if (error && error.code === error.POSITION_UNAVAILABLE) {
+            showStatus('Ubicación no disponible en este momento. Reintente o escríbala manualmente.', 'error');
+        } else if (error && error.code === error.TIMEOUT) {
+            showStatus('Tiempo agotado esperando la ubicación. Reintente.', 'error');
+        } else {
+            showStatus('No fue posible obtener la ubicación. Reintente o escríbala manualmente.', 'error');
+        }
+    }
+
+    captureButton.addEventListener('click', function () {
+        if (!navigator.geolocation) {
+            showStatus('Este dispositivo no soporta geolocalización. Escriba las coordenadas manualmente.', 'error');
+            return;
+        }
+
+        setBusy(true);
+        showStatus('Solicitando ubicación al dispositivo…', 'info');
+
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+        });
+    });
+})();
 </script>

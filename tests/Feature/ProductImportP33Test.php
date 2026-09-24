@@ -78,7 +78,7 @@ class ProductImportP33Test extends TestCase
         ]);
         ProductBarcode::create(['product_id' => $existing->id, 'barcode' => '744100000002', 'barcode_type' => 'EAN13', 'is_primary' => false, 'is_active' => true]);
         $rows = [
-            ['EXISTE', '', $otherCategory->name, $otherBrand->name, $otherUnit->name, 'otro', '744100000001', '744100000002', '', '', '', '-1', '1.999', '', '', '', '', '', '101', 'Sí', 'No', 'No', 'Sí'],
+            ['codigo_interno' => 'EXISTE', 'nombre' => '', 'categoria' => $otherCategory->name, 'marca' => $otherBrand->name, 'unidad' => $otherUnit->name, 'tipo_producto' => 'otro', 'codigo_barras_principal' => '744100000001', 'codigos_barras_adicionales' => '744100000002', 'costo' => '-1', 'precio_venta' => '1.999', 'impuesto' => '101', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí'],
             $this->validRow($category, $brand, $unit, 'ARCHIVO-1', '744100000010'),
             $this->validRow($category, $brand, $unit, 'archivo-1', '744100000010'),
         ];
@@ -105,12 +105,12 @@ class ProductImportP33Test extends TestCase
             'stock' => '9.0000', 'minimum_stock' => 1, 'maximum_stock' => 20, 'created_at' => now(), 'updated_at' => now(),
         ]);
         $row = $this->validRow($category, $brand, $unit, 'NUEVO-P33', '744100000100');
-        $row[7] = '744100000101 | 744100000102';
-        $row[11] = '1234.56';
-        $row[12] = '2500.75';
-        $row[15] = '2300.25';
-        $row[16] = '2200.10';
-        $row[17] = '2100.05';
+        $row['codigos_barras_adicionales'] = '744100000101 | 744100000102';
+        $row['costo'] = '1234.56';
+        $row['precio_venta'] = '2500.75';
+        $row['precio_a'] = '2300.25';
+        $row['precio_b'] = '2200.10';
+        $row['precio_c'] = '2100.05';
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
             route('importaciones.productos.preview'),
@@ -144,8 +144,11 @@ class ProductImportP33Test extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Unas', 'slug' => 'unas-'.$company->id, 'is_active' => true]);
         $brand = Brand::create(['company_id' => $company->id, 'name' => 'General', 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'General', 'abbreviation' => 'GEN', 'slug' => 'general-'.$company->id, 'allows_decimals' => false, 'is_active' => true]);
-        $row = ['REAL-P33', 'Producto real', '  UNAS  ', ' GENERAL ', ' general ', 'product', '', '', '', '', '',
-            '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'];
+        $row = [
+            'codigo_interno' => 'REAL-P33', 'nombre' => 'Producto real', 'categoria' => '  UNAS  ', 'marca' => ' GENERAL ',
+            'unidad' => ' general ', 'tipo_producto' => 'product', 'costo' => '5500.0000', 'precio_venta' => '1000.0000',
+            'impuesto' => '13.0000', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí',
+        ];
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
             route('importaciones.productos.preview'),
@@ -177,13 +180,17 @@ class ProductImportP33Test extends TestCase
         [$company, $branch, $user, $category, $brand, $unit] = $this->context(['productos.crear']);
         $row = $this->validRow($category, $brand, $unit, 'XLSX-REAL', '744100009999');
         $path = $this->productFile([$row], 'xlsx');
+        $costColumn = array_search('costo*', ProductImportService::HEADERS, true) + 1;
+        $saleColumn = array_search('precio_venta*', ProductImportService::HEADERS, true) + 1;
+        $costCell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($costColumn).'2';
+        $saleCell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($saleColumn).'2';
         $spreadsheet = IOFactory::load($path);
-        $spreadsheet->getActiveSheet()->setCellValueExplicit('L2', "5500.0000\u{00A0}", DataType::TYPE_STRING);
-        $spreadsheet->getActiveSheet()->setCellValueExplicit('M2', '1000.0000', DataType::TYPE_STRING);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit($costCell, "5500.0000\u{00A0}", DataType::TYPE_STRING);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit($saleCell, '1000.0000', DataType::TYPE_STRING);
         (new Xlsx($spreadsheet))->save($path);
         $spreadsheet->disconnectWorksheets();
 
-        $loaded = IOFactory::load($path)->getActiveSheet()->getCell('L2')->getValue();
+        $loaded = IOFactory::load($path)->getActiveSheet()->getCell($costCell)->getValue();
         $this->assertIsString($loaded);
         $this->assertSame("5500.0000\u{00A0}", $loaded);
 
@@ -205,8 +212,10 @@ class ProductImportP33Test extends TestCase
         [$company, $branch, $user, $category, $brand, $unit] = $this->context(['productos.crear']);
         $row = $this->validRow($category, $brand, $unit, 'COSTO-4D', '744100008888');
         $path = $this->productFile([$row], 'xlsx');
+        $costColumn = array_search('costo*', ProductImportService::HEADERS, true) + 1;
+        $costCell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($costColumn).'2';
         $spreadsheet = IOFactory::load($path);
-        $spreadsheet->getActiveSheet()->setCellValueExplicit('L2', '412.9412', DataType::TYPE_STRING);
+        $spreadsheet->getActiveSheet()->setCellValueExplicit($costCell, '412.9412', DataType::TYPE_STRING);
         (new Xlsx($spreadsheet))->save($path);
         $spreadsheet->disconnectWorksheets();
 
@@ -234,8 +243,8 @@ class ProductImportP33Test extends TestCase
             Unit::where('company_id', $company->id)->count(),
         ];
         $rows = [
-            ['CAT-1', 'Producto uno', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
-            ['CAT-2', 'Producto dos', '  unas ', ' general ', '  GENERAL  ', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+            ['codigo_interno' => 'CAT-1', 'nombre' => 'Producto uno', 'categoria' => 'UNAS', 'marca' => 'GENERAL', 'unidad' => 'GENERAL', 'tipo_producto' => 'product', 'costo' => '5500.0000', 'precio_venta' => '1000.0000', 'impuesto' => '13.0000', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí'],
+            ['codigo_interno' => 'CAT-2', 'nombre' => 'Producto dos', 'categoria' => '  unas ', 'marca' => ' general ', 'unidad' => '  GENERAL  ', 'tipo_producto' => 'product', 'costo' => '5500.0000', 'precio_venta' => '1000.0000', 'impuesto' => '13.0000', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí'],
         ];
 
         $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
@@ -271,8 +280,8 @@ class ProductImportP33Test extends TestCase
         Brand::create(['company_id' => $otherCompany->id, 'name' => 'GENERAL', 'is_active' => true]);
         Unit::create(['company_id' => $otherCompany->id, 'name' => 'GENERAL', 'abbreviation' => 'GEN', 'slug' => 'general-'.$otherCompany->id, 'is_active' => true]);
         $rows = [
-            ['ROLL-CAT-1', 'Primero', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
-            ['ROLL-CAT-2', 'Segundo', 'UNAS', 'GENERAL', 'GENERAL', 'product', '', '', '', '', '', '5500.0000', '1000.0000', '', '', '', '', '', '13.0000', 'Sí', 'No', 'No', 'Sí'],
+            ['codigo_interno' => 'ROLL-CAT-1', 'nombre' => 'Primero', 'categoria' => 'UNAS', 'marca' => 'GENERAL', 'unidad' => 'GENERAL', 'tipo_producto' => 'product', 'costo' => '5500.0000', 'precio_venta' => '1000.0000', 'impuesto' => '13.0000', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí'],
+            ['codigo_interno' => 'ROLL-CAT-2', 'nombre' => 'Segundo', 'categoria' => 'UNAS', 'marca' => 'GENERAL', 'unidad' => 'GENERAL', 'tipo_producto' => 'product', 'costo' => '5500.0000', 'precio_venta' => '1000.0000', 'impuesto' => '13.0000', 'controla_inventario' => 'Sí', 'permite_stock_negativo' => 'No', 'imprime_etiqueta' => 'No', 'activo' => 'Sí'],
         ];
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->post(
             route('importaciones.productos.preview'),
@@ -363,16 +372,46 @@ class ProductImportP33Test extends TestCase
 
     private function validRow(ProductCategory $category, Brand $brand, Unit $unit, string $code, ?string $barcode = null): array
     {
-        return [$code, 'Producto '.$code, $category->name, $brand->name, $unit->abbreviation, 'product', $barcode, '',
-            '1234567890123', 'Descripción corta', 'Descripción', '100.25', '200.50', '190.00', '180.00',
-            '175.00', '170.00', '165.00', '13.00', 'Sí', 'No', 'Sí', 'Sí'];
+        return [
+            'codigo_interno' => $code,
+            'nombre' => 'Producto '.$code,
+            'categoria' => $category->name,
+            'marca' => $brand->name,
+            'unidad' => $unit->abbreviation,
+            'tipo_producto' => 'product',
+            'codigo_barras_principal' => $barcode ?? '',
+            'codigos_barras_adicionales' => '',
+            'cabys' => '1234567890123',
+            'descripcion_corta' => 'Descripción corta',
+            'descripcion' => 'Descripción',
+            'costo' => '100.25',
+            'precio_venta' => '200.50',
+            'precio_mayorista' => '190.00',
+            'precio_especial' => '180.00',
+            'precio_a' => '175.00',
+            'precio_b' => '170.00',
+            'precio_c' => '165.00',
+            'impuesto' => '13.00',
+            'controla_inventario' => 'Sí',
+            'permite_stock_negativo' => 'No',
+            'imprime_etiqueta' => 'Sí',
+            'activo' => 'Sí',
+        ];
     }
 
     private function productFile(array $rows, string $format): string
     {
         $path = tempnam(sys_get_temp_dir(), 'products-').'.'.$format;
         $spreadsheet = new Spreadsheet;
-        $spreadsheet->getActiveSheet()->fromArray(array_merge([ProductImportService::HEADERS], $rows));
+        $matrix = [ProductImportService::HEADERS];
+        foreach ($rows as $row) {
+            $line = [];
+            foreach (ProductImportService::HEADERS as $header) {
+                $line[] = $row[rtrim($header, '*')] ?? '';
+            }
+            $matrix[] = $line;
+        }
+        $spreadsheet->getActiveSheet()->fromArray($matrix);
         match ($format) {
             'xlsx' => (new Xlsx($spreadsheet))->save($path),
             'xls' => (new Xls($spreadsheet))->save($path),

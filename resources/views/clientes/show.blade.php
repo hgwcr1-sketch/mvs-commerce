@@ -197,6 +197,66 @@
 
         </div>
 
+        {{-- R01 MVS RouteOS: Ubicación del cliente --}}
+        <div class="mt-6 border-t border-slate-200 pt-6">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-lg font-semibold">Ubicación</h3>
+
+                @can('clientes.editar')
+                    <a href="{{ route('clientes.edit', $customer) }}"
+                        class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
+                        Editar ubicación
+                    </a>
+                @endcan
+            </div>
+
+            @if ($customer->hasLocation())
+                <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="text-sm text-slate-500">Coordenadas</label>
+                        <p class="font-mono text-sm text-slate-900">{{ $customer->latitude }}, {{ $customer->longitude }}</p>
+                    </div>
+
+                    <div>
+                        <label class="text-sm text-slate-500">Validación</label>
+                        <p>
+                            @if ($customer->isLocationValidated())
+                                <span class="rounded-full bg-green-100 px-3 py-1 text-xs text-green-700">
+                                    Validada {{ $customer->location_validated_at?->format('d/m/Y H:i') }}
+                                </span>
+                            @else
+                                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">Sin validar</span>
+                            @endif
+                        </p>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="text-sm text-slate-500">Referencia de ubicación</label>
+                        <p>{{ $customer->location_reference ?: '-' }}</p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 sm:col-span-2">
+                        @if ($customer->google_maps_url)
+                            <a href="{{ $customer->google_maps_url }}" target="_blank" rel="noopener"
+                                class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
+                                Abrir en Google Maps
+                            </a>
+                        @endif
+                        @if ($customer->waze_url)
+                            <a href="{{ $customer->waze_url }}" target="_blank" rel="noopener"
+                                class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
+                                Abrir en Waze
+                            </a>
+                        @endif
+                    </div>
+                </div>
+            @else
+                <p class="mt-3 text-sm text-slate-500">
+                    Este cliente aún no tiene ubicación registrada.
+                </p>
+            @endif
+        </div>
+
         <x-slot:footer>
 
             <div class="flex justify-end">

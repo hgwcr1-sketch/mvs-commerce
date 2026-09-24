@@ -51,7 +51,7 @@
             )
                 <a
                     href="{{ route('ventas.return.create', $sale) }}"
-                    class="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-700">
+                    class="rounded-lg bg-primary px-4 py-2 font-semibold text-slate-950 hover:bg-primary-hover">
                     Devolver productos
                 </a>
             @endif
@@ -126,6 +126,11 @@
                 <p class="mt-1 text-slate-800">
                     {{ $sale->completed_at?->format('d/m/Y H:i') ?: '—' }}
                 </p>
+                @if($sale->status === \App\Models\Sale::STATUS_VOIDED && $sale->voided_at)
+                    <p class="mt-1 text-xs font-semibold text-red-700">
+                        Anulada el {{ $sale->voided_at->format('d/m/Y H:i') }}
+                    </p>
+                @endif
             </div>
 
             <div>

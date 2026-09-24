@@ -78,6 +78,7 @@
                                     <p class="text-xs text-slate-500">
                                         {{ $line['item']->product_code }}
                                     </p>
+                                    @include('partials.product-variant', ['product' => $line['item']->product])
                                 </td>
 
                                 <td class="px-4 py-3 text-right text-sm text-slate-700">

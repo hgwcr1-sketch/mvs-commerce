@@ -34,6 +34,9 @@ class Customer extends Model
         'canton_id',
         'district_id',
         'address',
+        'latitude',
+        'longitude',
+        'location_reference',
         'notes',
         'credit_limit',
         'credit_days',
@@ -47,6 +50,9 @@ class Customer extends Model
     protected $casts = [
         'birth_date' => 'date',
         'credit_limit' => 'decimal:2',
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'location_validated_at' => 'datetime',
         'is_active' => 'boolean',
         'accepts_email_invoice' => 'boolean',
         'phone_verified_at' => 'datetime',
@@ -142,4 +148,56 @@ class Customer extends Model
     {
         return $this->hasMany(LoyaltyCustomerContact::class);
     }
+
+    /**
+     * Usuario que validó la ubicación del cliente (R01 RouteOS).
+     */
+    public function locationValidatedBy()
+    {
+        return $this->belongsTo(User::class, 'location_validated_by');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ubicación (R01 MVS RouteOS)
+    |--------------------------------------------------------------------------
+    */
+
+    public function hasLocation(): bool
+    {
+        return $this->latitude !== null && $this->longitude !== null;
+    }
+
+    public function isLocationValidated(): bool
+    {
+        return $this->location_validated_at !== null;
+    }
+
+    /**
+     * Enlace a Google Maps con coordenadas reales (no textual).
+     * URL gratuita universal; no requiere API key ni servicio pagado.
+     */
+    public function getGoogleMapsUrlAttribute(): ?string
+    {
+        if (! $this->hasLocation()) {
+            return null;
+        }
+
+        return 'https://www.google.com/maps/search/?api=1&query='
+            .$this->latitude.','.$this->longitude;
+    }
+
+    /**
+     * Enlace a Waze con navegación directa a las coordenadas.
+     */
+    public function getWazeUrlAttribute(): ?string
+    {
+        if (! $this->hasLocation()) {
+            return null;
+        }
+
+        return 'https://waze.com/ul?ll='
+            .$this->latitude.','.$this->longitude.'&navigate=yes';
+    }
 }
+

@@ -238,10 +238,10 @@
 
         <x-input
             type="number"
-            step="1"
+            step="0.0001"
             name="cost"
             label="Costo"
-            :value="old('cost', $product->cost ?? 0)" />
+            :value="old('cost', \App\Support\NumberFormatter::trimDecimalZeros($product->cost ?? 0))" />
 
         <x-input
             type="number"

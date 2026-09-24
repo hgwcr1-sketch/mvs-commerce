@@ -16,6 +16,7 @@ use App\Services\CustomerOneTimeTokenService;
 use App\Services\CustomerPublicCodeService;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\PhoneNumberService;
+use App\Services\RouteosAuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -130,7 +131,23 @@ class CustomerController extends Controller
         $createPortalAccess = $request->boolean('create_portal_access');
         unset($data['create_portal_access']);
 
+        // R01 RouteOS: coordenadas capturadas al crear quedan validadas por quien las envió.
+        $geoCoordinatesProvided = array_key_exists('latitude', $data)
+            && $data['latitude'] !== null
+            && $data['longitude'] !== null;
+
         $customer = Customer::create($data);
+
+        if ($geoCoordinatesProvided) {
+            // location_validated_at/by no son fillable por diseño: se sellan explícitamente.
+            $customer->forceFill([
+                'location_validated_at' => now(),
+                'location_validated_by' => $request->user()?->id,
+            ])->save();
+        }
+
+        // R01 RouteOS: auditar inicialización de crédito y ubicación.
+        $this->auditCustomerRouteosFields($customer, null, $data, $request, 'creacion');
 
         $portalResult = null;
         if ($createPortalAccess) {
@@ -309,11 +326,128 @@ class CustomerController extends Controller
         $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
         $data['is_active'] = $request->boolean('is_active');
 
+        $routeosBefore = $this->routeosSnapshot($cliente);
+
         $cliente->update($data);
+
+        // R01 RouteOS: si se envían coordenadas y cambian respecto a las previas,
+        // la ubicación queda validada por el usuario que la capturó.
+        if ($cliente->latitude !== null && $cliente->longitude !== null
+            && ($this->decimalChanged($routeosBefore['latitude'], $cliente->latitude, 8)
+                || $this->decimalChanged($routeosBefore['longitude'], $cliente->longitude, 8))) {
+            $cliente->forceFill([
+                'location_validated_at' => now(),
+                'location_validated_by' => $request->user()?->id,
+            ])->save();
+        }
+
+        // R01 RouteOS: auditoría de crédito y ubicación del cliente.
+        $this->auditCustomerRouteosFields($cliente, $routeosBefore, $cliente->fresh()->only($this->routeosFields()), $request, 'actualizacion');
 
         return redirect()
             ->route('clientes.index')
             ->with('success', 'Cliente actualizado correctamente.');
+    }
+
+    /**
+     * Campos RouteOS relevantes para auditoría (R01).
+     */
+    private function routeosFields(): array
+    {
+        return [
+            'credit_limit',
+            'credit_days',
+            'latitude',
+            'longitude',
+            'location_reference',
+            'location_validated_at',
+            'location_validated_by',
+        ];
+    }
+
+    private function routeosSnapshot(Customer $customer): array
+    {
+        $snapshot = $customer->only($this->routeosFields());
+        $snapshot['location_validated_at'] = $customer->location_validated_at?->toIso8601String();
+
+        return $snapshot;
+    }
+
+    /**
+     * Comparación decimal segura para valores nullable (R01 RouteOS).
+     * Trata null como 0: pasar de null a null no es un cambio.
+     */
+    private function decimalChanged(mixed $previous, mixed $current, int $scale): bool
+    {
+        $previous = $previous === null ? '0' : (string) $previous;
+        $current = $current === null ? '0' : (string) $current;
+
+        return bccomp($previous, $current, $scale) !== 0;
+    }
+
+    private function auditCustomerRouteosFields(
+        Customer $customer,
+        ?array $before,
+        array $after,
+        Request $request,
+        string $context,
+    ): void {
+        $audit = app(RouteosAuditService::class);
+
+        $creditChanged = $before === null
+            || $this->decimalChanged($before['credit_limit'] ?? null, $after['credit_limit'] ?? null, 2)
+            || (int) ($before['credit_days'] ?? 0) !== (int) ($after['credit_days'] ?? 0);
+
+        if ($creditChanged) {
+            $action = $before === null ? 'routeos.credito.inicializado' : 'routeos.credito.actualizado';
+            $audit->log(
+                (int) $customer->company_id,
+                session('active_branch_id'),
+                $action,
+                $customer,
+                $before !== null ? [
+                    'credit_limit' => $before['credit_limit'],
+                    'credit_days' => $before['credit_days'],
+                ] : null,
+                [
+                    'credit_limit' => $after['credit_limit'],
+                    'credit_days' => $after['credit_days'],
+                ],
+                ['context' => $context],
+                $request->user(),
+            );
+        }
+
+        $locationChanged = $before !== null && (
+            $this->decimalChanged($before['latitude'] ?? null, $after['latitude'] ?? null, 8)
+            || $this->decimalChanged($before['longitude'] ?? null, $after['longitude'] ?? null, 8)
+            || ($before['location_reference'] ?? null) !== ($after['location_reference'] ?? null)
+        );
+
+        if ($before === null || $locationChanged) {
+            $hasNewLocation = ($after['latitude'] ?? null) !== null && ($after['longitude'] ?? null) !== null;
+            $audit->log(
+                (int) $customer->company_id,
+                session('active_branch_id'),
+                $hasNewLocation
+                    ? ($before === null ? 'routeos.ubicacion.registrada' : 'routeos.ubicacion.actualizada')
+                    : 'routeos.ubicacion.limpiada',
+                $customer,
+                $before !== null ? [
+                    'latitude' => $before['latitude'],
+                    'longitude' => $before['longitude'],
+                    'location_reference' => $before['location_reference'],
+                ] : null,
+                [
+                    'latitude' => $after['latitude'] ?? null,
+                    'longitude' => $after['longitude'] ?? null,
+                    'location_reference' => $after['location_reference'] ?? null,
+                    'location_validated' => $customer->fresh()->isLocationValidated(),
+                ],
+                ['context' => $context],
+                $request->user(),
+            );
+        }
     }
 
     /**

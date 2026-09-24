@@ -77,7 +77,7 @@ class SaleReturnTest extends TestCase
         return $user;
     }
 
-    private function product(Company $company, bool $trackInventory = true, int $stock = 10): Product
+    private function product(Company $company, bool $trackInventory = true, int $stock = 10, array $attributes = []): Product
     {
         $category = ProductCategory::create([
             'company_id' => $company->id,
@@ -95,7 +95,7 @@ class SaleReturnTest extends TestCase
             'is_active' => true,
         ]);
 
-        return Product::create([
+        return Product::create(array_merge([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -107,7 +107,7 @@ class SaleReturnTest extends TestCase
             'tax_rate' => 13,
             'track_inventory' => $trackInventory,
             'is_active' => true,
-        ]);
+        ], $attributes));
     }
 
     private function seedStock(Branch $branch, Product $product, int $qty): void
@@ -757,5 +757,33 @@ public function test_cannot_return_more_than_pending_after_previous_return(): vo
         $this->assertEqualsWithDelta((float) $original->total, $sumTotal, 0.0001);
 
         $this->assertSame(Sale::STATUS_RETURNED, $sale->fresh()->status);
+    }
+
+    public function test_return_create_page_displays_variant_labels(): void
+    {
+        $company = $this->company();
+        $branch = $this->branch($company, 'Principal');
+        $user = $this->userWithPermission($company, $branch, ['devoluciones.crear']);
+
+        $style = \App\Models\Style::create(['company_id' => $company->id, 'name' => 'Casual', 'slug' => 'casual', 'is_active' => true]);
+        $size = \App\Models\Size::create(['company_id' => $company->id, 'name' => 'M', 'slug' => 'm', 'abbreviation' => 'M', 'is_active' => true]);
+        $color = \App\Models\Color::create(['company_id' => $company->id, 'name' => 'Azul', 'slug' => 'azul', 'is_active' => true]);
+        $product = $this->product($company, true, 10, [
+            'name' => 'Camisa manga corta',
+            'style_id' => $style->id,
+            'size_id' => $size->id,
+            'color_id' => $color->id,
+        ]);
+        $this->seedStock($branch, $product, 10);
+        $sale = $this->completedSale($company, $branch, $user, [$product->id => 2]);
+
+        $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->get(route('ventas.return.create', $sale))
+            ->assertOk()
+            ->assertSee('Producto test')
+            ->assertSee('Casual')
+            ->assertSee('M')
+            ->assertSee('Azul');
     }
 }

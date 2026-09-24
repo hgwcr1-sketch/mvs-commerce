@@ -25,11 +25,16 @@ class ProductController extends Controller
         $companyId = session('active_company_id');
 
         $query = Product::where('company_id', $companyId)
-            ->with(['category', 'brand', 'unit'])
+            ->with(['category', 'brand', 'unit', 'style', 'size', 'color'])
             ->with([
                 'branches' => function ($query) use ($branchId) {
                     $query->where('branches.id', $branchId);
-                }
+                },
+                'productSuppliers' => function ($query) {
+                    $query->where('is_primary', true)
+                        ->where('is_active', true)
+                        ->with('supplier');
+                },
             ]);
 
         /*
@@ -48,7 +53,8 @@ class ProductController extends Controller
         /*
          * Filtro por categoría.
          */
-        if ($categoryId = request('category')) {
+        $categoryId = request()->integer('category');
+        if ($categoryId > 0) {
             $query->where('category_id', $categoryId);
         }
 

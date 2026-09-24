@@ -287,42 +287,80 @@ public function test_sale_from_other_company_is_isolated(): void
         $response->assertDontSee($otherSale->sale_number);
     }
 
-    public function test_search_by_customer_name(): void
+    public function test_filter_by_customer_id_shows_only_that_customer(): void
     {
         $company = $this->company();
         $branch = $this->branch($company, 'Principal');
         $user = $this->userWithPermission($company, $branch, ['devoluciones.crear', 'notas_credito.crear']);
 
         $customer = $this->customer($company, 'Juan Pérez');
+        $otherCustomer = $this->customer($company, 'María García');
+
         $product = $this->product($company);
         $sale = $this->completedSale($company, $branch, $user, [$product->id => 2], $customer);
-
-        $otherCustomer = $this->customer($company, 'María García');
         $otherSale = $this->completedSale($company, $branch, $user, [$product->id => 1], $otherCustomer);
 
-        $response = $this->getDevolucionesIndex(['search' => 'Juan Pérez'], $user, $company, $branch);
+        $response = $this->getDevolucionesIndex(['customer_id' => $customer->id], $user, $company, $branch);
         $response->assertOk();
         $response->assertSee($sale->sale_number);
         $response->assertDontSee($otherSale->sale_number);
     }
 
-    public function test_search_by_customer_identification(): void
+    public function test_filter_similar_customer_names_do_not_mix(): void
     {
         $company = $this->company();
         $branch = $this->branch($company, 'Principal');
         $user = $this->userWithPermission($company, $branch, ['devoluciones.crear', 'notas_credito.crear']);
 
-        $customer = $this->customer($company, 'Cliente Test', '123456789');
+        $customerA = $this->customer($company, 'Ana María Pérez');
+        $customerB = $this->customer($company, 'Ana María Pérez');
+
+        $product = $this->product($company);
+        $saleA = $this->completedSale($company, $branch, $user, [$product->id => 2], $customerA);
+        $saleB = $this->completedSale($company, $branch, $user, [$product->id => 1], $customerB);
+
+        $response = $this->getDevolucionesIndex(['customer_id' => $customerA->id], $user, $company, $branch);
+        $response->assertOk();
+        $response->assertSee($saleA->sale_number);
+        $response->assertDontSee($saleB->sale_number);
+    }
+
+    public function test_clearing_customer_filter_returns_all_sales(): void
+    {
+        $company = $this->company();
+        $branch = $this->branch($company, 'Principal');
+        $user = $this->userWithPermission($company, $branch, ['devoluciones.crear', 'notas_credito.crear']);
+
+        $customerA = $this->customer($company, 'Cliente A');
+        $customerB = $this->customer($company, 'Cliente B');
+
+        $product = $this->product($company);
+        $saleA = $this->completedSale($company, $branch, $user, [$product->id => 2], $customerA);
+        $saleB = $this->completedSale($company, $branch, $user, [$product->id => 1], $customerB);
+
+        $response = $this->getDevolucionesIndex([], $user, $company, $branch);
+        $response->assertOk();
+        $response->assertSee($saleA->sale_number);
+        $response->assertSee($saleB->sale_number);
+    }
+
+    public function test_sale_number_search_is_independent_of_customer(): void
+    {
+        $company = $this->company();
+        $branch = $this->branch($company, 'Principal');
+        $user = $this->userWithPermission($company, $branch, ['devoluciones.crear', 'notas_credito.crear']);
+
+        $customer = $this->customer($company, 'Cliente filtro');
+        $otherCustomer = $this->customer($company, 'Otro Cliente');
+
         $product = $this->product($company);
         $sale = $this->completedSale($company, $branch, $user, [$product->id => 2], $customer);
-
-        $otherCustomer = $this->customer($company, 'Otro Cliente', '987654321');
         $otherSale = $this->completedSale($company, $branch, $user, [$product->id => 1], $otherCustomer);
 
-        $response = $this->getDevolucionesIndex(['search' => '123456789'], $user, $company, $branch);
+        $response = $this->getDevolucionesIndex(['search' => $otherSale->sale_number], $user, $company, $branch);
         $response->assertOk();
-        $response->assertSee($sale->sale_number);
-        $response->assertDontSee($otherSale->sale_number);
+        $response->assertSee($otherSale->sale_number);
+        $response->assertDontSee($sale->sale_number);
     }
 
     public function test_filter_by_status_completed(): void

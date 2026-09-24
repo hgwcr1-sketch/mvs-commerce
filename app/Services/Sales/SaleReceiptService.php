@@ -13,6 +13,12 @@ class SaleReceiptService
 {
     public const FORMATS = ['80mm', '58mm', 'letter'];
 
+    public const FORMAT_LABELS = [
+        '80mm' => '80 mm',
+        '58mm' => '58 mm',
+        'letter' => 'Carta',
+    ];
+
     public function __construct(private readonly LoyaltySaleReceiptService $loyalty) {}
 
     public function authorizedSale(Sale $sale, User $user, int $companyId, int $branchId): Sale
