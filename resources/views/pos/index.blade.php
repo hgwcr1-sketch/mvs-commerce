@@ -106,6 +106,17 @@
                     </div>
                     <div>
                         <p class="font-semibold text-slate-800" x-text="product.name"></p>
+                        <p class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                            <template x-if="product.style_name">
+                                <span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="product.style_name"></span>
+                            </template>
+                            <template x-if="product.size_name">
+                                <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.size_name"></span>
+                            </template>
+                            <template x-if="product.color_name">
+                                <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.color_name"></span>
+                            </template>
+                        </p>
                         <p class="text-xs text-slate-500">
                             Código: <span x-text="product.internal_code || '—'"></span>
                             <template x-if="product.matched_barcode">
@@ -169,6 +180,17 @@
                                             </button>
                                             <div>
                                                 <p class="font-semibold text-slate-800" x-text="item.name"></p>
+                                                <p class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                                    <template x-if="item.style_name">
+                                                        <span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="item.style_name"></span>
+                                                    </template>
+                                                    <template x-if="item.size_name">
+                                                        <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.size_name"></span>
+                                                    </template>
+                                                    <template x-if="item.color_name">
+                                                        <span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.color_name"></span>
+                                                    </template>
+                                                </p>
                                                 <p class="text-xs text-slate-500" x-text="item.internal_code"></p>
                                                 <span x-show="item.is_offer" class="mt-0.5 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700 lg:hidden">Oferta</span>
                                                 <p x-show="exceedsStock(item)" class="mt-1 text-xs font-semibold text-red-600">Cantidad superior al stock de esta sucursal.</p>
@@ -485,45 +507,55 @@
     <section class="rounded-xl bg-white p-2 shadow-sm">
         <div class="flex gap-1.5 overflow-x-auto">
 
-      <button
-    type="button"
-    @click.prevent.stop="
-        if (quoteMode) leaveQuoteMode();
-        documentType = 'electronic_ticket';
-        notice = '';
-    "
-    :class="documentType === 'electronic_ticket'
-        ? 'bg-amber-500 text-black'
-        : 'border border-slate-300 bg-white text-slate-700'"
-    class="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal">
-    Tiquete electrónico
-</button>
+            <button
+                type="button"
+                @click.prevent.stop="
+                    if (quoteMode) leaveQuoteMode();
+                    documentType = 'electronic_ticket';
+                    notice = '';
+                "
+                :class="documentType === 'electronic_ticket'
+                    ? 'bg-amber-500 border-amber-500 text-black'
+                    : 'bg-white border-slate-300 text-slate-700'"
+                class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="false">
+                Tiquete electrónico
+            </button>
 
-<button
-    type="button"
-    @click="
-        if (quoteMode) leaveQuoteMode();
-        if (customerId) {
-            documentType = 'electronic_invoice';
-        } else {
-            notice = 'Seleccione un cliente antes de usar Factura electrónica.';
-        }
-    "
-    :class="documentType === 'electronic_invoice'
-        ? 'bg-amber-500 text-black'
-        : 'border border-slate-300 bg-white text-slate-700'"
-    class="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal hover:bg-amber-100">
-    Factura electrónica
-</button>
+            <button
+                type="button"
+                @click="
+                    if (quoteMode) leaveQuoteMode();
+                    if (customerId) {
+                        documentType = 'electronic_invoice';
+                    } else {
+                        notice = 'Seleccione un cliente antes de usar Factura electrónica.';
+                    }
+                "
+                :class="documentType === 'electronic_invoice'
+                    ? 'bg-amber-500 border-amber-500 text-black'
+                    : 'bg-white border-slate-300 text-slate-700'"
+                class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="false">
+                Factura electrónica
+            </button>
 
-            <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
-            <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
-            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
-            @can('apartados.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterLayawayMode()" :disabled="!canCreateLayaway || creatingLayaway || checkout.open" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-bold text-black hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Apartar</button>@endcan
-            @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
-            @foreach(['Nota de crédito', 'Nota de débito'] as $option)
-                <button type="button" disabled class="whitespace-nowrap rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-400" title="Próximamente">{{ $option }} · Próximamente</button>
-            @endforeach
+            <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
+            <button type="button" @click="openSuspended" class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>
+            @can('cotizaciones.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterQuoteMode()" :disabled="!canCreateQuote || creatingQuote || checkout.open" class="pos-top-btn min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-sky-700 bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700 disabled:cursor-not-allowed disabled:opacity-40">Cotizar</button>@endcan
+            @can('apartados.crear')<button type="button" x-show="!quoteMode && !layawayMode" @click="enterLayawayMode()" :disabled="!canCreateLayaway || creatingLayaway || checkout.open" class="pos-top-btn min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-bold text-black hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-40">Apartar</button>@endcan
+            @can('pedidos.crear')<button type="button" data-testid="create-internal-order" @click="openOrderRequest" class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Solicitar reposición</button>@endcan
+            @can('notas_credito.crear')
+                <a href="{{ route('devoluciones.index') }}"
+                   class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                    Nota de Crédito
+                </a>
+            @endcan
+            @can('notas_credito.aplicar')
+                <button type="button" x-show="totalCreditNotesApplied > 0" class="pos-top-btn min-h-[44px] whitespace-nowrap rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                    NC aplicadas: <span x-text="money(totalCreditNotesApplied)"></span>
+                </button>
+            @endcan
         </div>
     </section>
 
@@ -556,7 +588,15 @@
                                 <p x-show="orderRequest.loading" class="p-4 text-slate-500">Buscando…</p>
                                 <template x-for="product in orderRequest.results" :key="product.id">
                                     <button type="button" @click="addOrderProduct(product)" class="flex w-full items-center justify-between gap-4 border-b border-slate-100 p-4 text-left hover:bg-emerald-50">
-                                        <span class="min-w-0"><strong class="block truncate" x-text="product.name"></strong><small class="text-slate-500" x-text="`${product.internal_code || 'Sin código'} · ${product.unit || 'Unidad'}`"></small></span>
+                                        <span class="min-w-0">
+                                            <strong class="block truncate" x-text="product.name"></strong>
+                                            <span class="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                                <template x-if="product.style_name"><span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="product.style_name"></span></template>
+                                                <template x-if="product.size_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.size_name"></span></template>
+                                                <template x-if="product.color_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="product.color_name"></span></template>
+                                            </span>
+                                            <small class="text-slate-500" x-text="`${product.internal_code || 'Sin código'} · ${product.unit || 'Unidad'}`"></small>
+                                        </span>
                                         <span class="shrink-0 text-right text-xs"><span class="block" x-text="`Existencia: ${formatQuantity(product.available_stock)}`"></span><strong class="text-emerald-700" x-text="money(product.sale_price)"></strong></span>
                                     </button>
                                 </template>
@@ -569,7 +609,7 @@
                             <p x-show="orderRequest.items.length === 0" class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center text-slate-500">Busque y agregue al menos un producto.</p>
                             <template x-for="(item, index) in orderRequest.items" :key="item.id">
                                 <article class="grid gap-3 rounded-2xl border border-slate-200 p-4 lg:grid-cols-[1.5fr_.7fr_.7fr_.65fr_1.3fr_auto] lg:items-end">
-                                    <div><span class="text-xs font-bold uppercase text-slate-500">Producto</span><strong class="block" x-text="item.name"></strong><small class="text-slate-500" x-text="`${item.internal_code || 'Sin código'} · ${item.unit || 'Unidad'}`"></small></div>
+                                    <div><span class="text-xs font-bold uppercase text-slate-500">Producto</span><strong class="block" x-text="item.name"></strong><span class="flex flex-wrap items-center gap-1 text-xs text-slate-500"><template x-if="item.style_name"><span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded border border-amber-100" x-text="item.style_name"></span></template><template x-if="item.size_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.size_name"></span></template><template x-if="item.color_name"><span class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200" x-text="item.color_name"></span></template></span><small class="text-slate-500" x-text="`${item.internal_code || 'Sin código'} · ${item.unit || 'Unidad'}`"></small></div>
                                     <div><span class="text-xs font-bold uppercase text-slate-500">Existencia actual</span><strong class="block" x-text="formatQuantity(item.available_stock)"></strong></div>
                                     <div><span class="text-xs font-bold uppercase text-slate-500">Precio de venta</span><strong class="block" x-text="money(item.sale_price)"></strong></div>
                                     <label class="text-xs font-bold uppercase text-slate-500">Cantidad solicitada<input type="number" x-model="item.requested_quantity" :step="item.allows_decimals ? 0.0001 : 1" :min="item.allows_decimals ? 0.0001 : 1" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base font-normal text-slate-900"></label>
@@ -629,12 +669,17 @@
                                     <h3 class="font-black text-[#111111]">Resumen permanente</h3>
                                     <dl class="mt-4 space-y-2 text-sm"><div class="flex justify-between"><dt>Subtotal</dt><dd class="font-bold" x-text="money(subtotal)"></dd></div><div class="flex justify-between"><dt>Descuento</dt><dd class="font-bold" x-text="money(totalDiscount)"></dd></div><div class="flex justify-between"><dt>Impuesto</dt><dd class="font-bold" x-text="money(taxTotal)"></dd></div><div x-show="roundingTotal !== 0" class="flex justify-between"><dt>Ajuste de redondeo</dt><dd class="font-bold" x-text="money(roundingTotal)"></dd></div></dl>
                                     <div class="mt-4 flex items-end justify-between border-t border-[#B9BDC2] pt-4"><span class="font-bold">Total</span><strong class="text-3xl text-[#111111]" x-text="money(grandTotal)"></strong></div>
+                                    <div x-show="totalCreditNotesApplied > 0" class="mt-3 space-y-1 border-t border-[#B9BDC2] pt-3 text-sm">
+                                        <div class="flex justify-between"><dt class="text-emerald-700 font-semibold">Notas de crédito</dt><dd class="font-bold text-emerald-700" x-text="'−' + money(totalCreditNotesApplied)"></dd></div>
+                                        <div x-show="loyaltyRedeemedEstimate > 0" class="flex justify-between"><dt class="text-emerald-700 font-semibold">Puntos canjeados</dt><dd class="font-bold text-emerald-700" x-text="'−' + money(loyaltyRedeemedEstimate)"></dd></div>
+                                        <div x-show="appliedTotal > 0" class="flex justify-between"><dt class="font-semibold">Pagos</dt><dd class="font-bold" x-text="money(appliedTotal)"></dd></div>
+                                    </div>
                                 </div>
-                                <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money2(appliedTotal + loyaltyRedeemedEstimate)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
+                                <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Total aplicado</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" x-text="money2(appliedTotal + loyaltyRedeemedEstimate + totalCreditNotesApplied)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Saldo pendiente</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="pendingBalance > 0 ? 'text-[#B1922D]' : 'text-emerald-400'" x-text="money(pendingBalance)"></strong></div><div class="rounded-2xl bg-[#111111] p-4 text-white"><span class="text-sm font-semibold text-[#B9BDC2]">Vuelto total</span><strong class="mt-2 block text-xl font-extrabold sm:text-2xl" :class="totalPaymentChange > 0 ? 'text-emerald-400' : 'text-[#B9BDC2]'" x-text="money(totalPaymentChange)"></strong></div></div>
                                 <div class="rounded-2xl border border-[#B9BDC2] p-4">
                                     <div class="flex items-center justify-between"><h3 class="font-black">Pagos aplicados</h3><span x-show="checkout.payments.length > 1" class="rounded-full bg-[#B1922D]/15 px-3 py-1 text-xs font-black text-[#806817]">Pago mixto</span></div>
-                                    <p x-show="checkout.payments.length === 0 && loyaltyRequestedPoints === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
-                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
+                                    <p x-show="checkout.payments.length === 0 && loyaltyRequestedPoints === 0 && totalCreditNotesApplied === 0" class="py-7 text-center text-sm text-slate-500">Seleccione una forma de pago para comenzar</p>
+                                    <div class="mt-3 space-y-2"><template x-for="(payment, index) in checkout.payments" :key="payment.payment_method_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong x-text="payment.method_name"></strong><span class="font-black text-[#806817]" x-text="money(payment.amount)"></span></div><p x-show="payment.received_amount_usd" class="text-xs text-emerald-700" x-text="usdPaymentLabel(payment)"></p><p x-show="payment.reference" class="truncate text-xs text-slate-500" x-text="`Referencia: ${payment.reference}`"></p><p x-show="payment.received_amount != payment.amount || payment.change_amount > 0" class="text-xs text-emerald-700" x-text="`Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></p></div><button type="button" @click="removePayment(index)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template><template x-for="(app, idx) in creditNotes.selected.filter(a => numberValue(a.amount) > 0)" :key="'nc-'+app.credit_note_id"><div class="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 px-3 py-3"><div class="min-w-0"><div class="flex gap-2"><strong class="text-emerald-800">Nota de crédito</strong><span class="font-black text-emerald-700" x-text="money(app.amount)"></span></div><p class="text-xs text-emerald-600"><span x-show="app.bearer" class="font-black">Portador · </span><span x-text="app.bearer ? app.credit_note_number : (creditNotes.available.find(n => n.id === app.credit_note_id)?.number || app.credit_note_number || 'NC')"></span></p></div><button type="button" @click="removeCreditNote(idx)" :disabled="checkout.processing" class="rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50">Quitar</button></div></template></div>
                                 </div>
                             </section>
 
@@ -664,7 +709,135 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? 'border-[#111111] bg-amber-500 text-black ring-4 ring-amber-500/30 hover:bg-amber-600' : 'border-amber-500 bg-amber-500 text-black hover:bg-amber-600')" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-amber-600'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    @can('notas_credito.aplicar')
+                                    <div class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <h4 class="text-sm font-black text-[#111111]">Notas de crédito</h4>
+                                            <span x-show="creditNotes.loading" class="text-xs font-semibold text-slate-400">Cargando notas de crédito…</span>
+                                        </div>
+                                        <template x-if="!selectedCustomer">
+                                            <p class="mt-2 text-xs font-medium text-slate-500">Seleccione un cliente para consultar sus notas de crédito disponibles.</p>
+                                        </template>
+                                        <template x-if="selectedCustomer && !creditNotes.loading && creditNotes.error">
+                                            <p class="mt-2 text-xs font-semibold text-red-600" x-text="creditNotes.error"></p>
+                                        </template>
+                                        <template x-if="selectedCustomer && !creditNotes.loading && !creditNotes.error && creditNotes.available.length === 0">
+                                            <p class="mt-2 text-xs font-medium text-slate-500">No tiene notas de crédito disponibles.</p>
+                                        </template>
+                                        <template x-if="selectedCustomer && creditNotes.available.length > 0">
+                                            <div class="mt-2 space-y-2">
+                                                <template x-for="nc in creditNotes.available" :key="nc.id">
+                                                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                                        <div class="flex items-start justify-between gap-2">
+                                                            <div class="min-w-0 flex-1">
+                                                                <p class="text-sm font-bold text-[#111111]" x-text="nc.number"></p>
+                                                                <p class="text-xs text-slate-500">
+                                                                    Saldo: <strong class="text-[#806817]" x-text="money(nc.balance)"></strong>
+                                                                    <span x-show="nc.branch_name" x-text="' · ' + nc.branch_name"></span>
+                                                                </p>
+                                                                <p x-show="nc.sale_return_reason" class="mt-0.5 text-xs text-slate-400 truncate" x-text="nc.sale_return_reason"></p>
+                                                            </div>
+                                                            <button type="button" @click="toggleCreditNote(nc)"
+                                                                    :disabled="checkout.processing"
+                                                                    :class="isCreditNoteSelected(nc.id) ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-emerald-500 bg-white text-emerald-700 hover:bg-emerald-50'"
+                                                                    class="min-h-[44px] shrink-0 rounded-lg border-2 px-3 py-1.5 text-xs font-bold transition disabled:opacity-40">
+                                                                <span x-text="isCreditNoteSelected(nc.id) ? '✓ Seleccionada' : 'Usar'"></span>
+                                                            </button>
+                                                        </div>
+                                                        <div x-show="isCreditNoteSelected(nc.id)" class="mt-2 flex items-center gap-2">
+                                                            <label class="text-xs font-bold text-slate-600 shrink-0">Monto:</label>
+                                                            <input type="number" min="1" inputmode="numeric"
+                                                                   :value="creditNotes.selected.find(a => a.credit_note_id === nc.id)?.amount || ''"
+                                                                   @input="const idx = creditNotes.selected.findIndex(a => a.credit_note_id === nc.id); if (idx >= 0) creditNotes.selected[idx].amount = $event.target.value"
+                                                                   :disabled="checkout.processing"
+                                                                   class="min-h-11 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-right text-sm font-bold focus:border-[#B1922D] focus:ring-[#B1922D]">
+                                                            <button type="button" @click="const idx = creditNotes.selected.findIndex(a => a.credit_note_id === nc.id); if (idx >= 0) applyMaxCreditNote(idx)"
+                                                                    :disabled="checkout.processing"
+                                                                    class="min-h-11 shrink-0 rounded-lg border border-[#B1922D] bg-[#B1922D]/10 px-3 py-2 text-xs font-bold text-[#806817] hover:bg-[#B1922D]/20">
+                                                                Usar máximo
+                                                            </button>
+                                                            <button type="button" @click="const idx = creditNotes.selected.findIndex(a => a.credit_note_id === nc.id); if (idx >= 0) removeCreditNote(idx)"
+                                                                    :disabled="checkout.processing"
+                                                                    class="min-h-11 shrink-0 rounded-lg px-2 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
+                                                                Quitar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <div x-show="totalCreditNotesApplied > 0" class="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2">
+                                                    <span class="text-xs font-bold text-emerald-800">Total NC aplicado</span>
+                                                    <strong class="text-sm font-black text-emerald-700" x-text="'−' + money(totalCreditNotesApplied)"></strong>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    @endcan
+                                    <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3"><template x-for="method in paymentMethods" :key="method.id"><button type="button" @click="selectPaymentMethod(method)" :disabled="checkout.processing || methodUnavailable(method)" :class="unsupportedPaymentMethod(method) ? 'border-slate-300 bg-slate-100 text-slate-500' : (selectedPaymentMethod?.id === method.id ? paymentMethodActiveClasses(method) : paymentMethodClasses(method))" class="min-h-24 rounded-2xl border-2 p-3 text-left font-normal transition focus:outline-none focus:ring-4 focus:ring-primary/40 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"><span :class="unsupportedPaymentMethod(method) ? 'bg-slate-200 text-slate-500' : 'bg-white text-primary'" class="flex h-9 w-9 items-center justify-center rounded-full font-normal" x-text="methodInitial(method)"></span><strong class="mt-2 block text-sm font-normal" x-text="method.name"></strong><small :class="unsupportedPaymentMethod(method) ? 'text-slate-500' : 'text-black/85'" class="block" x-text="unsupportedPaymentMethod(method) ? 'Use la sección de puntos' : (method.requires_reference ? 'Requiere referencia' : (method.allows_change ? 'Permite vuelto' : 'Aplicación directa'))"></small></button></template></div>
+                                    @can('notas_credito.aplicar')
+                                    @if($company->consumerFinalCreditNotesEnabled())
+                                    <div class="mt-3 rounded-2xl border border-[#B9BDC2] bg-white p-4">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div>
+                                                <h4 class="text-sm font-black text-[#111111]">Nota de crédito sin cliente</h4>
+                                                <p class="text-xs text-slate-500">Canje con el código entregado al cliente.</p>
+                                            </div>
+                                            <button type="button" @click="toggleBearerPanel" :disabled="checkout.processing" class="min-h-11 shrink-0 rounded-xl border-2 border-primary bg-primary/10 px-3 py-2 text-xs font-black text-[#806817] hover:bg-primary/20 disabled:opacity-50">
+                                                <span x-text="bearerNC.open ? 'Cerrar' : 'Añadir'"></span>
+                                            </button>
+                                        </div>
+                                        <div x-show="bearerNC.open" class="mt-3 space-y-3 rounded-xl border border-[#B9BDC2] bg-slate-50/70 p-3 sm:p-4">
+                                            <div>
+                                                <label for="bearer-number" class="text-xs font-black uppercase text-slate-500">Número de nota</label>
+                                                <div class="mt-1 flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30">
+                                                    <span class="flex min-h-11 shrink-0 select-none items-center border-r border-slate-200 bg-slate-100 px-3 text-sm font-black text-[#806817]">NC-</span>
+                                                    <input id="bearer-number" type="text" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="00000004" :value="bearerNC.number" @input="sanitizeBearerNumber($event.target.value)" :disabled="checkout.processing || bearerNC.validating" class="min-w-0 w-full border-0 bg-transparent px-3 py-2 text-sm font-semibold text-[#111111] focus:ring-0">
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label for="bearer-code" class="text-xs font-black uppercase text-slate-500">Código</label>
+                                                <div class="mt-1 flex items-center gap-2">
+                                                    <input id="bearer-code" :type="bearerNC.showCode ? 'text' : 'password'" inputmode="text" autocomplete="off" maxlength="14" placeholder="XXXX-XXXX-XXXX" :value="bearerNC.code" @input="sanitizeBearerCode($event.target.value)" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-[#111111] focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none">
+                                                    <button type="button" @click="bearerNC.showCode = !bearerNC.showCode" :disabled="checkout.processing || bearerNC.validating" class="min-h-11 shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-[#806817] hover:bg-slate-50">
+                                                        <span x-text="bearerNC.showCode ? 'Ocultar' : 'Mostrar'"></span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div x-show="bearerNC.validated" class="space-y-1 rounded-lg border border-primary/40 bg-primary/10 p-3">
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-xs font-black uppercase tracking-wide text-slate-500">Saldo disponible</span>
+                                                    <strong class="text-[#806817]" x-text="money(bearerNC.validated.balance)"></strong>
+                                                </div>
+                                                <div class="flex items-center justify-between text-sm">
+                                                    <span class="text-xs font-black uppercase tracking-wide text-slate-500">Saldo pendiente de la venta</span>
+                                                    <strong x-text="money(pendingBalance)"></strong>
+                                                </div>
+                                            </div>
+                                            <div x-show="bearerNC.validated">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <label for="bearer-amount" class="text-xs font-black uppercase text-slate-500">Monto a aplicar</label>
+                                                    <span x-show="bearerAutoAmount !== ''" class="text-xs font-bold text-[#806817]" x-text="'Automático: ' + money(bearerAutoAmount)"></span>
+                                                </div>
+                                                <div class="mt-1 flex min-w-0 items-center rounded-lg border border-slate-300 bg-white px-3">
+                                                    <span class="shrink-0 text-lg font-black text-[#806817]">₡</span>
+                                                    <input id="bearer-amount" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0" x-model="bearerNC.amount" :disabled="checkout.processing || bearerNC.validating" class="min-w-0 w-full border-0 bg-transparent py-3 pl-2 text-right text-lg font-black text-[#111111] focus:ring-0 sm:text-xl">
+                                                </div>
+                                                <div x-show="bearerSaldoDespues !== ''" class="flex items-center justify-between text-xs text-slate-600">
+                                                    <span>Saldo después de aplicar</span>
+                                                    <strong x-text="money(bearerSaldoDespues)"></strong>
+                                                </div>
+                                            </div>
+                                            <button type="button" x-show="!bearerNC.validated" @click="validateBearerNote" :disabled="!bearerCanValidate" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
+                                                <span x-show="!bearerNC.validating">Validar nota de crédito</span>
+                                                <span x-show="bearerNC.validating">Validando…</span>
+                                            </button>
+                                            <button type="button" x-show="bearerNC.validated" @click="applyBearerNote" :disabled="!bearerCanApply" class="min-h-11 w-full rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-black text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500">
+                                                Aplicar nota de crédito
+                                            </button>
+                                            <p x-show="bearerNC.error" x-text="bearerNC.error" class="text-xs font-semibold text-red-600" role="alert"></p>
+                                        </div>
+                                    </div>
+                                    @endif
+                                    @endcan
                                 </div>
 
                                 <div x-show="selectedPaymentMethod" x-transition class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4">
@@ -926,6 +1099,11 @@ document.addEventListener('alpine:init', () => {
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
         loyaltyRequestNumber: 0,
         loyalty: { loading: false, available: false, reason: '', balance_points: '0', point_value: '1', minimum_enabled: false, minimum_amount: '0', eligible: false, available_points: '0', available_money: '0', maximum_redemption_percent: '100', max_redeemable_money: '0', max_redeemable_points: '0', offers_allowed: true, requested: '' },
+        creditNotes: { loading: false, available: [], selected: [], error: '', requestNumber: 0 },
+        // 4B-3: NC Consumer Final por número + código (portador). El código vive
+        // únicamente en esta memoria Alpine mientras se prepara el cobro; nunca se
+        // renderiza al DOM, ni se persiste, ni viaja por URL ni por almacenamiento.
+        bearerNC: { open: false, validating: false, showCode: false, number: '', code: '', amount: '', error: '', validated: null },
         // R02-B: escáner por cámara (capa de entrada; sin estado propio de carrito).
         cameraScannerAvailable: false,
         cameraScannerOpen: false,
@@ -1107,7 +1285,7 @@ document.addEventListener('alpine:init', () => {
             return `Recibido US$ ${payment.received_amount_usd || '0.0000'} · Cambio US$ ${payment.change_amount_usd || '0.0000'}`;
         },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
-        get pendingBalance() { return Math.max(0, Math.round(this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate)); },
+        get pendingBalance() { return Math.max(0, Math.round(this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate - this.totalCreditNotesApplied)); },
         get loyaltyRequestedPoints() {
             const value = Number(this.loyalty.requested);
             if (!this.loyaltyUsable || !Number.isFinite(value) || value <= 0) return 0;
@@ -1144,7 +1322,49 @@ document.addEventListener('alpine:init', () => {
             return Math.abs(pending - Math.round(pending)) > 0.000001;
         },
         get totalPaymentChange() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.change_amount), 0); },
-        get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && !this.loyalty.loading && !this.loyaltyInputError && (this.checkout.payments.length > 0 || this.loyaltyRequestedPoints > 0) && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
+        get totalCreditNotesApplied() { return this.decimal4(this.creditNotes.selected.reduce((sum, app) => sum + this.numberValue(app.amount), 0)); },
+        get checkoutCanConfirm() { return !this.quoteMode && !this.checkout.processing && !this.loyalty.loading && !this.loyaltyInputError && (this.checkout.payments.length > 0 || this.loyaltyRequestedPoints > 0 || this.totalCreditNotesApplied > 0) && this.pendingBalance === 0 && !this.loyaltyFractionalPending && (!this.creditPaymentSelected || this.creditEligible); },
+        // 4B-3: la validación de credenciales (número + código) es independiente
+        // del "Monto a aplicar". El número se normaliza estrictamente a NC-XXXXXXXX
+        // y el código a 12 caracteres alfanuméricos mayúsculas (los guiones son
+        // solo visuales). La validación real (saldo/vencimiento/estado) ocurre
+        // siempre en el servidor durante la prevalidación Y en checkout.
+        get bearerRawCode() { return this.bearerNC.code.trim().replace(/-/g, '').toUpperCase(); },
+        get bearerNormalizedNumber() {
+            const digits = this.bearerNC.number.trim();
+            return /^\d{1,12}$/.test(digits) ? 'NC-' + digits.padStart(8, '0') : null;
+        },
+        get bearerNumberValid() { return this.bearerNormalizedNumber !== null; },
+        get bearerCodeValid() { return /^[A-Z0-9]{12}$/.test(this.bearerRawCode); },
+        get bearerCanValidate() {
+            return !this.checkout.processing &&
+                !this.bearerNC.validating &&
+                !this.bearerNC.validated &&
+                this.bearerNumberValid &&
+                this.bearerCodeValid;
+        },
+        get bearerCanApply() {
+            const validated = this.bearerNC.validated;
+            if (!validated || this.checkout.processing || this.bearerNC.validating) return false;
+            const amount = this.numberValue(this.bearerNC.amount);
+            const balance = this.numberValue(validated.balance);
+            return /^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim()) &&
+                amount > 0 &&
+                amount <= balance &&
+                amount <= this.pendingBalance;
+        },
+        get bearerAutoAmount() {
+            if (!this.bearerNC.validated) return '';
+            const min = Math.min(this.numberValue(this.bearerNC.validated.balance), this.pendingBalance);
+            return min > 0 ? String(Number(min.toFixed(4))) : '';
+        },
+        get bearerSaldoDespues() {
+            if (!this.bearerNC.validated || !/^\d+(?:\.\d{1,4})?$/.test(String(this.bearerNC.amount).trim())) return '';
+            const balance = this.numberValue(this.bearerNC.validated.balance);
+            const amount = this.numberValue(this.bearerNC.amount);
+            if (amount <= 0 || amount >= balance) return '';
+            return String(Number((balance - amount).toFixed(4)));
+        },
         get checkoutError() { return this.checkout.error; },
         get canAddPayment() {
             const method = this.selectedPaymentMethod, amount = Number(this.checkout.draft.amount);
@@ -1266,7 +1486,7 @@ document.addEventListener('alpine:init', () => {
         addOrderProduct(product) {
             const existing = this.orderRequest.items.find(item => item.id === product.id);
             if (existing) existing.requested_quantity = Number(existing.requested_quantity) + 1;
-            else this.orderRequest.items.push({ id: product.id, name: product.name, internal_code: product.internal_code, available_stock: Number(product.available_stock), sale_price: Number(product.sale_price), unit: product.unit, allows_decimals: !!product.allows_decimals, requested_quantity: 1, request_note: '' });
+            else this.orderRequest.items.push({ id: product.id, name: product.name, internal_code: product.internal_code, style_name: product.style_name || null, size_name: product.size_name || null, color_name: product.color_name || null, available_stock: Number(product.available_stock), sale_price: Number(product.sale_price), unit: product.unit, allows_decimals: !!product.allows_decimals, requested_quantity: 1, request_note: '' });
             this.orderRequest.query = '';
             this.orderRequest.results = [];
             this.orderRequest.requestNumber += 1;
@@ -1436,9 +1656,18 @@ document.addEventListener('alpine:init', () => {
             if (this.checkout.payments.length && !window.confirm('¿Desea cerrar el cobro? Los pagos preparados se limpiarán.')) return;
             this.clearPayments();
             this.checkout.open = false;
+            this.creditNotes.selected = [];
             this.$nextTick(() => this.focusSearch());
         },
         unsupportedPaymentMethod(method) { return method.type === 'loyalty_points'; },
+        paymentMethodClasses(method) {
+            if (this.unsupportedPaymentMethod(method)) return 'border-slate-300 bg-slate-100 text-slate-500';
+            return 'border-primary bg-primary text-black hover:bg-primary-hover';
+        },
+        paymentMethodActiveClasses(method) {
+            if (this.unsupportedPaymentMethod(method)) return 'border-slate-300 bg-slate-100 text-slate-500';
+            return 'border-[#111111] bg-primary text-black ring-4 ring-primary/30 hover:bg-primary-hover';
+        },
         methodUnavailable(method) { return this.unsupportedPaymentMethod(method) || this.checkout.payments.some(payment => payment.payment_method_id === method.id) || this.pendingBalance <= 0 || (method.type === 'credit' && this.checkout.payments.length > 0); },
         methodInitial(method) { return (method.name || '?').trim().charAt(0).toUpperCase(); },
         selectPaymentMethod(method) {
@@ -1489,6 +1718,8 @@ document.addEventListener('alpine:init', () => {
             if (!this.checkoutCanConfirm) return;
             this.checkout.processing = true;
             this.checkout.error = '';
+            const creditNoteApplications = this.creditNotes.selected.filter(app => !app.bearer && this.numberValue(app.amount) > 0).map(app => ({ credit_note_id: app.credit_note_id, amount: String(app.amount) }));
+            const creditNoteBearerApplications = this.creditNotes.selected.filter(app => app.bearer && this.numberValue(app.amount) > 0).map(app => ({ credit_note_number: app.credit_note_number, application_code: app.code, amount: String(app.amount) }));
             try {
                 const response = await fetch({{ Illuminate\Support\Js::from(route('pos.checkout', [], false)) }}, {
                     method: 'POST',
@@ -1506,6 +1737,8 @@ document.addEventListener('alpine:init', () => {
                         document_type: this.documentType,
                         ...(this.loyaltyRequestedPoints > 0 ? { requested_points: String(this.loyaltyRequestedPoints) } : {}),
                         payments: this.checkout.payments.map(({ payment_method_id, amount, received_amount, received_amount_usd, change_currency, reference }) => ({ payment_method_id, amount, received_amount, ...(received_amount_usd ? { received_amount_usd, change_currency } : {}), reference })),
+                        ...(creditNoteApplications.length > 0 ? { credit_note_applications: creditNoteApplications } : {}),
+                        ...(creditNoteBearerApplications.length > 0 ? { credit_note_bearer_applications: creditNoteBearerApplications } : {}),
                         items: this.cart.map(item => ({
                             product_id: item.id,
                             quantity: item.quantity,
@@ -1525,6 +1758,7 @@ document.addEventListener('alpine:init', () => {
                 this.cart = [];
                 this.customerId = null;
                 this.selectedCustomer = null;
+                this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
                 if (this.documentType === 'electronic_invoice') {
     this.documentType = 'electronic_ticket';
 }
@@ -1536,6 +1770,9 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 this.checkout.error = error.message || 'No fue posible completar el cobro. Intente nuevamente.';
+                if (error.status === 422 && this.customerId && String(error.message || '').toLowerCase().includes('nota')) {
+                    this.fetchCreditNotes();
+                }
             } finally {
                 this.checkout.processing = false;
             }
@@ -1593,6 +1830,7 @@ document.addEventListener('alpine:init', () => {
             this.successMessage = '';
             this.clearSuspendedRecovery();
             this.quoteId = null;
+            this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
             this.refreshLoyalty();
             this.$nextTick(() => this.focusSearch());
         },
@@ -1734,6 +1972,156 @@ document.addEventListener('alpine:init', () => {
                 print.busy = false;
             }
         },
+        async fetchCreditNotes() {
+            if (!this.customerId) {
+                this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
+                return;
+            }
+            this.creditNotes.loading = true;
+            this.creditNotes.error = '';
+            const currentRequest = ++this.creditNotes.requestNumber;
+            try {
+                const url = new URL({{ Illuminate\Support\Js::from(route('pos.credit-notes.available', [], false)) }}, window.location.origin);
+                url.searchParams.set('customer_id', String(this.customerId));
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                if (currentRequest !== this.creditNotes.requestNumber) return;
+                if (!response.ok) {
+                    const errPayload = await response.json().catch(() => ({}));
+                    this.creditNotes.available = [];
+                    this.creditNotes.error = errPayload.message || 'No se pudieron consultar las notas de crédito.';
+                    this.creditNotes.loading = false;
+                    return;
+                }
+                const notes = await response.json();
+                if (currentRequest !== this.creditNotes.requestNumber) return;
+                const validIds = new Set(notes.map(n => n.id));
+                this.creditNotes.selected = this.creditNotes.selected.filter(app => app.bearer || validIds.has(app.credit_note_id));
+                this.creditNotes.available = notes;
+                this.creditNotes.error = '';
+                this.creditNotes.loading = false;
+            } catch (error) {
+                if (currentRequest === this.creditNotes.requestNumber) {
+                    this.creditNotes.available = [];
+                    this.creditNotes.error = error.message || 'No se pudieron consultar las notas de crédito.';
+                    this.creditNotes.loading = false;
+                }
+            }
+        },
+        toggleCreditNote(nc) {
+            const idx = this.creditNotes.selected.findIndex(app => app.credit_note_id === nc.id);
+            if (idx >= 0) {
+                this.creditNotes.selected.splice(idx, 1);
+            } else {
+                const maxApply = this.numberValue(nc.balance);
+                const remaining = Math.max(0, Math.round(this.grandTotal - this.loyaltyRedeemedEstimate - this.totalCreditNotesApplied - this.appliedTotal));
+                const amount = Math.min(maxApply, remaining);
+                if (amount > 0) {
+                    this.creditNotes.selected.push({ credit_note_id: nc.id, amount: String(Math.round(amount)) });
+                }
+            }
+        },
+        removeCreditNote(index) {
+            this.creditNotes.selected.splice(index, 1);
+        },
+        // ── 4B-3: NC Consumer Final por número + código (portador) ──
+        toggleBearerPanel() {
+            if (this.checkout.processing) return;
+            if (this.bearerNC.open) {
+                this.closeBearerPanel();
+            } else {
+                this.openBearerPanel();
+            }
+        },
+        openBearerPanel() {
+            this.bearerNC.open = true;
+            this.bearerNC.error = '';
+            this.bearerNC.amount = '';
+        },
+        closeBearerPanel() {
+            this.bearerNC.open = false;
+            this.bearerNC.validating = false;
+            this.bearerNC.showCode = false;
+            this.bearerNC.number = '';
+            this.bearerNC.code = '';
+            this.bearerNC.amount = '';
+            this.bearerNC.error = '';
+            this.bearerNC.validated = null;
+        },
+        sanitizeBearerNumber(value) {
+            const trimmed = String(value).trim();
+            const match = /^(?:NC-)?(\d{1,12})$/i.exec(trimmed);
+            this.bearerNC.number = match ? match[1] : trimmed.slice(0, 12);
+            this.bearerNC.validated = null;
+        },
+        sanitizeBearerCode(value) {
+            const raw = String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+            const chunks = raw.match(/.{1,4}/g) || [];
+            this.bearerNC.code = chunks.join('-');
+            this.bearerNC.validated = null;
+        },
+        async validateBearerNote() {
+            if (!this.bearerCanValidate || this.bearerNC.validating) return;
+            this.bearerNC.validating = true;
+            this.bearerNC.error = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.credit-notes.bearer-validate', [], false)) }}, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({
+                        credit_note_number: this.bearerNormalizedNumber,
+                        application_code: this.bearerRawCode,
+                    }),
+                });
+                const payload = await this.readFetchResponse(response);
+                this.bearerNC.validated = {
+                    credit_note_id: payload.credit_note_id,
+                    credit_note_number: payload.credit_note_number,
+                    balance: String(payload.balance),
+                    issued_at: payload.issued_at,
+                    expires_at: payload.expires_at,
+                };
+                this.bearerNC.amount = this.bearerAutoAmount;
+            } catch (error) {
+                this.bearerNC.error = error.message || 'No se pudo validar la nota de crédito.';
+                this.bearerNC.validated = null;
+                this.bearerNC.amount = '';
+            } finally {
+                this.bearerNC.validating = false;
+            }
+        },
+        async applyBearerNote() {
+            if (!this.bearerCanApply || this.bearerNC.validating) return;
+            const validated = this.bearerNC.validated;
+            this.creditNotes.selected.push({
+                credit_note_id: validated.credit_note_id,
+                credit_note_number: validated.credit_note_number,
+                amount: String(this.bearerNC.amount).trim(),
+                balance: validated.balance,
+                issued_at: validated.issued_at,
+                expires_at: validated.expires_at,
+                bearer: true,
+                code: this.bearerRawCode,
+            });
+            this.closeBearerPanel();
+        },
+        applyMaxCreditNote(index) {
+            const app = this.creditNotes.selected[index];
+            if (!app) return;
+            const nc = this.creditNotes.available.find(n => n.id === app.credit_note_id);
+            if (!nc) return;
+            const maxApply = this.numberValue(nc.balance);
+            const otherNcTotal = this.totalCreditNotesApplied - this.numberValue(app.amount);
+            const remaining = Math.max(0, Math.round(this.grandTotal - this.loyaltyRedeemedEstimate - otherNcTotal - this.appliedTotal));
+            app.amount = String(Math.min(maxApply, remaining));
+        },
+        creditNoteNcBalance(nc) {
+            const app = this.creditNotes.selected.find(a => a.credit_note_id === nc.id);
+            if (app) return this.numberValue(nc.balance);
+            return this.numberValue(nc.balance);
+        },
+        isCreditNoteSelected(ncId) {
+            return this.creditNotes.selected.some(app => app.credit_note_id === ncId);
+        },
         async enterQuoteMode() {
             if (!this.canCreateQuote || this.creatingQuote || this.checkout.open || this.creatingLayaway) return;
             if (this.layawayMode) { await this.leaveLayawayMode(); }
@@ -1796,7 +2184,7 @@ document.addEventListener('alpine:init', () => {
                 this.quoteId = payload.quote_id;
                 this.quoteMode = true;
                 this.closeResults();
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.sale_price), wholesale_price: item.wholesale_price, price_a: item.price_a, price_b: item.price_b, price_c: item.price_c, tax_rate: Number(item.tax_rate), available_stock: Number(item.available_stock), controls_inventory: !!item.controls_inventory, allows_decimals: !!item.allows_decimals, unavailable: !!item.unavailable, style_name: item.style_name || null, size_name: item.size_name || null, color_name: item.color_name || null, _discount: this.canDiscount ? Number(item.discount_total) : 0, _discountType: 'fixed', _unitPrice: this.canOverridePrice ? String(item.unit_price) : '' }));
                 this.customerId = payload.customer_id || payload.customer?.id || null; this.selectedCustomer = payload.customer; this.checkoutToken = generateUUID(); this.notice = `Cotización ${payload.quote_number} cargada. Puede editar y guardar cambios.`;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
@@ -1820,7 +2208,7 @@ document.addEventListener('alpine:init', () => {
             if (this.suspended.activeId && !window.confirm('Este carrito proviene de una venta suspendida. Si lo limpia, la suspensión volverá a quedar disponible.')) return;
             if (!this.suspended.activeId && !window.confirm('¿Desea limpiar el carrito?')) return;
             if (this.suspended.activeId && !(await this.releaseCurrentRecovery())) return;
-            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = generateUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null;
+            this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkout.payments = []; this.notice = ''; this.checkoutToken = generateUUID(); this._generalDiscountInput = ''; this._generalDiscountType = 'fixed'; this.quoteId = null; this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
             this.$nextTick(() => this.focusSearch());
         },
         async suspendCurrent() {
@@ -1831,7 +2219,7 @@ document.addEventListener('alpine:init', () => {
                 const url = recoveredCart ? `/pos/suspendidas/${this.suspended.activeId}/volver-a-suspender` : {{ Illuminate\Support\Js::from(route('pos.suspended.store', [], false)) }};
                 const response = await fetch(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ ...(recoveredCart ? { recovery_token: this.suspended.recoveryToken } : {}), customer_id: this.customerId, items: this.cart.map(item => ({ product_id: item.id, quantity: item.quantity })) }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkoutToken = generateUUID(); this.clearSuspendedRecovery(); this.successMessage = payload.message;
+                this.cart = []; this.customerId = null; this.selectedCustomer = null; this.checkoutToken = generateUUID(); this.clearSuspendedRecovery(); this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 }; this.successMessage = payload.message;
             } catch (error) { this.notice = error.message; } finally { this.suspended.saving = false; }
         },
         async openSuspended() {
@@ -1846,8 +2234,8 @@ document.addEventListener('alpine:init', () => {
                 if (this.suspended.activeId && this.suspended.activeId !== sale.id && !(await this.releaseCurrentRecovery())) return;
                 const response = await fetch(`/pos/suspendidas/${sale.id}/recuperar`, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }, body: JSON.stringify({ recovery_token: this.suspended.activeId === sale.id ? this.suspended.recoveryToken : null }) });
                 const payload = await this.readFetchResponse(response);
-                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
-                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = generateUUID(); this.checkout.payments = []; this.suspended.open = false; this.$nextTick(() => this.focusSearch());
+                this.cart = payload.items.map(item => ({ id: item.product_id, name: item.name, internal_code: item.code, barcode: item.barcode, quantity: Number(item.quantity), sale_price: Number(item.price), tax_rate: Number(item.tax_rate), available_stock: Number(item.stock), controls_inventory: !!item.track_inventory, allows_decimals: !!item.allows_decimals, has_image: !!item.image_url, image_url: item.image_url, unavailable: !!item.unavailable, style_name: item.style_name || null, size_name: item.size_name || null, color_name: item.color_name || null, _discount: 0, _discountType: 'fixed', _unitPrice: '' }));
+                this.customerId = payload.customer?.id || null; this.selectedCustomer = payload.customer; this.suspended.activeId = payload.suspended_sale_id; this.suspended.recoveryToken = payload.recovery_token; this.suspended.warnings = payload.warnings || []; this.suspended.customerInvalid = !!payload.customer_invalid; this.notice = this.suspended.warnings.join(' '); this.checkoutToken = generateUUID(); this.checkout.payments = []; this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 }; this.suspended.open = false; this.fetchCreditNotes(); this.$nextTick(() => this.focusSearch());
             } catch (error) { this.suspended.error = error.message; }
         },
         async cancelSuspended(sale) {
@@ -1894,12 +2282,18 @@ document.addEventListener('alpine:init', () => {
         this.notice = '';
     }
 
+    const preservedBearer = this.creditNotes.selected.filter(app => app.bearer);
+
+    this.creditNotes = { loading: false, available: [], selected: preservedBearer, error: '', requestNumber: 0 };
     this.closeCustomerResults();
+    this.fetchCreditNotes();
 },
         clearCustomer() {
             this.customerId = null;
             this.selectedCustomer = null;
             this.suspended.customerInvalid = false;
+            const preservedBearer = this.creditNotes.selected.filter(app => app.bearer);
+            this.creditNotes = { loading: false, available: [], selected: preservedBearer, error: '', requestNumber: 0 };
             this.closeCustomerResults();
             this.$nextTick(() => this.$refs.customerSearchInput.focus());
         },

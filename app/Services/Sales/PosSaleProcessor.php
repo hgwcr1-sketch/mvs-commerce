@@ -5,6 +5,7 @@ namespace App\Services\Sales;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanySequence;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
@@ -25,15 +26,24 @@ use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PosSaleProcessor
 {
+    /**
+     * Intentos de autorización de NC Consumer Final por ventana (10/60s),
+     * por usuario + empresa. Protege contra fuerza bruta del número+código.
+     */
+    private const BEARER_ATTEMPTS = 10;
+
+    private const BEARER_ATTEMPT_WINDOW = 60;
     public function __construct(
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
         private readonly AccountsReceivableService $accountsReceivableService,
+        private readonly CreditNoteService $creditNoteService,
         private readonly LoyaltyEarningService $loyaltyEarningService,
         private readonly LoyaltyOfferEligibilityService $loyaltyOfferEligibilityService,
         private readonly LoyaltyBirthdayService $loyaltyBirthdayService,
@@ -48,12 +58,39 @@ class PosSaleProcessor
         $items = $this->consolidateItems($data['items']);
         $payments = $this->canonicalPayments($data['payments']);
         $requestedPoints = $this->canonicalRequestedPoints($data);
+        $canonicalNC = $this->canonicalCreditNotes($data['credit_note_applications'] ?? []);
+        $hasNamedNC = $canonicalNC !== [];
+
+        $bearerEntries = $data['credit_note_bearer_applications'] ?? [];
+
+        if ($bearerEntries !== []) {
+            // Resolución ligera SOLO para el fingerprint de idempotencia:
+            // mapea número → id sin exigir el código. Permite responder un
+            // reenvío idempotente aunque la NC ya haya sido consumida, sin
+            // revelar si el número existe ni el código.
+            $bearerNC = $this->resolveBearerIdsForFingerprint(
+                $bearerEntries,
+                $companyId,
+            );
+
+            $canonicalNC = $this->mergeCanonicalCreditNotes(
+                $canonicalNC,
+                $bearerNC,
+            );
+        }
+
+        $ncAppliedAmount = '0.0000';
+        foreach ($canonicalNC as $nc) {
+            $ncAppliedAmount = bcadd($ncAppliedAmount, $nc['amount'], 4);
+        }
+        $hasNC = bccomp($ncAppliedAmount, '0', 4) > 0;
 
         $fingerprint = $this->fingerprint(
             $data,
             $items,
             $payments,
             $requestedPoints,
+            $canonicalNC,
             $user->id,
             $companyId,
             $branchId,
@@ -80,6 +117,29 @@ class PosSaleProcessor
             ];
         }
 
+        // Recién aquí, para un request NUEVO, se aplica el rate limit y la
+        // autorización plena por número + código + monto.
+        if ($bearerEntries !== []) {
+            $this->guardBearerAttemptRateLimit($companyId, $user->id);
+
+            $bearerNC = $this->resolveBearerApplications(
+                $bearerEntries,
+                $companyId,
+                $user,
+            );
+
+            $canonicalNC = $this->mergeCanonicalCreditNotes(
+                $this->canonicalCreditNotes($data['credit_note_applications'] ?? []),
+                $bearerNC,
+            );
+
+            $ncAppliedAmount = '0.0000';
+            foreach ($canonicalNC as $nc) {
+                $ncAppliedAmount = bcadd($ncAppliedAmount, $nc['amount'], 4);
+            }
+            $hasNC = bccomp($ncAppliedAmount, '0', 4) > 0;
+        }
+
         try {
             $sale = DB::transaction(function () use (
                 $data,
@@ -89,7 +149,11 @@ class PosSaleProcessor
                 $requestedPoints,
                 $user,
                 $companyId,
-                $branchId
+                $branchId,
+                $hasNC,
+                $hasNamedNC,
+                $ncAppliedAmount,
+                $canonicalNC
             ) {
                 $company = Company::query()
                     ->where('is_active', true)
@@ -126,23 +190,6 @@ class PosSaleProcessor
 
                 $quote = $this->lockQuoteForCheckout($data, $companyId, $branchId);
 
-                $cashSession = $this->cashSessionResolver->resolve(
-                    $user,
-                    $companyId,
-                    $branchId,
-                    isset($data['cash_session_id'])
-                        ? (int) $data['cash_session_id']
-                        : null,
-                    true,
-                );
-
-                $suspendedSale = $this->lockSuspensionForCheckout(
-                    $data,
-                    $user,
-                    $companyId,
-                    $branchId,
-                );
-
                 $customerId = $data['customer_id'] ?? null;
                 $customer = null;
 
@@ -159,6 +206,30 @@ class PosSaleProcessor
                         ]);
                     }
                 }
+
+                // ─── NC: permission + customer validation ───
+                if ($hasNC) {
+                    if (! $user->hasPermission('notas_credito.aplicar', $company)) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'No tiene permiso para aplicar Notas de Crédito.',
+                        ]);
+                    }
+
+                    // NC nominativa exige cliente identificado; NC Consumer
+                    // Final (portador) puede aplicarse a venta sin cliente.
+                    if ($customer === null && $hasNamedNC) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'Debe seleccionar un cliente para aplicar Notas de Crédito.',
+                        ]);
+                    }
+                }
+
+                $suspendedSale = $this->lockSuspensionForCheckout(
+                    $data,
+                    $user,
+                    $companyId,
+                    $branchId,
+                );
 
                 $paymentMethods = PaymentMethod::query()
                     ->where('company_id', $companyId)
@@ -388,11 +459,48 @@ class PosSaleProcessor
                     $total - $unroundedTotal,
                 );
 
+                // ─── NC coverage validation ───
+                if ($hasNC) {
+                    if (bccomp($ncAppliedAmount, (string) $total, 4) > 0) {
+                        throw ValidationException::withMessages([
+                            'credit_note_applications' => 'Las Notas de Crédito superan el total de la venta.',
+                        ]);
+                    }
+                }
+
+                // ─── CashSession: conditional on NC coverage ───
+                $ncCoversTotal = $hasNC
+                    && bccomp($ncAppliedAmount, (string) $total, 4) >= 0;
+                $cashSessionNeeded = ! $ncCoversTotal || count($payments) > 0;
+
+                $cashSession = null;
+                if ($cashSessionNeeded) {
+                    $cashSession = $this->cashSessionResolver->resolve(
+                        $user,
+                        $companyId,
+                        $branchId,
+                        isset($data['cash_session_id'])
+                            ? (int) $data['cash_session_id']
+                            : null,
+                        true,
+                    );
+                }
+
+                // ─── Coverage target for resolvePayments ───
+                $coverageTargetForPayments = null;
+                if ($hasNC) {
+                    $coverageTargetForPayments = (float) bcsub(
+                        (string) $total,
+                        $ncAppliedAmount,
+                        4,
+                    );
+                }
+
                 $resolvedPayments = $this->resolvePayments(
                     $payments,
                     $paymentMethods,
                     $total,
-                    null,
+                    $coverageTargetForPayments,
                     $requestedPoints === null,
                     $cashSession,
                 );
@@ -422,8 +530,12 @@ class PosSaleProcessor
                     'tax_total' => $taxTotal,
                     'rounding_total' => $roundingTotal,
                     'total' => $total,
-                    'paid_total' => $isCredit ? 0 : $total,
-                    'balance_due' => $isCredit ? $total : 0,
+                    'paid_total' => $isCredit
+                        ? ($hasNC ? (float) bcsub((string) $total, $ncAppliedAmount, 4) : 0)
+                        : $total,
+                    'balance_due' => $isCredit
+                        ? ($hasNC ? (float) bcsub((string) $total, $ncAppliedAmount, 4) : $total)
+                        : 0,
                     'due_date' => $isCredit ? now()->startOfDay()->addDays((int) $customer->credit_days) : null,
                     'notes' => null,
                     'completed_at' => now(),
@@ -459,6 +571,16 @@ class PosSaleProcessor
                             $line['quantity'],
                         );
                     }
+                }
+
+                // ─── NC: apply batch (Sale → NC1 → NC2 → ...) ───
+                if ($hasNC) {
+                    $this->creditNoteService->applyBatchToSale(
+                        $sale,
+                        $canonicalNC,
+                        $user,
+                        $data['checkout_token'],
+                    );
                 }
 
                 $redeemedAmount = '0.0000';
@@ -518,11 +640,12 @@ class PosSaleProcessor
                     foreach ($resolvedPayments as $payment) {
                         $cashApplied = bcadd($cashApplied, (string) $payment['amount'], 4);
                     }
-                    $remaining = bcsub((string) $sale->total, $redemption['redeemed_amount'], 4);
+                    $ncAndLoyaltyDeducted = bcadd($ncAppliedAmount, $redemption['redeemed_amount'], 4);
+                    $remaining = bcsub((string) $sale->total, $ncAndLoyaltyDeducted, 4);
 
                     if (bccomp($remaining, '0', 4) < 0 || bccomp($cashApplied, $remaining, 4) !== 0) {
                         throw ValidationException::withMessages([
-                            'payments' => 'La suma de los pagos debe ser exactamente igual al total de la venta menos el monto canjeado con puntos.',
+                            'payments' => 'La suma de los pagos debe ser exactamente igual al total menos NC y puntos canjeados.',
                         ]);
                     }
 
@@ -567,7 +690,8 @@ class PosSaleProcessor
                 }
 
                 if ($isCredit) {
-                    $this->accountsReceivableService->createForSale($sale, $customer);
+                    $creditAmount = bcsub((string) $total, $ncAppliedAmount, 4);
+                    $this->accountsReceivableService->createForSale($sale, $customer, $creditAmount);
                 }
 
                 if ($suspendedSale !== null) {
@@ -1042,6 +1166,155 @@ class PosSaleProcessor
         return bcadd($points, '0', 4);
     }
 
+    private function canonicalCreditNotes(array $applications): array
+    {
+        if (empty($applications)) {
+            return [];
+        }
+
+        $canonical = array_map(fn (array $nc) => [
+            'credit_note_id' => (int) $nc['credit_note_id'],
+            'amount' => bcadd((string) $nc['amount'], '0', 4),
+        ], array_values($applications));
+
+        $ids = array_column($canonical, 'credit_note_id');
+        if (count($ids) !== count(array_unique($ids))) {
+            throw ValidationException::withMessages([
+                'credit_note_applications' => 'No puede repetir una Nota de Crédito en la misma venta.',
+            ]);
+        }
+
+        // Deterministic order: sort by credit_note_id ASC
+        usort($canonical, fn (array $a, array $b) => $a['credit_note_id'] <=> $b['credit_note_id']);
+
+        return $canonical;
+    }
+
+    /**
+     * Rate limit anti fuerza bruta para la superficie que recibe
+     * número + código de NC Consumer Final (10 intentos / 60 s por
+     * usuario + empresa). No bloquea permanentemente la NC ni altera
+     * saldo/estado; el límite decae solo.
+     *
+     * Público porque la prevalidación de 4B-3 (`pos.credit-notes.bearer-validate`)
+     * comparte la misma superficie y la misma clave: el atacante no gana
+     * intentos extra combinando ambos endpoints.
+     */
+    public function guardBearerAttemptRateLimit(int $companyId, int $userId): void
+    {
+        $key = 'cn-bearer:'.$companyId.':'.$userId;
+
+        if (RateLimiter::tooManyAttempts($key, self::BEARER_ATTEMPTS)) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => 'No se pudo validar la nota de crédito.',
+            ]);
+        }
+
+        RateLimiter::hit($key, self::BEARER_ATTEMPT_WINDOW);
+    }
+
+    /**
+     * Resolución ligera SOLO para construir el fingerprint de idempotencia.
+     *
+     * Mapea número → credit_note_id por empresa SIN exigir el código ni
+     * revelar existencia. Permite detectar reenvíos idempotentes (mismo
+     * checkout_token + fingerprint) aunque la NC ya esté consumida. No lanza
+     * errores: una NC inexistente produce id nulo e igualmente fallará la
+     * autorización plena en requests nuevos.
+     *
+     * @param array<int, array{credit_note_number: string, application_code: string, amount: string}> $entries
+     * @return array<int, array{credit_note_id: int|null, amount: string, bearer: bool}>
+     */
+    private function resolveBearerIdsForFingerprint(array $entries, int $companyId): array
+    {
+        return array_values(array_map(function (array $entry) use ($companyId): array {
+            try {
+                $number = CreditNoteService::normalizeCreditNoteNumber(trim($entry['credit_note_number']));
+            } catch (ValidationException) {
+                $number = '';
+            }
+
+            $note = $number !== ''
+                ? CreditNote::query()
+                    ->where('company_id', $companyId)
+                    ->where('credit_note_number', $number)
+                    ->first()
+                : null;
+
+            return [
+                'credit_note_id' => $note !== null ? (int) $note->id : null,
+                'amount' => bcadd((string) $entry['amount'], '0', 4),
+                'bearer' => true,
+            ];
+        }, $entries));
+    }
+
+    /**
+     * Resuelve aplicaciones NC Consumer Final por número + código + monto
+     * en el credit_note_id canónico. NO confía en ids enviados por el cliente.
+     *
+     * El plaintext del código solo vive en memoria durante este request;
+     * nunca entra al fingerprint, a logs ni a persistencia.
+     *
+     * @param array<int, array{credit_note_number: string, application_code: string, amount: string}> $entries
+     * @return array<int, array{credit_note_id: int, amount: string, bearer: bool}>
+     */
+    private function resolveBearerApplications(array $entries, int $companyId, User $user): array
+    {
+        $company = Company::query()
+            ->where('is_active', true)
+            ->find($companyId);
+
+        if ($company === null || ! $user->hasPermission('notas_credito.aplicar', $company)) {
+            throw ValidationException::withMessages([
+                'credit_note_bearer_applications' => 'No tiene permiso para aplicar Notas de Crédito.',
+            ]);
+        }
+
+        $resolved = [];
+
+        foreach ($entries as $entry) {
+            $note = $this->creditNoteService->authorizeBearerApplication(
+                $companyId,
+                $entry['credit_note_number'],
+                $entry['application_code'],
+                $entry['amount'],
+            );
+
+            $resolved[] = [
+                'credit_note_id' => (int) $note->id,
+                'amount' => bcadd((string) $entry['amount'], '0', 4),
+                'bearer' => true,
+            ];
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Combina NC nominativas (credit_note_applications) y NC Consumer Final
+     * autorizadas por portador. Rechaza la misma NC duplicada entre ambas y
+     * ordena determinista ASC por credit_note_id.
+     *
+     * El fingerprint usa ÚNICAMENTE datos no secretos (credit_note_id, amount,
+     * flag bearer); el código secreto jamás se incluye.
+     */
+    private function mergeCanonicalCreditNotes(array $nominative, array $bearer): array
+    {
+        $canonical = [...$nominative, ...$bearer];
+
+        $ids = array_column($canonical, 'credit_note_id');
+        if (count($ids) !== count(array_unique($ids))) {
+            throw ValidationException::withMessages([
+                'credit_note_applications' => 'No puede repetir una Nota de Crédito en la misma venta.',
+            ]);
+        }
+
+        usort($canonical, fn (array $a, array $b) => $a['credit_note_id'] <=> $b['credit_note_id']);
+
+        return $canonical;
+    }
+
     private function resolvePayments(
         array $payments,
         $paymentMethods,
@@ -1223,6 +1496,7 @@ class PosSaleProcessor
         array $items,
         array $payments,
         ?string $requestedPoints,
+        array $canonicalNC,
         int $userId,
         int $companyId,
         int $branchId,
@@ -1245,6 +1519,8 @@ class PosSaleProcessor
                 'payments' => $payments,
 
                 'requested_points' => $requestedPoints,
+
+                'credit_note_applications' => $canonicalNC,
 
                 'items' => array_map(
                     fn (array $line) => [

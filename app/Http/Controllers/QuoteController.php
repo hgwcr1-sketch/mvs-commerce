@@ -78,7 +78,7 @@ class QuoteController extends Controller
      */
     public function show(Quote $cotizacione): View
     {
-        $quote = $this->scoped($cotizacione)->load(['items', 'customer', 'user', 'branch', 'cancelledBy', 'convertedSale']);
+        $quote = $this->scoped($cotizacione)->load(['items.product.style', 'items.product.size', 'items.product.color', 'customer', 'user', 'branch', 'cancelledBy', 'convertedSale']);
 
         return view('quotes.show', compact('quote'));
     }
@@ -88,7 +88,7 @@ class QuoteController extends Controller
      */
     public function print(Quote $quote): View
     {
-        $quote = $this->scoped($quote)->load(['items', 'customer', 'user', 'branch', 'company']);
+        $quote = $this->scoped($quote)->load(['items.product.style', 'items.product.size', 'items.product.color', 'customer', 'user', 'branch', 'company']);
 
         return view('quotes.print', compact('quote'));
     }
@@ -98,7 +98,7 @@ class QuoteController extends Controller
      */
     public function load(Quote $quote): JsonResponse
     {
-        $quote = $this->scoped($quote)->load(['items.product.unit', 'customer']);
+        $quote = $this->scoped($quote)->load(['items.product.unit', 'items.product.style', 'items.product.size', 'items.product.color', 'customer']);
         abort_unless($quote->status === Quote::STATUS_ACTIVE, 409, 'La cotización no está activa.');
         abort_if($quote->expires_at?->isBefore(today()), 409, 'La cotización está vencida.');
 
@@ -114,7 +114,8 @@ class QuoteController extends Controller
 
                 return ['product_id' => $item->product_id, 'name' => $item->description, 'code' => $item->product_code, 'barcode' => $item->barcode, 'quantity' => (float) $item->quantity, 'unit_price' => (float) $item->unit_price, 'discount_total' => (float) $item->discount_total, 'tax_rate' => (float) ($product?->tax_rate ?? 0), 'total' => (float) $item->total,
                     'sale_price' => (float) ($product?->sale_price ?? $item->unit_price), 'wholesale_price' => $product?->wholesale_price !== null ? (float) $product->wholesale_price : null, 'price_a' => $product?->price_a !== null ? (float) $product->price_a : null, 'price_b' => $product?->price_b !== null ? (float) $product->price_b : null, 'price_c' => $product?->price_c !== null ? (float) $product->price_c : null,
-                    'available_stock' => (float) ($stocks[$item->product_id] ?? 0), 'controls_inventory' => (bool) $product?->track_inventory, 'allows_decimals' => (bool) $product?->unit?->allows_decimals, 'unavailable' => ! $product?->is_active];
+                    'available_stock' => (float) ($stocks[$item->product_id] ?? 0), 'controls_inventory' => (bool) $product?->track_inventory, 'allows_decimals' => (bool) $product?->unit?->allows_decimals, 'unavailable' => ! $product?->is_active,
+                    'style_name' => $product?->style?->name, 'size_name' => $product?->size?->name, 'color_name' => $product?->color?->name];
             })->values(),
             'subtotal' => (float) $quote->subtotal, 'discount_total' => (float) $quote->discount_total, 'tax_total' => (float) $quote->tax_total, 'total' => (float) $quote->total]);
     }

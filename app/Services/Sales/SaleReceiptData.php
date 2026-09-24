@@ -11,6 +11,7 @@ use App\Models\SalePayment;
 use App\Models\CashSession;
 use App\Models\CashRegister;
 use App\Models\User;
+use App\Models\CreditNoteApplication;
 
 /**
  * DTO inmutable que contiene todos los datos normalizados para renderizar un comprobante.
@@ -87,6 +88,11 @@ readonly class SaleReceiptData
          *     is_mixed: bool,
          * } */
         public array $payment_summary,
+        /** @var list<array{
+         *     credit_note_number: string,
+         *     amount: string,
+         * }> */
+        public array $credit_note_applications,
         /** @var array{
          *     kind: 'invitation'|'history'|'balance',
          *     portal_name: string|null,
@@ -201,6 +207,12 @@ readonly class SaleReceiptData
             payment_summary: [
                 'is_mixed' => $sale->payments->count() >= 2,
             ],
+            credit_note_applications: $sale->creditNoteApplicationsAsDestination->map(function (CreditNoteApplication $application) {
+                return [
+                    'credit_note_number' => $application->creditNote->credit_note_number ?? 'NC',
+                    'amount' => number_format((float) $application->amount, 0, ',', '.'),
+                ];
+            })->toArray(),
             loyalty: $loyalty,
             cash_session: $sale->cashSession ? [
                 'session_number' => $sale->cashSession->session_number ?? null,

@@ -193,7 +193,7 @@ class SuspendedSaleService
     {
         $customer = $sale->customer_id ? Customer::withTrashed()->find($sale->customer_id) : null;
         $customerInvalid = $sale->customer_id !== null && (!$customer || $customer->trashed() || !$customer->is_active || (int) $customer->company_id !== (int) $sale->company_id);
-        $products = Product::withTrashed()->with('unit:id,abbreviation,allows_decimals')->whereIn('id', $sale->items->pluck('product_id')->filter())->get()->keyBy('id');
+        $products = Product::withTrashed()->with(['unit:id,abbreviation,allows_decimals', 'style:id,name', 'size:id,name', 'color:id,name'])->whereIn('id', $sale->items->pluck('product_id')->filter())->get()->keyBy('id');
         $stocks = DB::table('branch_product')->where('branch_id', $branchId)->whereIn('product_id', $products->keys())->pluck('stock', 'product_id');
         $warnings = $customerInvalid ? ['El cliente ya no está activo. Debe quitarlo antes de cobrar.'] : [];
         $canCheckout = !$customerInvalid;
@@ -204,7 +204,7 @@ class SuspendedSaleService
             if ($unavailable) {
                 $canCheckout = false;
                 $warnings[] = "{$snapshot->description} ya no está disponible y debe retirarse.";
-                return ['product_id' => $snapshot->product_id, 'name' => $snapshot->description, 'code' => $snapshot->product_code, 'barcode' => $snapshot->barcode, 'quantity' => $snapshot->quantity, 'price' => $snapshot->estimated_unit_price, 'tax_rate' => $snapshot->estimated_tax_rate, 'stock' => 0, 'track_inventory' => true, 'allows_decimals' => true, 'unit' => $snapshot->unit_code, 'image_url' => null, 'unavailable' => true];
+                return ['product_id' => $snapshot->product_id, 'name' => $snapshot->description, 'code' => $snapshot->product_code, 'barcode' => $snapshot->barcode, 'quantity' => $snapshot->quantity, 'price' => $snapshot->estimated_unit_price, 'tax_rate' => $snapshot->estimated_tax_rate, 'stock' => 0, 'track_inventory' => true, 'allows_decimals' => true, 'unit' => $snapshot->unit_code, 'image_url' => null, 'unavailable' => true, 'style_name' => null, 'size_name' => null, 'color_name' => null];
             }
             $stock = (float) ($stocks[$product->id] ?? 0);
             $currentPrice = match ($customer?->price_level ?? 'normal') {
@@ -242,7 +242,7 @@ if ($priceChanged) {
             if ($taxChanged) $warnings[] = "{$product->name}: impuesto cambió de {$snapshot->estimated_tax_rate}% a {$product->tax_rate}%.";
             if ($stockInsufficient) { $warnings[] = "{$product->name}: stock insuficiente."; $canCheckout = false; }
             $path = $this->safeImage($product->image);
-            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $currentPrice, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? asset('storage/'.$path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient];
+            return ['product_id' => $product->id, 'name' => $product->name, 'code' => $product->internal_code, 'barcode' => $product->barcode, 'quantity' => $snapshot->quantity, 'price' => $currentPrice, 'previous_price' => $snapshot->estimated_unit_price, 'tax_rate' => $product->tax_rate ?? 0, 'previous_tax_rate' => $snapshot->estimated_tax_rate, 'stock' => $stock, 'track_inventory' => (bool) $product->track_inventory, 'allows_decimals' => (bool) $product->unit?->allows_decimals, 'unit' => $product->unit?->abbreviation, 'image_url' => $path ? asset('storage/'.$path) : null, 'unavailable' => false, 'price_changed' => $priceChanged, 'tax_changed' => $taxChanged, 'stock_insufficient' => $stockInsufficient, 'style_name' => $product->style?->name, 'size_name' => $product->size?->name, 'color_name' => $product->color?->name];
         })->values();
         return ['suspended_sale_id' => $sale->id, 'suspension_number' => $sale->suspension_number, 'recovery_token' => $sale->recovery_token, 'customer' => $customerInvalid || !$customer ? null : [
     'id' => $customer->id,

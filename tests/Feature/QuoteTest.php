@@ -84,6 +84,32 @@ class QuoteTest extends TestCase
         $this->createQuote($withoutPermission, $company, $branch, $product)->assertForbidden();
     }
 
+    public function test_load_and_show_include_variant_fields(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $style = \App\Models\Style::create(['company_id' => $company->id, 'name' => 'Casual', 'slug' => 'casual', 'is_active' => true]);
+        $size = \App\Models\Size::create(['company_id' => $company->id, 'name' => 'M', 'slug' => 'm', 'abbreviation' => 'M', 'is_active' => true]);
+        $color = \App\Models\Color::create(['company_id' => $company->id, 'name' => 'Azul', 'slug' => 'azul', 'is_active' => true]);
+        $product = $this->product($company, [
+            'name' => 'Camisa manga corta',
+            'style_id' => $style->id,
+            'size_id' => $size->id,
+            'color_id' => $color->id,
+        ]);
+        $quoteId = $this->createQuote($user, $company, $branch, $product)->json('quote_id');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('cotizaciones.load', $quoteId))
+            ->assertOk()
+            ->assertJsonPath('items.0.style_name', 'Casual')
+            ->assertJsonPath('items.0.size_name', 'M')
+            ->assertJsonPath('items.0.color_name', 'Azul');
+
+        $base = $this->actingAs($user)->withSession($this->activeSession($company, $branch));
+        $base->get(route('cotizaciones.show', $quoteId))->assertOk()->assertSee('Casual')->assertSee('M')->assertSee('Azul');
+        $base->get(route('cotizaciones.print', $quoteId))->assertOk()->assertSee('Casual')->assertSee('M')->assertSee('Azul');
+    }
+
     public function test_cancellation_is_logical_and_cancelled_or_expired_quote_cannot_convert(): void
     {
         [$company, $branch, $user, $cash] = $this->context();

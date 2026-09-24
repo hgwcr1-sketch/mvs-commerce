@@ -24,6 +24,9 @@
     @can('fidelidad.configuracion')
         @php $settingsTabs[] = ['id' => 'plantillas', 'label' => 'Plantillas']; @endphp
     @endcan
+    @can('notas_credito.configurar')
+        @php $settingsTabs[] = ['id' => 'notas-credito', 'label' => 'Notas de Crédito']; @endphp
+    @endcan
 
     <x-tabs :tabs="$settingsTabs" active-tab="fidelizacion" variant="pills" aria-label="Secciones de configuración">
     <div id="panel-fidelizacion" role="tabpanel" aria-labelledby="tab-fidelizacion" x-show="activeTab === 'fidelizacion'">
@@ -197,6 +200,76 @@
         </form>
     </x-card>
     </div>
+
+    @can('notas_credito.configurar')
+        <div id="panel-notas-credito" role="tabpanel" aria-labelledby="tab-notas-credito" x-show="activeTab === 'notas-credito'" x-cloak
+             x-data="{ policy: @js(old('credit_note_expiration_policy', $company->credit_note_expiration_policy ?? 'none')) }">
+        <x-card>
+            <x-slot:header>
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-800">Notas de Crédito</h2>
+                    <p class="text-sm text-slate-500">Configure la vigencia de las notas de crédito que emita la empresa. Los cambios aplican a las notas futuras; las ya emitidas no se modifican.</p>
+                </div>
+            </x-slot:header>
+
+            <form method="POST" action="{{ route('configuracion.notas-credito.update') }}" class="max-w-xl space-y-5">
+                @csrf
+                @method('PUT')
+
+                <fieldset>
+                    <legend class="mb-2 block text-sm font-semibold text-slate-700">Vigencia de nuevas notas de crédito</legend>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        @foreach([
+                            'none' => 'Sin vencimiento',
+                            '30' => '30 días',
+                            '60' => '60 días',
+                            '90' => '90 días',
+                            'custom' => 'Personalizado',
+                        ] as $value => $label)
+                            <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors duration-150"
+                                :class="policy === '{{ $value }}' ? 'border-primary bg-primary text-black' : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'">
+                                <input type="radio" name="credit_note_expiration_policy" value="{{ $value }}"
+                                    x-model="policy"
+                                    @checked(old('credit_note_expiration_policy', $company->credit_note_expiration_policy ?? 'none') === $value)
+                                    class="h-5 w-5 shrink-0 cursor-pointer accent-amber-500 focus:ring-2 focus:ring-amber-400">
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                    @error('credit_note_expiration_policy')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </fieldset>
+
+                <div>
+                    <label for="credit_note_custom_expiration_days" class="mb-1 block text-sm font-semibold text-slate-700">Días (personalizado)</label>
+                    <input id="credit_note_custom_expiration_days" name="credit_note_custom_expiration_days" type="number" min="1" max="3650" step="1"
+                        inputmode="numeric" placeholder="90"
+                        value="{{ old('credit_note_custom_expiration_days', $company->credit_note_custom_expiration_days) }}"
+                        :class="policy === 'custom' ? 'border-slate-300 bg-white text-slate-800' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'"
+                        :disabled="policy !== 'custom'"
+                        class="h-12 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200">
+                    @error('credit_note_custom_expiration_days')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    <p class="mt-2 text-sm text-slate-500">Plazo en días para la política personalizada.</p>
+                </div>
+
+                <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0">
+                        <label for="credit_note_consumer_final" class="text-sm font-semibold text-slate-700">Permitir notas de crédito a consumidor final</label>
+                        <p class="mt-1 text-sm text-slate-500">Si está activo, las devoluciones sobre ventas sin cliente identificado emiten una Nota de Crédito con código de aplicación entregado una sola vez.</p>
+                    </div>
+                    <label class="inline-flex shrink-0 cursor-pointer items-center">
+                        <input id="credit_note_consumer_final" name="credit_note_consumer_final" type="checkbox" value="1"
+                            @checked(old('credit_note_consumer_final', $company->credit_note_consumer_final ?? false))
+                            class="h-6 w-6 shrink-0 cursor-pointer rounded accent-amber-500 focus:ring-2 focus:ring-amber-400">
+                        <span class="ml-2 text-sm font-semibold text-slate-700">Activado</span>
+                    </label>
+                    @error('credit_note_consumer_final')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+
+                <button type="submit" class="rounded-lg bg-amber-500 px-5 py-3 text-sm font-semibold text-black hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Guardar configuración de Notas de Crédito</button>
+            </form>
+        </x-card>
+        </div>
+    @endcan
 
     @can('fidelidad.configuracion')
         <div id="panel-plantillas" role="tabpanel" aria-labelledby="tab-plantillas" x-show="activeTab === 'plantillas'" x-cloak>

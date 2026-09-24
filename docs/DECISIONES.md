@@ -350,6 +350,61 @@ Trial, Active y Grace permiten operación; Expired, Suspended y Cancelled la blo
 
 ---
 
+## D026 — Nota de Crédito nominativa, unida a la devolución
+
+Toda Nota de Crédito debe pertenecer a un cliente identificado. No existe NC anónima, ni al portador, ni se crea un cliente genérico "Consumidor Final".
+
+- Si la venta original no tiene cliente, la devolución de mercancía sigue funcionando con el comportamiento actual y NO emite NC. En una fase UI posterior, el usuario podrá seleccionar/registrar al cliente antes de generar la NC.
+- Contrato 1 devolución = máximo 1 NC garantizado por `credit_notes.sale_return_id UNIQUE`. Una venta puede tener múltiples devoluciones y, por tanto, múltiples NC.
+- Razón: una NC es un derecho crediticio nominativo y trazable; sin cliente no hay acreedor.
+- Consecuencia: `CreditNoteService::issueFromReturn` exige `customer_id` y la emisión ocurre atómicamente dentro de la misma transacción de `SaleReturnService`, sin alterar inventario ni fidelización.
+
+## D027 — CxC: NC con revisión pendiente, nunca doble beneficio
+
+Mientras no exista conciliación CxC, una NC emitida sobre una venta con cuenta por cobrar:
+
+- se marca con `requires_ar_review=true`;
+- NO disminuye `balance_due`, NO crea `AccountReceivablePayment` y NO modifica `AccountReceivable`;
+- `applyToSale` la rechaza a nivel dominio (bloqueo duro en Fase 1), sin importar la venta destino.
+
+Antes de habilitar la aplicación de esa NC en POS deberá existir conciliación CxC; de lo contrario el cliente obtendría doble beneficio económico (abono implícito vía NC + pago íntegro de la CxC). Esta decisión NO es la solución definitiva de conciliación.
+
+## D028 — NC interna separada de NC electrónica Hacienda
+
+La Nota de Crédito interna (`credit_notes`) es la fuente financiera del negocio. NO comparte columnas ni ciclo de vida con la futura NC electrónica de Hacienda: la integración fiscal se implementará después como entidad/tabla separada 1:1, sin tocar la feature de factura electrónica actual.
+
+---
+
+## D029 — Conciliación NC↔CxC: offset compensatorio automático
+
+Al emitir una Nota de Crédito sobre una venta con cuenta por cobrar activa, la conciliación es automática: se crea un `AccountReceivableAdjustment` de tipo `credit_note_offset` que reduce `AR.balance_due` y `NC.offset_amount` al mismo monto, sin crear pagos ni movimientos de caja.
+
+- La NC se marca con `requires_ar_review=false` (conciliación inmediata).
+- `CreditNote.balance` pasa a `0.0000` tras offset total.
+- El AR cambia de estado `pending → partial/paid` según el saldo restante.
+- `applyToSale` queda habilitado para NC con balance > 0.
+- Guardas: `SaleVoidService` no permite anular venta con ajustes activos; `CreditNoteService::void()` no permite anular NC con `offset_amount > 0`.
+- Invariante post-offset: `AR.issued_amount = AR.balance_due + Σ(offsets) + Σ(pagos)`.
+
+## D030 — Reversión formal de compensación NC↔CxC
+
+La reversión de un offset previo entre NC y CxC es un movimiento separado, no un pago, no una anulación:
+
+- Crea un `AccountReceivableAdjustment` de tipo `credit_note_offset_reversal`; el adjustment original permanece inmutable como evidencia histórica.
+- `amount` del reversal siempre positivo; el `type` determina la dirección.
+- Incrementa `AR.balance_due` (sin superar `AR.original_amount`) y decrementa `NC.offset_amount`.
+- NO crea `AccountReceivablePayment`, NO crea `CashMovement`, NO usa `PaymentMethod`, NO toca inventario ni fidelización.
+- Relación: el adjustment original apunta al reversal más reciente vía `reversal_adjustment_id` (FK nullable). El reversal tiene `reversal_adjustment_id = NULL`. `reversed_amount` en el original acumula el monto total revertido.
+- **Efecto económico activo** de un offset: `amount - reversed_amount`. Cuando `reversed_amount == amount`, el offset está completamente revertido y ya no se trata como compensación económicamente activa. La fila original NO se elimina.
+- `SaleVoid` bloquea solo si existen offsets con `status = ACTIVE` y `amount - reversed_amount > 0`.
+- Idempotente: llave `credit-note-ar-offset-reversal:{adjustment_id}` con `UNIQUE(company_id, idempotency_key)`.
+- Lock order: AR → NC → adjustment (consistente con reconcile).
+- Permiso backend: `cuentas_cobrar.revertir`; la validación es en el servicio, no solo UI.
+- NC con aplicaciones parciales (`applied_amount > 0`): reversal permitido si el balance NC tras reversión no excede `issued_amount`.
+- Invariante NC se preserva: `issued_amount = offset_amount + applied_amount + balance`.
+
+---
+
 # Regla para nuevas decisiones
 
 Cuando aparezca una decisión arquitectónica importante, agregar una entrada:

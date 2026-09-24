@@ -103,7 +103,7 @@ class PosCheckoutLoyaltyPointsRequestTest extends TestCase
 
         $this->checkout($user, $company, $branch, $cash, [['product_id' => $product->id, 'quantity' => 1]], 1000, [], $customer->id, null, '12.3456')
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'La suma de los pagos debe ser exactamente igual al total de la venta menos el monto canjeado con puntos.');
+            ->assertJsonPath('message', 'La suma de los pagos debe ser exactamente igual al total menos NC y puntos canjeados.');
 
         $this->assertDatabaseCount('sales', 0);
         $this->assertDatabaseCount('sale_payments', 0);

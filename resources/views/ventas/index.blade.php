@@ -28,7 +28,7 @@
 
     <x-card>
 
-        <form method="GET" action="{{ route('ventas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <form method="GET" action="{{ route('ventas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 
             <div>
                 <label class="mb-1 block text-sm font-semibold text-slate-700">
@@ -39,9 +39,11 @@
                     type="text"
                     name="search"
                     value="{{ request('search') }}"
-                    placeholder="Número o cliente"
+                    placeholder="Número de venta"
                     class="w-full rounded-lg border border-slate-300 px-3 py-2">
             </div>
+
+            <x-customer-filter :selected-customer="$selectedCustomer ?? null" />
 
             <div>
                 <label class="mb-1 block text-sm font-semibold text-slate-700">
@@ -131,7 +133,7 @@
                     class="w-full rounded-lg border border-slate-300 px-3 py-2">
             </div>
 
-            <div class="flex items-end gap-2 md:col-span-2 lg:col-span-5">
+            <div class="flex items-end gap-2 md:col-span-2 lg:col-span-3">
                 <button
                     type="submit"
                     class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600">
@@ -209,6 +211,11 @@
 
                                 <td class="px-4 py-3 text-sm text-slate-600">
                                     {{ $sale->completed_at?->format('d/m/Y H:i') ?: '—' }}
+                                    @if($sale->status === \App\Models\Sale::STATUS_VOIDED && $sale->voided_at)
+                                        <span class="mt-0.5 block text-xs font-semibold text-red-700">
+                                            Anulada el {{ $sale->voided_at->format('d/m/Y H:i') }}
+                                        </span>
+                                    @endif
                                 </td>
 
                                 <td class="px-4 py-3 text-sm text-slate-700">

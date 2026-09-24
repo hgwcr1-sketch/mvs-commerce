@@ -43,6 +43,7 @@ class CashSessionHistoryController extends Controller
             'sensitive' => $sensitive,
             'companyTimezone' => $this->companyTimezone($company),
             'closingSummary' => $sensitive ? app(CashClosingSummaryService::class)->summarize($cashSession) : null,
+            'paymentBreakdown' => $sensitive ? app(\App\Services\Cash\CashPaymentBreakdownService::class)->summarize($cashSession) : null,
         ]);
     }
 

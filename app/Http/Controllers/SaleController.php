@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Sales\SaleVoidService;
+use App\Models\Customer;
 use App\Models\Sale;
 use Illuminate\Http\Request;
 
@@ -22,12 +23,17 @@ class SaleController extends Controller
             ]);
 
         if ($search = trim((string) $request->query('search', ''))) {
-            $query->where(function ($q) use ($search) {
-                $q->where('sale_number', 'like', "%{$search}%")
-                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
-                        $customerQuery->where('name', 'like', "%{$search}%");
-                    });
-            });
+            $query->where('sale_number', 'like', "%{$search}%");
+        }
+
+        $selectedCustomer = null;
+
+        if ($customerId = (int) $request->query('customer_id', 0)) {
+            $selectedCustomer = Customer::forCompany($companyId)->find($customerId);
+
+            if ($selectedCustomer) {
+                $query->where('customer_id', $selectedCustomer->id);
+            }
         }
 
         if ($documentType = $request->query('document_type')) {
@@ -56,7 +62,7 @@ class SaleController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('ventas.index', compact('sales'));
+        return view('ventas.index', compact('sales', 'selectedCustomer'));
     }
 
     public function show(Sale $venta)

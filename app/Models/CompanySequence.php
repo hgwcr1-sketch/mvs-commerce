@@ -23,6 +23,7 @@ class CompanySequence extends Model
     public const ORDER = 'order';
     public const PURCHASE_ORDER = 'purchase_order';
     public const CUSTOMER_CODE = 'customer_code';
+    public const CREDIT_NOTE = 'credit_note';
 
     protected $fillable = [
         'company_id',
@@ -42,9 +43,9 @@ class CompanySequence extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public static function nextValue(int $companyId, string $name): int
+    public static function nextValue(int $companyId, string $name, ?callable $conflictCheck = null): int
     {
-        return DB::transaction(function () use ($companyId, $name): int {
+        return DB::transaction(function () use ($companyId, $name, $conflictCheck): int {
             static::query()->insertOrIgnore([
                 'company_id' => $companyId,
                 'name' => $name,
@@ -59,8 +60,10 @@ class CompanySequence extends Model
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $sequence->current_value++;
-            $sequence->save();
+            do {
+                $sequence->current_value++;
+                $sequence->save();
+            } while ($conflictCheck !== null && $conflictCheck($sequence->current_value));
 
             return $sequence->current_value;
         });
@@ -83,7 +86,12 @@ class CompanySequence extends Model
 
     public static function nextSaleReturnNumber(int $companyId): string
     {
-        return sprintf('DEV-%08d', static::nextValue($companyId, static::SALE_RETURN));
+        return sprintf('DEV-%08d', static::nextValue($companyId, static::SALE_RETURN, function (int $value) use ($companyId): bool {
+            return (bool) DB::table('sale_returns')
+                ->where('company_id', $companyId)
+                ->where('return_number', sprintf('DEV-%08d', $value))
+                ->exists();
+        }));
     }
 
     public static function nextQuoteNumber(int $companyId): string
@@ -105,5 +113,15 @@ class CompanySequence extends Model
     public static function nextCustomerCode(int $companyId): string
     {
         return sprintf('%06d', static::nextValue($companyId, static::CUSTOMER_CODE));
+    }
+
+    public static function nextCreditNoteNumber(int $companyId): string
+    {
+        return sprintf('NC-%08d', static::nextValue($companyId, static::CREDIT_NOTE, function (int $value) use ($companyId): bool {
+            return (bool) DB::table('credit_notes')
+                ->where('company_id', $companyId)
+                ->where('credit_note_number', sprintf('NC-%08d', $value))
+                ->exists();
+        }));
     }
 }

@@ -18,6 +18,10 @@
         @include('cash.closing._totals')
     @endif
 
+    @if($sensitive && $paymentBreakdown)
+        @include('cash.history._payment_breakdown', ['breakdown' => $paymentBreakdown, 'companyTimezone' => $companyTimezone])
+    @endif
+
     <div class="flex items-start justify-between gap-4">
         <div>
             <h2 class="text-2xl font-semibold">

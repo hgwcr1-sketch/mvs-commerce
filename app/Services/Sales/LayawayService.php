@@ -147,7 +147,7 @@ class LayawayService
                     ]);
                 }
 
-                if ((float) ($data['initial_amount'] ?? 0) > 0) {
+                if (! empty($data['payments']) || (float) ($data['initial_amount'] ?? 0) > 0) {
                     $this->payLocked($layaway, $data, $user);
                 }
 
@@ -162,7 +162,10 @@ class LayawayService
         }
     }
 
-    public function pay(Layaway $layaway, array $data, User $user): LayawayPayment
+    /**
+     * @return array<int, LayawayPayment>
+     */
+    public function pay(Layaway $layaway, array $data, User $user): array
     {
         return DB::transaction(function () use ($layaway, $data, $user) {
             $locked = Layaway::lockForUpdate()->findOrFail($layaway->id);
@@ -171,7 +174,10 @@ class LayawayService
         });
     }
 
-    private function payLocked(Layaway $layaway, array $data, User $user): LayawayPayment
+    /**
+     * @return array<int, LayawayPayment>
+     */
+    private function payLocked(Layaway $layaway, array $data, User $user): array
     {
         if (! in_array($layaway->status, [Layaway::STATUS_ACTIVE, Layaway::STATUS_PAID], true) || $layaway->status === Layaway::STATUS_PAID) {
             throw ValidationException::withMessages(['layaway' => 'Este apartado no admite abonos.']);
@@ -180,57 +186,116 @@ class LayawayService
             throw ValidationException::withMessages(['layaway' => 'El apartado está vencido.']);
         }
 
-        $amount = round((float) ($data['amount'] ?? $data['initial_amount'] ?? 0), 4);
-        if ($amount <= 0 || $amount > (float) $layaway->balance_due) {
-            throw ValidationException::withMessages(['amount' => 'El abono debe ser mayor que cero y no superar el saldo.']);
+        $payments = $this->normalizePayments($data);
+        if ($payments === []) {
+            throw ValidationException::withMessages(['payments' => 'Debe indicar al menos un pago.']);
         }
 
-        $method = PaymentMethod::forCompany($layaway->company_id)->active()->findOrFail($data['payment_method_id']);
-        if (in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) {
-            throw ValidationException::withMessages(['payment_method_id' => 'La forma de pago no es válida para apartados.']);
+        $isMixedRequest = isset($data['payments']) && is_array($data['payments']);
+        $methodIds = array_map(fn (array $payment) => (int) $payment['payment_method_id'], $payments);
+        $methods = PaymentMethod::forCompany($layaway->company_id)->active()->whereIn('id', $methodIds)->get()->keyBy('id');
+
+        $totalApplied = '0';
+        $seenMethods = [];
+        foreach ($payments as $index => $payment) {
+            $amount = $this->decimal4($payment['amount'] ?? 0);
+            if (bccomp($amount, '0', 4) <= 0) {
+                throw ValidationException::withMessages([$isMixedRequest ? "payments.{$index}.amount" : 'amount' => 'El monto debe ser mayor que cero.']);
+            }
+            $methodId = (int) $payment['payment_method_id'];
+            if (isset($seenMethods[$methodId])) {
+                throw ValidationException::withMessages(['payments' => 'No puede repetir una forma de pago en la misma operación.']);
+            }
+            $seenMethods[$methodId] = true;
+            $method = $methods->get($methodId);
+            if (! $method) {
+                throw ValidationException::withMessages([$isMixedRequest ? "payments.{$index}.payment_method_id" : 'payment_method_id' => 'La forma de pago no está activa o no pertenece a la empresa.']);
+            }
+            if (in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) {
+                throw ValidationException::withMessages([$isMixedRequest ? "payments.{$index}.payment_method_id" : 'payment_method_id' => 'La forma de pago no es válida para apartados.']);
+            }
+            if ($isMixedRequest && $method->requires_reference && trim((string) ($payment['reference'] ?? '')) === '') {
+                throw ValidationException::withMessages(["payments.{$index}.reference" => "La referencia es obligatoria para {$method->name}."]);
+            }
+            $totalApplied = bcadd($totalApplied, $amount, 4);
         }
 
-        [$received, $change] = $this->receivedAndChange($method, $amount, $data['received_amount'] ?? null);
+        $declared = $data['initial_amount'] ?? $data['amount'] ?? null;
+        if ($declared !== null && $declared !== '') {
+            if (bccomp($totalApplied, $this->decimal4($declared), 4) !== 0) {
+                throw ValidationException::withMessages([$isMixedRequest ? 'payments' : 'amount' => 'La suma de los pagos debe ser exactamente igual al monto a aplicar.']);
+            }
+        }
+        if (bccomp($totalApplied, (string) $layaway->balance_due, 4) > 0) {
+            throw ValidationException::withMessages([$isMixedRequest ? 'payments' : 'amount' => 'El abono debe ser mayor que cero y no superar el saldo.']);
+        }
 
+        $needsCash = collect($payments)->contains(fn (array $payment) => (bool) $methods->get((int) $payment['payment_method_id'])?->affects_cash);
         $session = null;
-        if ($method->affects_cash) {
-            $session = CashSession::query()
-                ->forCompany($layaway->company_id)
-                ->forBranch($layaway->branch_id)
-                ->where('status', CashSession::STATUS_OPEN)
-                ->where('open_guard', CashSession::OPEN_GUARD)
+        if ($needsCash) {
+            $session = CashSession::query()->forCompany($layaway->company_id)->forBranch($layaway->branch_id)
+                ->where('status', CashSession::STATUS_OPEN)->where('open_guard', CashSession::OPEN_GUARD)
                 ->find($data['cash_session_id'] ?? null);
             if (! $session) {
                 throw ValidationException::withMessages(['cash_session_id' => 'Seleccione una sesión de caja abierta.']);
             }
+        } elseif (! empty($data['cash_session_id'])) {
+            $session = CashSession::query()->forCompany($layaway->company_id)->forBranch($layaway->branch_id)
+                ->where('status', CashSession::STATUS_OPEN)->where('open_guard', CashSession::OPEN_GUARD)
+                ->find($data['cash_session_id']);
         }
 
-        $payment = $layaway->payments()->create([
-            'company_id' => $layaway->company_id,
-            'branch_id' => $layaway->branch_id,
-            'user_id' => $user->id,
-            'cash_session_id' => $session?->id,
-            'payment_method_id' => $method->id,
-            'amount' => $amount,
-            'received_amount' => $received,
-            'change_amount' => $change,
-            'affects_cash_snapshot' => (bool) $method->affects_cash,
-            'cash_effect_amount' => $method->affects_cash ? $amount : 0,
-            'reference' => $data['reference'] ?? null,
-            'notes' => $data['payment_notes'] ?? null,
-            'paid_at' => now(),
-        ]);
+        $singleReceived = null;
+        if (count($payments) === 1 && array_key_exists('received_amount', $data)) {
+            $singleMethod = $methods->get((int) $payments[0]['payment_method_id']);
+            if ($singleMethod) {
+                [$singleReceived, $singleChange] = $this->receivedAndChange($singleMethod, (float) $this->decimal4($payments[0]['amount']), $data['received_amount'] ?? null);
+            }
+        }
 
-        $paid = round((float) $layaway->paid_total + $amount, 4);
-        $balance = max(0, round((float) $layaway->total - $paid, 4));
+        $created = [];
+        foreach ($payments as $index => $payment) {
+            $method = $methods->get((int) $payment['payment_method_id']);
+            $amount = $this->decimal4($payment['amount']);
+            $received = $amount;
+            $change = '0.0000';
+            if ($index === 0 && $singleReceived !== null) {
+                $received = $singleReceived;
+                $change = $singleChange;
+            } elseif ($method->allows_change && count($payments) === 1) {
+                [$received, $change] = $this->receivedAndChange($method, (float) $amount, $data['received_amount'] ?? null);
+            }
+            $created[] = $layaway->payments()->create([
+                'company_id' => $layaway->company_id,
+                'branch_id' => $layaway->branch_id,
+                'user_id' => $user->id,
+                'cash_session_id' => $session?->id,
+                'payment_method_id' => $method->id,
+                'amount' => $amount,
+                'received_amount' => $received,
+                'change_amount' => $change,
+                'affects_cash_snapshot' => (bool) $method->affects_cash,
+                'cash_effect_amount' => $method->affects_cash ? $amount : '0.0000',
+                'reference' => $payment['reference'] ?? null,
+                'notes' => $payment['notes'] ?? $data['payment_notes'] ?? null,
+                'paid_at' => now(),
+            ]);
+        }
+
+        $paid = bcadd((string) $layaway->paid_total, $totalApplied, 4);
+        $balance = bcsub((string) $layaway->total, $paid, 4);
+        if (bccomp($balance, '0', 4) < 0) {
+            $balance = '0.0000';
+        }
+        $isPaid = bccomp($balance, '0', 4) <= 0;
         $layaway->update([
             'paid_total' => $paid,
             'balance_due' => $balance,
-            'status' => $balance <= 0 ? Layaway::STATUS_PAID : Layaway::STATUS_ACTIVE,
-            'paid_at' => $balance <= 0 ? now() : null,
+            'status' => $isPaid ? Layaway::STATUS_PAID : Layaway::STATUS_ACTIVE,
+            'paid_at' => $isPaid ? now() : null,
         ]);
 
-        return $payment;
+        return $created;
     }
 
     /**
@@ -255,6 +320,38 @@ class LayawayService
         }
 
         return [$receivedStr, bcsub($receivedStr, $amountStr, 4)];
+    }
+
+    /**
+     * @return array<int, array{payment_method_id: mixed, amount: mixed, reference: mixed, notes: mixed}>
+     */
+    private function normalizePayments(array $data): array
+    {
+        if (isset($data['payments']) && is_array($data['payments'])) {
+            return array_values(array_filter($data['payments'], function ($payment) {
+                return ! empty($payment['payment_method_id']) || ! empty($payment['amount']);
+            }));
+        }
+        if (! empty($data['payment_method_id'])) {
+            return [[
+                'payment_method_id' => $data['payment_method_id'],
+                'amount' => $data['amount'] ?? $data['initial_amount'] ?? 0,
+                'reference' => $data['reference'] ?? null,
+                'notes' => $data['payment_notes'] ?? null,
+            ]];
+        }
+
+        return [];
+    }
+
+    private function decimal4(mixed $value): string
+    {
+        $value = trim((string) ($value ?? '0'));
+        if ($value === '' || ! is_numeric($value)) {
+            return '0.0000';
+        }
+
+        return bcadd($value, '0', 4);
     }
 
     public function cancel(Layaway $layaway, User $user, string $reason): void

@@ -115,6 +115,10 @@
                         <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Producto</th>
                         <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Categoría</th>
                         <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Marca</th>
+                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Estilo</th>
+                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Talla</th>
+                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Color</th>
+                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">Proveedor</th>
                         <th class="px-5 py-4 text-right text-sm font-semibold text-slate-600">Costo</th>
                         <th class="px-5 py-4 text-right text-sm font-semibold text-slate-600">Precio</th>
                         <th class="px-5 py-4 text-center text-sm font-semibold text-slate-600">Stock</th>
@@ -136,7 +140,22 @@
                             <td class="px-5 py-4 font-medium text-slate-800">{{ $product->name }}</td>
                             <td class="px-5 py-4 text-sm text-slate-600">{{ $product->category->name ?? '-' }}</td>
                             <td class="px-5 py-4 text-sm text-slate-600">{{ $product->brand->name ?? '-' }}</td>
-                            <td class="px-5 py-4 text-right text-sm text-slate-600">₡ {{ number_format($product->cost, 2) }}</td>
+                            <td class="px-5 py-4 text-sm text-slate-600">{{ $product->style->name ?? '-' }}</td>
+                            <td class="px-5 py-4 text-sm text-slate-600">{{ $product->size->name ?? '-' }}</td>
+                            <td class="px-5 py-4 text-sm text-slate-600">{{ $product->color->name ?? '-' }}</td>
+                            @php
+                                $primarySupplier = $product->productSuppliers->first()?->supplier;
+                            @endphp
+                            <td class="px-5 py-4 text-sm text-slate-600">
+                                @if($primarySupplier)
+                                    <a href="{{ route('productos.proveedores.index', $product) }}" class="text-sky-600 hover:underline">
+                                        {{ $primarySupplier->commercial_name ?: $primarySupplier->name }}
+                                    </a>
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td class="px-5 py-4 text-right text-sm text-slate-600">₡ {{ \App\Support\NumberFormatter::trimDecimalZeros($product->cost) }}</td>
                             <td class="px-5 py-4 text-right text-sm font-semibold text-slate-800">₡ {{ number_format($product->sale_price, 2) }}</td>
                             <td class="px-5 py-4 text-center text-sm font-bold text-slate-800">{{ number_format($product->branch_stock, 2) }}</td>
                             <td class="px-5 py-4 text-center">
@@ -155,7 +174,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="px-6 py-12 text-center text-slate-400">
+                            <td colspan="14" class="px-6 py-12 text-center text-slate-400">
                                 No hay productos registrados.
                             </td>
                         </tr>
@@ -184,6 +203,23 @@
         · {{ $product->brand->name }}
     @endif
 </p>
+                        @if($product->style?->name || $product->size?->name || $product->color?->name)
+                            <p class="mt-1 text-xs text-slate-500">
+                                @foreach(array_filter([$product->style?->name, $product->size?->name, $product->color?->name]) as $attribute)
+                                    {{ $loop->first ? '' : ' · ' }}{{ $attribute }}
+                                @endforeach
+                            </p>
+                        @endif
+                        @php
+                            $primarySupplierMobile = $product->productSuppliers->first()?->supplier;
+                        @endphp
+                        @if($primarySupplierMobile)
+                            <p class="mt-1 text-xs text-sky-600">
+                                <a href="{{ route('productos.proveedores.index', $product) }}" class="hover:underline">
+                                    {{ $primarySupplierMobile->commercial_name ?: $primarySupplierMobile->name }}
+                                </a>
+                            </p>
+                        @endif
                     </div>
                     @if($product->is_active)
                         <span class="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Activo</span>
@@ -194,7 +230,7 @@
                 <div class="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
                     <div class="text-center">
                         <p class="text-[10px] font-medium uppercase text-slate-400">Costo</p>
-                        <p class="text-sm font-bold text-slate-700">₡ {{ number_format($product->cost, 0) }}</p>
+                        <p class="text-sm font-bold text-slate-700">₡ {{ \App\Support\NumberFormatter::trimDecimalZeros($product->cost) }}</p>
                     </div>
                     <div class="text-center">
                         <p class="text-[10px] font-medium uppercase text-slate-400">Precio</p>

@@ -77,7 +77,26 @@ class StorePosSaleRequest extends FormRequest
                 'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
             ],
 
-            'payments' => ['present', 'array', $this->filled('requested_points') ? 'min:0' : 'min:1'],
+            'payments' => ['present', 'array', ($this->filled('requested_points') || $this->filled('credit_note_applications') || $this->filled('credit_note_bearer_applications')) ? 'min:0' : 'min:1'],
+
+            'credit_note_applications' => ['nullable', 'array'],
+            'credit_note_applications.*.credit_note_id' => ['required', 'integer', 'distinct'],
+            'credit_note_applications.*.amount' => [
+                'required',
+                'numeric',
+                'regex:/^\d+(?:\.\d{1,4})?$/',
+                'gt:0',
+            ],
+
+            'credit_note_bearer_applications' => ['nullable', 'array'],
+            'credit_note_bearer_applications.*.credit_note_number' => ['required', 'string', 'max:60'],
+            'credit_note_bearer_applications.*.application_code' => ['required', 'string', 'max:40'],
+            'credit_note_bearer_applications.*.amount' => [
+                'required',
+                'numeric',
+                'regex:/^\d+(?:\.\d{1,4})?$/',
+                'gt:0',
+            ],
             'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d+$/'],
             'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', function ($attribute, $value, $fail) {
@@ -166,6 +185,25 @@ class StorePosSaleRequest extends FormRequest
             'payments.*.cash_effect_amount' => ['prohibited'],
             'redeemed_amount' => ['prohibited'],
             'point_value' => ['prohibited'],
+
+            'credit_note_applications.*.company_id' => ['prohibited'],
+            'credit_note_applications.*.customer_id' => ['prohibited'],
+            'credit_note_applications.*.status' => ['prohibited'],
+            'credit_note_applications.*.balance' => ['prohibited'],
+            'credit_note_applications.*.branch_id' => ['prohibited'],
+            'credit_note_applications.*.application_token' => ['prohibited'],
+            'credit_note_applications.*.application_code_hash' => ['prohibited'],
+            'credit_note_applications.*.hash' => ['prohibited'],
+
+            'credit_note_bearer_applications.*.credit_note_id' => ['prohibited'],
+            'credit_note_bearer_applications.*.company_id' => ['prohibited'],
+            'credit_note_bearer_applications.*.branch_id' => ['prohibited'],
+            'credit_note_bearer_applications.*.customer_id' => ['prohibited'],
+            'credit_note_bearer_applications.*.status' => ['prohibited'],
+            'credit_note_bearer_applications.*.balance' => ['prohibited'],
+            'credit_note_bearer_applications.*.application_token' => ['prohibited'],
+            'credit_note_bearer_applications.*.application_code_hash' => ['prohibited'],
+            'credit_note_bearer_applications.*.hash' => ['prohibited'],
 
             'items.*.price' => ['prohibited'],
             'items.*.sale_price' => ['prohibited'],

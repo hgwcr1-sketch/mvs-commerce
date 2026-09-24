@@ -78,6 +78,7 @@
                                     <p class="text-xs text-slate-500">
                                         {{ $line['item']->product_code }}
                                     </p>
+                                    @include('partials.product-variant', ['product' => $line['item']->product])
                                 </td>
 
                                 <td class="px-4 py-3 text-right text-sm text-slate-700">
@@ -157,7 +158,7 @@
 
                 <button
                     type="submit"
-                    class="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-800">
+                    class="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-black hover:bg-amber-600">
                     Registrar devolución
                 </button>
 

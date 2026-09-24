@@ -495,6 +495,150 @@ Pruebas relacionadas: `SaleReturnTest`, `SaleVoidTest`.
 
 ---
 
+## Notas de Crédito
+
+Estado: **COMPLETADA Y CERTIFICADA — DESPLEGADA EN PRODUCCIÓN** (2026-09-22, PRODUCTION_HEAD `40685e86a086c152d178e511af1c0ba454fadb24`)
+
+**Estado de deploy: FASES 4A Y 4B CERTIFICADAS EN PRODUCCIÓN** — 4A (2026-09-20, `5246e38`): migraciones Ran, build PASS, smoke PASS, NEW_HTTP_500 = 0. 4B (2026-09-22, `40685e86`): migraciones `2026_09_20_000003` + `2026_09_22_000001` Ran; smoke Demo PASS (emisión Consumer Final, aplicación POS bearer, rotación, reversión); NC nominativa preservada; seguridad/multitenancy/contabilidad PASS; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados; smoke únicamente Empresa Demo. Incidente de deploy registrado: 6 HTTP 500 transitorios en ventana 10:30:16–10:32:33 CST (swap no atómico + route-cache), 0 posteriores, producción estable desde 10:32 CST, no defecto funcional de 4B.
+
+Cadena completa (rama `feature/notas-credito` + integración `integration/notas-credito`):
+
+| Fase | Commit | Descripción | Estado |
+|------|--------|-------------|--------|
+| 0 | `b748c5d` | fix(inventory): restore missing posting operations | CERRADA |
+| 1 | `e035cea` | feat(credit-notes): implement core credit note domain | CERRADA |
+| 2B | `7bb6b2d` | feat(credit-notes): reconcile credit notes with receivables | CERRADA |
+| 2C | `85907e9` | feat(credit-notes): support receivable offset reversals | CERRADA |
+| 3A | `3f55ba9` | feat(credit-notes): integrate credit notes with pos backend | CERRADA |
+| 3B | `58bc902` | docs: record POS backend certification | CERRADA |
+| **final** | **`a734f5d`** | **feat(credit-notes): complete pos workflow and reversals** | **CERTIFICADA** |
+| docs | `4737a93` | docs: record credit-notes 4A recovery state | CERRADA |
+| 4A | `9b55929` | feat(credit-notes): add configurable expiration | CERTIFICADA |
+| integración | `645e564` | integración Fase 4A + NC | CERRADA |
+| hotfix | `5246e38` | fix(pos): restore payment method active states | **PRODUCCIÓN** |
+| 4B-1 | `82c82db` | feat(credit-notes): issue consumer final credit notes securely | CERTIFICADA |
+| 4B-2 | `93aa4cc` | feat(credit-notes): apply consumer final credit notes securely | CERTIFICADA |
+| 4B-3 | `e682e9a` | feat(credit-notes): add consumer final pos workflow | CERTIFICADA |
+| 4B-4 | `3f59e67` | feat(credit-notes): add secure application code rotation | CERTIFICADA |
+| docs | `5ca8389` | docs(credit-notes): record certified consumer final workflow | CERTIFICADA |
+| merge 4B | `40685e86` | merge: integrate certified consumer final credit notes | **PRODUCCIÓN** |
+
+### Funcionalidad certificada
+
+**Fase 1 — Núcleo de dominio:**
+- NC nominativa ligada a cliente identificado.
+- Consumidor Final puede devolver pero NO genera NC reutilizable.
+- Búsqueda de venta/factura para iniciar devolución.
+- Emisión automática de NC cuando corresponde.
+- Contrato 1 devolución = máximo 1 NC (`sale_return_id` UNIQUE).
+- Importes BCMath DECIMAL(19,4); saldo nunca negativo.
+- Auditoría exclusiva en `credit_note_applications`.
+- NC interna ≠ NC electrónica Hacienda.
+
+**Fase 2B — Conciliación CxC automática:**
+- Conciliación NC↔CxC al emitir NC sobre venta con `AccountReceivable` activo.
+- `AccountsReceivableReconciliationService::reconcile()` reduce AR y NC offset.
+- NC emitida con CxC: `requires_ar_review=false`, balance=0 tras offset total.
+
+**Fase 2C — Reversión formal de compensación:**
+- `reverseOffset()` revierte offset previo creando `credit_note_offset_reversal`.
+- Incrementa AR, decrementa NC offset; idempotente por llave única.
+- Permiso `cuentas_cobrar.revertir`.
+
+**Fase 3A — Integración Backend POS:**
+- Backend POS soporta NC en checkout.
+- `CreditNoteApplication` como dominio separado.
+- Aplicación parcial y múltiples NC con locking ASC por ID.
+- NC + efectivo, tarjeta/SINPE, crédito, loyalty.
+- 100% NC sin CashSession.
+- Cross-branch POS permitido same company/customer.
+- Endpoint `pos.credit-notes.available` con permiso `notas_credito.aplicar`.
+- `SaleVoidService` bloquea anulación con NC activas.
+
+**Fase 3B — Documentación POS:**
+- Certificación backend documentada.
+- Estado de módulo registrado.
+
+**Fase 4A — Vigencia configurable — COMPLETADA / INTEGRADA / PRODUCCIÓN CERTIFICADA (2026-09-20):**
+- Política por empresa `none` (Sin vencimiento) / `30` (30 días) / `60` (60 días) / `90` (90 días) / `custom` (Personalizado, `credit_note_custom_expiration_days` 1–3650) en `companies` (migración `2026_09_20_000002`, default `none`).
+- `expires_at` en `credit_notes` persistido al emitir (calculado UNA vez); los cambios posteriores de configuración NO son retroactivos (migración `2026_09_20_000001`, además `customer_id` nullable en `credit_notes` y `credit_note_applications` como preparación estructural futura).
+- NC vencida conserva historial y saldo pero no puede aplicarse; NO existe status persisted `expired`. Enforcement backend dentro de la transacción en `applyToSale`/`applyBatchToSale`. La reversión de una aplicación NO elimina `expires_at`.
+- `CreditNote::isExpired()` + `scopeAvailable` excluye vencidas; NC sin `expires_at` = vigencia ilimitada (backward compatible).
+- Permiso `notas_credito.configurar` (Administrador / Administrador Local según modelo de permisos; Cajero NO) + ruta `PUT configuracion/notas-credito` + pestaña "Notas de Crédito" en Configuración (responsive, dorado).
+- **CONSUMER FINAL: NO HABILITADO EN FASE 4A. APPLICATION CODE: NO IMPLEMENTADO EN FASE 4A.** Fase siguiente: **4B — Consumer Final + mecanismo seguro de autorización/aplicación**.
+- Hotfix visual POS `5246e38`: con saldo pendiente, métodos → `primary`/dorado + texto negro + habilitado + `cursor-pointer`; al cubrirse → neutro + `disabled` + `cursor-not-allowed`; pagos parciales mantienen métodos disponibles.
+- Deploy producción: migraciones `2026_09_20_000001`/`000002` Ran; backup `mvscommerce_predeploy5246e38_20260920_201843.dump` verificado (PG 16.15); build/smoke/configuración/visual/permisos PASS; NC nominativa preservada; cotizaciones y apartados preservados. Validación: `CreditNoteExpirationTest` 22/22 (73 aserciones); regresión NC/POS/permisos/demo/settings en verde.
+
+**Fase final — Flujo completo POS/UI/receipt/reversals:**
+- POS UI: `creditNotes`, `fetchCreditNotes`, `toggleCreditNote`, `applyMaxCreditNote` en `pos/index.blade.php`.
+- Top bar buttons unificados: "Cotizar", "Nota de Crédito" → `/devoluciones`.
+- "Facturar / NC" → vista principal del POS.
+- Receipt: `SaleReceiptData.php` DTO `credit_note_applications` + sección visual en `receipt.blade.php`.
+- `CreditNoteService::reverseApplication()` + `reverseApplications()` (lock ASC, idempotente, campos auditoría).
+- `SaleVoidService` llama reversión en vez de bloquear.
+- Balance y estado de NC restaurados correctamente.
+- DevolucionesController: `index` con búsqueda, ruta `GET /devoluciones`.
+- sidebar: "Nota de Crédito" en menú, permisos explícitos.
+
+### Tests certificados
+
+**132/132 tests focales NC pasando** (626+ assertions):
+
+| Suite | Tests | Descripción |
+|-------|-------|-------------|
+| PosCreditNoteTest | 42 | POS checkout + reversión |
+| CreditNoteTest | 19 | Domain invariants |
+| CreditNoteReconciliationTest | 18 | NC↔AR reconciliation |
+| SaleReturnTest | 19 | Devolución + emisión NC |
+| DevolucionesIndexTest | 16 | Búsqueda interfaz |
+| OrderPermissionSeederTest | 2 | Asignación permisos |
+| PosCheckoutTest | 14 | Checkout NC integrado |
+| SaleVoidTest | 2 | Reversión anulación |
+
+### Deuda técnica preexistente (NO causada por NC)
+
+- `SaleVoidLoyaltyTest`: 5 fallos (diff 25 pts, canje proporcional).
+- `SaleReturnLoyaltyTest`: 2 fallos (diff 20-30 pts).
+- `PosAccessAndSearchTest`: 3 fallos (payload fields históricos).
+
+### Deploys de producción ejecutados (4A y 4B)
+
+Preparación aplicada en cada deploy de producción:
+- Backup PostgreSQL.
+- Migraciones Ran (4A: `2026_09_20_000001`/`000002`, deploy 2026-09-20 `5246e38`; 4B: `2026_09_20_000003` + `2026_09_22_000001`, deploy 2026-09-22 `40685e86`).
+- `PermissionSeeder` no destructivo (`updateOrCreate`).
+- `npm run build`.
+- Caches Laravel.
+- Smoke tests: devolución → NC → POS → receipt → anulación → reversión.
+- Verificar permisos por rol.
+
+### Fase futura — NO implementada
+
+**Nota de Crédito al Portador** (decisiones aprobadas):
+- Destinada a ventas Consumidor Final.
+- Configurable por empresa.
+- Número interno NC consecutivo.
+- Canje con código secreto aleatorio NO consecutivo.
+- Número NC por sí solo NO permite canje.
+- Código perdido = NO recuperable.
+- Posesión del código = mecanismo de canje.
+- Debe admitir aplicación parcial y saldo.
+- NO implementar antes de estabilizar NC nominativa.
+
+---
+
+**Fase 4B — Consumer Final — COMPLETADA / CERTIFICADA / PRODUCCIÓN (2026-09-22):**
+- Activación opcional por empresa; Consumer Final identificado internamente por `customer_id NULL`.
+- Emisión exclusivamente desde devolución válida; NC nominativa preservada.
+- Código secreto 12 caracteres efectivos, formato `XXXX-XXXX-XXXX`; solo SHA-256 persistido; plaintext de entrega única.
+- Vencimiento reutiliza configuración 4A. Aplicación por número+código; parcial/total/pagos mixtos.
+- Multitenancy, rate limiting, idempotencia y protección de doble gasto.
+- POS integrado. Regeneración administrativa con motivo/auditoría; código anterior invalidado inmediatamente.
+- Cajero únicamente `notas_credito.aplicar`. NC NO es PaymentMethod; sin `SalePayment`/`CashMovement` por NC.
+- Certificación: **406 tests PASS** en auditoría conjunta; 4B1/4B2/4B3/4B4 PASS; Security PASS; Build PASS.
+- Deuda preexistente (no causada por 4B): `QuoteTest` expectativa visual antigua `bg-sky-700`; 7 tests loyalty con drift de puntos.
+- **PRODUCCIÓN:** fuente certificada `5ca8389`; merge integración `40685e86a086c152d178e511af1c0ba454fadb24`; producción actual `40685e86`. Migraciones `2026_09_20_000003` + `2026_09_22_000001` aplicadas; smoke Demo PASS (emisión, aplicación POS bearer, rotación segura, reversión); NC nominativa preservada; NC fuera de PaymentMethod/SalePayment/CashMovement; datos reales preservados. Incidente deploy: 6 HTTP 500 transitorios (10:30:16–10:32:33 CST, swap no atómico + route-cache), 0 posteriores, producción estable desde 10:32 CST, no defecto 4B. **Decisión operativa futura: deploys anunciados previamente, ventana aceptada ≤2 min sin iniciar sin confirmación, futuro deploy atómico + soporte Offline.**
+
 ## Cuentas por pagar
 
 Estado: ACTIVO
@@ -1395,6 +1539,24 @@ Existe trabajo relacionado con contabilidad fuera del flujo principal de MVS Com
 Debe integrarse posteriormente mediante una arquitectura definida.
 
 No recrear funcionalidad contable sin revisar primero ese trabajo.
+
+---
+
+## Cierre B1–B7 — integración revisada (2026-09-23)
+
+**Rama:** `feature/notas-credito` @ `ff1fd58`. **LISTO PARA INTEGRACIÓN a rama destino.** Sin merge, push, deploy ni producción.
+
+| Bloque | Commit | Descripción |
+|--------|--------|-------------|
+| B6 Ventas/NC | `3b56a89` | Fecha de anulación + filtro por cliente en Ventas/Devoluciones |
+| B4 Productos | `a4c2be1` | Atributos en listado, filtro categoría, proveedor principal, formato costo |
+| B5 Dashboard/períodos | `9eecdfb` | Selector año/personalizado, NC en movimientos, tarjetas reorganizadas |
+| B2 Variantes | `1241c53` + `4e046e4` | Variantes en POS, cotizaciones, devoluciones y apartados |
+| B7 Carga masiva | `17b346e` | Proveedor opcional en importación de productos |
+| B1 Analítico de caja | `7b4ece7` | Analítico por medio de pago en historial de caja |
+| B3 Pagos mixtos apartados | `ff1fd58` | Pagos mixtos en apartados |
+
+Evidencia: integración focal **253 tests, 250 PASS, 2F+1E**; focales por bloque en verde (B3 19/19, B1 7/7 + Cash 89/89, B7 31/31). Sin regresiones nuevas. **3 fallos preexistentes:** `PosAccessAndSearchTest` (modal `Puntos futuros`), `QuoteTest` JS (clases antiguas `Cotizar`), `AdministrativeDashboardTest` (mensaje caja vs métodos de pago). Detalle en `docs/ESTADO_ACTUAL.md`.
 
 ---
 

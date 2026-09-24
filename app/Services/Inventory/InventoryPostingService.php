@@ -169,6 +169,266 @@ class InventoryPostingService
         ]);
     }
 
+    /**
+     * Movimiento de inventario generado por la importación Excel de inventario.
+     * Registra la entrada o salida y actualiza mínimo y máximo de la sucursal.
+     *
+     * Restaurado: fue eliminado por la regresión de 9d491fe y es requerido por
+     * InventoryImportService::confirm().
+     */
+    public function postImportMovement(
+        Branch $branch,
+        Product $product,
+        int $userId,
+        string $movementType,
+        float $quantity,
+        float $minimumStock,
+        float $maximumStock,
+    ): InventoryMovement {
+        if ($branch->company_id !== $product->company_id || ! in_array($movementType, ['entry', 'exit'], true) || $quantity <= 0) {
+            throw ValidationException::withMessages(['inventory' => 'El movimiento de importación no es válido.']);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => $minimumStock,
+            'maximum_stock' => $maximumStock,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $stock = DB::table('branch_product')->where('branch_id', $branch->id)
+            ->where('product_id', $product->id)->lockForUpdate()->first();
+        if ($stock === null) {
+            throw ValidationException::withMessages(['inventory' => 'No se pudo obtener el inventario de la sucursal.']);
+        }
+
+        $previousStock = (float) $stock->stock;
+        $newStock = round($movementType === 'entry' ? $previousStock + $quantity : $previousStock - $quantity, 4);
+        if ($newStock < 0) {
+            throw ValidationException::withMessages(['inventory' => 'La salida no puede dejar el inventario con stock negativo.']);
+        }
+
+        DB::table('branch_product')->where('id', $stock->id)->update([
+            'stock' => $newStock,
+            'minimum_stock' => $minimumStock,
+            'maximum_stock' => $maximumStock,
+            'updated_at' => now(),
+        ]);
+
+        return InventoryMovement::create([
+            'company_id' => $branch->company_id,
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'user_id' => $userId,
+            'type' => $movementType,
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Importación de inventario',
+            'reference_type' => 'inventory_import',
+            'notes' => 'Movimiento generado por importación Excel.',
+        ]);
+    }
+
+    /**
+     * Entrada por anulación de venta (devolución del inventario vendido).
+     *
+     * Restaurado: fue eliminado por la regresión de 9d491fe y es requerido por
+     * SaleVoidService::void().
+     */
+    public function voidSale(Sale $sale, Product $product, float $quantity, int $userId): InventoryMovement
+    {
+        if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La devolución de inventario de la venta no es válida.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $sale->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($branchProduct === null) {
+            throw ValidationException::withMessages([
+                'inventory' => 'No se pudo obtener el inventario de la sucursal.',
+            ]);
+        }
+
+        $previousStock = (float) $branchProduct->stock;
+        $newStock = round($previousStock + $quantity, 4);
+
+        DB::table('branch_product')
+            ->where('id', $branchProduct->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        return InventoryMovement::create([
+            'company_id' => $sale->company_id,
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'sale_void',
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Entrada por anulación de venta',
+            'reference_type' => Sale::class,
+            'reference_id' => $sale->id,
+            'notes' => 'Anulación de venta '.$sale->sale_number,
+        ]);
+    }
+
+    /**
+     * Entrada por devolución de mercancía de una venta.
+     *
+     * Restaurado: fue eliminado por la regresión de 9d491fe y es requerido por
+     * SaleReturnService::store().
+     */
+    public function saleReturn(
+        Sale $sale,
+        SaleReturn $saleReturn,
+        Product $product,
+        float $quantity,
+        int $userId,
+    ): InventoryMovement {
+        if ($quantity <= 0 || $sale->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'La línea de devolución no es válida.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $sale->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($branchProduct === null) {
+            throw ValidationException::withMessages([
+                'inventory' => 'No se pudo obtener el inventario de la sucursal.',
+            ]);
+        }
+
+        $previousStock = (float) $branchProduct->stock;
+        $newStock = round($previousStock + $quantity, 4);
+
+        DB::table('branch_product')
+            ->where('id', $branchProduct->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        return InventoryMovement::create([
+            'company_id' => $sale->company_id,
+            'branch_id' => $sale->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'sale_return',
+            'quantity' => round($quantity, 4),
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Entrada por devolución de venta',
+            'reference_type' => SaleReturn::class,
+            'reference_id' => $saleReturn->id,
+            'notes' => 'Devolución '.$saleReturn->return_number.' de la venta '.$sale->sale_number,
+        ]);
+    }
+
+    /**
+     * Descuenta exactamente 1 unidad por canje de premio vinculado a producto.
+     * Es el único punto de escritura de inventario autorizado para premios (F21).
+     *
+     * Restaurado: fue eliminado por la regresión de 9d491fe y es requerido por
+     * LoyaltyRewardRedemptionService::redeem().
+     */
+    public function postRewardRedemption(LoyaltyRewardRedemption $redemption, int $userId): InventoryMovement
+    {
+        $product = Product::query()->findOrFail($redemption->product_id);
+
+        if ($redemption->company_id !== $product->company_id) {
+            throw ValidationException::withMessages([
+                'items' => 'El producto del premio no pertenece a la empresa del canje.',
+            ]);
+        }
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $redemption->branch_id,
+            'product_id' => $product->id,
+            'stock' => 0,
+            'minimum_stock' => null,
+            'maximum_stock' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $branchProduct = DB::table('branch_product')
+            ->where('branch_id', $redemption->branch_id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        $previousStock = $branchProduct === null ? 0.0 : (float) $branchProduct->stock;
+
+        if ($previousStock < 1) {
+            throw ValidationException::withMessages([
+                'items' => "Stock insuficiente para {$product->name}. Disponible: ".number_format($previousStock, 4, '.', ''),
+            ]);
+        }
+
+        $newStock = round($previousStock - 1, 4);
+
+        DB::table('branch_product')->where('id', $branchProduct->id)->update([
+            'stock' => $newStock,
+            'updated_at' => now(),
+        ]);
+
+        return InventoryMovement::create([
+            'company_id' => $redemption->company_id,
+            'branch_id' => $redemption->branch_id,
+            'product_id' => $product->id,
+            'inventory_lot_id' => null,
+            'user_id' => $userId,
+            'type' => 'reward_redemption',
+            'quantity' => 1,
+            'previous_stock' => round($previousStock, 4),
+            'new_stock' => $newStock,
+            'reason' => 'Salida por canje de premio',
+            'reference_type' => LoyaltyRewardRedemption::class,
+            'reference_id' => $redemption->id,
+            'notes' => 'Canje de premio '.$redemption->reward_name,
+        ]);
+    }
+
     public function postInitialMigration(
         Branch $branch,
         Product $product,

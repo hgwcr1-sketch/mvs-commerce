@@ -70,10 +70,11 @@ class PosAccessAndSearchTest extends TestCase
 
         $response->assertJsonCount(1)->assertJsonPath('0.id', $product->id);
         $this->assertEqualsCanonicalizing([
-            'id', 'name', 'internal_code', 'matched_barcode', 'sale_price', 'tax_rate',
-            'controls_inventory', 'available_stock',
+            'id', 'name', 'internal_code', 'matched_barcode', 'sale_price', 'is_offer',
+            'wholesale_price', 'price_a', 'price_b', 'price_c', 'tax_rate',
+            'controls_inventory', 'available_stock', 'unit', 'allows_decimals',
             'can_add_to_cart',
-            'has_image', 'image_url',
+            'has_image', 'image_url', 'style_name', 'size_name', 'color_name',
         ], array_keys($response->json('0')));
     }
 
@@ -171,7 +172,10 @@ class PosAccessAndSearchTest extends TestCase
             ->assertSee('Seleccione una forma de pago para comenzar')->assertSee('Pago mixto')
             ->assertSee('Referencia *')->assertSee('Monto recibido')->assertSee('Vuelto')
             ->assertSee('Limpiar pagos')->assertSee('Confirmar cobro —')
-            ->assertSee('PayPal')->assertSee('Crédito futuro')->assertSee('Puntos futuros')->assertSee('Próximamente')
+            ->assertSee('PayPal')->assertSee('Crédito futuro')->assertSee('Puntos futuros')->assertSee('Notas de crédito')
+            ->assertSee('Seleccione un cliente para consultar sus notas de crédito disponibles.', false)
+            ->assertSee('notas_credito.aplicar', false)
+            ->assertSee('creditNotes', false)
             ->assertDontSee('Oculto inactivo')->assertSee('x-for="method in paymentMethods"', false)
             ->assertSee('lg:grid-cols-[0.9fr_1.1fr]', false)->assertSee('max-w-[1120px]', false)
             ->assertSee('selectPaymentMethod(method)', false)->assertSee('method.requires_reference', false)
@@ -204,6 +208,38 @@ class PosAccessAndSearchTest extends TestCase
 
         $response->assertJsonPath('0.id', $exact->id);
         $this->assertSame($partial->id, $response->json('1.id'));
+    }
+
+    public function test_search_includes_variant_fields_when_product_has_style_size_and_color(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $style = \App\Models\Style::create(['company_id' => $company->id, 'name' => 'Casual', 'slug' => 'casual', 'is_active' => true]);
+        $size = \App\Models\Size::create(['company_id' => $company->id, 'name' => 'M', 'slug' => 'm', 'abbreviation' => 'M', 'is_active' => true]);
+        $color = \App\Models\Color::create(['company_id' => $company->id, 'name' => 'Azul', 'slug' => 'azul', 'is_active' => true]);
+        $product = $this->product($company, [
+            'name' => 'Camisa manga corta',
+            'style_id' => $style->id,
+            'size_id' => $size->id,
+            'color_id' => $color->id,
+        ]);
+
+        $response = $this->search($user, $company, $branch, 'Camisa')->assertOk();
+
+        $response->assertJsonPath('0.style_name', 'Casual')
+            ->assertJsonPath('0.size_name', 'M')
+            ->assertJsonPath('0.color_name', 'Azul');
+    }
+
+    public function test_search_returns_null_variant_fields_when_product_has_no_variants(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $product = $this->product($company, ['name' => 'Producto sin variantes']);
+
+        $response = $this->search($user, $company, $branch, 'Producto sin variantes')->assertOk();
+
+        $this->assertNull($response->json('0.style_name'));
+        $this->assertNull($response->json('0.size_name'));
+        $this->assertNull($response->json('0.color_name'));
     }
 
     public function test_local_stock_and_inventory_control_determine_if_product_can_be_added(): void
@@ -435,8 +471,9 @@ class PosAccessAndSearchTest extends TestCase
         $response = $this->searchCustomers($user, $company, $branch, 'Cliente JSON');
 
         $this->assertEqualsCanonicalizing([
-            'id', 'name', 'identification', 'phone', 'mobile', 'email',
-            'customer_type', 'credit_limit', 'credit_days',
+            'id', 'name', 'identification', 'phone', 'mobile', 'email', 'public_code',
+            'customer_type', 'credit_limit', 'credit_days', 'credit_due_date', 'credit_used',
+            'price_level',
         ], array_keys($response->json('0')));
         $this->assertArrayNotHasKey('notes', $response->json('0'));
         $this->assertArrayNotHasKey('address', $response->json('0'));

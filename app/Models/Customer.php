@@ -134,6 +134,16 @@ class Customer extends Model
         return $this->hasMany(AccountReceivable::class);
     }
 
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
+    public function creditNoteApplications(): HasMany
+    {
+        return $this->hasMany(CreditNoteApplication::class);
+    }
+
     public function loyaltyContacts(): HasMany
     {
         return $this->hasMany(LoyaltyCustomerContact::class);

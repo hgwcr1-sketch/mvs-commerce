@@ -9,6 +9,7 @@ use App\Http\Requests\StoreSuspendedSaleRequest;
 use App\Models\AccountReceivable;
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\PaymentMethod;
@@ -21,6 +22,7 @@ use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
+use App\Services\Sales\CreditNoteService;
 use App\Services\Sales\LayawayService;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
@@ -120,15 +122,24 @@ class PosController extends Controller
                             ->where('barcode', $likeOperator, $like);
                     });
             })
-            ->with(['unit:id,abbreviation,allows_decimals', 'barcodes' => function ($query) use ($like, $likeOperator) {
-                $query
-                    ->where('is_active', true)
-                    ->where('barcode', $likeOperator, $like)
-                    ->select(['id', 'product_id', 'barcode']);
-            }])
+            ->with([
+                'unit:id,abbreviation,allows_decimals',
+                'style:id,name',
+                'size:id,name',
+                'color:id,name',
+                'barcodes' => function ($query) use ($like, $likeOperator) {
+                    $query
+                        ->where('is_active', true)
+                        ->where('barcode', $likeOperator, $like)
+                        ->select(['id', 'product_id', 'barcode']);
+                },
+            ])
             ->select([
                 'products.id',
                 'products.unit_id',
+                'products.style_id',
+                'products.size_id',
+                'products.color_id',
                 'products.name',
                 'products.internal_code',
                 'products.barcode',
@@ -220,6 +231,9 @@ class PosController extends Controller
                 'available_stock' => $availableStock,
                 'unit' => $product->unit?->abbreviation,
                 'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'style_name' => $product->style?->name,
+                'size_name' => $product->size?->name,
+                'color_name' => $product->color?->name,
                 'can_add_to_cart' => ! $product->track_inventory || $availableStock > 0,
                 'has_image' => $hasImage,
                 'image_url' => $hasImage ? asset('storage/'.$imagePath) : null,
@@ -410,6 +424,108 @@ class PosController extends Controller
             number_format((float) $validated['total'], 4, '.', ''),
             (bool) ($validated['has_offers'] ?? false),
         ));
+    }
+
+    public function searchCreditNotes(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer'],
+        ]);
+
+        $companyId = (int) session('active_company_id');
+        $company = Company::query()->findOrFail($companyId);
+
+        if (! $request->user()->hasPermission('notas_credito.aplicar', $company)) {
+            abort(403);
+        }
+
+        $customer = Customer::query()
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->find($validated['customer_id']);
+
+        if ($customer === null) {
+            return response()->json(['message' => 'Cliente no encontrado.'], 404);
+        }
+
+        $notes = CreditNote::query()
+            ->forCompany($companyId)
+            ->forCustomer($customer->id)
+            ->available()
+            ->with('saleReturn:id,sale_id,reason')
+            ->with('branch:id,name')
+            ->orderBy('issued_at')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json($notes->map(fn (CreditNote $note) => [
+            'id' => $note->id,
+            'number' => $note->credit_note_number,
+            'balance' => $note->balance,
+            'issued_at' => $note->issued_at?->toIso8601String(),
+            'branch_name' => $note->branch?->name,
+            'sale_return_reason' => $note->saleReturn?->reason,
+        ])->values());
+    }
+
+    /**
+     * Prevalidación de NC Consumer Final por número + código (4B-3).
+     *
+     * Es una validación SIN locks y SIN writes: reutiliza la misma autorización
+     * lock-free del backend certificado 4B-2 y comparte su rate limit. La
+     * validación definitiva (saldo, estado, toggle, vencimiento, empresa)
+     * ocurre SIEMPRE dentro del checkout bajo lock (applyBatchToSale).
+     *
+     * El monto es OPCIONAL: la resolución de credenciales (número + código) es
+     * independiente del "Monto a aplicar". Sin monto, el endpoint devuelve el
+     * saldo disponible para que la UI proponga MIN(saldo NC, pendiente venta).
+     * Si se envía monto, valida también 0 < monto <= saldo.
+     *
+     * Devuelve datos NO secretos (id, número, saldo) para que el cajero pueda
+     * preparar la línea y sugerir el monto; jamás el código ni el hash.
+     */
+    public function validateBearerCreditNote(Request $request, PosSaleProcessor $processor, CreditNoteService $creditNotes): JsonResponse
+    {
+        $validated = $request->validate([
+            'credit_note_number' => ['required', 'string', 'max:60'],
+            'application_code' => ['required', 'string', 'max:40'],
+            'amount' => ['nullable', 'numeric', 'regex:/^\d+(?:\.\d{1,4})?$/', 'gt:0'],
+        ]);
+
+        $companyId = (int) session('active_company_id');
+
+        if (! $request->user()->hasPermission('notas_credito.aplicar', Company::query()->findOrFail($companyId))) {
+            abort(403);
+        }
+
+        $processor->guardBearerAttemptRateLimit($companyId, $request->user()->id);
+
+        $amount = array_key_exists('amount', $validated) && $validated['amount'] !== null && $validated['amount'] !== ''
+            ? (string) $validated['amount']
+            : null;
+
+        try {
+            $note = $creditNotes->authorizeBearerApplication(
+                $companyId,
+                $validated['credit_note_number'],
+                $validated['application_code'],
+                $amount,
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'message' => collect($exception->errors())->flatten()->first() ?? 'No se pudo validar la nota de crédito.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'credit_note_id' => $note->id,
+            'credit_note_number' => $note->credit_note_number,
+            'balance' => $note->balance,
+            'issued_at' => $note->issued_at?->toIso8601String(),
+            'expires_at' => $note->expires_at?->toDateString(),
+        ]);
     }
 
     public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse

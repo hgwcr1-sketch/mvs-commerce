@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Layaway;
@@ -22,7 +23,7 @@ class LayawayController extends Controller
             $q->where('status', $r->status);
         }
 
-return view('layaways.index', ['layaways' => $q->latest()->paginate(20)->withQueryString()]);
+        return view('layaways.index', ['layaways' => $q->latest()->paginate(20)->withQueryString()]);
     }
 
     public function create(Request $r, CashSessionResolver $resolver): View
@@ -30,12 +31,12 @@ return view('layaways.index', ['layaways' => $q->latest()->paginate(20)->withQue
         $companyId = (int) session('active_company_id');
         $branchId = (int) session('active_branch_id');
 
-        return view('layaways.create', ['customers' => Customer::forCompany($companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name']), 'products' => Product::query()->where('company_id', $companyId)->where('is_active', true)->whereHas('branches', fn ($q) => $q->where('branches.id', $branchId)->where('branch_product.stock', '>', 0))->with(['branches' => fn ($q) => $q->where('branches.id', $branchId), 'unit:id,allows_decimals'])->orderBy('name')->get(), 'methods' => PaymentMethod::forCompany($companyId)->active()->whereNotIn('type', ['credit', 'loyalty_points'])->ordered()->get(), 'sessions' => $resolver->applicable($r->user(), $companyId, $branchId), 'company' => Company::findOrFail($companyId)]);
+        return view('layaways.create', ['customers' => Customer::forCompany($companyId)->where('is_active', true)->orderBy('name')->get(['id', 'name']), 'products' => Product::query()->where('company_id', $companyId)->where('is_active', true)->whereHas('branches', fn ($q) => $q->where('branches.id', $branchId)->where('branch_product.stock', '>', 0))->with(['branches' => fn ($q) => $q->where('branches.id', $branchId), 'unit:id,allows_decimals', 'style:id,name', 'size:id,name', 'color:id,name'])->orderBy('name')->get(), 'methods' => PaymentMethod::forCompany($companyId)->active()->whereNotIn('type', ['credit', 'loyalty_points'])->ordered()->get(), 'sessions' => $resolver->applicable($r->user(), $companyId, $branchId), 'company' => Company::findOrFail($companyId)]);
     }
 
     public function store(Request $r, LayawayService $service): RedirectResponse
     {
-        $data = $r->validate(['customer_id' => ['required', 'integer'], 'expires_at' => ['nullable', 'date', 'after_or_equal:today'], 'notes' => ['nullable', 'string'], 'items' => ['required', 'array', 'min:1'], 'items.*.product_id' => ['nullable', 'integer'], 'items.*.quantity' => ['nullable', 'numeric', 'gt:0'], 'initial_amount' => ['required', 'numeric', 'gt:0'], 'payment_method_id' => ['required', 'integer'], 'received_amount' => ['nullable', 'numeric', 'gte:0'], 'cash_session_id' => ['nullable', 'integer'], 'reference' => ['nullable', 'string', 'max:150']]);
+        $data = $r->validate(['customer_id' => ['required', 'integer'], 'expires_at' => ['nullable', 'date', 'after_or_equal:today'], 'notes' => ['nullable', 'string'], 'items' => ['required', 'array', 'min:1'], 'items.*.product_id' => ['nullable', 'integer'], 'items.*.quantity' => ['nullable', 'numeric', 'gt:0'], 'initial_amount' => ['required', 'numeric', 'gt:0'], 'payment_method_id' => ['nullable', 'required_without:payments', 'integer'], 'received_amount' => ['nullable', 'numeric', 'gte:0'], 'payments' => ['nullable', 'array', 'min:1'], 'payments.*.payment_method_id' => ['required', 'integer'], 'payments.*.amount' => ['required', 'numeric', 'gt:0'], 'payments.*.reference' => ['nullable', 'string', 'max:150'], 'payments.*.notes' => ['nullable', 'string', 'max:2000'], 'cash_session_id' => ['nullable', 'integer'], 'reference' => ['nullable', 'string', 'max:150'], 'client_token' => ['nullable', 'uuid']]);
         $layaway = $service->create($data, $r->user(), (int) session('active_company_id'), (int) session('active_branch_id'));
         $r->session()->flash('mvs_layaway_print', ['type' => 'layaway', 'layaway_id' => $layaway->id]);
 
@@ -44,7 +45,7 @@ return view('layaways.index', ['layaways' => $q->latest()->paginate(20)->withQue
 
     public function show(Request $r, Layaway $apartado, CashSessionResolver $resolver): View
     {
-        $a = $this->scoped($apartado)->load(['customer', 'items.product.unit', 'payments.paymentMethod', 'payments.user', 'sale']);
+        $a = $this->scoped($apartado)->load(['customer', 'items.product.unit', 'items.product.style', 'items.product.size', 'items.product.color', 'payments.paymentMethod', 'payments.user', 'sale']);
         $companyId = $a->company_id;
         $methods = PaymentMethod::forCompany($companyId)->active()->whereNotIn('type', ['credit', 'loyalty_points'])->ordered()->get();
         $sheet = ['layawayId' => $a->id, 'methods' => $methods->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'allows_change' => (bool) $m->allows_change])->values(), 'layawayTicketUrl' => route('mvs.print.ticket.layaway', ['layaway' => '__LAYAWAY__'], false), 'paymentTicketUrl' => route('mvs.print.ticket.layaway.payment', ['layaway' => '__LAYAWAY__', 'payment' => '__PAYMENT__'], false), 'initialPrint' => null, 'configUrl' => route('mvs.print.config', [], false)];
@@ -54,16 +55,19 @@ return view('layaways.index', ['layaways' => $q->latest()->paginate(20)->withQue
             $sheet['initialPrint'] = ['type' => $print['type'], 'id' => $isPayment ? $print['payment_id'] : $print['layaway_id'], 'url' => $isPayment ? route('mvs.print.ticket.layaway.payment', ['layaway' => $print['layaway_id'], 'payment' => $print['payment_id']], false) : route('mvs.print.ticket.layaway', ['layaway' => $print['layaway_id']], false)];
         }
 
-return view('layaways.show', ['layaway' => $a, 'methods' => $methods, 'sessions' => $resolver->applicable($r->user(), $companyId, $a->branch_id), 'sheet' => $sheet]);
+        return view('layaways.show', ['layaway' => $a, 'methods' => $methods, 'sessions' => $resolver->applicable($r->user(), $companyId, $a->branch_id), 'sheet' => $sheet]);
     }
 
     public function payment(Request $r, Layaway $apartado, LayawayService $service): RedirectResponse
     {
-        $data = $r->validate(['amount' => ['required', 'numeric', 'gt:0'], 'payment_method_id' => ['required', 'integer'], 'received_amount' => ['nullable', 'numeric', 'gte:0'], 'cash_session_id' => ['nullable', 'integer'], 'reference' => ['nullable', 'string', 'max:150'], 'payment_notes' => ['nullable', 'string', 'max:2000']]);
-        $payment = $service->pay($this->scoped($apartado), $data, $r->user());
+        $data = $r->validate(['amount' => ['nullable', 'required_without:payments', 'numeric', 'gt:0'], 'payment_method_id' => ['nullable', 'required_without:payments', 'integer'], 'received_amount' => ['nullable', 'numeric', 'gte:0'], 'payments' => ['nullable', 'array', 'min:1'], 'payments.*.payment_method_id' => ['required', 'integer'], 'payments.*.amount' => ['required', 'numeric', 'gt:0'], 'payments.*.reference' => ['nullable', 'string', 'max:150'], 'payments.*.notes' => ['nullable', 'string', 'max:2000'], 'cash_session_id' => ['nullable', 'integer'], 'reference' => ['nullable', 'string', 'max:150'], 'payment_notes' => ['nullable', 'string', 'max:2000']]);
+        $payments = $service->pay($this->scoped($apartado), $data, $r->user());
         if ($r->expectsJson()) {
-            return response()->json(['success' => true, 'message' => 'Abono registrado correctamente.', 'layaway_id' => $apartado->id, 'payment_id' => $payment->id, 'amount' => $payment->amount, 'received_amount' => $payment->received_amount, 'change_amount' => $payment->change_amount, 'balance_due' => $apartado->fresh()->balance_due]);
-        }$r->session()->flash('mvs_layaway_print', ['type' => 'payment', 'layaway_id' => $apartado->id, 'payment_id' => $payment->id]);
+            $first = is_array($payments) ? ($payments[0] ?? null) : $payments;
+
+            return response()->json(['success' => true, 'message' => 'Abono registrado correctamente.', 'layaway_id' => $apartado->id, 'payment_id' => $first?->id, 'amount' => $first?->amount, 'received_amount' => $first?->received_amount, 'change_amount' => $first?->change_amount, 'balance_due' => $apartado->fresh()->balance_due]);
+        }
+        $r->session()->flash('mvs_layaway_print', ['type' => 'payment', 'layaway_id' => $apartado->id, 'payment_id' => is_array($payments) ? ($payments[0]->id ?? null) : $payments->id]);
 
         return back()->with('success', 'Abono registrado correctamente.');
     }
@@ -93,7 +97,7 @@ return view('layaways.show', ['layaway' => $a, 'methods' => $methods, 'sessions'
 
     private function scoped(Layaway $a): Layaway
     {
-        abort_unless($a->company_id === (int) session('active_company_id') && $a->branch_id === (int) session('active_branch_id'),404);
+        abort_unless($a->company_id === (int) session('active_company_id') && $a->branch_id === (int) session('active_branch_id'), 404);
 
         return $a;
     }
