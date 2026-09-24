@@ -248,8 +248,31 @@ class FacturaencrEmissionServiceTest extends TestCase
                 && $request->hasHeader('X-API-Secret', 'test-secret')
                 && $request->hasHeader('Idempotency-Key', $key)
                 && $request->hasHeader('Content-Type', 'application/json')
-                && $request->data()['emisorLegalId'] === 'EMISORPRUEBA';
+                && $request->data()['emisorLegalId'] === 'EMISORPRUEBA'
+                && !array_key_exists('idempotencyKey', $request->data())
+                && $request->data()['detalle'][0]['impuesto'] === [[
+                    'codigo' => '01',
+                    'codigoTarifa' => '08',
+                    'tarifa' => 13,
+                ]];
         });
+    }
+
+    public function test_unsupported_tax_rate_fails_before_http_post(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $item->tax_rate = 12;
+        Http::fake();
+
+        try {
+            (new FacturaencrEmissionService())->emit($sale, $company, $customer, [$item], $sale->payments->first());
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $exception) {
+            $this->assertArrayHasKey('detalle[0]_impuesto', $exception->getErrors());
+        }
+
+        Http::assertNothingSent();
     }
 
     public function test_emit_is_idempotent_returns_existing_document(): void

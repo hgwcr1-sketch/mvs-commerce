@@ -651,6 +651,102 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertSame('01', $payload['condicionVenta']);
     }
 
+    public function test_mapper_does_not_decide_fiscality_by_percentage(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 1000, 'unit_cost' => 500]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame([[
+            'codigo' => '01',
+            'codigoTarifa' => '10',
+            'tarifa' => 0,
+        ]], $payload['detalle'][0]['impuesto']);
+    }
+
+    public function test_mapper_uses_fiscal_snapshot_over_legacy_percentage(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 0, 'total' => 1000, 'unit_cost' => 500, 'fiscal_snapshot' => ['source' => 'Hacienda v4.4 / Facturaencr OpenAPI', 'source_version' => 'v4.4', 'taxes' => [['codigo' => '01', 'codigoTarifa' => '01', 'tarifa' => 0, 'treatment' => 'zero_rate']]]]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('01', $payload['detalle'][0]['impuesto'][0]['codigoTarifa']);
+        $this->assertSame(0, $payload['detalle'][0]['impuesto'][0]['tarifa']);
+    }
+
+    public function test_unknown_cabys_never_falls_back_to_iva_13(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+
+        foreach ([
+            ['tax_rate' => 0, 'tax_total' => 0, 'total' => 1000],
+            ['tax_rate' => null, 'tax_total' => 0, 'total' => 1000],
+        ] as $taxAttributes) {
+            $item = new SaleItem(array_merge(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '9999999999999', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'unit_cost' => 500], $taxAttributes));
+
+            try {
+                (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+                $this->fail('Expected FacturaencrValidationException for unknown CABYS without fiscal data');
+            } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $e) {
+                $errors = $e->getErrors();
+                $this->assertArrayHasKey('detalle[0]_impuesto', $errors);
+                $this->assertStringContainsString('ambiguo', $errors['detalle[0]_impuesto']);
+            }
+        }
+    }
+
+    public function test_unknown_cabys_with_explicit_fiscal_profile_is_not_auto_taxed(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '9999999999999', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 0, 'tax_code' => '01', 'tax_rate_code' => '11', 'tax_total' => 0, 'total' => 1000, 'unit_cost' => 500]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('9999999999999', $payload['detalle'][0]['codigoCabys']);
+        $this->assertSame([[
+            'codigo' => '01',
+            'codigoTarifa' => '11',
+            'tarifa' => 0,
+        ]], $payload['detalle'][0]['impuesto']);
+    }
+
+    public function test_mapper_serializes_multiple_taxes_per_line(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 500, 'fiscal_snapshot' => ['source' => 'Hacienda v4.4 / Facturaencr OpenAPI', 'source_version' => 'v4.4', 'taxes' => [
+            ['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13],
+            ['codigo' => '12', 'tarifa' => 5, 'datosImpuestoEspecifico' => ['montoImpuestoEspecifico' => 50]],
+        ]]]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+        $impuesto = $payload['detalle'][0]['impuesto'];
+
+        $this->assertCount(2, $impuesto);
+        $this->assertSame('01', $impuesto[0]['codigo']);
+        $this->assertSame('08', $impuesto[0]['codigoTarifa']);
+        $this->assertSame(13, $impuesto[0]['tarifa']);
+        $this->assertSame('12', $impuesto[1]['codigo']);
+        $this->assertSame(5, $impuesto[1]['tarifa']);
+    }
+
+    public function test_mapper_impuesto_delegates_to_fiscal_tax_service(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        $service = new \App\Services\Fiscal\FiscalTaxService();
+        $expected = $service->serializeSnapshot($service->snapshotForSaleItem($item));
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame($expected, $payload['detalle'][0]['impuesto']);
+        $this->assertSame([
+            ['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13],
+        ], $expected);
+    }
+
     private function prepareData(
         string $tradeName = 'Test Comercio',
         string $legalName = 'Test S.A.',

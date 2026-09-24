@@ -41,6 +41,7 @@ class Product extends Model
         'maximum_stock',
         'allow_negative_stock',
         'tax_rate',
+        'fiscal_profile_id',
         'image',
         'is_active',
         'prints_label',
@@ -67,6 +68,16 @@ class Product extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function fiscalProfile(): BelongsTo
+    {
+        return $this->belongsTo(FiscalProfile::class);
+    }
+
+    public function productTaxes(): HasMany
+    {
+        return $this->hasMany(ProductTax::class);
     }
 
     /**

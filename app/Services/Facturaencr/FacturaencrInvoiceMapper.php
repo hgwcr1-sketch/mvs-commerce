@@ -7,8 +7,9 @@ use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
-use App\Models\PaymentMethod;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
+use App\Services\Fiscal\FiscalTaxService;
+use Throwable;
 
 class FacturaencrInvoiceMapper
 {
@@ -23,6 +24,10 @@ class FacturaencrInvoiceMapper
         'bank_transfer' => '04',
         'sinpe' => '06',
     ];
+
+    public function __construct(private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService())
+    {
+    }
 
     public function map(
         Sale $sale,
@@ -57,10 +62,6 @@ class FacturaencrInvoiceMapper
             if ($plazoCredito !== null) {
                 $payload['plazoCredito'] = $plazoCredito;
             }
-        }
-
-        if ($idempotencyKey !== null) {
-            $payload['idempotencyKey'] = $idempotencyKey;
         }
 
         return $payload;
@@ -191,8 +192,10 @@ class FacturaencrInvoiceMapper
                 $errors["{$prefix}_unidad"] = 'Unidad de medida no soportada por Facturaencr: ' . $item->unit_code;
             }
 
-            if ($item->tax_rate <= 0) {
-                $errors["{$prefix}_impuesto"] = 'El impuesto es requerido (sale_items.tax_rate debe ser > 0)';
+            try {
+                $this->fiscalTaxService->snapshotForSaleItem($item);
+            } catch (Throwable $exception) {
+                $errors["{$prefix}_impuesto"] = $exception->getMessage();
             }
         }
 
@@ -248,6 +251,9 @@ class FacturaencrInvoiceMapper
                 'cantidad' => (float) $item->quantity,
                 'unidadMedida' => $unitMapper->map($item->unit_code),
                 'precioUnitario' => (float) $item->unit_price,
+                'impuesto' => $this->fiscalTaxService->serializeSnapshot(
+                    $this->fiscalTaxService->snapshotForSaleItem($item),
+                ),
             ];
         }
 
@@ -263,4 +269,5 @@ class FacturaencrInvoiceMapper
     {
         return preg_match('/^\d{13}$/', $cabys) === 1;
     }
+
 }
