@@ -61,6 +61,9 @@ class VisitService
             }
 
             $from = $visit->status;
+            $lat = $data['latitude'] ?? null;
+            $lng = $data['longitude'] ?? null;
+            $hasSnapshot = $lat !== null && $lat !== '' && $lng !== null && $lng !== '';
             $visit->update([
                 'status' => $status,
                 'visited_at' => in_array($status, [CobrosVisit::STATUS_VISITED, CobrosVisit::STATUS_NOT_FOUND, CobrosVisit::STATUS_PROMISE], true)
@@ -71,6 +74,10 @@ class VisitService
                     ? (string) $data['promise_amount']
                     : null,
                 'notes' => array_key_exists('notes', $data) ? $data['notes'] : $visit->notes,
+                // Snapshot GPS opcional: evidencia histórica de la gestión; jamás escribe Customer.
+                'latitude' => $hasSnapshot ? (string) $lat : $visit->latitude,
+                'longitude' => $hasSnapshot ? (string) $lng : $visit->longitude,
+                'location_captured_at' => $hasSnapshot ? now() : $visit->location_captured_at,
             ]);
 
             if ($from !== $status) {

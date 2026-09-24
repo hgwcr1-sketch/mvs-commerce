@@ -27,6 +27,7 @@ class CobrosVisit extends Model
         'company_id', 'branch_id', 'customer_id', 'collector_user_id',
         'account_receivable_id', 'scheduled_for', 'visited_at', 'status',
         'promise_date', 'promise_amount', 'notes', 'rescheduled_from_visit_id',
+        'latitude', 'longitude', 'location_captured_at',
     ];
 
     protected function casts(): array
@@ -36,6 +37,9 @@ class CobrosVisit extends Model
             'visited_at' => 'date',
             'promise_date' => 'date',
             'promise_amount' => 'decimal:4',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
+            'location_captured_at' => 'datetime',
         ];
     }
 

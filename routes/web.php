@@ -157,6 +157,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
     Route::get('/collector/portfolio/{customer}', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
+    Route::post('/collector/portfolio/{customer}/location', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'storeLocation'])
+        ->middleware('permission:cobros.cobrar')->name('collector.portfolio.location');
     Route::get('/visits/today', [App\Http\Controllers\Cobros\VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
     Route::get('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'customerHistory'])

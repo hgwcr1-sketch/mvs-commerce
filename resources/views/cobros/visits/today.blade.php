@@ -122,6 +122,32 @@
         card.querySelectorAll('[data-cancel]').forEach(function (btn) {
             btn.addEventListener('click', function () { openPanel(null); });
         });
+
+        // 2C: snapshot GPS opcional en la gestión; si falla, el formulario igual se envía.
+        card.querySelectorAll('form[data-panel]').forEach(function (form) {
+            form.addEventListener('submit', function onSubmit(e) {
+                if (form.querySelector('input[name="latitude"]')) { return; }
+                var latIn = document.createElement('input');
+                latIn.type = 'hidden'; latIn.name = 'latitude'; latIn.value = '';
+                var lngIn = document.createElement('input');
+                lngIn.type = 'hidden'; lngIn.name = 'longitude'; lngIn.value = '';
+                form.appendChild(latIn); form.appendChild(lngIn);
+
+                if (!navigator.geolocation) { return; }
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                form.removeEventListener('submit', onSubmit, true);
+                navigator.geolocation.getCurrentPosition(function (pos) {
+                    latIn.value = String(pos.coords.latitude);
+                    lngIn.value = String(pos.coords.longitude);
+                    form.submit();
+                }, function () {
+                    // Fallo GPS opcional: la gestión se envía igual (snapshot vacío).
+                    latIn.value = ''; lngIn.value = '';
+                    form.submit();
+                }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+            }, true);
+        });
     });
 </script>
 @endsection

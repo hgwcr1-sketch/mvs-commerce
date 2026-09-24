@@ -69,6 +69,8 @@ class VisitController extends Controller
                 'promise_date' => ['nullable', 'date', 'required_if:status,promesa_pago'],
                 'promise_amount' => ['nullable', 'numeric', 'min:0'],
                 'notes' => ['nullable', 'string', 'max:2000'],
+                'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+                'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             ]
             : [
                 'scheduled_for' => ['required', 'date'],

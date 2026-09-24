@@ -168,4 +168,22 @@ class CollectorPortfolioService
             ->where('customer_id', $customer->id)
             ->exists();
     }
+
+    /** Fase 2C — guardar ubicación del cliente desde el cobrador. NO valida location_validated_*. */
+    public function saveLocation(User $collector, Company $company, Customer $customer, array $data): void
+    {
+        abort_unless(
+            (int) $customer->company_id === (int) $company->id
+            && $this->assignmentExists($collector, $company, $customer),
+            404
+        );
+
+        $customer->update([
+            'latitude' => (string) $data['latitude'],
+            'longitude' => (string) $data['longitude'],
+            'location_reference' => ($data['location_reference'] ?? null) !== null && trim((string) $data['location_reference']) !== ''
+                ? trim((string) $data['location_reference'])
+                : $customer->location_reference,
+        ]);
+    }
 }

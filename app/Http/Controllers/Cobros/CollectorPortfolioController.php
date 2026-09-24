@@ -46,4 +46,18 @@ class CollectorPortfolioController extends Controller
             'payments' => $data['payments'],
         ]);
     }
+
+    /** Fase 2C — guardar ubicación actual del cliente en su cartera. */
+    public function storeLocation(Request $request, Customer $customer, CollectorPortfolioService $service): \Illuminate\Http\RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $validated = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'location_reference' => ['nullable', 'string', 'max:500'],
+        ]);
+        $service->saveLocation($request->user(), $company, $customer, $validated);
+
+        return back()->with('success', 'Ubicación guardada correctamente.');
+    }
 }
