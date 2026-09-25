@@ -108,7 +108,12 @@ class QuoteTest extends TestCase
         $other = $this->product($company, ['sale_price' => 1200, 'cost' => 300, 'tax_rate' => 13]);
         $this->stock($branch, $product, 10);
         $this->stock($branch, $other, 10);
-        $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 2, 'unit_price' => 800, 'discount' => 100, 'discount_type' => 'fixed'])->json('quote_id'));
+        $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 2, 'unit_price' => 800, 'discount' => 100, 'discount_type' => 'fixed'], [
+            'items' => [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 800, 'discount' => 100, 'discount_type' => 'fixed'],
+                ['product_id' => $other->id, 'quantity' => 1],
+            ],
+        ])->json('quote_id'));
         $original = $quote->load('items')->toArray();
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.load', $quote))

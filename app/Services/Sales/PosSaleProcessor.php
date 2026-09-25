@@ -291,6 +291,13 @@ class PosSaleProcessor
                     $lineDiscountTotal += $lineDiscount;
                 }
 
+                if ($quote !== null) {
+                    $this->assertQuoteFiscalUnchanged(
+                        $quote,
+                        $resolvedLines,
+                    );
+                }
+
                 $baseAfterLineDiscounts = $this->decimal4(
                     $baseAfterLineDiscounts,
                 );
@@ -1023,6 +1030,66 @@ class PosSaleProcessor
         }
 
         return $profile;
+    }
+
+    private function assertQuoteFiscalUnchanged(
+        Quote $quote,
+        array $resolvedLines,
+    ): void {
+        $quoteItems = $quote->items()
+            ->get()
+            ->keyBy('product_id');
+
+        foreach ($resolvedLines as $line) {
+            /** @var Product $product */
+            $product = $line['product'];
+            $quoteItem = $quoteItems->get($product->id);
+
+            if ($quoteItem === null) {
+                throw ValidationException::withMessages([
+                    'quote_id' => "El producto {$product->name} no forma parte de la cotización; actualice la cotización antes de convertirla.",
+                ]);
+            }
+
+            $current = $this->fiscalTaxService->serializeSnapshot(
+                $this->fiscalTaxService->snapshotFromProfile($line['fiscalProfile']),
+            );
+
+            $snapshot = is_array($quoteItem->fiscal_snapshot)
+                ? $quoteItem->fiscal_snapshot
+                : null;
+
+            if (is_array($snapshot) && ! empty($snapshot['taxes'])) {
+                try {
+                    $frozen = $this->fiscalTaxService->serializeSnapshot($snapshot);
+                } catch (InvalidArgumentException $exception) {
+                    throw ValidationException::withMessages([
+                        'quote_id' => "La fiscalidad congelada de la cotización para {$product->name} no es válida; actualice la cotización antes de convertirla.",
+                    ]);
+                }
+
+                if ($frozen !== $current) {
+                    throw ValidationException::withMessages([
+                        'quote_id' => "La fiscalidad del producto {$product->name} cambió respecto a la cotización; actualice la cotización antes de convertirla.",
+                    ]);
+                }
+
+                continue;
+            }
+
+            $frozenRate = $quoteItem->tax_rate !== null
+                ? (float) $quoteItem->tax_rate
+                : null;
+
+            if (
+                $frozenRate === null
+                || abs($frozenRate - (float) $line['taxRate']) >= 0.0001
+            ) {
+                throw ValidationException::withMessages([
+                    'quote_id' => "La fiscalidad del producto {$product->name} cambió respecto a la cotización; actualice la cotización antes de convertirla.",
+                ]);
+            }
+        }
     }
 
     private function canonicalPayments(

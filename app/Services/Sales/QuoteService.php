@@ -6,14 +6,22 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanySequence;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\QuoteItemTax;
 use App\Models\User;
+use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class QuoteService
 {
+    public function __construct(private readonly FiscalTaxService $fiscalTaxService)
+    {
+    }
+
     public function create(array $data, User $user, int $companyId, int $branchId): Quote
     {
         return DB::transaction(function () use ($data, $user, $companyId, $branchId) {
@@ -75,7 +83,8 @@ class QuoteService
                 $allocated = $this->decimal($allocated + $share);
                 $line['discountTotal'] = $this->decimal($line['discount'] + $share);
                 $line['subtotal'] = $this->decimal($line['gross'] - $line['discountTotal']);
-                $line['taxRate'] = $this->decimal((float) ($line['product']->tax_rate ?? 0));
+                $line['profile'] = $this->resolveLineProfile($line['product']);
+                $line['taxRate'] = $this->decimal((float) ($line['profile']->rate ?? 0));
                 $line['taxTotal'] = $this->decimal($line['subtotal'] * ($line['taxRate'] / 100));
                 $line['total'] = $this->decimal($line['subtotal'] + $line['taxTotal']);
             }
@@ -93,16 +102,7 @@ class QuoteService
             ]);
 
             foreach ($lines as $line) {
-                $product = $line['product'];
-                $quote->items()->create([
-                    'product_id' => $product->id, 'product_code' => $product->internal_code,
-                    'barcode' => $product->barcode, 'cabys_code' => $product->cabys_code,
-                    'description' => $product->name, 'unit_code' => $product->unit?->abbreviation,
-                    'quantity' => $line['quantity'], 'unit_price' => $line['unitPrice'],
-                    'gross_total' => $line['gross'], 'discount_total' => $line['discountTotal'],
-                    'subtotal' => $line['subtotal'], 'tax_rate' => $line['taxRate'],
-                    'tax_total' => $line['taxTotal'], 'total' => $line['total'], 'unit_cost' => $product->cost,
-                ]);
+                $this->persistItem($quote, $line);
             }
 
             return $quote->load('items');
@@ -173,7 +173,8 @@ class QuoteService
                 $allocated = $this->decimal($allocated + $share);
                 $line['discountTotal'] = $this->decimal($line['discount'] + $share);
                 $line['subtotal'] = $this->decimal($line['gross'] - $line['discountTotal']);
-                $line['taxRate'] = $this->decimal((float) ($line['product']->tax_rate ?? 0));
+                $line['profile'] = $this->resolveLineProfile($line['product']);
+                $line['taxRate'] = $this->decimal((float) ($line['profile']->rate ?? 0));
                 $line['taxTotal'] = $this->decimal($line['subtotal'] * ($line['taxRate'] / 100));
                 $line['total'] = $this->decimal($line['subtotal'] + $line['taxTotal']);
             }
@@ -192,20 +193,63 @@ class QuoteService
             $quote->items()->delete();
 
             foreach ($lines as $line) {
-                $product = $line['product'];
-                $quote->items()->create([
-                    'product_id' => $product->id, 'product_code' => $product->internal_code,
-                    'barcode' => $product->barcode, 'cabys_code' => $product->cabys_code,
-                    'description' => $product->name, 'unit_code' => $product->unit?->abbreviation,
-                    'quantity' => $line['quantity'], 'unit_price' => $line['unitPrice'],
-                    'gross_total' => $line['gross'], 'discount_total' => $line['discountTotal'],
-                    'subtotal' => $line['subtotal'], 'tax_rate' => $line['taxRate'],
-                    'tax_total' => $line['taxTotal'], 'total' => $line['total'], 'unit_cost' => $product->cost,
-                ]);
+                $this->persistItem($quote, $line);
             }
 
             return $quote->load('items');
         }, 3);
+    }
+
+    private function resolveLineProfile(Product $product): FiscalProfile
+    {
+        try {
+            return $this->fiscalTaxService->resolveProductProfile($product);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede cotizarse: requiere un perfil fiscal explícito ({$exception->getMessage()}).",
+            ]);
+        }
+    }
+
+    private function persistItem(Quote $quote, array $line): void
+    {
+        $product = $line['product'];
+        /** @var FiscalProfile $profile */
+        $profile = $line['profile'];
+        $snapshot = $this->fiscalTaxService->snapshotFromProfile($profile);
+
+        $quoteItem = $quote->items()->create([
+            'product_id' => $product->id, 'product_code' => $product->internal_code,
+            'barcode' => $product->barcode, 'cabys_code' => $product->cabys_code,
+            'description' => $product->name, 'unit_code' => $product->unit?->abbreviation,
+            'quantity' => $line['quantity'], 'unit_price' => $line['unitPrice'],
+            'gross_total' => $line['gross'], 'discount_total' => $line['discountTotal'],
+            'subtotal' => $line['subtotal'], 'tax_rate' => $line['taxRate'],
+            'tax_code' => $profile->tax_code,
+            'tax_rate_code' => $profile->tax_rate_code,
+            'tax_treatment' => $profile->treatment,
+            'fiscal_source' => $profile->catalogVersion?->source,
+            'fiscal_source_version' => $profile->catalogVersion?->source_version,
+            'fiscal_snapshot' => $snapshot,
+            'tax_total' => $line['taxTotal'], 'total' => $line['total'], 'unit_cost' => $product->cost,
+        ]);
+
+        QuoteItemTax::create([
+            'quote_item_id' => $quoteItem->id,
+            'tax_code' => $profile->tax_code,
+            'tax_rate_code' => $profile->tax_rate_code,
+            'description' => $profile->name,
+            'treatment' => $profile->treatment,
+            'rate' => $profile->rate,
+            'factor_iva' => $profile->factor_iva,
+            'base_amount' => $line['subtotal'],
+            'tax_amount' => $line['taxTotal'],
+            'specific_tax_data' => null,
+            'exemption_snapshot' => null,
+            'source' => $profile->catalogVersion?->source,
+            'source_version' => $profile->catalogVersion?->source_version,
+            'sequence' => 1,
+        ]);
     }
 
     private function discount(float $value, string $type, float $base): float

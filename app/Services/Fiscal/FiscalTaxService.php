@@ -3,6 +3,7 @@
 namespace App\Services\Fiscal;
 
 use App\Models\FiscalProfile;
+use App\Models\Product;
 use App\Models\SaleItem;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -68,6 +69,25 @@ class FiscalTaxService
         }
 
         return $this->resolveLegacyTaxRate($legacyTaxRate, $documentType);
+    }
+
+    public function resolveProductProfile(Product $product, string $documentType = '01'): FiscalProfile
+    {
+        $fiscalProfileId = $product->fiscal_profile_id !== null
+            ? (int) $product->fiscal_profile_id
+            : null;
+
+        $legacyTaxRate = $product->tax_rate !== null
+            ? (float) $product->tax_rate
+            : null;
+
+        $profile = $this->resolveForProduct($fiscalProfileId, $legacyTaxRate, $documentType);
+
+        if ($profile->tax_code !== '01' || $profile->rate === null) {
+            throw new InvalidArgumentException('su perfil fiscal no define una tarifa de IVA calculable.');
+        }
+
+        return $profile;
     }
 
     public function productProfiles(): Collection
