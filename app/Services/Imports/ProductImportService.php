@@ -257,7 +257,7 @@ class ProductImportService
             'tax_rate' => $this->decimalValue($data['tax_rate'] ?? null),
             'track_inventory' => $this->booleanValue($data['track_inventory'] ?? null, true),
             'allow_negative_stock' => $this->booleanValue($data['allow_negative_stock'] ?? null, false),
-            'prints_label' => $this->booleanValue($data['prints_label'] ?? null, false),
+            'prints_label' => $this->booleanValue($data['prints_label'] ?? null, true),
             'is_active' => $this->booleanValue($data['is_active'] ?? null, true),
             'valid' => true,
             'errors' => [],
