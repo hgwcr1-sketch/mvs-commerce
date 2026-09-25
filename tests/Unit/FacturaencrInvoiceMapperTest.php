@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\Facturaencr\FacturaencrClient;
@@ -745,6 +746,399 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertSame([
             ['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13],
         ], $expected);
+    }
+
+    public function test_line_discount_is_serialized_without_faking_unit_price(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '5060101000000',
+            'description' => 'Producto',
+            'unit_code' => 'un',
+            'quantity' => 2,
+            'unit_price' => 500,
+            'gross_total' => 1000,
+            'discount_total' => 100,
+            'subtotal' => 900,
+            'tax_rate' => 13,
+            'tax_code' => '01',
+            'tax_rate_code' => '08',
+            'tax_total' => 117,
+            'total' => 1017,
+            'unit_cost' => 250,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+        $line = $payload['detalle'][0];
+
+        $this->assertSame(500.0, $line['precioUnitario'], 'precioUnitario debe ser el precio real de la línea');
+        $this->assertSame(100.0, $line['descuento']);
+
+        $base = bcsub(bcmul('500.0000', '2.0000', 4), '100.0000', 4);
+        $this->assertSame('900.0000', $base, 'BCMath: cantidad x precio - descuento = base');
+        $this->assertSame('900.0000', (string) $item->subtotal);
+        $this->assertSame('1000.0000', (string) $item->gross_total, 'el bruto no se reescribe para encajar el descuento');
+    }
+
+    public function test_zero_discount_omits_line_discount(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertArrayNotHasKey('descuento', $payload['detalle'][0]);
+    }
+
+    public function test_discount_above_line_gross_is_blocked(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '5060101000000',
+            'description' => 'Producto',
+            'unit_code' => 'un',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'gross_total' => 1000,
+            'discount_total' => 1500,
+            'subtotal' => 0,
+            'tax_rate' => 13,
+            'tax_total' => 0,
+            'total' => 0,
+            'unit_cost' => 500,
+        ]);
+
+        try {
+            (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $exception) {
+            $this->assertArrayHasKey('detalle[0]_descuento', $exception->getErrors());
+        }
+    }
+
+    public function test_document_type_is_derived_from_sale(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $mapper = new FacturaencrInvoiceMapper();
+
+        $invoice = $mapper->map($sale, [$item], $customer, $company);
+        $this->assertSame('01', $invoice['tipoDocumento']);
+        $this->assertSame('01', $mapper->documentType($sale));
+
+        $sale->update(['document_type' => 'electronic_ticket']);
+        $sale->refresh();
+
+        $ticket = $mapper->map($sale, [$item], $customer, $company);
+        $this->assertSame('04', $ticket['tipoDocumento']);
+        $this->assertSame('04', $mapper->documentType($sale));
+    }
+
+    public function test_unmapped_document_type_is_blocked(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $sale->update(['document_type' => 'custom_document']);
+        $sale->refresh();
+
+        try {
+            (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $exception) {
+            $this->assertArrayHasKey('tipo_documento', $exception->getErrors());
+        }
+    }
+
+    public function test_receptor_email_is_included_only_when_accepted(): void
+    {
+        [$company, , $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $mapper = new FacturaencrInvoiceMapper();
+
+        $accepted = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '1111111111',
+            'name' => 'Cliente Correo',
+            'email' => 'cliente@example.com',
+            'accepts_email_invoice' => true,
+        ]);
+        $declined = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '2222222222',
+            'name' => 'Cliente Sin Correo',
+            'email' => 'no@example.com',
+            'accepts_email_invoice' => false,
+        ]);
+        $withoutEmail = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '3333333333',
+            'name' => 'Cliente Sin Dirección',
+            'accepts_email_invoice' => true,
+        ]);
+
+        $withEmail = $mapper->map($sale, [$item], $accepted, $company);
+        $this->assertSame('cliente@example.com', $withEmail['receptor']['correoElectronico']);
+
+        $withoutConsent = $mapper->map($sale, [$item], $declined, $company);
+        $this->assertArrayNotHasKey('correoElectronico', $withoutConsent['receptor']);
+
+        $noEmail = $mapper->map($sale, [$item], $withoutEmail, $company);
+        $this->assertArrayNotHasKey('correoElectronico', $noEmail['receptor']);
+    }
+
+    public function test_frozen_sale_item_taxes_are_authority(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '5060101000000',
+            'description' => 'Producto',
+            'unit_code' => 'un',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'gross_total' => 1000,
+            'discount_total' => 0,
+            'subtotal' => 1000,
+            'tax_rate' => 13,
+            'tax_code' => '01',
+            'tax_rate_code' => '08',
+            'tax_total' => 0,
+            'total' => 1000,
+            'unit_cost' => 500,
+            'fiscal_snapshot' => [
+                'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+                'source_version' => 'v4.4',
+                'taxes' => [['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13]],
+            ],
+        ]);
+
+        SaleItemTax::create([
+            'sale_item_id' => $item->id,
+            'tax_code' => '01',
+            'tax_rate_code' => '10',
+            'description' => 'Exento',
+            'treatment' => 'exempt',
+            'rate' => 0,
+            'base_amount' => 1000,
+            'tax_amount' => 0,
+            'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+            'source_version' => 'v4.4',
+            'sequence' => 1,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame([['codigo' => '01', 'codigoTarifa' => '10', 'tarifa' => 0]], $payload['detalle'][0]['impuesto']);
+    }
+
+    public function test_frozen_multi_tax_lines_include_specific_tax_data(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        SaleItemTax::create([
+            'sale_item_id' => $item->id,
+            'tax_code' => '01',
+            'tax_rate_code' => '08',
+            'rate' => 13,
+            'base_amount' => 1000,
+            'tax_amount' => 130,
+            'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+            'source_version' => 'v4.4',
+            'sequence' => 1,
+        ]);
+        SaleItemTax::create([
+            'sale_item_id' => $item->id,
+            'tax_code' => '12',
+            'rate' => 5,
+            'specific_tax_data' => ['montoImpuestoEspecifico' => 50],
+            'base_amount' => 1000,
+            'tax_amount' => 50,
+            'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+            'source_version' => 'v4.4',
+            'sequence' => 2,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+        $taxes = $payload['detalle'][0]['impuesto'];
+
+        $this->assertCount(2, $taxes);
+        $this->assertSame('01', $taxes[0]['codigo']);
+        $this->assertSame('08', $taxes[0]['codigoTarifa']);
+        $this->assertSame(13, $taxes[0]['tarifa']);
+        $this->assertSame('12', $taxes[1]['codigo']);
+        $this->assertSame(['montoImpuestoEspecifico' => 50], $taxes[1]['datosImpuestoEspecifico']);
+    }
+
+    public function test_zero_exempt_and_not_subject_serialize_distinctly(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+
+        foreach ([['01', 'zero_rate'], ['10', 'exempt'], ['11', 'not_subject']] as [$rateCode, $treatment]) {
+            $item = SaleItem::create([
+                'sale_id' => $sale->id,
+                'product_code' => 'P-' . $rateCode,
+                'cabys_code' => '5060101000000',
+                'description' => 'Producto ' . $rateCode,
+                'unit_code' => 'un',
+                'quantity' => 1,
+                'unit_price' => 1000,
+                'gross_total' => 1000,
+                'discount_total' => 0,
+                'subtotal' => 1000,
+                'tax_rate' => 0,
+                'tax_code' => '01',
+                'tax_rate_code' => $rateCode,
+                'tax_treatment' => $treatment,
+                'tax_total' => 0,
+                'total' => 1000,
+                'unit_cost' => 500,
+            ]);
+
+            $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+            $tax = $payload['detalle'][0]['impuesto'][0];
+
+            $this->assertSame('01', $tax['codigo']);
+            $this->assertSame($rateCode, $tax['codigoTarifa'], "Tarifa {$rateCode} debe serializarse tal cual");
+            $this->assertSame(0, $tax['tarifa']);
+        }
+    }
+
+    public function test_exoneration_is_serialized_from_frozen_tax(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $exoneration = [
+            'tipoDocumento' => '01',
+            'numeroDocumento' => 'EX-2026-001',
+            'nombreInstitucion' => 'Ministerio de Hacienda',
+            'fechaEmision' => '2026-01-15',
+            'porcentajeExencion' => 100.0,
+            'montoExoneracion' => 130.0,
+        ];
+
+        SaleItemTax::create([
+            'sale_item_id' => $item->id,
+            'tax_code' => '01',
+            'tax_rate_code' => '08',
+            'rate' => 13,
+            'base_amount' => 1000,
+            'tax_amount' => 0,
+            'exemption_snapshot' => $exoneration,
+            'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+            'source_version' => 'v4.4',
+            'sequence' => 1,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertEquals($exoneration, $payload['detalle'][0]['impuesto'][0]['exoneracion']);
+    }
+
+    public function test_foreign_currency_and_exchange_rate_are_preserved(): void
+    {
+        [$company, $customer] = $this->prepareData();
+        $branch = Branch::where('company_id', $company->id)->first();
+        $user = User::factory()->create(['is_active' => true]);
+        $sale = Sale::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'user_id' => $user->id,
+            'sale_number' => 'POS-USD-001',
+            'document_type' => 'electronic_invoice',
+            'sale_condition' => 'cash',
+            'status' => 'completed',
+            'currency_code' => 'USD',
+            'exchange_rate' => 530.25,
+            'subtotal' => 1000,
+            'total' => 1130,
+            'completed_at' => now(),
+        ]);
+        $item = $this->createItem($sale);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('USD', $payload['currency']);
+        $this->assertSame(530.25, $payload['exchangeRate']);
+    }
+
+    public function test_credit_sale_keeps_condition_term_and_payment_methods(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['sale_condition' => 'credit', 'due_date' => now()->addDays(45)]);
+        $item = $this->createItem($sale);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company, $sale->payments->first());
+
+        $this->assertSame('02', $payload['condicionVenta']);
+        $this->assertSame('45', $payload['plazoCredito']);
+        $this->assertArrayNotHasKey('medioPago', $payload);
+        $this->assertSame('CRC', $payload['currency']);
+        $this->assertSame(1.0, $payload['exchangeRate']);
+    }
+
+    public function test_idempotency_key_uses_derived_document_type(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $mapper = new FacturaencrInvoiceMapper();
+
+        $invoiceKey = $mapper->idempotencyKey($sale, $mapper->documentType($sale));
+        $ticketKey = $mapper->idempotencyKey($sale, '04');
+
+        $this->assertSame(md5("{$company->id}-{$sale->id}-01"), $invoiceKey);
+        $this->assertSame(md5("{$company->id}-{$sale->id}-04"), $ticketKey);
+        $this->assertNotSame($invoiceKey, $ticketKey);
+
+        $sale->update(['document_type' => 'electronic_ticket']);
+        $sale->refresh();
+
+        $this->assertSame($ticketKey, $mapper->idempotencyKey($sale, $mapper->documentType($sale)));
+        $this->assertSame($ticketKey, $mapper->idempotencyKey($sale->fresh(), $mapper->documentType($sale->fresh())));
+    }
+
+    public function test_historical_fiscal_snapshot_is_preserved(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '5060101000000',
+            'description' => 'Producto histórico',
+            'unit_code' => 'un',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'gross_total' => 1000,
+            'discount_total' => 0,
+            'subtotal' => 1000,
+            'tax_rate' => 2,
+            'tax_total' => 20,
+            'total' => 1020,
+            'unit_cost' => 500,
+            'fiscal_snapshot' => [
+                'source' => 'Hacienda v4.4 / Facturaencr OpenAPI',
+                'source_version' => 'v4.4',
+                'taxes' => [['codigo' => '01', 'codigoTarifa' => '03', 'tarifa' => 2]],
+            ],
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+        $tax = $payload['detalle'][0]['impuesto'][0];
+
+        $this->assertSame('03', $tax['codigoTarifa']);
+        $this->assertSame(2, $tax['tarifa']);
+        $this->assertSame('v4.4', $item->fiscal_snapshot['source_version']);
     }
 
     private function prepareData(

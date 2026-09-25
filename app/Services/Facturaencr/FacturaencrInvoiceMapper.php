@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Services\Fiscal\FiscalTaxService;
@@ -37,7 +38,8 @@ class FacturaencrInvoiceMapper
         ?SalePayment $salePayment = null,
         ?string $idempotencyKey = null
     ): array {
-        $errors = $this->validate($sale, $saleItems, $customer, $company, $salePayment);
+        $documentType = $this->documentType($sale);
+        $errors = $this->validate($sale, $saleItems, $customer, $company, $salePayment, $documentType);
 
         if (!empty($errors)) {
             throw new FacturaencrValidationException($errors);
@@ -45,11 +47,12 @@ class FacturaencrInvoiceMapper
 
         $payload = [
             'emisorLegalId' => $this->emisorLegalId($company),
+            'tipoDocumento' => $documentType,
             'condicionVenta' => $this->mapCondicionVenta($sale->sale_condition),
             'currency' => $sale->currency_code,
             'exchangeRate' => (float) $sale->exchange_rate,
             'receptor' => $this->mapReceptor($customer),
-            'detalle' => $this->mapDetalle($saleItems),
+            'detalle' => $this->mapDetalle($saleItems, $documentType),
         ];
 
         $medioPago = $this->mapMedioPago($sale, $salePayment);
@@ -70,6 +73,22 @@ class FacturaencrInvoiceMapper
     public function idempotencyKey(Sale $sale, string $documentType): string
     {
         return md5("{$sale->company_id}-{$sale->id}-{$documentType}");
+    }
+
+    /**
+     * Documento electrónico derivado de la venta: Factura Electrónica 01 o
+     * Tiquete Electrónico 04. Nunca se asume 01 de forma fija.
+     */
+    public function documentType(Sale $sale): string
+    {
+        return match ($sale->document_type) {
+            Sale::DOCUMENT_ELECTRONIC_INVOICE => '01',
+            Sale::DOCUMENT_ELECTRONIC_TICKET => '04',
+            default => throw new FacturaencrValidationException([
+                'tipo_documento' => 'Tipo de documento de venta no mapeable a FE/Tiquete: '
+                    . ($sale->document_type ?? '(vacío)'),
+            ]),
+        };
     }
 
     public function canUseSandboxEmisor(): bool
@@ -102,7 +121,8 @@ class FacturaencrInvoiceMapper
         array $saleItems,
         Customer $customer,
         Company $company,
-        ?SalePayment $salePayment = null
+        ?SalePayment $salePayment = null,
+        string $documentType = '01'
     ): array {
         $errors = [];
 
@@ -186,6 +206,11 @@ class FacturaencrInvoiceMapper
                 $errors["{$prefix}_precio"] = 'El precio unitario no puede ser negativo';
             }
 
+            $discountError = $this->validateDiscount($item);
+            if ($discountError !== null) {
+                $errors["{$prefix}_descuento"] = $discountError;
+            }
+
             if (empty($item->unit_code)) {
                 $errors["{$prefix}_unidad"] = 'La unidad de medida no está especificada';
             } elseif (!$unitMapper->isSupported($item->unit_code)) {
@@ -193,13 +218,46 @@ class FacturaencrInvoiceMapper
             }
 
             try {
-                $this->fiscalTaxService->snapshotForSaleItem($item);
+                $this->taxesFor($item, $documentType);
             } catch (Throwable $exception) {
                 $errors["{$prefix}_impuesto"] = $exception->getMessage();
             }
         }
 
         return $errors;
+    }
+
+    /**
+     * El descuento se valida con precisión decimal (BCMath): nunca se
+     * ajusta precioUnitario para hacer cuadrar la base de la línea.
+     */
+    private function validateDiscount(SaleItem $item): ?string
+    {
+        if ($item->gross_total === null) {
+            return null;
+        }
+
+        $gross = $this->money($item->gross_total);
+        $discount = $this->money($item->discount_total);
+
+        if (bccomp($discount, '0', 4) < 0) {
+            return 'El descuento de la línea no puede ser negativo';
+        }
+
+        if (bccomp($gross, '0', 4) >= 0 && bccomp($discount, $gross, 4) > 0) {
+            return 'El descuento de la línea supera el bruto de la línea';
+        }
+
+        return null;
+    }
+
+    private function money(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '0.0000';
+        }
+
+        return bcadd((string) $value, '0', 4);
     }
 
     private function emisorLegalId(Company $company): string
@@ -232,32 +290,84 @@ class FacturaencrInvoiceMapper
 
     private function mapReceptor(Customer $customer): array
     {
-        return [
+        $receptor = [
             'tipoIdentificacion' => $customer->identification_type,
             'numeroIdentificacion' => $customer->identification,
             'nombre' => $customer->name,
         ];
+
+        $email = trim((string) ($customer->email ?? ''));
+
+        if ($email !== '' && $customer->accepts_email_invoice) {
+            $receptor['correoElectronico'] = $email;
+        }
+
+        return $receptor;
     }
 
-    private function mapDetalle(array $saleItems): array
+    private function mapDetalle(array $saleItems, string $documentType): array
     {
         $unitMapper = new FacturaencrUnitMapper();
         $detalle = [];
 
         foreach ($saleItems as $item) {
-            $detalle[] = [
+            $line = [
                 'codigoCabys' => $item->cabys_code,
                 'detalle' => $item->description,
                 'cantidad' => (float) $item->quantity,
                 'unidadMedida' => $unitMapper->map($item->unit_code),
                 'precioUnitario' => (float) $item->unit_price,
-                'impuesto' => $this->fiscalTaxService->serializeSnapshot(
-                    $this->fiscalTaxService->snapshotForSaleItem($item),
-                ),
             ];
+
+            $discount = $this->money($item->discount_total);
+            if (bccomp($discount, '0', 4) > 0) {
+                $line['descuento'] = (float) $discount;
+            }
+
+            $line['impuesto'] = $this->taxesFor($item, $documentType);
+
+            $detalle[] = $line;
         }
 
         return $detalle;
+    }
+
+    /**
+     * Impuestos de la línea desde lo congelado en la venta (SaleItemTax o
+     * fiscal_snapshot del SaleItem). Jamás se lee el producto actual.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function taxesFor(SaleItem $item, string $documentType): array
+    {
+        $frozen = $item->taxes()
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get();
+
+        if ($frozen->isEmpty()) {
+            return $this->fiscalTaxService->serializeSnapshot(
+                $this->fiscalTaxService->snapshotForSaleItem($item, $documentType),
+            );
+        }
+
+        $first = $frozen->first();
+        $snapshot = [
+            'source' => $first->source,
+            'source_version' => $first->source_version,
+            'taxes' => $frozen->map(fn (SaleItemTax $tax): array => array_filter([
+                'codigo' => $tax->tax_code,
+                'codigoTarifa' => $tax->tax_rate_code,
+                'tarifa' => $tax->rate !== null ? (float) $tax->rate : null,
+                'factorIVA' => $tax->factor_iva !== null ? (float) $tax->factor_iva : null,
+                'datosImpuestoEspecifico' => $tax->specific_tax_data ?: null,
+                'exoneracion' => $tax->exemption_snapshot ?: null,
+            ], static fn (mixed $value): bool => $value !== null))->values()->all(),
+        ];
+
+        $this->fiscalTaxService->validateSnapshot($snapshot, $documentType);
+
+        return $this->fiscalTaxService->serializeSnapshot($snapshot);
     }
 
     private function mapCondicionVenta(string $condition): string

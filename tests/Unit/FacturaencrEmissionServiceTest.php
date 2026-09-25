@@ -449,6 +449,55 @@ class FacturaencrEmissionServiceTest extends TestCase
         $this->assertCount(2, ElectronicDocument::all());
     }
 
+    public function test_emit_derives_tiquete_document_type_and_stable_key(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $sale->update(['document_type' => 'electronic_ticket']);
+        $sale->refresh();
+        $item = $this->createItem($sale);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/factura' => Http::response([
+                'status' => 'accepted',
+                'documentId' => 'doc-ticket',
+            ], 200),
+        ]);
+
+        $service = new FacturaencrEmissionService();
+        $first = $service->emit($sale, $company, $customer, [$item], $sale->payments->first());
+        $second = $service->emit($sale, $company, $customer, [$item], $sale->payments->first());
+
+        $this->assertSame('04', $first->document_type);
+        $this->assertSame(md5("{$company->id}-{$sale->id}-04"), $first->idempotency_key);
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame($first->idempotency_key, $second->idempotency_key);
+        $this->assertCount(1, ElectronicDocument::where('sale_id', $sale->id)->get());
+        $this->assertCount(1, Http::recorded());
+
+        Http::assertSent(fn ($request) => $request->data()['tipoDocumento'] === '04'
+            && $request->hasHeader('Idempotency-Key', $first->idempotency_key));
+    }
+
+    public function test_emit_keeps_factura_document_type_01(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/factura' => Http::response([
+                'status' => 'accepted',
+                'documentId' => 'doc-invoice',
+            ], 200),
+        ]);
+
+        $document = (new FacturaencrEmissionService())->emit($sale, $company, $customer, [$item], $sale->payments->first());
+
+        $this->assertSame('01', $document->document_type);
+        $this->assertSame(md5("{$company->id}-{$sale->id}-01"), $document->idempotency_key);
+
+        Http::assertSent(fn ($request) => $request->data()['tipoDocumento'] === '01');
+    }
+
     private function prepareData(
         string $tradeName = 'Test Comercio',
         string $legalName = 'Test S.A.',

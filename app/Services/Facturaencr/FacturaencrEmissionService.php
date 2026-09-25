@@ -19,7 +19,7 @@ class FacturaencrEmissionService
         ?SalePayment $salePayment = null
     ): ElectronicDocument {
         $mapper = new FacturaencrInvoiceMapper();
-        $documentType = '01';
+        $documentType = $mapper->documentType($sale);
         $this->assertScope($sale, $company, $customer);
         $idempotencyKey = $mapper->idempotencyKey($sale, $documentType);
 
