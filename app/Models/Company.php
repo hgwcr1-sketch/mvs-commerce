@@ -207,4 +207,14 @@ class Company extends Model
     {
         return $this->hasMany(CashDenomination::class);
     }
+
+    public function backupSetting()
+    {
+        return $this->hasOne(CompanyBackupSetting::class);
+    }
+
+    public function backupRecords()
+    {
+        return $this->hasMany(CompanyBackupRecord::class);
+    }
 }

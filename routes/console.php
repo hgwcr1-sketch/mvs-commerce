@@ -14,6 +14,7 @@ Schedule::command('cash:notifications:dispatch-pending')->everyMinute()->without
 Schedule::command('layaways:process')->hourly()->withoutOverlapping();
 Schedule::command('payables:alerts')->hourly()->withoutOverlapping();
 Schedule::command('loyalty:expire-points')->daily()->withoutOverlapping();
+Schedule::command('backup:companies')->everyFifteenMinutes()->withoutOverlapping();
 
 Artisan::command('licenses:refresh', function (CompanyLicenseService $licenses) {
     CompanyLicense::query()->each(fn (CompanyLicense $license) => $licenses->refresh($license));

@@ -27,5 +27,44 @@
     </form>
 
     <form method="POST" action="{{ route('platform.modules.update', $company) }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">@csrf @method('PATCH')<h2 class="font-bold">Módulos del contrato efectivo</h2><div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">@foreach($moduleCatalog as $key=>$module)<label class="flex min-h-14 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="modules[]" value="{{ $key }}" @checked($company->isModuleEnabled($key)) class="h-5 w-5"> {{ $module['label'] }}</label>@endforeach</div><button class="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar módulos</button></form>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" data-section="company-backups">
+        <div class="flex items-start justify-between gap-4"><div><h2 class="font-bold">Backups y recuperación</h2><p class="mt-1 text-sm text-slate-500">Servicio por empresa · configuración y ejecución solo desde Platform Admin.</p></div>
+            <span class="rounded-full px-3 py-1 text-xs font-bold {{ $backupSetting->is_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }}">{{ $backupSetting->is_enabled ? 'Activado' : 'Desactivado' }}</span></div>
+
+        <form method="POST" action="{{ route('platform.backups.update', $company) }}" class="mt-4">@csrf @method('PATCH')
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <label class="flex min-h-11 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="is_enabled" value="1" class="h-5 w-5" @checked($backupSetting->is_enabled)> Activado / Desactivado</label>
+                <label class="flex min-h-11 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="manual_backup_allowed" value="1" class="h-5 w-5" @checked($backupSetting->manual_backup_allowed)> Permitir backup manual</label>
+                <label class="text-sm font-semibold">Plan<select name="plan" class="mt-2 min-h-11 w-full rounded-xl border px-4">@foreach($backupPlans as $key=>$label)<option value="{{ $key }}" @selected($backupSetting->plan === $key)>{{ $label }}</option>@endforeach</select></label>
+                <label class="text-sm font-semibold">Frecuencia<select name="frequency" class="mt-2 min-h-11 w-full rounded-xl border px-4">@foreach($backupFrequencies as $key=>$label)<option value="{{ $key }}" @selected($backupSetting->frequency === $key)>{{ $label }}</option>@endforeach</select></label>
+                <label class="text-sm font-semibold">Retención (días)<input type="number" name="retention_days" min="1" max="3650" value="{{ $backupSetting->retention_days }}" class="mt-2 min-h-11 w-full rounded-xl border px-4"><span class="mt-1 block text-xs font-normal text-slate-500">Plan FE 5 años: mínimo 1825 días.</span></label>
+                <label class="text-sm font-semibold">Copia externa<select name="external_copy" class="mt-2 min-h-11 w-full rounded-xl border px-4">@foreach($backupExternalCopies as $key=>$label)<option value="{{ $key }}" @selected($backupSetting->external_copy === $key)>{{ $label }}</option>@endforeach</select><span class="mt-1 block text-xs font-normal text-slate-500">Cifrado obligatorio cuando la copia externa está activada.</span></label>
+            </div>
+            <button class="mt-5 min-h-11 rounded-xl bg-amber-500 px-5 font-bold">Guardar ajustes de respaldos</button>
+        </form>
+
+        <dl class="mt-5 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt class="text-slate-500">Último backup</dt><dd class="mt-1 font-semibold">{{ $backupSetting->last_backup_at?->format('d/m/Y H:i') ?: 'Sin backups' }}</dd></div>
+            <div><dt class="text-slate-500">Resultado</dt><dd class="mt-1 font-semibold {{ $backupSetting->last_status === 'success' ? 'text-emerald-700' : ($backupSetting->last_status === 'error' ? 'text-red-700' : '') }}">{{ $backupSetting->last_status === 'success' ? 'Éxito' : ($backupSetting->last_status === 'error' ? 'Error' : '—') }}</dd></div>
+            <div><dt class="text-slate-500">Tamaño</dt><dd class="mt-1 font-semibold">{{ $backupSetting->last_size_bytes !== null ? number_format($backupSetting->last_size_bytes / 1048576, 2).' MB' : '—' }}</dd></div>
+            <div><dt class="text-slate-500">Próximo backup</dt><dd class="mt-1 font-semibold">{{ $backupSetting->is_enabled ? ($backupSetting->next_backup_at?->format('d/m/Y H:i') ?: 'Pendiente') : 'No programado' }}</dd></div>
+        </dl>
+        @if($backupSetting->last_message)<p class="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">{{ $backupSetting->last_message }}</p>@endif
+
+        <div class="mt-5 flex flex-wrap gap-3">
+            <form method="POST" action="{{ route('platform.backups.run', $company) }}">@csrf
+                <button @disabled(! $backupSetting->is_enabled || ! $backupSetting->manual_backup_allowed) class="min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Crear backup ahora</button>
+            </form>
+            <form method="POST" action="{{ route('platform.backups.restore-test', $company) }}">@csrf
+                <button @disabled(! $backupSetting->is_enabled) class="min-h-11 rounded-xl border border-emerald-300 bg-emerald-50 px-5 font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-40">Probar restauración</button>
+            </form>
+            <span class="flex min-h-11 items-center rounded-xl border border-dashed px-4 text-xs font-semibold text-slate-500">Restauración real: solo Platform Admin · no activada sobre producción.</span>
+        </div>
+
+        <div class="mt-6 overflow-x-auto"><table class="min-w-full text-sm"><thead><tr class="text-left text-slate-500"><th class="p-3">Fecha</th><th class="p-3">Tipo</th><th class="p-3">Resultado</th><th class="p-3">Tamaño</th><th class="p-3">Detalle</th></tr></thead><tbody>
+            @forelse($backupRecords as $record)<tr class="border-t" data-record-company="{{ $record->company_id }}"><td class="p-3">{{ $record->created_at?->format('d/m/Y H:i') }}</td><td class="p-3">{{ ['manual'=>'Manual','scheduled'=>'Automático','restore_test'=>'Prueba de restore'][$record->kind] ?? $record->kind }}</td><td class="p-3 {{ $record->status === 'success' ? 'text-emerald-700' : ($record->status === 'error' ? 'text-red-700' : '') }}">{{ $record->status === 'success' ? 'Éxito' : ($record->status === 'error' ? 'Error' : 'En curso') }}</td><td class="p-3">{{ $record->size_bytes !== null ? number_format($record->size_bytes / 1048576, 2).' MB' : '—' }}</td><td class="p-3">{{ \Illuminate\Support\Str::limit((string) $record->message, 120) }}</td></tr>@empty<tr><td colspan="5" class="p-3">Sin respaldos registrados para esta empresa.</td></tr>@endforelse
+        </tbody></table></div>
+    </section>
 </div>
 @endsection

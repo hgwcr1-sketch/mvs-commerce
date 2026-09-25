@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CompanyBackupRecord;
+use App\Models\CompanyBackupSetting;
 use App\Models\CompanyLicense;
 use App\Models\LicensePlan;
 use App\Models\User;
+use App\Services\Backups\CompanyBackupService;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
 use App\Services\Modules\ModuleRegistry;
@@ -100,10 +103,17 @@ class PlatformAdminController extends Controller
         $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
         $company->license->load(['events.actor']);
 
+        $backupService = app(CompanyBackupService::class);
+
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+            'backupSetting' => $backupService->settings($company),
+            'backupRecords' => CompanyBackupRecord::query()->where('company_id', $company->id)->latest()->limit(10)->get(),
+            'backupPlans' => CompanyBackupSetting::PLAN_LABELS,
+            'backupFrequencies' => CompanyBackupSetting::FREQUENCY_LABELS,
+            'backupExternalCopies' => CompanyBackupSetting::EXTERNAL_COPY_LABELS,
         ]);
     }
 
@@ -169,5 +179,48 @@ class PlatformAdminController extends Controller
         $licenses->updateModules($company, $request->user(), $enabled);
 
         return back()->with('success', 'Módulos contratados actualizados.');
+    }
+
+    public function updateBackups(Request $request, Company $company, CompanyBackupService $backups): RedirectResponse
+    {
+        $data = $request->validate([
+            'is_enabled' => ['nullable', 'boolean'],
+            'plan' => ['required', Rule::in(CompanyBackupSetting::PLANS)],
+            'frequency' => ['required', Rule::in(CompanyBackupSetting::FREQUENCIES)],
+            'retention_days' => ['required', 'integer', 'min:1', 'max:3650'],
+            'manual_backup_allowed' => ['nullable', 'boolean'],
+            'external_copy' => ['required', Rule::in(CompanyBackupSetting::EXTERNAL_COPIES)],
+        ]);
+        $data['is_enabled'] = $request->boolean('is_enabled');
+        $data['manual_backup_allowed'] = $request->boolean('manual_backup_allowed');
+
+        $settings = $backups->updateSettings($company, $data, $request->user());
+        $message = $settings->is_enabled
+            ? 'Servicio de backups activado para esta empresa.'
+            : 'Servicio de backups desactivado para esta empresa.';
+
+        return back()->with('success', $message);
+    }
+
+    public function runBackupNow(Request $request, Company $company, CompanyBackupService $backups): RedirectResponse
+    {
+        $record = $backups->runBackup($company, 'manual', $request->user());
+
+        if ($record->status === 'success') {
+            return back()->with('success', 'Backup manual creado y verificado.');
+        }
+
+        return back()->with('error', 'Backup manual falló: '.$record->message);
+    }
+
+    public function runRestoreTest(Request $request, Company $company, CompanyBackupService $backups): RedirectResponse
+    {
+        $record = $backups->runRestoreTest($company, $request->user());
+
+        if ($record->status === 'success') {
+            return back()->with('success', $record->message);
+        }
+
+        return back()->with('error', 'Prueba de restauración falló: '.$record->message);
     }
 }
