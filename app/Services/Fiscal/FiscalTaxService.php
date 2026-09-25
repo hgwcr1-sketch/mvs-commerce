@@ -103,6 +103,25 @@ class FiscalTaxService
             ->values();
     }
 
+    /**
+     * Perfiles fiscales activos de la versión de catálogo activa (fuente
+     * única para catálogos descargables y guías; no duplicar esta autoridad).
+     *
+     * @return Collection<int, FiscalProfile>
+     */
+    public function activeCatalog(): Collection
+    {
+        return FiscalProfile::query()
+            ->with('catalogVersion')
+            ->where('is_active', true)
+            ->whereHas('catalogVersion', fn ($query) => $query->where('status', 'active'))
+            ->orderBy('tax_code')
+            ->orderBy('tax_rate_code')
+            ->orderBy('rate')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function snapshotForSaleItem(SaleItem $item, string $documentType = '01'): array
     {
         if (is_array($item->fiscal_snapshot) && ! empty($item->fiscal_snapshot['taxes'])) {

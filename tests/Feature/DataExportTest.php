@@ -44,10 +44,13 @@ class DataExportTest extends TestCase
             ->assertSee('grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3', false)
             ->assertSee('min-h-11', false);
 
-        [$emptyCompany, $emptyBranch, $emptyUser] = $this->context(['reportes.exportar']);
-        $this->actingAs($emptyUser)->withSession($this->activeSession($emptyCompany, $emptyBranch))
+        [$exportOnlyCompany, $exportOnlyBranch, $exportOnlyUser] = $this->context(['reportes.exportar']);
+        $this->actingAs($exportOnlyUser)->withSession($this->activeSession($exportOnlyCompany, $exportOnlyBranch))
             ->get(route('data-center.exports'))->assertOk()
-            ->assertSee('necesita acceso de lectura');
+            ->assertSee('data-export-dataset="cabys"', false)
+            ->assertSee('data-export-dataset="fiscal-catalog"', false)
+            ->assertDontSee('data-export-dataset="products"', false)
+            ->assertDontSee('data-export-dataset="customers"', false);
     }
 
     public function test_csv_products_are_utf8_and_isolated_by_company(): void
@@ -93,9 +96,16 @@ class DataExportTest extends TestCase
     public function test_each_dataset_requires_its_read_permission_in_addition_to_export_permission(): void
     {
         [$company, $branch, $user] = $this->context(['reportes.exportar']);
-        foreach (array_keys(DataExportService::DATASETS) as $dataset) {
-            $this->actingAs($user)->withSession($this->activeSession($company, $branch))
-                ->get(route('data-center.exports.download', [$dataset, 'csv']))->assertForbidden();
+        foreach (DataExportService::DATASETS as $dataset => $definition) {
+            $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+                ->get(route('data-center.exports.download', [$dataset, 'csv']));
+
+            // Los catálogos fiscales son globales: comparten reportes.exportar.
+            if ($definition['permission'] === 'reportes.exportar') {
+                $response->assertOk();
+            } else {
+                $response->assertForbidden();
+            }
         }
     }
 

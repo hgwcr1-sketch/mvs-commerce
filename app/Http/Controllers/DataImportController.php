@@ -8,12 +8,14 @@ use App\Models\LoyaltyMigrationRun;
 use App\Models\CustomerImportRun;
 use App\Services\Imports\CustomerImportRunService;
 use App\Services\Imports\CustomerImportService;
+use App\Services\Imports\FiscalGuideSheet;
 use App\Services\Imports\HistoricalSaleImportService;
 use App\Services\Imports\InventoryImportService;
 use App\Services\Imports\InventoryMigrationImportService;
 use App\Services\Imports\LoyaltyMigrationImportService;
 use App\Services\Imports\MigrationTemplateService;
 use App\Services\Imports\ProductImportService;
+use App\Services\Fiscal\FiscalTaxService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -397,6 +399,8 @@ class DataImportController extends Controller
                 'codigo_impuesto', 'codigo_tarifa', 'perfil_fiscal'],
             'plantilla_importacion_inventario.xlsx',
             true,
+            'Inventario',
+            true,
         );
     }
 
@@ -405,6 +409,7 @@ class DataImportController extends Controller
         return $this->spreadsheetDownload([
             'TEST-001', 'Producto ejemplo', 10, 'Categoria', 'Marca', 'Unidad', '750000000',
             '123456789', 1500, 3000, 2500, 2800, 13, 2, 20, 'Producto de ejemplo',
+            '01', '08', '',
         ], 'ejemplo_importacion_inventario.xlsx');
     }
 
@@ -424,7 +429,7 @@ class DataImportController extends Controller
             ->orderBy('name')->get();
     }
 
-    private function spreadsheetDownload(array $row, string $fileName, bool $isTemplate = false, string $title = 'Inventario')
+    private function spreadsheetDownload(array $row, string $fileName, bool $isTemplate = false, string $title = 'Inventario', bool $withFiscalGuide = false)
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -432,6 +437,9 @@ class DataImportController extends Controller
             $sheet->setTitle($title);
         }
         $sheet->fromArray([$row], null, 'A1');
+        if ($withFiscalGuide) {
+            (new FiscalGuideSheet)->attach($spreadsheet, app(FiscalTaxService::class));
+        }
         $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(

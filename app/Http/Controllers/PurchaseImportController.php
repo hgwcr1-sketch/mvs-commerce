@@ -12,8 +12,10 @@ use App\Models\ProductBarcode;
 use App\Models\ProductCategory;
 use App\Models\Supplier;
 use App\Models\Unit;
+use App\Services\Imports\FiscalGuideSheet;
 use App\Services\Imports\Managers\PurchaseImportManager;
 use App\Services\Imports\PurchaseExcelImport;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Purchases\CompanyPurchaseSettingsResolver;
 use App\Services\Purchases\PurchaseProcessor;
 use Illuminate\Http\Request;
@@ -36,8 +38,10 @@ class PurchaseImportController extends Controller
     'Marca', 'Proveedor *', 'Unidad de medida *', 'Tipo Artículo',
     'Cantidad *', 'Costo *', 'Precio Venta', 'Impuesto %', 'Descuento %',
     'CABYS', 'Mínimo Stock', 'Máximo Stock', 'Lote', 'Fecha Vencimiento',
-    'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal',
-], null, 'A1');
+            'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal',
+        ], null, 'A1');
+
+        (new FiscalGuideSheet)->attach($spreadsheet, app(FiscalTaxService::class));
 
         $writer = new Xlsx($spreadsheet);
 

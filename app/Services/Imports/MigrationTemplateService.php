@@ -8,6 +8,7 @@ use App\Models\ProductCategory;
 use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -95,6 +96,9 @@ class MigrationTemplateService
             $data->setDataValidation("{$dataColumn}2", $validation);
         }
 
+        if ($type === 'products') {
+            (new FiscalGuideSheet)->attach($spreadsheet, app(FiscalTaxService::class));
+        }
         $spreadsheet->setActiveSheetIndex(0);
 
         return $spreadsheet;
