@@ -7,6 +7,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Models\User;
 use App\Models\Company;
+use App\Contracts\Fiscal\FiscalProviderInterface;
+use App\Services\Fiscal\FiscalManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,7 +17,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(FiscalManager::class);
+
+        $this->app->bind(FiscalProviderInterface::class, function ($app) {
+            return $app->make(FiscalManager::class)->provider();
+        });
     }
 
     /**
