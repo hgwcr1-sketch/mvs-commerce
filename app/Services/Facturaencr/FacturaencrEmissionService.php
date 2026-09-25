@@ -49,7 +49,7 @@ class FacturaencrEmissionService
         ]);
 
         $client = new FacturaencrClient();
-        $response = $client->post('documents/factura', $payload, $idempotencyKey);
+        $response = $client->post($this->endpointFor($documentType), $payload, $idempotencyKey);
 
         if ($response->isSuccess()) {
             $data = $response->data ?? [];
@@ -70,6 +70,89 @@ class FacturaencrEmissionService
         }
 
         return $document;
+    }
+
+    /**
+     * Estados finales y no finales definidos por el contrato DocumentDetail
+     * de Facturaencr: solo accepted/rejected cierran el ciclo de vida.
+     */
+    private const DOCUMENT_STATUSES = [
+        'pending',
+        'queued',
+        'signing',
+        'sent',
+        'polling',
+        'accepted',
+        'rejected',
+    ];
+
+    /**
+     * Consulta GET /documents/{id} (o /documents/clave/{clave}) para sincronizar
+     * el estado de un documento no final. Es idempotente: documentos en estado
+     * final o sin identificador de proveedor no generan HTTP.
+     */
+    public function syncStatus(ElectronicDocument $document): ElectronicDocument
+    {
+        if ($document->isFinal()) {
+            return $document;
+        }
+
+        $endpoint = $document->provider_document_id !== null
+            ? 'documents/' . $document->provider_document_id
+            : ($document->clave !== null ? 'documents/clave/' . $document->clave : null);
+
+        if ($endpoint === null) {
+            return $document;
+        }
+
+        $client = new FacturaencrClient();
+        $response = $client->get($endpoint);
+
+        if (!$response->isSuccess()) {
+            $document->update([
+                'last_error_code' => $response->errorCode,
+                'last_error_message' => $response->errorMessage,
+            ]);
+
+            return $document;
+        }
+
+        $data = $response->data ?? [];
+        $remoteStatus = $data['status'] ?? null;
+
+        $attributes = [
+            'provider_document_id' => $data['documentId'] ?? $document->provider_document_id,
+            'clave' => $data['clave'] ?? $document->clave,
+            'consecutivo' => $data['consecutivo'] ?? $document->consecutivo,
+        ];
+
+        if (in_array($remoteStatus, self::DOCUMENT_STATUSES, true)) {
+            $attributes['status'] = $remoteStatus;
+        }
+
+        if (($attributes['status'] ?? $document->status) === 'rejected') {
+            $attributes['last_error_code'] = 'HACIENDA_REJECTED';
+            $attributes['last_error_message'] = $data['haciendaMessage']
+                ?? ($data['rechazo']['resumen'] ?? null);
+        } elseif (($attributes['status'] ?? $document->status) === 'accepted') {
+            $attributes['last_error_code'] = null;
+            $attributes['last_error_message'] = null;
+        }
+
+        $document->update($attributes);
+
+        return $document;
+    }
+
+    private function endpointFor(string $documentType): string
+    {
+        return match ($documentType) {
+            '01' => 'documents/factura',
+            '04' => 'documents/tiquete',
+            default => throw new \InvalidArgumentException(
+                "Tipo de documento no soportado por Facturaencr: {$documentType}"
+            ),
+        };
     }
 
     private function assertScope(Sale $sale, Company $company, Customer $customer): void

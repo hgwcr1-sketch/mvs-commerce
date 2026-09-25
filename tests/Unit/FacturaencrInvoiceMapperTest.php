@@ -539,6 +539,71 @@ class FacturaencrInvoiceMapperTest extends TestCase
         }
     }
 
+    public function test_unit_catalog_codes_map_to_official_contract_codes(): void
+    {
+        $unitMapper = new \App\Services\Facturaencr\FacturaencrUnitMapper();
+
+        $expected = [
+            'un' => 'Unid',
+            'SERVICIO' => 'Sp',
+            'KG' => 'kg',
+            'GR' => 'g',
+            'LT' => 'L',
+            'ML' => 'mL',
+            'MT' => 'm',
+            'CM' => 'cm',
+            'M2' => 'm2',
+            'M3' => 'm3',
+            'HORA' => 'h',
+            'DIA' => 'd',
+            'ALQUILER' => 'Al',
+            'OTROS' => 'Os',
+        ];
+
+        foreach ($expected as $mvsUnit => $officialCode) {
+            $this->assertSame($officialCode, $unitMapper->map($mvsUnit), "Unidad MVS: {$mvsUnit}");
+        }
+    }
+
+    public function test_unit_mapping_is_case_insensitive_and_accepts_official_codes(): void
+    {
+        $unitMapper = new \App\Services\Facturaencr\FacturaencrUnitMapper();
+
+        $this->assertSame('Unid', $unitMapper->map('Unid'));
+        $this->assertSame('kg', $unitMapper->map('KG'));
+        $this->assertSame('mL', $unitMapper->map('ml'));
+        $this->assertSame('L', $unitMapper->map('l'));
+        $this->assertSame('Sp', $unitMapper->map(' SP '));
+        $this->assertTrue($unitMapper->isSupported('UNIDAD'));
+        $this->assertFalse($unitMapper->isSupported('CAJA'));
+    }
+
+    public function test_payload_uses_official_unit_code_for_mvs_abbreviation(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+
+        $item = SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '5060101000000',
+            'description' => 'Producto',
+            'unit_code' => 'LT',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'gross_total' => 1000,
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'tax_rate' => 13,
+            'tax_total' => 117,
+            'total' => 1017,
+            'unit_cost' => 500,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper())->map($sale, [$item], $customer, $company);
+
+        $this->assertSame('L', $payload['detalle'][0]['unidadMedida']);
+    }
+
     public function test_cabys_service_found(): void
     {
         Http::fake([

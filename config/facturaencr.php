@@ -12,6 +12,12 @@ return [
 
     'timeout' => (int) env('FACTURAENCR_TIMEOUT', 30),
 
+    'max_retries' => (int) env('FACTURAENCR_MAX_RETRIES', 2),
+
+    'retry_delay_ms' => (int) env('FACTURAENCR_RETRY_DELAY_MS', 500),
+
+    'retry_max_delay_ms' => (int) env('FACTURAENCR_RETRY_MAX_DELAY_MS', 5000),
+
     'sandbox_emisor' => env('FACTURAENCR_SANDBOX_EMISOR', 'EMISORPRUEBA'),
 
 ];

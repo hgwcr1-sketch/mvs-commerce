@@ -148,6 +148,8 @@ class FacturaencrEmissionServiceTest extends TestCase
 
     public function test_emit_persists_expected_http_error_classification(): void
     {
+        Config::set('facturaencr.max_retries', 0);
+
         $responses = [
             [401, 'unauthorized'],
             [403, 'forbidden'],
@@ -193,19 +195,50 @@ class FacturaencrEmissionServiceTest extends TestCase
         $this->assertNotNull($document->last_error_message);
     }
 
-    public function test_emit_records_retryable_network_error_without_retrying(): void
+    public function test_emit_retries_connection_errors_before_persisting_error(): void
     {
         [$company, $customer, $sale] = $this->prepareData();
         $item = $this->createItem($sale);
 
-        Http::fake(fn () => throw new ConnectionException('network timeout'));
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+            throw new ConnectionException('network timeout');
+        });
 
         $document = (new FacturaencrEmissionService())->emit($sale, $company, $customer, [$item], $sale->payments->first());
 
         $this->assertSame('error', $document->status);
         $this->assertSame('CONNECTION_TIMEOUT', $document->last_error_code);
         $this->assertStringContainsString('network timeout', $document->last_error_message);
+        $this->assertSame(1 + (int) config('facturaencr.max_retries'), $attempts);
         Http::assertNothingSent();
+    }
+
+    public function test_emit_retries_rate_limit_with_same_idempotency_key(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+
+        Http::fakeSequence()
+            ->push(['error' => 'rate_limit', 'message' => 'Rate limited'], 429)
+            ->push(['status' => 'queued', 'documentId' => 'doc-retry'], 202);
+
+        $document = (new FacturaencrEmissionService())->emit($sale, $company, $customer, [$item], $sale->payments->first());
+
+        $this->assertSame('queued', $document->status);
+        $this->assertSame('doc-retry', $document->provider_document_id);
+
+        $keys = [];
+        Http::recorded(function ($request) use (&$keys) {
+            $keys[] = $request->header('Idempotency-Key')[0] ?? null;
+
+            return true;
+        });
+
+        $this->assertCount(2, $keys);
+        $this->assertNotNull($keys[0]);
+        $this->assertSame($keys[0], $keys[1]);
     }
 
     public function test_emit_reuses_document_and_idempotency_key_on_retry(): void
@@ -457,7 +490,7 @@ class FacturaencrEmissionServiceTest extends TestCase
         $item = $this->createItem($sale);
 
         Http::fake([
-            'api.facturaencr.com/v2/efactura/documents/factura' => Http::response([
+            'api.facturaencr.com/v2/efactura/documents/tiquete' => Http::response([
                 'status' => 'accepted',
                 'documentId' => 'doc-ticket',
             ], 200),
@@ -474,7 +507,8 @@ class FacturaencrEmissionServiceTest extends TestCase
         $this->assertCount(1, ElectronicDocument::where('sale_id', $sale->id)->get());
         $this->assertCount(1, Http::recorded());
 
-        Http::assertSent(fn ($request) => $request->data()['tipoDocumento'] === '04'
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documents/tiquete')
+            && $request->data()['tipoDocumento'] === '04'
             && $request->hasHeader('Idempotency-Key', $first->idempotency_key));
     }
 
@@ -496,6 +530,173 @@ class FacturaencrEmissionServiceTest extends TestCase
         $this->assertSame(md5("{$company->id}-{$sale->id}-01"), $document->idempotency_key);
 
         Http::assertSent(fn ($request) => $request->data()['tipoDocumento'] === '01');
+    }
+
+    public function test_sync_status_moves_queued_document_to_accepted(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, ['provider_document_id' => 'doc-sync']);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/doc-sync' => Http::response([
+                'status' => 'accepted',
+                'documentId' => 'doc-sync',
+                'clave' => '506301010000000000010000000000000000001',
+                'consecutivo' => '001-001-000009',
+            ], 200),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('accepted', $synced->status);
+        $this->assertTrue($synced->isFinal());
+        $this->assertSame('506301010000000000010000000000000000001', $synced->clave);
+        $this->assertSame('001-001-000009', $synced->consecutivo);
+        $this->assertNull($synced->last_error_code);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documents/doc-sync')
+            && $request->method() === 'GET');
+    }
+
+    public function test_sync_status_records_hacienda_rejection(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, ['provider_document_id' => 'doc-rejected']);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/doc-rejected' => Http::response([
+                'status' => 'rejected',
+                'haciendaMessage' => 'Clave duplicada -400',
+            ], 200),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('rejected', $synced->status);
+        $this->assertTrue($synced->isFinal());
+        $this->assertSame('HACIENDA_REJECTED', $synced->last_error_code);
+        $this->assertStringContainsString('Clave duplicada', $synced->last_error_message);
+    }
+
+    public function test_sync_status_uses_rechazo_resumen_when_hacienda_message_is_missing(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, ['provider_document_id' => 'doc-rechazo']);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/doc-rechazo' => Http::response([
+                'status' => 'rejected',
+                'rechazo' => ['resumen' => 'Rechazado por Hacienda', 'codigos' => ['-37']],
+            ], 200),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('rejected', $synced->status);
+        $this->assertSame('HACIENDA_REJECTED', $synced->last_error_code);
+        $this->assertStringContainsString('Rechazado por Hacienda', $synced->last_error_message);
+    }
+
+    public function test_sync_status_keeps_document_non_final_while_provider_processes(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, ['provider_document_id' => 'doc-inflight']);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/doc-inflight' => Http::response([
+                'status' => 'signing',
+            ], 200),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('signing', $synced->status);
+        $this->assertFalse($synced->isFinal());
+        $this->assertTrue($synced->isPending());
+    }
+
+    public function test_sync_status_falls_back_to_clave_when_document_id_is_missing(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, [
+            'clave' => '506301010000000000010000000000000000002',
+        ]);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/clave/506301010000000000010000000000000000002' => Http::response([
+                'status' => 'accepted',
+                'clave' => '506301010000000000010000000000000000002',
+                'documentId' => 'doc-from-clave',
+            ], 200),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('accepted', $synced->status);
+        $this->assertSame('doc-from-clave', $synced->provider_document_id);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'documents/clave/506301010000000000010000000000000000002'));
+    }
+
+    public function test_sync_status_skips_http_when_document_is_final(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = ElectronicDocument::create([
+            'company_id' => $company->id,
+            'sale_id' => $sale->id,
+            'provider' => 'facturaencr',
+            'document_type' => '01',
+            'environment' => 'sandbox',
+            'idempotency_key' => 'sync-final',
+            'provider_document_id' => 'doc-final',
+            'status' => 'accepted',
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('accepted', $synced->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_sync_status_keeps_current_status_when_query_fails(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, ['provider_document_id' => 'doc-failing']);
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/doc-failing' => Http::response([
+                'message' => 'Internal server error',
+            ], 500),
+        ]);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('queued', $synced->status);
+        $this->assertFalse($synced->isFinal());
+        $this->assertSame('HTTP_500', $synced->last_error_code);
+        $this->assertStringContainsString('Internal server error', $synced->last_error_message);
+    }
+
+    public function test_sync_status_makes_no_http_without_provider_identifiers(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $document = $this->createQueuedDocument($company, $sale, []);
+
+        $synced = (new FacturaencrEmissionService())->syncStatus($document);
+
+        $this->assertSame('queued', $synced->status);
+        Http::assertNothingSent();
+    }
+
+    private function createQueuedDocument(Company $company, Sale $sale, array $attributes): ElectronicDocument
+    {
+        return ElectronicDocument::create(array_merge([
+            'company_id' => $company->id,
+            'sale_id' => $sale->id,
+            'provider' => 'facturaencr',
+            'document_type' => '01',
+            'environment' => 'sandbox',
+            'idempotency_key' => 'sync-key-' . $sale->id,
+            'status' => 'queued',
+        ], $attributes));
     }
 
     private function prepareData(
