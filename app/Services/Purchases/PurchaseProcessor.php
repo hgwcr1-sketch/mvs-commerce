@@ -71,6 +71,15 @@ class PurchaseProcessor
                 /** @var FiscalProfile $profile */
                 $profile = $resolvedLine['profile'];
                 $snapshot = $this->fiscalTaxService->snapshotFromProfile($profile);
+                $documentTaxes = is_array($line->document_taxes) && $line->document_taxes !== []
+                    ? array_values($line->document_taxes)
+                    : null;
+
+                if ($documentTaxes !== null) {
+                    // Trazabilidad fiel de la fiscalidad del documento (multi-impuesto
+                    // y exoneración). Los cálculos operativos siguen en columnas/filas.
+                    $snapshot['document'] = ['impuestos' => $documentTaxes];
+                }
 
                 $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
@@ -94,24 +103,40 @@ class PurchaseProcessor
                     'total' => $resolvedLine['total'],
                 ]);
 
-                PurchaseItemTax::create([
-                    'purchase_item_id' => $purchaseItem->id,
-                    'tax_code' => $profile->tax_code,
-                    'tax_rate_code' => $profile->tax_rate_code,
-                    'description' => $profile->name,
-                    'treatment' => $profile->treatment,
-                    'rate' => $profile->rate,
-                    'factor_iva' => $profile->factor_iva,
-                    'base_amount' => $resolvedLine['fiscal_base'],
-                    'tax_amount' => $resolvedLine['fiscal_tax'],
-                    'specific_tax_data' => null,
-                    'exemption_snapshot' => null,
-                    'source' => $profile->catalogVersion?->source,
-                    'source_version' => $profile->catalogVersion?->source_version,
-                    'sequence' => 1,
-                ]);
+                if ($documentTaxes !== null) {
+                    $this->persistDocumentTaxRows(
+                        $purchaseItem,
+                        $documentTaxes,
+                        $profile,
+                        $resolvedLine,
+                    );
+                } else {
+                    PurchaseItemTax::create([
+                        'purchase_item_id' => $purchaseItem->id,
+                        'tax_code' => $profile->tax_code,
+                        'tax_rate_code' => $profile->tax_rate_code,
+                        'description' => $profile->name,
+                        'treatment' => $profile->treatment,
+                        'rate' => $profile->rate,
+                        'factor_iva' => $profile->factor_iva,
+                        'base_amount' => $resolvedLine['fiscal_base'],
+                        'tax_amount' => $resolvedLine['fiscal_tax'],
+                        'specific_tax_data' => null,
+                        'exemption_snapshot' => null,
+                        'source' => $profile->catalogVersion?->source,
+                        'source_version' => $profile->catalogVersion?->source_version,
+                        'sequence' => 1,
+                    ]);
+                }
 
                 $product->cost = $resolvedLine['unit_cost'];
+
+                // Solo se completa el perfil del producto cuando la clasificación
+                // es inequívoca y el producto aún no tiene perfil explícito.
+                if ($product->fiscal_profile_id === null && $profile->rate !== null) {
+                    $product->fiscal_profile_id = $profile->id;
+                    $product->tax_rate = (float) $profile->rate;
+                }
 
                 if ($line->new_sale_price !== null) {
                     $product->sale_price = $line->new_sale_price;
@@ -256,6 +281,35 @@ class PurchaseProcessor
             $discount = $subtotal * ($discountPercent / 100);
             $taxableAmount = $subtotal - $discount;
             $tax = $taxableAmount * ($taxRate / 100);
+
+            $documentTaxes = is_array($line->document_taxes) && $line->document_taxes !== []
+                ? array_values($line->document_taxes)
+                : null;
+
+            if ($documentTaxes !== null) {
+                // Montos explícitos del LineaDetalle = autoridad económica:
+                // tax/total incorporan TODOS los impuestos del documento con su
+                // Monto original (la exoneración ya está aplicada ahí). Solo se
+                // calcula el IVA primario cuando el XML no trae Monto para él.
+                $primaryIndex = $this->fiscalTaxService->primaryDocumentTaxIndex($documentTaxes);
+                $documentTaxTotal = 0.0;
+                foreach ($documentTaxes as $docTax) {
+                    if (isset($docTax['monto']) && is_numeric($docTax['monto'])) {
+                        $documentTaxTotal += (float) $docTax['monto'];
+                    }
+                }
+
+                $primaryHasMonto = $primaryIndex !== null
+                    && isset($documentTaxes[$primaryIndex]['monto'])
+                    && is_numeric($documentTaxes[$primaryIndex]['monto']);
+
+                if (!$primaryHasMonto) {
+                    $documentTaxTotal += $tax;
+                }
+
+                $tax = $documentTaxTotal;
+            }
+
             $total = $taxableAmount + $tax;
 
             $resolvedLines[] = [
@@ -278,9 +332,10 @@ class PurchaseProcessor
     }
 
     /**
-     * La fiscalidad de la línea (1/2/4/13) es autoridad si es inequívoca;
-     * 0/8/NULL u otras tasas no se inventan y se resuelven desde el
-     * perfil fiscal explícito del producto vía FiscalTaxService.
+     * Autoridad fiscal única: FiscalTaxService resuelve la línea con la
+     * precedencia perfil explícito > códigos > documento (si existe) >
+     * tasa legada inequívoca (1/2/4/13) > perfil del producto. 0/8/NULL
+     * jamás se infieren; si nada resuelve, la línea se bloquea.
      */
     private function resolveLineProfile(
         PurchaseLineData $line,
@@ -290,30 +345,91 @@ class PurchaseProcessor
             ? (float) $line->tax_rate
             : null;
 
-        $isUnequivocal = $lineRate !== null && (
-            abs($lineRate - 1) < 0.0001
-            || abs($lineRate - 2) < 0.0001
-            || abs($lineRate - 4) < 0.0001
-            || abs($lineRate - 13) < 0.0001
-        );
-
         try {
-            if ($isUnequivocal) {
-                $profile = $this->fiscalTaxService->resolveLegacyTaxRate($lineRate);
-            } else {
-                $profile = $this->fiscalTaxService->resolveProductProfile($product);
-            }
+            $profile = $this->fiscalTaxService->resolveImportLineProfile(
+                $line->fiscal_profile_id,
+                $line->tax_code,
+                $line->tax_rate_code,
+                $lineRate,
+                $line->document_taxes,
+                $product,
+            );
 
             if ($profile->rate === null) {
                 throw new InvalidArgumentException('la tarifa de IVA calculable no está definida.');
             }
         } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
-                'items' => "El producto {$product->name} no puede comprarse: requiere fiscalidad inequívoca ({$exception->getMessage()}).",
+                'items' => "El producto {$product->name} no puede comprarse: {$exception->getMessage()}",
             ]);
         }
 
         return $profile;
+    }
+
+    /**
+     * Congela en purchase_item_taxes TODA la fiscalidad del documento
+     * Hacienda (multi-impuesto, montos, factores y exoneraciones), sin
+     * recalcularla ni sustituirla por el perfil del producto.
+     *
+     * @param  array<int, array<string, mixed>>  $documentTaxes
+     * @param  array<string, mixed>  $resolvedLine
+     */
+    private function persistDocumentTaxRows(
+        PurchaseItem $purchaseItem,
+        array $documentTaxes,
+        FiscalProfile $profile,
+        array $resolvedLine,
+    ): void {
+        $primaryIndex = $this->fiscalTaxService->primaryDocumentTaxIndex($documentTaxes);
+
+        foreach ($documentTaxes as $index => $docTax) {
+            $codigo = trim((string) ($docTax['codigo'] ?? ''));
+            $isPrimary = $index === $primaryIndex;
+            $tarifa = isset($docTax['tarifa']) && is_numeric($docTax['tarifa'])
+                ? (float) $docTax['tarifa']
+                : null;
+            $rateCode = trim((string) ($docTax['codigo_tarifa'] ?? '')) ?: null;
+            $rateCode ??= $this->fiscalTaxService->rateCodeFromTarifa(
+                $tarifa,
+                $codigo !== '' ? $codigo : null,
+            );
+
+            $others = is_array($docTax['otros'] ?? null) && $docTax['otros'] !== []
+                ? $docTax['otros']
+                : null;
+            $exoneration = is_array($docTax['exoneracion'] ?? null) && $docTax['exoneracion'] !== []
+                ? $docTax['exoneracion']
+                : null;
+
+            $amount = null;
+            if (isset($docTax['monto']) && is_numeric($docTax['monto'])) {
+                $amount = round((float) $docTax['monto'], 4);
+            } elseif ($isPrimary) {
+                $amount = round((float) $resolvedLine['fiscal_tax'], 4);
+            }
+
+            PurchaseItemTax::create([
+                'purchase_item_id' => $purchaseItem->id,
+                'tax_code' => $codigo !== '' ? $codigo : ($isPrimary ? '01' : '99'),
+                'tax_rate_code' => $rateCode,
+                'description' => $isPrimary
+                    ? $profile->name
+                    : ($codigo !== '' ? "Impuesto {$codigo}" : 'Impuesto adicional'),
+                'treatment' => $isPrimary ? $profile->treatment : null,
+                'rate' => $tarifa,
+                'factor_iva' => isset($docTax['factor']) && is_numeric($docTax['factor'])
+                    ? (float) $docTax['factor']
+                    : null,
+                'base_amount' => $isPrimary ? $resolvedLine['fiscal_base'] : null,
+                'tax_amount' => $amount,
+                'specific_tax_data' => $others,
+                'exemption_snapshot' => $exoneration,
+                'source' => 'xml_hacienda',
+                'source_version' => null,
+                'sequence' => $index + 1,
+            ]);
+        }
     }
 
     private function validateLine(PurchaseLineData $line): void

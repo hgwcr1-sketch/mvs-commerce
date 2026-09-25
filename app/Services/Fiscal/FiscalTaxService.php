@@ -202,4 +202,237 @@ class FiscalTaxService
             return $serialized;
         }, $snapshot['taxes']);
     }
+
+    /**
+     * Normalización fiscal única para importaciones de productos.
+     *
+     * Precedencia: perfil explícito > códigos explícitos (codigo + tarifa)
+     * > tasa legada inequívoca (1/2/4/13). El 0/8/NULL jamás se infiere y
+     * CABYS nunca participa en la clasificación.
+     *
+     * @param  array{fiscal_profile_id?: int|string|null, tax_code?: string|null, tax_rate_code?: string|null, tax_rate?: float|int|string|null}  $attributes
+     * @return array{fiscal_profile_id: int, tax_rate: float}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function normalizeProductFiscalAttributes(array $attributes): array
+    {
+        $profileId = $this->nullableInt($attributes['fiscal_profile_id'] ?? null);
+        $taxCode = $this->nullableString($attributes['tax_code'] ?? null);
+        $rateCode = $this->nullableString($attributes['tax_rate_code'] ?? null);
+        $legacyRate = $this->nullableFloat($attributes['tax_rate'] ?? null);
+
+        if ($profileId !== null) {
+            $profile = $this->resolveForProduct($profileId, null);
+        } elseif ($taxCode !== null && $rateCode !== null) {
+            $profile = $this->resolveProfile($taxCode, $rateCode);
+        } elseif ($taxCode !== null && $legacyRate !== null) {
+            $derived = $this->rateCodeFromTarifa($legacyRate, $taxCode);
+            if ($derived === null) {
+                throw new InvalidArgumentException("la tasa {$legacyRate} del documento no tiene tarifa inequívoca para el código {$taxCode}; use códigos o perfil fiscal explícito.");
+            }
+            $profile = $this->resolveProfile($taxCode, $derived);
+        } else {
+            // Tasa legada sin códigos: solo 1/2/4/13; 0/8/NULL u otras quedan bloqueadas.
+            $profile = $this->resolveLegacyTaxRate($legacyRate);
+        }
+
+        if ($profile->tax_code !== '01' || $profile->rate === null) {
+            throw new InvalidArgumentException('su perfil fiscal no define una tarifa de IVA calculable.');
+        }
+
+        return [
+            'fiscal_profile_id' => (int) $profile->id,
+            'tax_rate' => (float) $profile->rate,
+        ];
+    }
+
+    /**
+     * Precedencia fiscal única de una línea de compra/importación:
+     * perfil explícito > códigos explícitos > fiscalidad del documento
+     * (si existe, manda el documento y jamás se sustituye por el producto)
+     * > tasa legada inequívoca > perfil del producto. Si nada resuelve,
+     * se bloquea: nunca se inventa tratamiento.
+     *
+     * @param  array<int, array<string, mixed>>|null  $documentTaxes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function resolveImportLineProfile(
+        ?int $fiscalProfileId,
+        ?string $taxCode,
+        ?string $taxRateCode,
+        ?float $legacyRate,
+        ?array $documentTaxes,
+        ?Product $product,
+    ): FiscalProfile {
+        if ($fiscalProfileId !== null) {
+            return $this->resolveForProduct($fiscalProfileId, null);
+        }
+
+        $taxCode = $this->nullableString($taxCode);
+        $taxRateCode = $this->nullableString($taxRateCode);
+
+        if ($taxCode !== null && $taxRateCode !== null) {
+            return $this->resolveProfile($taxCode, $taxRateCode);
+        }
+
+        if (! empty($documentTaxes)) {
+            return $this->profileForDocumentTaxes($documentTaxes);
+        }
+
+        if ($taxCode !== null && $legacyRate !== null) {
+            $derived = $this->rateCodeFromTarifa($legacyRate, $taxCode);
+            if ($derived === null) {
+                throw new InvalidArgumentException("la tasa {$legacyRate} no es inequívoca para el código {$taxCode}; use perfil fiscal explícito.");
+            }
+
+            return $this->resolveProfile($taxCode, $derived);
+        }
+
+        if ($legacyRate !== null && $this->isUnequivocalRate($legacyRate)) {
+            return $this->resolveLegacyTaxRate($legacyRate);
+        }
+
+        if ($product !== null) {
+            return $this->resolveProductProfile($product);
+        }
+
+        throw new InvalidArgumentException('la línea no incluye perfil fiscal, códigos ni tasa inequívoca.');
+    }
+
+    /**
+     * Resuelve el perfil IVA a partir de la fiscalidad fiel de un documento
+     * Hacienda (todos los Impuesto de la línea). Si el documento existe pero
+     * su clasificación no es inequívoca, se bloquea: no se infiere 0/8 ni se
+     * sustituye por el producto actual.
+     *
+     * @param  array<int, array<string, mixed>>  $documentTaxes
+     *
+     * @throws InvalidArgumentException
+     */
+    public function profileForDocumentTaxes(array $documentTaxes): FiscalProfile
+    {
+        $primary = $this->primaryDocumentTax($documentTaxes);
+
+        if ($primary === null) {
+            throw new InvalidArgumentException('el documento no incluye impuestos clasificables.');
+        }
+
+        $codigo = $this->nullableString($primary['codigo'] ?? null);
+        $tarifa = isset($primary['tarifa']) && is_numeric($primary['tarifa'])
+            ? (float) $primary['tarifa']
+            : null;
+        $rateCode = $this->nullableString($primary['codigo_tarifa'] ?? null)
+            ?? $this->rateCodeFromTarifa($tarifa, $codigo);
+
+        if ($rateCode === null) {
+            $tarifaTexto = $tarifa ?? 'n/d';
+            throw new InvalidArgumentException("la tarifa del documento ({$tarifaTexto}) no es inequívoca; use perfil fiscal explícito.");
+        }
+
+        // El código 01 solo se asume cuando la tarifa no es cero: el 0 del
+        // documento exige código de IVA explícito, nunca se infiere.
+        if ($codigo === null && $tarifa !== null && abs($tarifa) < 0.0001 && $rateCode === '01') {
+            throw new InvalidArgumentException('la tarifa 0 del documento requiere código de IVA (01) explícito.');
+        }
+        $codigo ??= '01';
+
+        $profile = $this->resolveProfile($codigo, $rateCode);
+
+        if ($profile->rate === null) {
+            throw new InvalidArgumentException('la clasificación del documento no define tarifa de IVA calculable.');
+        }
+
+        return $profile;
+    }
+
+    /**
+     * Índice del impuesto IVA principal dentro de la fiscalidad del documento.
+     *
+     * @param  array<int, array<string, mixed>>  $documentTaxes
+     */
+    public function primaryDocumentTaxIndex(array $documentTaxes): ?int
+    {
+        foreach ($documentTaxes as $index => $tax) {
+            if ($this->nullableString($tax['codigo'] ?? null) === '01') {
+                return (int) $index;
+            }
+        }
+
+        foreach ($documentTaxes as $index => $tax) {
+            if (isset($tax['tarifa']) && is_numeric($tax['tarifa'])) {
+                return (int) $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Equivalencia inequívoca tarifa Hacienda → código de tarifa (solo
+     * 1/2/4/13 y 0 cuando el propio documento declara código 01).
+     */
+    public function rateCodeFromTarifa(?float $tarifa, ?string $taxCode): ?string
+    {
+        if ($tarifa === null) {
+            return null;
+        }
+
+        return match (true) {
+            abs($tarifa - 1) < 0.0001 => '02',
+            abs($tarifa - 2) < 0.0001 => '03',
+            abs($tarifa - 4) < 0.0001 => '04',
+            abs($tarifa - 13) < 0.0001 => '08',
+            abs($tarifa) < 0.0001 => $taxCode === '01' ? '01' : null,
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $documentTaxes
+     */
+    private function primaryDocumentTax(array $documentTaxes): ?array
+    {
+        $index = $this->primaryDocumentTaxIndex($documentTaxes);
+
+        return $index === null ? null : $documentTaxes[$index];
+    }
+
+    private function isUnequivocalRate(float $rate): bool
+    {
+        return abs($rate - 1) < 0.0001
+            || abs($rate - 2) < 0.0001
+            || abs($rate - 4) < 0.0001
+            || abs($rate - 13) < 0.0001;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function nullableFloat(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? (float) $value : null;
+    }
 }

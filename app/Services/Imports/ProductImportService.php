@@ -11,6 +11,7 @@ use App\Models\ProductCategory;
 use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -32,6 +33,10 @@ class ProductImportService
 
     private array $colorCache = [];
 
+    public function __construct(
+        private readonly FiscalTaxService $fiscalTaxService,
+    ) {}
+
     public const HEADERS = [
         'codigo_interno*', 'nombre*', 'categoria*', 'subcategoria_subrubro', 'marca', 'unidad*', 'tipo_producto*',
         'estilo', 'talla', 'color',
@@ -39,6 +44,7 @@ class ProductImportService
         'descripcion', 'costo*', 'precio_venta*', 'precio_mayorista', 'precio_especial',
         'precio_a', 'precio_b', 'precio_c', 'impuesto*', 'controla_inventario',
         'permite_stock_negativo', 'imprime_etiqueta', 'activo',
+        'codigo_impuesto', 'codigo_tarifa', 'perfil_fiscal',
     ];
 
     private const HEADER_MAP = [
@@ -52,7 +58,10 @@ class ProductImportService
         'descripcion_corta' => 'short_description', 'descripcion' => 'description', 'costo' => 'cost',
         'precio_venta' => 'sale_price', 'precio_de_venta' => 'sale_price', 'precio_mayorista' => 'wholesale_price',
         'precio_especial' => 'special_price', 'precio_a' => 'price_a', 'precio_b' => 'price_b',
-        'precio_c' => 'price_c', 'impuesto' => 'tax_rate', 'impuesto_%' => 'tax_rate',
+        'precio_c' => 'price_c',         'impuesto' => 'tax_rate', 'impuesto_%' => 'tax_rate',
+        'codigo_impuesto' => 'tax_code', 'codigo_de_impuesto' => 'tax_code',
+        'codigo_tarifa' => 'tax_rate_code', 'codigo_de_tarifa' => 'tax_rate_code',
+        'perfil_fiscal' => 'fiscal_profile_id',
         'controla_inventario' => 'track_inventory', 'permite_stock_negativo' => 'allow_negative_stock',
         'imprime_etiqueta' => 'prints_label', 'activo' => 'is_active',
     ];
@@ -69,6 +78,8 @@ class ProductImportService
         'price_c' => 'precio_c', 'tax_rate' => 'impuesto', 'track_inventory' => 'controla_inventario',
         'allow_negative_stock' => 'permite_stock_negativo', 'prints_label' => 'imprime_etiqueta',
         'is_active' => 'activo',
+        'tax_code' => 'codigo_impuesto', 'tax_rate_code' => 'codigo_tarifa',
+        'fiscal_profile_id' => 'perfil_fiscal',
     ];
 
     public function preview(string $path, int $companyId): array
@@ -230,6 +241,9 @@ class ProductImportService
             'price_b' => $this->decimalValue($data['price_b'] ?? null),
             'price_c' => $this->decimalValue($data['price_c'] ?? null),
             'tax_rate' => $this->decimalValue($data['tax_rate'] ?? null),
+            'tax_code' => $this->nullable($data['tax_code'] ?? null),
+            'tax_rate_code' => $this->nullable($data['tax_rate_code'] ?? null),
+            'fiscal_profile_id' => $this->nullable($data['fiscal_profile_id'] ?? null),
             'track_inventory' => $this->booleanValue($data['track_inventory'] ?? null, true),
             'allow_negative_stock' => $this->booleanValue($data['allow_negative_stock'] ?? null, false),
             'prints_label' => $this->booleanValue($data['prints_label'] ?? null, false),
@@ -259,6 +273,8 @@ class ProductImportService
             $requiredCost = ['required', 'decimal:0,4', 'gte:0'];
             $requiredMoney = ['required', 'decimal:0,2', 'gte:0'];
             $optionalMoney = ['nullable', 'decimal:0,2', 'gte:0'];
+            $hasExplicitFiscal = ($row['fiscal_profile_id'] ?? null) !== null
+                || (($row['tax_code'] ?? null) !== null && ($row['tax_rate_code'] ?? null) !== null);
             $validator = Validator::make($row, [
                 'internal_code' => ['required', 'string', 'max:50'], 'name' => ['required', 'string', 'max:150'],
                 'category_name' => ['required', 'string', 'max:100'], 'brand_name' => ['nullable', 'string', 'max:150'], 'unit_name' => ['required', 'string', 'max:50'],
@@ -269,7 +285,7 @@ class ProductImportService
                 'sale_price' => $requiredMoney, 'wholesale_price' => $optionalMoney,
                 'special_price' => $optionalMoney, 'price_a' => $optionalMoney,
                 'price_b' => $optionalMoney, 'price_c' => $optionalMoney,
-                'tax_rate' => [...$requiredMoney, 'lte:100'], 'track_inventory' => ['required', 'boolean'],
+                'tax_rate' => $hasExplicitFiscal ? $optionalMoney : [...$requiredMoney, 'lte:100'], 'track_inventory' => ['required', 'boolean'],
                 'allow_negative_stock' => ['required', 'boolean'], 'prints_label' => ['required', 'boolean'], 'is_active' => ['required', 'boolean'],
             ], [], self::FIELD_LABELS);
             foreach ($validator->errors()->messages() as $field => $messages) {
@@ -312,6 +328,22 @@ class ProductImportService
                 }
             }
 
+            // Normalización fiscal única (FiscalTaxService): perfil explícito >
+            // códigos explícitos > tasa inequívoca 1/2/4/13. 0/8/NULL bloquean
+            // la fila; CABYS jamás determina el tratamiento.
+            try {
+                $fiscal = $this->fiscalTaxService->normalizeProductFiscalAttributes([
+                    'fiscal_profile_id' => $row['fiscal_profile_id'] ?? null,
+                    'tax_code' => $row['tax_code'] ?? null,
+                    'tax_rate_code' => $row['tax_rate_code'] ?? null,
+                    'tax_rate' => $row['tax_rate'] ?? null,
+                ]);
+                $row['fiscal_profile_id'] = $fiscal['fiscal_profile_id'];
+                $row['tax_rate'] = $fiscal['tax_rate'];
+            } catch (\InvalidArgumentException $exception) {
+                $row['errors'][] = ['field' => 'impuesto', 'message' => $exception->getMessage()];
+            }
+
             $row['valid'] = $row['errors'] === [];
             $rows[$index] = $row;
         }
@@ -326,7 +358,7 @@ class ProductImportService
             'name', 'internal_code', 'barcode', 'product_type',
             'cabys_code', 'short_description', 'description', 'cost', 'sale_price', 'wholesale_price',
             'special_price', 'price_a', 'price_b', 'price_c', 'track_inventory', 'allow_negative_stock',
-            'tax_rate', 'is_active', 'prints_label',
+            'tax_rate', 'fiscal_profile_id', 'is_active', 'prints_label',
         ]);
     }
 

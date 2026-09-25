@@ -70,13 +70,14 @@ class PurchaseImportCharacterizationTest extends TestCase
         $response->assertOk()->assertDownload('plantilla_importacion_compras.xlsx');
         $path = tempnam(sys_get_temp_dir(), 'purchase-template-');
         file_put_contents($path, $response->streamedContent());
-        $headers = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:S1')[0];
+        $headers = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:V1')[0];
 
         $this->assertSame([
             'Código *', 'Código Barra', 'Producto *', 'Descripción', 'Categoría', 'Marca',
             'Proveedor *', 'Unidad de medida *', 'Tipo Artículo', 'Cantidad *', 'Costo *',
             'Precio Venta', 'Impuesto %', 'Descuento %', 'CABYS', 'Mínimo Stock',
             'Máximo Stock', 'Lote', 'Fecha Vencimiento',
+            'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal',
         ], $headers);
     }
 

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductCategory;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -20,6 +21,7 @@ class InventoryImportService
 
     public function __construct(
         private readonly InventoryPostingService $inventory,
+        private readonly FiscalTaxService $fiscalTaxService,
     ) {}
 
     public function preview(
@@ -86,6 +88,9 @@ class InventoryImportService
                 'wholesale_price' => $value('precio_mayoreo'),
                 'special_price' => $value('precio_especial'),
                 'tax_rate' => $value('impuesto'),
+                'tax_code' => $value('codigo_impuesto') ?? $value('codigo de impuesto'),
+                'tax_rate_code' => $value('codigo_tarifa') ?? $value('codigo de tarifa'),
+                'fiscal_profile_id' => $value('perfil_fiscal') ?? $value('perfil fiscal'),
                 'description' => $this->nullableString($value('descripcion')),
                 'quantity' => $value('cantidad'),
                 'minimum' => $value('minimo'),
@@ -95,7 +100,33 @@ class InventoryImportService
                 'errors' => [],
             ];
 
+            $fiscalError = null;
+            if ($row['is_new']) {
+                // Normalización fiscal única (FiscalTaxService): perfil explícito
+                // > códigos explícitos > tasa inequívoca 1/2/4/13. 0/8/NULL
+                // jamás se infieren; CABYS no participa. Solo aplica a altas.
+                try {
+                    $fiscal = $this->fiscalTaxService->normalizeProductFiscalAttributes([
+                        'fiscal_profile_id' => $row['fiscal_profile_id'],
+                        'tax_code' => $row['tax_code'],
+                        'tax_rate_code' => $row['tax_rate_code'],
+                        'tax_rate' => $row['tax_rate'],
+                    ]);
+                    $row['fiscal_profile_id'] = $fiscal['fiscal_profile_id'];
+                    $row['tax_rate'] = $fiscal['tax_rate'];
+                } catch (\InvalidArgumentException $exception) {
+                    $fiscalError = $exception->getMessage();
+                }
+            } else {
+                $row['fiscal_profile_id'] = $product->fiscal_profile_id;
+                $row['tax_code'] = null;
+                $row['tax_rate_code'] = null;
+            }
+
             $row['errors'] = $this->validateRow($row, $companyId, $movementType, $value('categoria'), $value('unidad'), $value('marca'));
+            if ($fiscalError !== null) {
+                $row['errors'][] = 'El impuesto del producto nuevo no puede resolverse: '.$fiscalError.' Seleccione perfil o códigos fiscales explícitos.';
+            }
             $identity = $product ? 'product:'.$product->id : 'new:'.Str::lower($code !== '' ? $code : $barcode ?? $name);
             if (isset($identities[$identity])) {
                 $row['errors'][] = 'El producto está repetido dentro del archivo.';
@@ -211,6 +242,14 @@ class InventoryImportService
 
     private function createProduct(array $row, int $companyId): Product
     {
+        // La vista previa garantiza fiscalidad inequívoca para altas; si algo
+        // llegase sin resolver, se bloquea en lugar de asumir 0.
+        if (empty($row['fiscal_profile_id']) || $row['tax_rate'] === null) {
+            throw ValidationException::withMessages([
+                'inventory_file' => 'El producto nuevo "'.$row['code'].'" no incluye perfil fiscal, códigos ni tasa inequívoca. Nunca se asume una tasa automáticamente.',
+            ]);
+        }
+
         $product = Product::create([
             'company_id' => $companyId,
             'category_id' => $row['category_id'],
@@ -224,7 +263,8 @@ class InventoryImportService
             'sale_price' => (float) ($row['sale_price'] ?? 0),
             'wholesale_price' => $row['wholesale_price'],
             'special_price' => $row['special_price'],
-            'tax_rate' => (float) ($row['tax_rate'] ?? 0),
+            'fiscal_profile_id' => (int) $row['fiscal_profile_id'],
+            'tax_rate' => (float) $row['tax_rate'],
             'description' => $row['description'],
             'product_type' => 'product',
             'track_inventory' => true,

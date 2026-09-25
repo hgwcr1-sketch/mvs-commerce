@@ -393,7 +393,8 @@ class DataImportController extends Controller
         return $this->spreadsheetDownload(
             ['codigo*', 'nombre*', 'cantidad*', 'categoria', 'marca', 'unidad', 'codigo_barras',
                 'cabys', 'costo', 'precio_venta', 'precio_mayoreo', 'precio_especial', 'impuesto',
-                'minimo', 'maximo', 'descripcion'],
+                'minimo', 'maximo', 'descripcion',
+                'codigo_impuesto', 'codigo_tarifa', 'perfil_fiscal'],
             'plantilla_importacion_inventario.xlsx',
             true,
         );

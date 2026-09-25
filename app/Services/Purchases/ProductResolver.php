@@ -10,14 +10,17 @@ use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductCategory;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class ProductResolver
 {
     public function __construct(
         private readonly CompanyPurchaseSettingsResolver $settingsResolver,
+        private readonly FiscalTaxService $fiscalTaxService,
     ) {
     }
 
@@ -126,9 +129,28 @@ class ProductResolver
         $unit = $this->resolveUnit($company, $line->unit);
         $brand = $this->resolveBrand($company, $line->brand);
 
-        if ($line->tax_rate === null) {
+        // Fiscalidad del producto nuevo: misma autoridad que la línea
+        // (perfil/códigos/documento/tasa inequívoca). Nunca se infiere 0/8
+        // ni se asume 13%: si nada resuelve, no se crea el producto.
+        try {
+            $fiscal = $this->fiscalTaxService->resolveImportLineProfile(
+                $line->fiscal_profile_id,
+                $line->tax_code,
+                $line->tax_rate_code,
+                $line->tax_rate !== null ? (float) $line->tax_rate : null,
+                $line->document_taxes,
+                null,
+            );
+        } catch (InvalidArgumentException $exception) {
             throw ValidationException::withMessages([
-                'items' => 'Tasa tributaria ausente para «' . trim($line->name) . '»: no se asume 13%; indique la tasa de la línea.',
+                'items' => 'No se puede crear «'.trim($line->name).'»: '.$exception->getMessage()
+                    .' Indique la tasa de la línea o el perfil fiscal.',
+            ]);
+        }
+
+        if ($fiscal->rate === null || $fiscal->tax_code !== '01') {
+            throw ValidationException::withMessages([
+                'items' => 'No se puede crear «'.trim($line->name).'»: su perfil fiscal no define una tarifa de IVA calculable.',
             ]);
         }
 
@@ -143,7 +165,8 @@ class ProductResolver
             'cabys_code' => $this->nullableValue($line->cabys),
             'cost' => $line->unit_cost ?? 0,
             'sale_price' => 0,
-            'tax_rate' => $line->tax_rate,
+            'fiscal_profile_id' => $fiscal->id,
+            'tax_rate' => (float) $fiscal->rate,
             'is_active' => true,
         ]);
 

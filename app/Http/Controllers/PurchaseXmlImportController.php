@@ -63,6 +63,7 @@ class PurchaseXmlImportController extends Controller
                     'cost' => $line['unit_cost'] ?? null,
                     'unit' => $line['unit'] ?? null,
                     'tax_rate' => $line['tax_rate'] ?? null,
+                    'document_taxes' => !empty($line['impuestos']) ? $line['impuestos'] : null,
                     'supplier' => $supplierName,
                     '_row_key' => 'xml-' . ($index + 1),
                 ];

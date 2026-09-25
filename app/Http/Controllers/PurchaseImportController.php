@@ -36,6 +36,7 @@ class PurchaseImportController extends Controller
     'Marca', 'Proveedor *', 'Unidad de medida *', 'Tipo Artículo',
     'Cantidad *', 'Costo *', 'Precio Venta', 'Impuesto %', 'Descuento %',
     'CABYS', 'Mínimo Stock', 'Máximo Stock', 'Lote', 'Fecha Vencimiento',
+    'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal',
 ], null, 'A1');
 
         $writer = new Xlsx($spreadsheet);
@@ -143,6 +144,12 @@ class PurchaseImportController extends Controller
             discount_percent: $this->nullableFloat($item['discount_percent'] ?? null),
             lot_number: $item['lot_number'] ?? null,
             expires_at: $item['expires_at'] ?? null,
+            fiscal_profile_id: $this->nullableInt($item['fiscal_profile_id'] ?? null),
+            tax_code: $item['tax_code'] ?? null,
+            tax_rate_code: $item['tax_rate_code'] ?? null,
+            document_taxes: is_array($item['document_taxes'] ?? null) && $item['document_taxes'] !== []
+                ? $item['document_taxes']
+                : null,
         ), $validation['found']);
 
         $purchase = $processor->process(new PurchaseData(
@@ -180,6 +187,7 @@ class PurchaseImportController extends Controller
             'code' => $sourceItem['code'] ?? null,
             'name' => $sourceItem['name'] ?? null,
             'cost' => $sourceItem['cost'] ?? null,
+            'fiscalProfiles' => app(\App\Services\Fiscal\FiscalTaxService::class)->productProfiles(),
         ]);
     }
 
@@ -277,6 +285,25 @@ class PurchaseImportController extends Controller
 
             $productType = $this->resolveProductType($sourceItem['product_type'] ?? null);
 
+            // Normalización fiscal única (FiscalTaxService): perfil explícito del
+            // formulario > perfil/códigos de la fila > tasa inequívoca. 0/8/NULL
+            // jamás se infieren; CABYS no participa.
+            try {
+                $fiscal = app(\App\Services\Fiscal\FiscalTaxService::class)
+                    ->normalizeProductFiscalAttributes([
+                        'fiscal_profile_id' => $this->nullableInt($request->input('fiscal_profile_id'))
+                            ?? $this->nullableInt($sourceItem['fiscal_profile_id'] ?? null),
+                        'tax_code' => $sourceItem['tax_code'] ?? null,
+                        'tax_rate_code' => $sourceItem['tax_rate_code'] ?? null,
+                        'tax_rate' => $sourceItem['tax_rate'] ?? null,
+                    ]);
+            } catch (\InvalidArgumentException $exception) {
+                throw ValidationException::withMessages([
+                    'fiscal_profile_id' => 'Fila '.($sourceItem['_row_key'] ?? '?').': '.$exception->getMessage()
+                        .' Seleccione un tratamiento fiscal explícito.',
+                ]);
+            }
+
             $attributes = [
                 'company_id' => $companyId,
                 'category_id' => $categoryId,
@@ -287,12 +314,14 @@ class PurchaseImportController extends Controller
     trim($request->code),
 ),
                 'cost' => (float) $request->cost,
+                'fiscal_profile_id' => $fiscal['fiscal_profile_id'],
+                'tax_rate' => $fiscal['tax_rate'],
                 'is_active' => true,
             ];
 
             foreach ([
                 'barcode' => 'barcode', 'cabys' => 'cabys_code',
-                'description' => 'description', 'tax_rate' => 'tax_rate',
+                'description' => 'description',
                 'new_sale_price' => 'sale_price',
             ] as $source => $target) {
                 if (($sourceItem[$source] ?? null) !== null) {
@@ -506,6 +535,11 @@ class PurchaseImportController extends Controller
     private function nullableFloat(mixed $value): ?float
     {
         return $value === null || $value === '' ? null : (float) $value;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        return $value === null || $value === '' ? null : (int) $value;
     }
 
     private function hasValue(?string $value): bool

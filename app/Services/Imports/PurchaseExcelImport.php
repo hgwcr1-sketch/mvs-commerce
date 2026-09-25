@@ -27,6 +27,11 @@ class PurchaseExcelImport
         'precio de venta' => 'new_sale_price',
         'impuesto' => 'tax_rate',
         'impuesto %' => 'tax_rate',
+        'codigo impuesto' => 'tax_code',
+        'codigo de impuesto' => 'tax_code',
+        'codigo tarifa' => 'tax_rate_code',
+        'codigo de tarifa' => 'tax_rate_code',
+        'perfil fiscal' => 'fiscal_profile_id',
         'descuento' => 'discount_percent',
         'descuento %' => 'discount_percent',
         'cabys' => 'cabys',
@@ -42,13 +47,15 @@ class PurchaseExcelImport
     private const FIELDS = [
         'code', 'barcode', 'name', 'description', 'category', 'brand',
         'supplier', 'unit', 'product_type', 'quantity', 'cost',
-        'new_sale_price', 'tax_rate', 'discount_percent', 'cabys',
+        'new_sale_price', 'tax_rate', 'tax_code', 'tax_rate_code',
+        'fiscal_profile_id', 'discount_percent', 'cabys',
         'minimum_stock', 'maximum_stock', 'lot_number', 'expires_at',
     ];
 
     private const NUMERIC_FIELDS = [
         'quantity', 'cost', 'new_sale_price', 'tax_rate',
         'discount_percent', 'minimum_stock', 'maximum_stock',
+        'fiscal_profile_id',
     ];
 
     public function read(string $file): array
