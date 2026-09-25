@@ -100,6 +100,7 @@ for tb in "${TABLES[@]}"; do
 
     csv_rows="$(python3 - "$OUT/$file" <<'PY'
 import csv, gzip, sys
+csv.field_size_limit(sys.maxsize)
 with gzip.open(sys.argv[1], "rt", newline="") as fh:
     print(sum(1 for _ in csv.reader(fh)) - 1)
 PY

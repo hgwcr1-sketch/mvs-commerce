@@ -41,6 +41,7 @@ done < <(jq -r '.tables[] | [.file, .sha256] | @tsv' "$DIR/manifest.json")
 
 python3 - "$DIR/manifest.json" <<'PY'
 import csv, gzip, json, os, sys
+csv.field_size_limit(sys.maxsize)
 
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
 company_id = str(manifest["company_id"])

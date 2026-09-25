@@ -34,7 +34,7 @@ CREATE TABLE countries (id bigserial PRIMARY KEY, name text NOT NULL);
 echo "== Sembrar Empresa A y Empresa B"
 p "
 INSERT INTO companies (id, name) VALUES (980001, 'ALPHA-COMPANY-A-MARKER'), (980002, 'BETA-COMPANY-B-MARKER');
-INSERT INTO branches (company_id, name, code) VALUES (980001, 'Sucursal A', 'SA'), (980002, 'Sucursal B', 'SB');
+INSERT INTO branches (company_id, name, code) VALUES (980001, repeat('LARGOCAMPOLARGOCAMPOLARGO', 9000) || ' LARGE-FIELD-MARKER-A', 'SA'), (980002, 'Sucursal B', 'SB');
 INSERT INTO users (name, email) VALUES ('User A', 'a-user@example.test'), ('User B', 'b-user@example.test');
 INSERT INTO company_user (company_id, user_id) SELECT 980001, id FROM users WHERE email = 'a-user@example.test';
 INSERT INTO company_user (company_id, user_id) SELECT 980002, id FROM users WHERE email = 'b-user@example.test';
@@ -86,7 +86,7 @@ fi
 
 echo "== Presencia de marcadores de A"
 AFULL="$(for f in "$OUT"/export/*.csv.gz; do gzip -dc "$f"; done)"
-for marker in "ALPHA-COMPANY-A-MARKER" "A-SALE-001" "A-SALE-002" "a-client@example.test" "Item A1"; do
+for marker in "ALPHA-COMPANY-A-MARKER" "A-SALE-001" "A-SALE-002" "a-client@example.test" "Item A1" "LARGE-FIELD-MARKER-A"; do
     if ! grep -q "$marker" <<<"$AFULL"; then
         echo "FALLO: falta marcador de A: $marker"; fail=1
     fi
