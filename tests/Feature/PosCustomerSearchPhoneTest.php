@@ -84,11 +84,12 @@ class PosCustomerSearchPhoneTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_pos_customer_phone_endpoint_updates_phone_within_company(): void
+    public function test_pos_cashier_without_clientes_editar_can_update_customer_phone(): void
     {
         [$company, $branch, $user] = $this->context(true);
-        $this->grantPermission($user, $company, 'clientes.editar');
         $customer = $this->customer($company, ['name' => 'Cliente sin teléfono']);
+
+        $this->assertFalse($user->hasPermission('clientes.editar', $company));
 
         $this->actingAs($user)
             ->withSession($this->activeSession($company, $branch))
@@ -100,10 +101,9 @@ class PosCustomerSearchPhoneTest extends TestCase
         $this->assertSame('22223333', $customer->fresh()->phone);
     }
 
-    public function test_pos_customer_phone_endpoint_rejects_invalid_phone_and_enforces_permissions_and_company(): void
+    public function test_pos_customer_phone_endpoint_rejects_invalid_phone_and_enforces_company_and_pos_access(): void
     {
         [$company, $branch, $user] = $this->context(true);
-        $this->grantPermission($user, $company, 'clientes.editar');
         $customer = $this->customer($company, ['name' => 'Cliente Validado']);
 
         $this->actingAs($user)
@@ -122,7 +122,8 @@ class PosCustomerSearchPhoneTest extends TestCase
             ->patchJson(route('pos.customers.update-phone', ['cliente' => $foreign->id]), ['phone' => '22223333'])
             ->assertNotFound();
 
-        [$denyCompany, $denyBranch, $denyUser] = $this->context(true);
+        [$denyCompany, $denyBranch, $denyUser] = $this->context(false);
+        $this->grantPermission($denyUser, $denyCompany, 'clientes.editar');
 
         $this->actingAs($denyUser)
             ->withSession($this->activeSession($denyCompany, $denyBranch))
@@ -130,19 +131,51 @@ class PosCustomerSearchPhoneTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_pos_screen_exposes_phone_capture_flow_without_blocking_generic_customer(): void
+    public function test_pos_customer_phone_endpoint_only_updates_phone_and_mobile_fields(): void
+    {
+        [$company, $branch, $user] = $this->context(true);
+        $customer = $this->customer($company, [
+            'name' => 'Cliente Original',
+            'credit_limit' => 100,
+            'email' => 'cliente@example.test',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession($this->activeSession($company, $branch))
+            ->patchJson(route('pos.customers.update-phone', ['cliente' => $customer->id]), [
+                'phone' => '22223333',
+                'name' => 'Nombre Manipulado',
+                'credit_limit' => 999999,
+                'email' => 'hack@example.test',
+                'is_active' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('customer.phone', '22223333');
+
+        $customer->refresh();
+        $this->assertSame('22223333', $customer->phone);
+        $this->assertSame('Cliente Original', $customer->name);
+        $this->assertSame('100.00', (string) $customer->credit_limit);
+        $this->assertSame('cliente@example.test', $customer->email);
+        $this->assertTrue($customer->is_active);
+    }
+
+    public function test_pos_screen_exposes_phone_capture_flow_without_clientes_editar(): void
     {
         [$company, $branch, $user] = $this->context(true);
         $this->paymentMethod($company, 'Efectivo', 'cash', true);
-        $this->grantPermission($user, $company, 'clientes.editar');
+
+        $this->assertFalse($user->hasPermission('clientes.editar', $company));
 
         $this->actingAs($user)
             ->withSession($this->activeSession($company, $branch))
             ->get(route('pos.index'))
             ->assertOk()
             ->assertSee('Agregar teléfono')
+            ->assertSee('Sin teléfono')
             ->assertSee('phoneCaptureRequired()', false)
             ->assertSee('openPhoneModal(', false)
+            ->assertDontSee("hasPermission('clientes.editar'", false)
             ->assertSee('Consumidor Final');
     }
 

@@ -295,15 +295,15 @@
                             <span x-show="selectedCustomer && (selectedCustomer.phone || selectedCustomer.mobile)" class="text-slate-500">
                                 Teléfono: <span x-text="selectedCustomer.phone || selectedCustomer.mobile" class="font-semibold text-slate-800"></span>
                             </span>
-                            @can('clientes.editar')
-                                <button x-show="selectedCustomer && !selectedCustomer.phone && !selectedCustomer.mobile"
-                                        x-cloak
+                            <span x-show="selectedCustomer && !selectedCustomer.phone && !selectedCustomer.mobile" class="text-slate-500">
+                                Sin teléfono ·
+                                <button x-cloak
                                         type="button"
                                         @click="openPhoneModal(false)"
-                                        class="inline-flex min-h-[44px] items-center rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-[#806817] hover:bg-primary/10">
+                                        class="inline-flex min-h-[44px] items-center rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-[#806817] hover:bg-primary/10">
                                     Agregar teléfono
                                 </button>
-                            @endcan
+                            </span>
                         </div>
                     </div>
                     <div class="flex flex-col gap-2">
@@ -1066,8 +1066,7 @@
         </div>
     @endcan
 
-    @can('clientes.editar')
-        <div x-show="customerPhone.open"
+    <div x-show="customerPhone.open"
              x-cloak
              @keydown.escape.window="closePhoneModal"
              @click.self="closePhoneModal"
@@ -1116,7 +1115,6 @@
                 </div>
             </form>
         </div>
-    @endcan
 
     {{-- R02-B: hoja del escáner por cámara (capa reutilizable; emite mvs-scan). --}}
     <x-scanner.mvs-scanner />
@@ -1152,7 +1150,7 @@ document.addEventListener('alpine:init', () => {
         customerSelectedIndex: 0,
         customerLoading: false,
         customerRequestNumber: 0,
-        canEditCustomerPhone: @json(auth()->user()->hasPermission('clientes.editar', $company)),
+        canEditCustomerPhone: @json(auth()->user()->hasPermission('pos.acceder', $company)),
         customerPhone: { open: false, saving: false, value: '', error: '', resumeCheckout: false },
         successMessage: '',
         _generalDiscountInput: '',
