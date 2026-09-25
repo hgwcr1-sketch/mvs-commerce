@@ -163,10 +163,18 @@ class UpdateProductRequest extends FormRequest
                 'boolean',
             ],
 
+            'fiscal_profile_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('fiscal_profiles', 'id'),
+                'required_without:tax_rate',
+            ],
+
             'tax_rate' => [
-                'required',
+                'nullable',
                 'numeric',
                 'min:0',
+                'required_without:fiscal_profile_id',
             ],
 
             'image' => [
@@ -233,8 +241,11 @@ class UpdateProductRequest extends FormRequest
             'sale_price.required' =>
                 'Debe ingresar el precio de venta.',
 
-            'tax_rate.required' =>
-                'Debe seleccionar el impuesto.',
+            'tax_rate.required_without' =>
+                'Debe seleccionar el tratamiento fiscal.',
+
+            'fiscal_profile_id.required_without' =>
+                'Debe seleccionar el tratamiento fiscal.',
 
         ];
     }

@@ -113,13 +113,85 @@ class FiscalTaxServiceTest extends TestCase
 
     public function test_legacy_tax_rate_without_unequivocal_equivalence_is_rejected(): void
     {
-        foreach ([1.0, 2.0, 4.0, 5.0, 8.0, 12.0] as $legacyRate) {
+        foreach ([5.0, 8.0, 12.0] as $legacyRate) {
             try {
                 $this->service->resolveLegacyTaxRate($legacyRate);
                 $this->fail('Expected InvalidArgumentException for tax_rate=' . $legacyRate);
             } catch (InvalidArgumentException $exception) {
                 $this->assertStringContainsString('equivalencia fiscal', $exception->getMessage());
             }
+        }
+    }
+
+    public function test_legacy_tax_rate_reduced_iva_rates_map_unequivocally(): void
+    {
+        $cases = [1.0 => '02', 2.0 => '03', 4.0 => '04', 13.0 => '08'];
+
+        foreach ($cases as $legacyRate => $rateCode) {
+            $profile = $this->service->resolveLegacyTaxRate($legacyRate);
+
+            $this->assertSame('01', $profile->tax_code);
+            $this->assertSame($rateCode, $profile->tax_rate_code);
+        }
+    }
+
+    public function test_legacy_tax_rate_eight_is_rejected_for_products(): void
+    {
+        try {
+            $this->service->resolveLegacyTaxRate(8.0, '01');
+            $this->fail('Expected InvalidArgumentException for tax_rate=8');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('equivalencia fiscal', $exception->getMessage());
+        }
+    }
+
+    public function test_resolve_for_product_prefers_explicit_profile(): void
+    {
+        $exempt = $this->service->resolveProfile('01', '10');
+
+        $profile = $this->service->resolveForProduct($exempt->id, 13.0);
+
+        $this->assertSame($exempt->id, $profile->id);
+        $this->assertSame('exempt', $profile->treatment);
+        $this->assertSame('10', $profile->tax_rate_code);
+    }
+
+    public function test_resolve_for_product_legacy_bridge_is_unequivocal_only(): void
+    {
+        $profile = $this->service->resolveForProduct(null, 13.0);
+
+        $this->assertSame('08', $profile->tax_rate_code);
+
+        foreach ([null, 0.0, 8.0] as $legacyRate) {
+            try {
+                $this->service->resolveForProduct(null, $legacyRate);
+                $this->fail('Expected InvalidArgumentException for legacy tax_rate=' . var_export($legacyRate, true));
+            } catch (InvalidArgumentException $exception) {
+                $this->assertNotEmpty($exception->getMessage());
+            }
+        }
+    }
+
+    public function test_product_profiles_include_zero_exempt_and_not_subject(): void
+    {
+        $profiles = $this->service->productProfiles();
+
+        $this->assertNotEmpty($profiles);
+
+        $rateCodes = $profiles->pluck('tax_rate_code')->all();
+
+        $this->assertContains('01', $rateCodes);
+        $this->assertContains('10', $rateCodes);
+        $this->assertContains('11', $rateCodes);
+        $this->assertContains('08', $rateCodes);
+
+        foreach (['05', '06', '07'] as $transitional) {
+            $this->assertNotContains($transitional, $rateCodes);
+        }
+
+        foreach ($profiles as $profile) {
+            $this->assertSame('01', $profile->tax_code);
+            $this->assertContains('01', (array) $profile->document_types);
         }
     }
 

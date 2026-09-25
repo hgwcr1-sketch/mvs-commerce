@@ -11,8 +11,10 @@ use App\Models\ProductCategory;
 use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -154,7 +156,7 @@ $lowStockProducts = $statsProducts
     /**
      * Mostrar formulario.
      */
-    public function create()
+    public function create(FiscalTaxService $fiscalTaxService)
     {
         $companyId = session('active_company_id');
 
@@ -189,22 +191,25 @@ $lowStockProducts = $statsProducts
             ->orderBy('name')
             ->get();
 
+        $fiscalProfiles = $fiscalTaxService->productProfiles();
+
         return view('productos.create', compact(
             'categories',
             'brands',
             'units',
             'styles',
             'sizes',
-            'colors'
+            'colors',
+            'fiscalProfiles'
         ));
     }
 
     /**
      * Guardar producto.
      */
-    public function store(StoreProductRequest $request)
+    public function store(StoreProductRequest $request, FiscalTaxService $fiscalTaxService)
     {
-        $data = $request->validated();
+        $data = $this->applyFiscalProfile($request->validated(), $fiscalTaxService);
         $data['company_id'] = session('active_company_id');
 
         if ($request->has('subcategory_id') && $request->subcategory_id) {
@@ -260,6 +265,8 @@ if ($request->expectsJson()) {
         'cost' => (float) $product->cost,
         'sale_price' => (float) $product->sale_price,
         'tax_rate' => (float) $product->tax_rate,
+        'fiscal_profile_id' => $product->fiscal_profile_id,
+        'fiscal_treatment' => $product->fiscalProfile?->name,
         'track_inventory' => (bool) $product->track_inventory,
         'stock' => (float) $initialStock,
     ], 201);
@@ -281,7 +288,7 @@ if ($request->expectsJson()) {
     /**
      * Editar producto.
      */
-    public function edit(Product $producto)
+    public function edit(Product $producto, FiscalTaxService $fiscalTaxService)
 {
     $companyId = session('active_company_id');
     $branchId = session('active_branch_id');
@@ -312,12 +319,14 @@ if ($request->expectsJson()) {
         ->orderBy('name')
         ->get();
 
-    $colors = Color::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $colors = Color::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $branch = $producto->branches()
+        $fiscalProfiles = $fiscalTaxService->productProfiles();
+
+        $branch = $producto->branches()
         ->where('branches.id', $branchId)
         ->first();
 
@@ -342,16 +351,17 @@ if ($request->expectsJson()) {
         'units',
         'styles',
         'sizes',
-        'colors'
+        'colors',
+        'fiscalProfiles'
     ));
 }
 
     /**
      * Actualizar producto.
      */
-    public function update(UpdateProductRequest $request, Product $producto)
+    public function update(UpdateProductRequest $request, Product $producto, FiscalTaxService $fiscalTaxService)
     {
-        $data = $request->validated();
+        $data = $this->applyFiscalProfile($request->validated(), $fiscalTaxService);
         $data['company_id'] = session('active_company_id');
 
         if ($request->has('subcategory_id') && $request->subcategory_id) {
@@ -426,7 +436,35 @@ if ($branchId) {
     }
 
     /**
-     * Buscar productos dinámicamente.
+     * Autoridad fiscal única: resuelve el perfil fiscal del producto y
+     * sincroniza products.tax_rate solo por compatibilidad.
+     */
+    private function applyFiscalProfile(array $data, FiscalTaxService $fiscalTaxService): array
+    {
+        $profileId = isset($data['fiscal_profile_id']) && $data['fiscal_profile_id'] !== null
+            ? (int) $data['fiscal_profile_id']
+            : null;
+
+        $legacyRate = isset($data['tax_rate']) && $data['tax_rate'] !== null && $data['tax_rate'] !== ''
+            ? (float) $data['tax_rate']
+            : null;
+
+        try {
+            $profile = $fiscalTaxService->resolveForProduct($profileId, $legacyRate);
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'fiscal_profile_id' => $exception->getMessage(),
+            ]);
+        }
+
+        $data['fiscal_profile_id'] = $profile->id;
+        $data['tax_rate'] = (float) ($profile->rate ?? 0);
+
+        return $data;
+    }
+
+    /**
+     * Buscar productos din�micamente.
      */
     public function search()
     {

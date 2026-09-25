@@ -126,6 +126,12 @@ class ProductResolver
         $unit = $this->resolveUnit($company, $line->unit);
         $brand = $this->resolveBrand($company, $line->brand);
 
+        if ($line->tax_rate === null) {
+            throw ValidationException::withMessages([
+                'items' => 'Tasa tributaria ausente para «' . trim($line->name) . '»: no se asume 13%; indique la tasa de la línea.',
+            ]);
+        }
+
         $product = Product::create([
             'company_id' => $company->id,
             'category_id' => $category->id,
@@ -137,7 +143,7 @@ class ProductResolver
             'cabys_code' => $this->nullableValue($line->cabys),
             'cost' => $line->unit_cost ?? 0,
             'sale_price' => 0,
-            'tax_rate' => $line->tax_rate ?? 13,
+            'tax_rate' => $line->tax_rate,
             'is_active' => true,
         ]);
 

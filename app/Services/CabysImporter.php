@@ -18,13 +18,17 @@ class CabysImporter
             throw new \Exception("No fue posible abrir el archivo CABYS.");
         }
 
-        // Detectar separador
+        // Detectar separador (tab, punto y coma o coma)
         $firstLine = fgets($handle);
 
-        $delimiter = substr_count($firstLine, ';') >
-                     substr_count($firstLine, ',')
-                     ? ';'
-                     : ',';
+        $delimiter = "\t";
+
+        if (substr_count($firstLine, "\t") === 0) {
+            $delimiter = substr_count($firstLine, ';') >
+                         substr_count($firstLine, ',')
+                         ? ';'
+                         : ',';
+        }
 
         rewind($handle);
 
@@ -92,9 +96,7 @@ class CabysImporter
                     'category9_code' => $data['Categoría 9'] ?? null,
                     'category9_description' => $data['Descripción Categoría 9'] ?? null,
 
-                    'tax_rate' => is_numeric($data['Impuesto'] ?? null)
-                        ? $data['Impuesto']
-                        : 13,
+                    'tax_rate' => $this->parseTaxRate($data['Impuesto'] ?? null, $code),
 
                     'note1' => $data['Nota Explicativa 1'] ?? null,
                     'note2' => $data['Nota Explicativa 2'] ?? null,
@@ -111,5 +113,34 @@ class CabysImporter
         fclose($handle);
 
         return $count;
+    }
+
+    /**
+     * Tasa tributaria del catálogo CABYS. Valores ambiguos o desconocidos
+     * fallan explícitamente: jamás se asume 13%.
+     */
+    private function parseTaxRate(mixed $raw, string $code): float
+    {
+        $value = trim((string) $raw);
+
+        if ($value === '') {
+            throw new \Exception(
+                "CABYS {$code}: impuesto vacío; se requiere tasa explícita (nunca se asume 13%)."
+            );
+        }
+
+        if (preg_match('/^-?\d+(?:[.,]\d+)?\s*%?$/', $value) === 1) {
+            $numeric = str_replace(['%', ' '], '', $value);
+
+            return (float) str_replace(',', '.', $numeric);
+        }
+
+        if (mb_strtolower($value, 'UTF-8') === 'exento') {
+            return 0.0;
+        }
+
+        throw new \Exception(
+            "CABYS {$code}: impuesto «{$value}» no interpretable; se requiere tasa explícita (nunca se asume 13%)."
+        );
     }
 }

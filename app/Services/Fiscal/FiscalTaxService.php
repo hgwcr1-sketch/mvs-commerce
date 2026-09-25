@@ -35,6 +35,9 @@ class FiscalTaxService
         }
 
         $rateCode = match (true) {
+            abs($taxRate - 1) < 0.0001 => '02',
+            abs($taxRate - 2) < 0.0001 => '03',
+            abs($taxRate - 4) < 0.0001 => '04',
             abs($taxRate - 13) < 0.0001 => '08',
             default => null,
         };
@@ -44,6 +47,40 @@ class FiscalTaxService
         }
 
         return $this->resolveProfile('01', $rateCode, $documentType);
+    }
+
+    public function resolveForProduct(?int $fiscalProfileId, ?float $legacyTaxRate = null, string $documentType = '01'): FiscalProfile
+    {
+        if ($fiscalProfileId !== null) {
+            $profile = FiscalProfile::query()
+                ->where('id', $fiscalProfileId)
+                ->where('is_active', true)
+                ->whereHas('catalogVersion', fn ($query) => $query->where('status', 'active'))
+                ->first();
+
+            if (! $profile) {
+                throw new InvalidArgumentException('Perfil fiscal inexistente o inactivo.');
+            }
+
+            $this->validateProfile($profile, $documentType);
+
+            return $profile;
+        }
+
+        return $this->resolveLegacyTaxRate($legacyTaxRate, $documentType);
+    }
+
+    public function productProfiles(): Collection
+    {
+        return FiscalProfile::query()
+            ->where('tax_code', '01')
+            ->where('is_active', true)
+            ->whereHas('catalogVersion', fn ($query) => $query->where('status', 'active'))
+            ->orderBy('rate')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (FiscalProfile $profile) => in_array('01', (array) $profile->document_types, true))
+            ->values();
     }
 
     public function snapshotForSaleItem(SaleItem $item, string $documentType = '01'): array

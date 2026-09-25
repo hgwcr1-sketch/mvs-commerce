@@ -286,42 +286,43 @@
             :value="old('price_c', $product->price_c ?? '')" />
 
         <x-select
-            name="tax_rate"
-            label="Impuesto *">
+            name="fiscal_profile_id"
+            label="Tratamiento fiscal *">
 
             <option value="">Seleccione...</option>
 
-            <option value="0"
-                @selected(old('tax_rate', $product->tax_rate ?? '') == '0')>
-                Exento (0%)
-            </option>
+            @foreach ($fiscalProfiles as $fiscalProfile)
+                @php
+                    $humanTreatment = match ($fiscalProfile->tax_rate_code) {
+                        '01' => 'IVA 0% gravado',
+                        '10' => 'Exento (sin IVA)',
+                        '11' => 'No sujeto (fuera de IVA)',
+                        default => $fiscalProfile->name,
+                    };
+                @endphp
 
-            <option value="1"
-                @selected(old('tax_rate', $product->tax_rate ?? '') == '1')>
-                IVA 1%
-            </option>
-
-            <option value="2"
-                @selected(old('tax_rate', $product->tax_rate ?? '') == '2')>
-                IVA 2%
-            </option>
-
-            <option value="4"
-                @selected(old('tax_rate', $product->tax_rate ?? '') == '4')>
-                IVA 4%
-            </option>
-
-            <option value="8"
-                @selected(old('tax_rate', $product->tax_rate ?? '') == '8')>
-                IVA 8%
-            </option>
-
-            <option value="13"
-                @selected(old('tax_rate', $product->tax_rate ?? '13') == '13')>
-                IVA 13%
-            </option>
+                <option value="{{ $fiscalProfile->id }}"
+                    @selected(old('fiscal_profile_id', $product->fiscal_profile_id ?? '') == $fiscalProfile->id)>
+                    {{ $humanTreatment }}
+                </option>
+            @endforeach
 
         </x-select>
+
+        @if (($product->fiscal_profile_id ?? null) === null && old('fiscal_profile_id', '') === '')
+            <p class="mt-1 text-xs text-amber-700">
+                Sin perfil fiscal asignado (dato legado). El tratamiento nunca se infiere del impuesto:
+                seleccione una opción para guardar.
+            </p>
+        @endif
+
+        <p class="mt-1 text-xs text-gray-500">
+            @if (($product->cabys_code ?? null) !== null)
+                CABYS: <span class="font-mono">{{ $product->cabys_code }}</span>
+            @else
+                Sin código CABYS asignado.
+            @endif
+        </p>
 
     </div>
 
