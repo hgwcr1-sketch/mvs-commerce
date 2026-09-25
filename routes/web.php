@@ -267,6 +267,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::post('/pos/clientes/rapido', [PosController::class, 'storeQuickCustomer'])
             ->middleware('permission:clientes.crear')
             ->name('pos.customers.quick-store');
+        Route::patch('/pos/clientes/{cliente}/telefono', [PosController::class, 'updateCustomerPhone'])
+            ->middleware('permission:clientes.editar')
+            ->name('pos.customers.update-phone');
         Route::get('/pos/fidelidad/consulta', [PosController::class, 'loyaltySummary'])
             ->name('pos.loyalty.summary');
 

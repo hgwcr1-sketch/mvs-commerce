@@ -291,6 +291,20 @@
                         <p x-show="selectedCustomer" class="text-xs text-slate-500">
                             Identificación: <span x-text="selectedCustomer?.identification || '—'"></span>
                         </p>
+                        <div x-show="selectedCustomer" class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                            <span x-show="selectedCustomer && (selectedCustomer.phone || selectedCustomer.mobile)" class="text-slate-500">
+                                Teléfono: <span x-text="selectedCustomer.phone || selectedCustomer.mobile" class="font-semibold text-slate-800"></span>
+                            </span>
+                            @can('clientes.editar')
+                                <button x-show="selectedCustomer && !selectedCustomer.phone && !selectedCustomer.mobile"
+                                        x-cloak
+                                        type="button"
+                                        @click="openPhoneModal(false)"
+                                        class="inline-flex min-h-[44px] items-center rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-[#806817] hover:bg-primary/10">
+                                    Agregar teléfono
+                                </button>
+                            @endcan
+                        </div>
                     </div>
                     <div class="flex flex-col gap-2">
                         @can('clientes.crear')
@@ -1052,6 +1066,58 @@
         </div>
     @endcan
 
+    @can('clientes.editar')
+        <div x-show="customerPhone.open"
+             x-cloak
+             @keydown.escape.window="closePhoneModal"
+             @click.self="closePhoneModal"
+             class="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/75 p-3 sm:p-5"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Agregar teléfono al cliente">
+            <form @submit.prevent="saveCustomerPhone"
+                  class="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 sm:text-xl">Agregar teléfono</h2>
+                        <p class="text-sm text-slate-500">
+                            <span x-text="selectedCustomer?.name"></span> · el teléfono se guarda en el cliente sin perder la venta.
+                        </p>
+                    </div>
+                    <button type="button" @click="closePhoneModal"
+                            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-2xl leading-none text-white"
+                            aria-label="Cerrar agregar teléfono">×</button>
+                </div>
+
+                <p x-show="customerPhone.error" x-text="customerPhone.error"
+                   class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></p>
+
+                <div class="mt-5">
+                    <label for="pos-customer-phone" class="mb-1 block text-sm font-semibold text-slate-700">Teléfono *</label>
+                    <input id="pos-customer-phone"
+                           x-ref="customerPhoneInput"
+                           x-model="customerPhone.value"
+                           inputmode="tel"
+                           autocomplete="tel"
+                           maxlength="30"
+                           placeholder="2222-3333"
+                           class="w-full rounded-xl border border-slate-300 px-4 py-3 text-right focus:border-primary focus:ring-0">
+                </div>
+
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button type="button" @click="closePhoneModal"
+                            class="min-h-[44px] rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-100">
+                        Cancelar
+                    </button>
+                    <button type="submit" :disabled="customerPhone.saving"
+                            class="min-h-[44px] rounded-xl border border-primary bg-primary px-5 py-3 font-semibold text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50">
+                        <span x-text="customerPhone.saving ? 'Guardando…' : 'Guardar teléfono'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endcan
+
     {{-- R02-B: hoja del escáner por cámara (capa reutilizable; emite mvs-scan). --}}
     <x-scanner.mvs-scanner />
 </div>
@@ -1086,6 +1152,8 @@ document.addEventListener('alpine:init', () => {
         customerSelectedIndex: 0,
         customerLoading: false,
         customerRequestNumber: 0,
+        canEditCustomerPhone: @json(auth()->user()->hasPermission('clientes.editar', $company)),
+        customerPhone: { open: false, saving: false, value: '', error: '', resumeCheckout: false },
         successMessage: '',
         _generalDiscountInput: '',
         _generalDiscountType: 'fixed',
@@ -1677,7 +1745,7 @@ document.addEventListener('alpine:init', () => {
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
         handleGlobalEnter(event) {
-            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.cameraScannerOpen || this.resultsOpen || this.customerResultsOpen) return;
+            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.customerPhone.open || this.cameraScannerOpen || this.resultsOpen || this.customerResultsOpen) return;
             if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
             if (this.canCheckout) { event.preventDefault(); this.openCheckout(); }
         },
@@ -1690,6 +1758,7 @@ document.addEventListener('alpine:init', () => {
             this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); });
         },
         requestCloseCheckout() {
+            if (this.customerPhone.open) return;
             if (this.checkout.processing || !this.checkout.open) return;
             if (this.checkout.payments.length && !window.confirm('¿Desea cerrar el cobro? Los pagos preparados se limpiarán.')) return;
             this.clearPayments();
@@ -1738,7 +1807,7 @@ document.addEventListener('alpine:init', () => {
         cancelPaymentDraft() { this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' }; this.checkout.error = ''; this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); }); },
         clearPayments() { this.checkout.payments = []; this.checkout.draft = { methodId: '', amount: String(this.grandTotal), receivedAmount: String(this.grandTotal), reference: '' }; this.checkout.error = ''; },
         handleCheckoutEnter(event) {
-            if (event.defaultPrevented || !this.checkout.open || this.checkout.result || this.checkout.processing) return;
+            if (event.defaultPrevented || !this.checkout.open || this.checkout.result || this.checkout.processing || this.customerPhone.open) return;
             if (this.selectedPaymentMethod) { if (this.canAddPayment) { event.preventDefault(); this.addPayment(); } return; }
             if (this.checkoutCanConfirm) { event.preventDefault(); this.confirmCheckout(); }
         },
@@ -1761,6 +1830,10 @@ document.addEventListener('alpine:init', () => {
         removePayment(index) { this.checkout.payments.splice(index, 1); this.checkout.error = ''; this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' }; },
         async confirmCheckout() {
             if (!this.checkoutCanConfirm) return;
+            if (this.phoneCaptureRequired() && !this.customerPhone.open) {
+                this.openPhoneModal(true);
+                return;
+            }
             this.checkout.processing = true;
             this.checkout.error = '';
             const creditNoteApplications = this.creditNotes.selected.filter(app => !app.bearer && this.numberValue(app.amount) > 0).map(app => ({ credit_note_id: app.credit_note_id, amount: String(app.amount) }));
@@ -2354,6 +2427,57 @@ document.addEventListener('alpine:init', () => {
             this.customerResults = [];
             this.customerSelectedIndex = 0;
             this.customerRequestNumber += 1;
+        },
+        customerHasPhone() {
+            return !!(this.selectedCustomer && ((this.selectedCustomer.phone || '').trim() || (this.selectedCustomer.mobile || '').trim()));
+        },
+        phoneCaptureRequired() {
+            return this.canEditCustomerPhone && !!this.customerId && !this.customerHasPhone();
+        },
+        openPhoneModal(resumeCheckout = false) {
+            if (!this.canEditCustomerPhone || !this.selectedCustomer) return;
+            this.customerPhone.open = true;
+            this.customerPhone.resumeCheckout = !!resumeCheckout;
+            this.customerPhone.value = this.selectedCustomer.phone || this.selectedCustomer.mobile || '';
+            this.customerPhone.error = '';
+            this.$nextTick(() => { this.$refs.customerPhoneInput?.focus(); this.$refs.customerPhoneInput?.select?.(); });
+        },
+        closePhoneModal() {
+            if (this.customerPhone.saving) return;
+            this.customerPhone.open = false;
+            this.customerPhone.resumeCheckout = false;
+            this.customerPhone.error = '';
+            this.customerPhone.value = '';
+        },
+        async saveCustomerPhone() {
+            if (this.customerPhone.saving || !this.selectedCustomer) return;
+            const value = this.customerPhone.value.trim();
+            if (!/^\d[\d\s\-().]{2,29}$/.test(value) || (value.replace(/\D/g, '').length < 4)) {
+                this.customerPhone.error = 'Ingrese un teléfono válido de 4 a 15 dígitos.';
+                return;
+            }
+            this.customerPhone.saving = true;
+            this.customerPhone.error = '';
+            try {
+                const response = await fetch({{ Illuminate\Support\Js::from(route('pos.customers.update-phone', ['cliente' => '__ID__'], false)) }}.replace('__ID__', String(this.selectedCustomer.id)), {
+                    method: 'PATCH',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    body: JSON.stringify({ phone: value }),
+                });
+                const payload = await this.readFetchResponse(response);
+                this.selectedCustomer = { ...this.selectedCustomer, phone: payload.customer.phone, mobile: payload.customer.mobile };
+                const resume = this.customerPhone.resumeCheckout;
+                this.customerPhone.open = false;
+                this.customerPhone.resumeCheckout = false;
+                this.customerPhone.value = '';
+                this.customerPhone.error = '';
+                this.successMessage = payload.message;
+                if (resume) this.$nextTick(() => this.confirmCheckout());
+            } catch (error) {
+                this.customerPhone.error = error.payload?.errors?.phone?.[0] || error.message || 'No fue posible guardar el teléfono. Intente nuevamente.';
+            } finally {
+                this.customerPhone.saving = false;
+            }
         },
         dropdownPos(refEl) {
             if (!refEl) return { top: '-9999px', left: '0px', width: '0px' };

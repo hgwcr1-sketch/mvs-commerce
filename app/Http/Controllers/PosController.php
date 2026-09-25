@@ -263,19 +263,41 @@ class PosController extends Controller
         }
 
         $search = mb_substr($search, 0, 100);
-        $like = '%'.$search.'%';
+
+        $terms = preg_split('/\s+/u', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        if ($terms === []) {
+            return response()->json([]);
+        }
+
+        $columns = ['name', 'identification', 'phone', 'mobile', 'email', 'public_code'];
+        $digitColumns = ['identification', 'phone', 'mobile'];
 
         $customers = Customer::forCompany((int) session('active_company_id'))
             ->where('is_active', true)
-            ->where(function ($query) use ($like) {
-                $query->where('name', 'like', $like)
-                    ->orWhere('identification', 'like', $like)
-                    ->orWhere('phone', 'like', $like)
-                    ->orWhere('mobile', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('public_code', 'like', $like);
+            ->where(function ($query) use ($terms, $columns, $digitColumns) {
+                foreach ($terms as $term) {
+                    $query->where(function ($termQuery) use ($term, $columns, $digitColumns) {
+                        $like = '%'.$this->foldSearchText($term).'%';
+
+                        foreach ($columns as $column) {
+                            $termQuery->orWhereRaw($this->foldSearchExpression($column).' LIKE ?', [$like]);
+                        }
+
+                        $digits = preg_replace('/\D+/', '', $term);
+
+                        if (strlen($digits) >= 3) {
+                            foreach ($digitColumns as $column) {
+                                $termQuery->orWhereRaw($this->digitsExpression($column).' LIKE ?', ['%'.$digits.'%']);
+                            }
+                        }
+                    });
+                }
             })
-            ->orderByRaw('CASE WHEN public_code = ? THEN 0 WHEN identification = ? THEN 1 ELSE 2 END', [$search, $search])
+            ->orderByRaw(
+                'CASE WHEN '.$this->foldSearchExpression('public_code').' = ? THEN 0 WHEN '.$this->foldSearchExpression('identification').' = ? THEN 1 ELSE 2 END',
+                [$this->foldSearchText($search), $this->foldSearchText($search)],
+            )
             ->orderBy('name')
             ->limit(10)
             ->get([
@@ -307,6 +329,72 @@ class PosController extends Controller
             'credit_due_date' => (int) ($customer->credit_days ?? 0) > 0 ? today()->addDays((int) $customer->credit_days)->toDateString() : null,
             'price_level' => $customer->price_level ?? 'normal',
         ])->values());
+    }
+
+    public function updateCustomerPhone(Request $request, Customer $cliente): JsonResponse
+    {
+        if ((int) $cliente->company_id !== (int) session('active_company_id')) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'phone' => ['required', 'string', 'max:30', 'regex:/^[\d\s\-().]+$/'],
+        ], [
+            'phone.required' => 'Ingrese el teléfono del cliente.',
+            'phone.regex' => 'El teléfono solo puede contener números, espacios, guiones y paréntesis.',
+        ]);
+
+        $phone = app(PhoneNumberService::class)->normalizePhone($validated['phone']);
+
+        if ($phone === null || preg_match('/^\d{4,15}$/', $phone) !== 1) {
+            throw ValidationException::withMessages([
+                'phone' => ['Ingrese un teléfono válido de 4 a 15 dígitos.'],
+            ]);
+        }
+
+        $cliente->update(['phone' => $phone]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Teléfono actualizado correctamente.',
+            'customer' => [
+                'id' => $cliente->id,
+                'phone' => $cliente->phone,
+                'mobile' => $cliente->mobile,
+            ],
+        ]);
+    }
+
+    private const SEARCH_ACCENT_FOLD = [
+        'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u', 'Ñ' => 'n', 'Ç' => 'c',
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n', 'ç' => 'c',
+    ];
+
+    private function foldSearchText(string $value): string
+    {
+        return strtr(mb_strtolower($value), self::SEARCH_ACCENT_FOLD);
+    }
+
+    private function foldSearchExpression(string $column): string
+    {
+        $expression = 'COALESCE('.$column.", '')";
+
+        foreach (self::SEARCH_ACCENT_FOLD as $accent => $plain) {
+            $expression = 'REPLACE('.$expression.", '".$accent."', '".$plain."')";
+        }
+
+        return 'LOWER('.$expression.')';
+    }
+
+    private function digitsExpression(string $column): string
+    {
+        $expression = 'COALESCE('.$column.", '')";
+
+        foreach ([' ', '-', '(', ')', '.', '/', '+'] as $separator) {
+            $expression = 'REPLACE('.$expression.", '".$separator."', '')";
+        }
+
+        return $expression;
     }
 
     public function storeQuickCustomer(QuickStoreCustomerRequest $request): JsonResponse
