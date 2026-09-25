@@ -8,4 +8,6 @@ return [
         'facturaencr' => \App\Services\Facturaencr\FacturaencrProvider::class,
     ],
 
+    'cabys_catalog' => \App\Services\Fiscal\LocalCabysCatalog::class,
+
 ];

@@ -3,10 +3,12 @@
 namespace App\Services\Facturaencr;
 
 use App\Contracts\Fiscal\FiscalProviderInterface;
+use App\Contracts\Fiscal\FiscalTaxpayerLookupInterface;
 use App\DTOs\Fiscal\FiscalDocumentStatus;
 use App\DTOs\Fiscal\FiscalError;
 use App\DTOs\Fiscal\FiscalEmissionRequest;
 use App\DTOs\Fiscal\FiscalEmissionResult;
+use App\DTOs\Fiscal\FiscalTaxpayerInfo;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Models\ElectronicDocument;
 
@@ -17,13 +19,18 @@ use App\Models\ElectronicDocument;
  * unidades, reintentos, códigos de error) y expone únicamente tipos
  * MVS: cualquier detalle FacturaEnCR sale traducido antes de devolver.
  */
-class FacturaencrProvider implements FiscalProviderInterface
+class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLookupInterface
 {
     private readonly FacturaencrEmissionService $emissionService;
 
-    public function __construct(?FacturaencrEmissionService $emissionService = null)
-    {
+    private readonly FacturaencrTaxpayerService $taxpayerService;
+
+    public function __construct(
+        ?FacturaencrEmissionService $emissionService = null,
+        ?FacturaencrTaxpayerService $taxpayerService = null,
+    ) {
         $this->emissionService = $emissionService ?? new FacturaencrEmissionService();
+        $this->taxpayerService = $taxpayerService ?? new FacturaencrTaxpayerService(new FacturaencrClient());
     }
 
     public function providerCode(): string
@@ -81,6 +88,60 @@ class FacturaencrProvider implements FiscalProviderInterface
             providerReference: $document->provider_document_id,
             fiscalReference: $document->clave,
             message: $document->last_error_message,
+        );
+    }
+
+    /**
+     * Consulta de contribuyentes vía FacturaEnCR: el servicio interno
+     * devuelve su array propietario y aquí se traduce a FiscalTaxpayerInfo.
+     */
+    public function lookup(string $identification): FiscalTaxpayerInfo
+    {
+        $data = $this->taxpayerService->getRegimen($identification);
+
+        if (($data['error'] ?? null) !== null) {
+            $code = (string) $data['error'];
+            [$category, $retryable] = $this->classify($code);
+
+            return new FiscalTaxpayerInfo(
+                found: false,
+                error: new FiscalError(
+                    code: $code,
+                    message: $code,
+                    category: $category,
+                    retryable: $retryable,
+                ),
+            );
+        }
+
+        $regime = is_array($data['regimen'] ?? null) ? $data['regimen'] : null;
+
+        $activities = [];
+        foreach (($data['actividadesEconomicas'] ?? []) as $activity) {
+            if (!is_array($activity)) {
+                continue;
+            }
+
+            $activities[] = [
+                'code' => (string) ($activity['codigo'] ?? ''),
+                'description' => (string) ($activity['descripcion'] ?? ''),
+            ];
+        }
+
+        return new FiscalTaxpayerInfo(
+            found: (bool) ($data['encontrado'] ?? false),
+            taxpayer: isset($data['contribuyente']) && $data['contribuyente'] !== null
+                ? (bool) $data['contribuyente']
+                : null,
+            regimeCode: $regime !== null && ($regime['codigo'] ?? null) !== null
+                ? (string) $regime['codigo']
+                : null,
+            regimeKey: $regime['clave'] ?? null,
+            regimeDescription: $regime['descripcion'] ?? null,
+            regimeSimplified: (bool) ($regime['simplificado'] ?? false),
+            regimeTransfersTax: (bool) ($regime['trasladaIva'] ?? false),
+            activities: $activities,
+            situation: $data['situacion'] ?? null,
         );
     }
 
