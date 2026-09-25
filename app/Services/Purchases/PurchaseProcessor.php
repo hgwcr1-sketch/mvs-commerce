@@ -6,13 +6,18 @@ use App\Data\Purchases\PurchaseData;
 use App\Data\Purchases\PurchaseLineData;
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\FiscalProfile;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\PurchaseItemTax;
+use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class PurchaseProcessor
 {
@@ -21,6 +26,7 @@ class PurchaseProcessor
         private readonly ProductResolver $productResolver,
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly PurchaseAccountPayableService $accountPayableService,
+        private readonly FiscalTaxService $fiscalTaxService,
     ) {
     }
 
@@ -62,6 +68,9 @@ class PurchaseProcessor
             foreach ($resolvedLines as $resolvedLine) {
                 $product = $resolvedLine['product'];
                 $line = $resolvedLine['line'];
+                /** @var FiscalProfile $profile */
+                $profile = $resolvedLine['profile'];
+                $snapshot = $this->fiscalTaxService->snapshotFromProfile($profile);
 
                 $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
@@ -75,8 +84,31 @@ class PurchaseProcessor
                     'subtotal' => $resolvedLine['subtotal'],
                     'discount' => $resolvedLine['discount'],
                     'tax_rate' => $resolvedLine['tax_rate'],
+                    'tax_code' => $profile->tax_code,
+                    'tax_rate_code' => $profile->tax_rate_code,
+                    'tax_treatment' => $profile->treatment,
+                    'fiscal_source' => $profile->catalogVersion?->source,
+                    'fiscal_source_version' => $profile->catalogVersion?->source_version,
+                    'fiscal_snapshot' => $snapshot,
                     'tax' => $resolvedLine['tax'],
                     'total' => $resolvedLine['total'],
+                ]);
+
+                PurchaseItemTax::create([
+                    'purchase_item_id' => $purchaseItem->id,
+                    'tax_code' => $profile->tax_code,
+                    'tax_rate_code' => $profile->tax_rate_code,
+                    'description' => $profile->name,
+                    'treatment' => $profile->treatment,
+                    'rate' => $profile->rate,
+                    'factor_iva' => $profile->factor_iva,
+                    'base_amount' => $resolvedLine['fiscal_base'],
+                    'tax_amount' => $resolvedLine['fiscal_tax'],
+                    'specific_tax_data' => null,
+                    'exemption_snapshot' => null,
+                    'source' => $profile->catalogVersion?->source,
+                    'source_version' => $profile->catalogVersion?->source_version,
+                    'sequence' => 1,
                 ]);
 
                 $product->cost = $resolvedLine['unit_cost'];
@@ -216,7 +248,8 @@ class PurchaseProcessor
 
             $quantity = $line->quantity;
             $unitCost = $line->unit_cost;
-            $taxRate = $line->tax_rate ?? (float) $product->tax_rate;
+            $profile = $this->resolveLineProfile($line, $product);
+            $taxRate = (float) ($profile->rate ?? 0);
             $discountPercent = $line->discount_percent ?? 0;
 
             $subtotal = $quantity * $unitCost;
@@ -228,6 +261,7 @@ class PurchaseProcessor
             $resolvedLines[] = [
                 'product' => $product,
                 'line' => $line,
+                'profile' => $profile,
                 'quantity' => $quantity,
                 'unit_cost' => $unitCost,
                 'tax_rate' => $taxRate,
@@ -235,10 +269,51 @@ class PurchaseProcessor
                 'discount' => round($discount, 2),
                 'tax' => round($tax, 2),
                 'total' => round($total, 2),
+                'fiscal_base' => round($taxableAmount, 4),
+                'fiscal_tax' => round($taxableAmount * ($taxRate / 100), 4),
             ];
         }
 
         return $resolvedLines;
+    }
+
+    /**
+     * La fiscalidad de la línea (1/2/4/13) es autoridad si es inequívoca;
+     * 0/8/NULL u otras tasas no se inventan y se resuelven desde el
+     * perfil fiscal explícito del producto vía FiscalTaxService.
+     */
+    private function resolveLineProfile(
+        PurchaseLineData $line,
+        Product $product,
+    ): FiscalProfile {
+        $lineRate = $line->tax_rate !== null
+            ? (float) $line->tax_rate
+            : null;
+
+        $isUnequivocal = $lineRate !== null && (
+            abs($lineRate - 1) < 0.0001
+            || abs($lineRate - 2) < 0.0001
+            || abs($lineRate - 4) < 0.0001
+            || abs($lineRate - 13) < 0.0001
+        );
+
+        try {
+            if ($isUnequivocal) {
+                $profile = $this->fiscalTaxService->resolveLegacyTaxRate($lineRate);
+            } else {
+                $profile = $this->fiscalTaxService->resolveProductProfile($product);
+            }
+
+            if ($profile->rate === null) {
+                throw new InvalidArgumentException('la tarifa de IVA calculable no está definida.');
+            }
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede comprarse: requiere fiscalidad inequívoca ({$exception->getMessage()}).",
+            ]);
+        }
+
+        return $profile;
     }
 
     private function validateLine(PurchaseLineData $line): void

@@ -4,8 +4,10 @@ namespace App\Services\Sales;
 
 use App\Models\CompanySequence;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnItem;
+use App\Models\SaleReturnItemTax;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltySaleReturnAdjustmentService;
@@ -69,13 +71,16 @@ class SaleReturnService
                 ]);
             }
 
-            $sale->load('items.product.unit');
+            $sale->load(['items.product.unit', 'items.taxes']);
 
             // Cantidad ya devuelta por línea, calculada dentro de la transacción.
             $previouslyReturned = $this->returnedQuantitiesBySaleItem($sale);
 
             // Importes financieros ya devueltos por línea, para el remanente final.
             $previouslyReturnedFinances = $this->returnedFinancialsBySaleItem($sale);
+
+            // Importes fiscales ya devueltos por línea/impuesto, para el remanente exacto.
+            $previouslyReturnedTaxes = $this->returnedTaxAmountsBySaleItem($sale);
 
             $requested = $this->normalizeLineRequests($lines);
 
@@ -128,6 +133,7 @@ class SaleReturnService
                 $previousQty = (float) ($previouslyReturned[$item->id] ?? 0);
                 $cumulativeQty = $previousQty + $quantity;
                 $completesLine = ((float) $item->quantity - $cumulativeQty) <= self::QTY_EPSILON;
+                $ratio = null;
 
                 if ($completesLine) {
                     // La última devolución absorbe el remanente financiero exacto.
@@ -155,7 +161,7 @@ class SaleReturnService
                     $total = round((float) $item->total * $ratio, 4);
                 }
 
-                SaleReturnItem::create([
+                $returnItem = SaleReturnItem::create([
                     'sale_return_id' => $saleReturn->id,
                     'sale_item_id' => $item->id,
                     'product_id' => $item->product_id,
@@ -165,9 +171,23 @@ class SaleReturnService
                     'discount_total' => $discountTotal,
                     'subtotal' => $subtotal,
                     'tax_rate' => $item->tax_rate,
+                    'tax_code' => $item->tax_code,
+                    'tax_rate_code' => $item->tax_rate_code,
+                    'tax_treatment' => $item->tax_treatment,
+                    'fiscal_source' => $item->fiscal_source,
+                    'fiscal_source_version' => $item->fiscal_source_version,
+                    'fiscal_snapshot' => $item->fiscal_snapshot,
                     'tax_total' => $taxTotal,
                     'total' => $total,
                 ]);
+
+                $this->copyFrozenItemTaxes(
+                    $item,
+                    $returnItem,
+                    $completesLine,
+                    $completesLine ? null : $ratio,
+                    $previouslyReturnedTaxes[$item->id] ?? [],
+                );
 
                 if ($item->product !== null && $item->product->track_inventory) {
                     $this->inventoryPostingService->saleReturn(
@@ -288,6 +308,91 @@ class SaleReturnService
         }
 
         return $requested;
+    }
+
+    /**
+     * Importes fiscales congelados (por impuesto/sequence) ya devueltos.
+     *
+     * @return array<int, array<int, array{base: float, tax: float}>>
+     */
+    private function returnedTaxAmountsBySaleItem(Sale $sale): array
+    {
+        $rows = SaleReturnItemTax::query()
+            ->join('sale_return_items', 'sale_return_items.id', '=', 'sale_return_item_taxes.sale_return_item_id')
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->where('sale_returns.sale_id', $sale->id)
+            ->selectRaw(
+                'sale_return_items.sale_item_id, '
+                .'sale_return_item_taxes.sequence, '
+                .'SUM(sale_return_item_taxes.base_amount) as base, '
+                .'SUM(sale_return_item_taxes.tax_amount) as tax'
+            )
+            ->groupBy('sale_return_items.sale_item_id', 'sale_return_item_taxes.sequence')
+            ->get();
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $result[(int) $row->sale_item_id][(int) $row->sequence] = [
+                'base' => (float) $row->base,
+                'tax' => (float) $row->tax,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Copia EXACTAMENTE la fiscalidad histórica de la línea de venta:
+     * nunca resuelve desde el Product actual. La devolución parcial
+     * prorratea por impuesto y la cierre absorbe el remanente exacto.
+     *
+     * @param  array<int, array{base: float, tax: float}>  $returnedBySequence
+     */
+    private function copyFrozenItemTaxes(
+        SaleItem $item,
+        SaleReturnItem $returnItem,
+        bool $completesLine,
+        ?float $ratio,
+        array $returnedBySequence,
+    ): void {
+        foreach ($item->taxes as $tax) {
+            if ($completesLine) {
+                $previous = $returnedBySequence[(int) $tax->sequence]
+                    ?? ['base' => 0.0, 'tax' => 0.0];
+
+                $base = $tax->base_amount === null
+                    ? null
+                    : max(0.0, round((float) $tax->base_amount - $previous['base'], 4));
+                $amount = $tax->tax_amount === null
+                    ? null
+                    : max(0.0, round((float) $tax->tax_amount - $previous['tax'], 4));
+            } else {
+                $base = $tax->base_amount === null
+                    ? null
+                    : round((float) $tax->base_amount * (float) $ratio, 4);
+                $amount = $tax->tax_amount === null
+                    ? null
+                    : round((float) $tax->tax_amount * (float) $ratio, 4);
+            }
+
+            SaleReturnItemTax::create([
+                'sale_return_item_id' => $returnItem->id,
+                'tax_code' => $tax->tax_code,
+                'tax_rate_code' => $tax->tax_rate_code,
+                'description' => $tax->description,
+                'treatment' => $tax->treatment,
+                'rate' => $tax->rate,
+                'factor_iva' => $tax->factor_iva,
+                'base_amount' => $base,
+                'tax_amount' => $amount,
+                'specific_tax_data' => $tax->specific_tax_data,
+                'exemption_snapshot' => $tax->exemption_snapshot,
+                'source' => $tax->source,
+                'source_version' => $tax->source_version,
+                'sequence' => $tax->sequence,
+            ]);
+        }
     }
 
     /**

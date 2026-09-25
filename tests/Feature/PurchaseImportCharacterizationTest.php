@@ -155,7 +155,7 @@ class PurchaseImportCharacterizationTest extends TestCase
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'Unid', 'slug' => 'unidad-'.$suffix, 'is_active' => true]);
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id,
             'name' => 'Producto', 'internal_code' => 'P-'.$suffix, 'cost' => 400, 'sale_price' => 800,
-            'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+            'tax_rate' => 0, 'fiscal_profile_id' => \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id'), 'track_inventory' => true, 'is_active' => true]);
 
         return [$company, $branch, $user, $supplier, $product];
     }

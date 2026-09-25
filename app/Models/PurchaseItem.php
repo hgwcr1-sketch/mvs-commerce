@@ -20,6 +20,12 @@ class PurchaseItem extends Model
         'subtotal',
         'discount',
         'tax_rate',
+        'tax_code',
+        'tax_rate_code',
+        'tax_treatment',
+        'fiscal_source',
+        'fiscal_source_version',
+        'fiscal_snapshot',
         'tax',
         'total',
     ];
@@ -35,9 +41,15 @@ class PurchaseItem extends Model
             'subtotal' => 'decimal:2',
             'discount' => 'decimal:2',
             'tax_rate' => 'decimal:4',
+            'fiscal_snapshot' => 'array',
             'tax' => 'decimal:2',
             'total' => 'decimal:2',
         ];
+    }
+
+    public function taxes(): HasMany
+    {
+        return $this->hasMany(PurchaseItemTax::class);
     }
 
     public function purchase(): BelongsTo

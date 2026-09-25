@@ -100,7 +100,7 @@ class PurchaseAccountPayableIntegrationTest extends TestCase
         app(CompanyPurchaseSettingsResolver::class)->forCompany($company);
         $supplier=Supplier::create(['company_id'=>$company->id,'supplier_type'=>'company','name'=>'Proveedor '.uniqid(),'credit_days'=>30,'is_active'=>true]);
         $id=Str::lower(Str::random(8)); $category=ProductCategory::create(['company_id'=>$company->id,'name'=>'Categoría '.$id,'slug'=>'cat-'.$id,'is_active'=>true]); $unit=Unit::create(['company_id'=>$company->id,'name'=>'Unidad','abbreviation'=>'U','slug'=>'u-'.$id,'is_active'=>true]);
-        $product=Product::create(['company_id'=>$company->id,'category_id'=>$category->id,'unit_id'=>$unit->id,'name'=>'Producto '.$id,'internal_code'=>'P-'.$id,'cost'=>400,'sale_price'=>800,'tax_rate'=>0,'track_inventory'=>true,'is_active'=>true]);
+        $product=Product::create(['company_id'=>$company->id,'category_id'=>$category->id,'unit_id'=>$unit->id,'name'=>'Producto '.$id,'internal_code'=>'P-'.$id,'cost'=>400,'sale_price'=>800,'tax_rate'=>0,'fiscal_profile_id'=>\App\Models\FiscalProfile::query()->where('tax_code','01')->where('tax_rate_code','10')->value('id'),'track_inventory'=>true,'is_active'=>true]);
         return[$company,$branch,$user,$supplier,$product];
     }
 }
