@@ -801,7 +801,7 @@ class PosDiscountAndPriceOverrideTest extends TestCase
             'is_active' => true,
         ]);
 
-        return Product::create(array_merge([
+        $product = Product::create(array_merge([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -814,6 +814,13 @@ class PosDiscountAndPriceOverrideTest extends TestCase
             'track_inventory' => false,
             'is_active' => true,
         ], $attributes));
+
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function stock(

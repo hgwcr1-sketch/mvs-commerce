@@ -256,7 +256,7 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
     public function test_earning_reduction_preserves_offer_filter_taxes_discounts_and_multiplier(): void
     {
         [$company, $branch, $user, $product, , $customer] = $this->context('50000.0000');
-        $product->update(['sale_price' => 6000, 'tax_rate' => 13]);
+        $product->update(['sale_price' => 6000, 'tax_rate' => 13, 'fiscal_profile_id' => null]);
         $offer = $product->replicate();
         $offer->fill(['internal_code' => 'OFFER-'.uniqid(), 'sale_price' => 5500, 'special_price' => 5000, 'track_inventory' => false])->save();
         $role = $user->companies()->whereKey($company->id)->first()->pivot->role_id;
@@ -312,13 +312,18 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
     public function test_mixed_tax_rates_and_exempt_lines_use_actual_invoice_funding_ratio(): void
     {
         [$company, $branch, $user, $product, , $customer] = $this->context('30000.0000');
-        $product->update(['sale_price' => 6000, 'tax_rate' => 13]);
+        $product->update(['sale_price' => 6000, 'tax_rate' => 13, 'fiscal_profile_id' => null]);
         $second = $product->replicate();
-        $second->fill(['internal_code' => 'MIX-'.uniqid(), 'sale_price' => 4000, 'tax_rate' => 4, 'track_inventory' => false])->save();
+        $second->fill(['internal_code' => 'MIX-'.uniqid(), 'sale_price' => 4000, 'tax_rate' => 4, 'fiscal_profile_id' => null, 'track_inventory' => false])->save();
         $session = $this->ensureCashSession($company, $branch, $user);
         $cash = PaymentMethod::forCompany($company->id)->where('type', 'cash')->firstOrFail();
         foreach ([[4, 10940, 2188, 940], [0, 10780, 2156, 780]] as [$rate, $total, $points, $tax]) {
-            $second->update(['tax_rate' => $rate]);
+            $second->update([
+                'tax_rate' => $rate,
+                'fiscal_profile_id' => $rate === 0
+                    ? \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id')
+                    : null,
+            ]);
             $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.checkout'), [
                 'checkout_token' => (string) Str::uuid(), 'cash_session_id' => $session->id, 'customer_id' => $customer->id,
                 'items' => [['product_id' => $product->id, 'quantity' => 1], ['product_id' => $second->id, 'quantity' => 1]],
@@ -339,7 +344,7 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
     private function assertTaxedEarning(?string $requestedPoints, string $expectedBase, string $expectedPoints): void
     {
         [$company, $branch, $user, $product, , $customer, $account] = $this->context('30000.0000');
-        $product->update(['sale_price' => '10000.0000', 'tax_rate' => '13.0000']);
+        $product->update(['sale_price' => '10000.0000', 'tax_rate' => '13.0000', 'fiscal_profile_id' => null]);
         $remaining = bcsub('11300', $requestedPoints ?? '0', 4);
         $payments = bccomp($remaining, '0', 4) === 0 ? [] : [$this->cashPayload($company, (float) $remaining, (float) $remaining)];
         $response = $this->checkout($user, $company, $branch, $payments, $customer->id, null, $requestedPoints)->assertOk();
@@ -391,6 +396,8 @@ class PosCheckoutLoyaltyRedemptionTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'is_active' => true]);
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'P-'.$suffix, 'cost' => 500, 'sale_price' => 1000, 'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+        $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $product->save();
         DB::table('branch_product')->insert(['branch_id' => $branch->id, 'product_id' => $product->id, 'stock' => 50, 'created_at' => now(), 'updated_at' => now()]);
 
         $customer = Customer::create(['company_id' => $company->id, 'name' => 'Cliente '.uniqid(), 'customer_type' => 'individual', 'is_active' => true]);

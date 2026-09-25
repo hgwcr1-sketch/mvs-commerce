@@ -6,16 +6,19 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanySequence;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Models\SuspendedSale;
 use App\Models\User;
 use App\Services\Cash\CashSessionResolver;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyBirthdayService;
 use App\Services\Loyalty\LoyaltyEarningService;
@@ -25,12 +28,14 @@ use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PosSaleProcessor
 {
     public function __construct(
+        private readonly FiscalTaxService $fiscalTaxService,
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
         private readonly AccountsReceivableService $accountsReceivableService,
@@ -253,7 +258,8 @@ class PosSaleProcessor
                     }
 
                     $unitCost = (float) $product->cost;
-                    $taxRate = (float) ($product->tax_rate ?? 0);
+                    $fiscalProfile = $this->resolveLineProfile($product);
+                    $taxRate = (float) ($fiscalProfile->rate ?? 0);
                     $grossTotal = $this->decimal4($unitPrice * $quantity);
 
                     $lineDiscount = $this->resolveDiscountAmount(
@@ -273,6 +279,7 @@ class PosSaleProcessor
                         'unitPrice' => $unitPrice,
                         'unitCost' => $unitCost,
                         'taxRate' => $taxRate,
+                        'fiscalProfile' => $fiscalProfile,
                         'grossTotal' => $grossTotal,
                         'lineDiscount' => $lineDiscount,
                         'lineBase' => $lineBase,
@@ -431,8 +438,11 @@ class PosSaleProcessor
 
                 foreach ($resolvedLines as $line) {
                     $product = $line['product'];
+                    /** @var FiscalProfile $fiscalProfile */
+                    $fiscalProfile = $line['fiscalProfile'];
+                    $fiscalSnapshot = $this->fiscalTaxService->snapshotFromProfile($fiscalProfile);
 
-                    SaleItem::create([
+                    $saleItem = SaleItem::create([
                         'sale_id' => $sale->id,
                         'product_id' => $product->id,
                         'product_code' => $product->internal_code,
@@ -447,9 +457,32 @@ class PosSaleProcessor
                         'discount_total' => $line['discountTotal'],
                         'subtotal' => $line['lineSubtotal'],
                         'tax_rate' => $line['taxRate'],
+                        'tax_code' => $fiscalProfile->tax_code,
+                        'tax_rate_code' => $fiscalProfile->tax_rate_code,
+                        'tax_treatment' => $fiscalProfile->treatment,
+                        'fiscal_source' => $fiscalProfile->catalogVersion?->source,
+                        'fiscal_source_version' => $fiscalProfile->catalogVersion?->source_version,
+                        'fiscal_snapshot' => $fiscalSnapshot,
                         'tax_total' => $line['lineTax'],
                         'total' => $line['lineTotal'],
                         'unit_cost' => $line['unitCost'],
+                    ]);
+
+                    SaleItemTax::create([
+                        'sale_item_id' => $saleItem->id,
+                        'tax_code' => $fiscalProfile->tax_code,
+                        'tax_rate_code' => $fiscalProfile->tax_rate_code,
+                        'description' => $fiscalProfile->name,
+                        'treatment' => $fiscalProfile->treatment,
+                        'rate' => $fiscalProfile->rate,
+                        'factor_iva' => $fiscalProfile->factor_iva,
+                        'base_amount' => $line['lineSubtotal'],
+                        'tax_amount' => $line['lineTax'],
+                        'specific_tax_data' => null,
+                        'exemption_snapshot' => null,
+                        'source' => $fiscalProfile->catalogVersion?->source,
+                        'source_version' => $fiscalProfile->catalogVersion?->source_version,
+                        'sequence' => 1,
                     ]);
 
                     if ($product->track_inventory) {
@@ -960,6 +993,36 @@ class PosSaleProcessor
                 'items' => "La unidad de {$product->name} requiere una cantidad entera.",
             ]);
         }
+    }
+
+    private function resolveLineProfile(Product $product): FiscalProfile
+    {
+        $fiscalProfileId = $product->fiscal_profile_id !== null
+            ? (int) $product->fiscal_profile_id
+            : null;
+
+        $legacyTaxRate = $product->tax_rate !== null
+            ? (float) $product->tax_rate
+            : null;
+
+        try {
+            $profile = $this->fiscalTaxService->resolveForProduct(
+                $fiscalProfileId,
+                $legacyTaxRate,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede venderse: requiere un perfil fiscal explícito ({$exception->getMessage()}).",
+            ]);
+        }
+
+        if ($profile->tax_code !== '01' || $profile->rate === null) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede venderse: su perfil fiscal no define una tarifa de IVA calculable por el POS.",
+            ]);
+        }
+
+        return $profile;
     }
 
     private function canonicalPayments(

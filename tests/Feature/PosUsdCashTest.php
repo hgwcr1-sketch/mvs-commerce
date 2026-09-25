@@ -162,6 +162,8 @@ class PosUsdCashTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'General', 'slug' => 'general', 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'unidad', 'is_active' => true]);
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto', 'internal_code' => 'P', 'cost' => 500, 'sale_price' => $total, 'tax_rate' => 0, 'track_inventory' => false, 'is_active' => true]);
+        $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $product->save();
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
         return [$company, $branch, $user, $session, $cash, $product];
     }
