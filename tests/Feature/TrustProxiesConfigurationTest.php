@@ -4,58 +4,75 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class TrustProxiesConfigurationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_request_with_forwarded_proto_https_is_secure(): void
+    public function test_untrusted_client_cannot_spoof_forwarded_headers(): void
     {
-        $request = Request::create('https://rebound-fotos-see-visibility.trycloudflare.com/test', 'GET');
-        $request->headers->set('X-Forwarded-Proto', 'https');
-        $request->headers->set('X-Forwarded-Host', 'rebound-fotos-see-visibility.trycloudflare.com');
-        $request->setTrustedProxies(
-            ['*'],
-            Request::HEADER_X_FORWARDED_PROTO
-            | Request::HEADER_X_FORWARDED_HOST
-            | Request::HEADER_X_FORWARDED_PORT,
-        );
+        $this->registerProbeRoute();
 
-        $this->assertTrue($request->isSecure(), 'Request with X-Forwarded-Proto: https must be detected as secure');
-        $this->assertSame('https', $request->getScheme(), 'Scheme must be https when X-Forwarded-Proto is https');
+        $response = $this->withHeaders([
+            'X-Forwarded-For' => '203.0.113.9',
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Host' => 'evil.example',
+        ])->getJson('/__trusted-proxy-probe');
+
+        $response->assertOk();
+
+        $this->assertSame('127.0.0.1', $response->json('ip'), 'IP must come from REMOTE_ADDR when no proxy is trusted');
+        $this->assertFalse($response->json('secure'), 'X-Forwarded-Proto must be ignored from untrusted clients');
+        $this->assertSame('localhost', $response->json('host'), 'X-Forwarded-Host must be ignored from untrusted clients');
     }
 
-    public function test_url_generation_uses_https_behind_proxy(): void
+    public function test_explicitly_configured_proxy_is_honoured(): void
     {
-        $request = Request::create('https://rebound-fotos-see-visibility.trycloudflare.com/pos', 'GET');
-        $request->headers->set('X-Forwarded-Proto', 'https');
-        $request->headers->set('X-Forwarded-Host', 'rebound-fotos-see-visibility.trycloudflare.com');
-        $request->setTrustedProxies(
-            ['*'],
-            Request::HEADER_X_FORWARDED_PROTO
-            | Request::HEADER_X_FORWARDED_HOST
-            | Request::HEADER_X_FORWARDED_PORT,
-        );
+        $this->registerProbeRoute();
+        config(['trustedproxy.proxies' => ['127.0.0.1']]);
 
-        $this->assertTrue($request->isSecure());
-        $this->assertSame('https://rebound-fotos-see-visibility.trycloudflare.com/pos', $request->fullUrl());
+        $response = $this->withHeaders([
+            'X-Forwarded-For' => '203.0.113.9',
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Host' => 'app.mvscommerce.com',
+        ])->getJson('/__trusted-proxy-probe');
+
+        $response->assertOk();
+
+        $this->assertSame('203.0.113.9', $response->json('ip'), 'Configured proxy must be able to forward client IP');
+        $this->assertTrue($response->json('secure'), 'Configured proxy must be able to forward X-Forwarded-Proto');
+        $this->assertSame('app.mvscommerce.com', $response->json('host'), 'Configured proxy must be able to forward X-Forwarded-Host');
     }
 
-    public function test_build_assets_would_be_https_behind_proxy(): void
+    public function test_trusted_proxies_default_configuration_is_an_empty_list(): void
     {
-        $request = Request::create('https://rebound-fotos-see-visibility.trycloudflare.com/', 'GET');
-        $request->headers->set('X-Forwarded-Proto', 'https');
-        $request->headers->set('X-Forwarded-Host', 'rebound-fotos-see-visibility.trycloudflare.com');
-        $request->setTrustedProxies(
-            ['*'],
-            Request::HEADER_X_FORWARDED_PROTO
-            | Request::HEADER_X_FORWARDED_HOST
-            | Request::HEADER_X_FORWARDED_PORT,
-        );
+        $this->assertEmpty(config('trustedproxy.proxies'), 'Default configuration must trust no proxies');
+    }
 
-        $this->assertTrue($request->isSecure());
-        $baseUrl = $request->getScheme().'://'.$request->getHost();
-        $this->assertSame('https://rebound-fotos-see-visibility.trycloudflare.com', $baseUrl);
+    public function test_trusted_proxies_env_is_parsed_as_an_explicit_list_without_global_wildcard(): void
+    {
+        $_ENV['TRUSTED_PROXIES'] = '10.0.0.1, 172.16.0.0/12 ,*';
+        $_SERVER['TRUSTED_PROXIES'] = '10.0.0.1, 172.16.0.0/12 ,*';
+
+        try {
+            $parsed = require base_path('config/trustedproxy.php');
+        } finally {
+            unset($_ENV['TRUSTED_PROXIES'], $_SERVER['TRUSTED_PROXIES']);
+        }
+
+        $this->assertSame(['10.0.0.1', '172.16.0.0/12'], $parsed['proxies']);
+    }
+
+    private function registerProbeRoute(): void
+    {
+        Route::get('/__trusted-proxy-probe', static function (Request $request) {
+            return response()->json([
+                'ip' => $request->ip(),
+                'secure' => $request->isSecure(),
+                'host' => $request->getHost(),
+            ]);
+        });
     }
 }
