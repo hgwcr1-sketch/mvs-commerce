@@ -12,7 +12,8 @@
         .format-letter{width:210mm;min-height:270mm;padding:14mm}
         h1{margin:0;font-size:20px;text-align:center}
         h2{margin:4px 0 0;font-size:13px;text-align:center;font-weight:700}
-        .brand{color:#b7791f;letter-spacing:.08em}
+        .brand{color:#D4AF37;letter-spacing:.08em}
+        .company-logo{display:block;max-height:16mm;max-width:42mm;margin:0 auto 3px}
         .center{text-align:center}
         .loyalty-invitation{text-align:center;page-break-inside:avoid;overflow-wrap:anywhere}
         .loyalty-invitation p{margin:3px 0;font-size:11px}
@@ -80,17 +81,20 @@
     $documentData = $data?->document ?? ['type' => $sale->document_type === 'electronic_invoice' ? 'FACTURA ELECTRÓNICA' : ($sale->document_type === 'electronic_ticket' ? 'TICKET ELECTRÓNICO' : 'COMPROBANTE'), 'sale_number' => $sale->sale_number, 'completed_at' => $sale->completed_at?->timezone($company->timezone)->format('d/m/Y H:i') ?? $sale->created_at->timezone($company->timezone)->format('d/m/Y H:i'), 'is_voided' => $sale->status === \App\Models\Sale::STATUS_VOIDED];
     $cashierData = $data?->cashier ?? ['name' => $sale->user->name ?? ''];
     $customerData = $data?->customer ?? ['name' => $sale->customer?->name ?? 'Consumidor Final', 'identification' => $sale->customer?->identification ?? null];
-    $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 0, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 0, ',', '.'), 'total' => number_format((float) $item->total, 0, ',', '.')])->toArray();
-    $totalsData = $data?->totals ?? ['subtotal' => number_format((float) $sale->subtotal, 0, ',', '.'), 'discount_total' => number_format((float) $sale->discount_total, 0, ',', '.'), 'tax_total' => number_format((float) $sale->tax_total, 0, ',', '.'), 'rounding_total' => number_format((float) $sale->rounding_total, 0, ',', '.'), 'total' => number_format((float) $sale->total, 0, ',', '.')];
-    $paymentsData = $data?->payments ?? $sale->payments->map(fn($payment) => ['method' => $payment->paymentMethod->name ?? 'Pago', 'amount' => number_format((float) $payment->amount, 0, ',', '.'), 'reference' => $payment->reference ?? null, 'received_amount' => (float) $payment->received_amount > 0 ? number_format((float) $payment->received_amount, 0, ',', '.') : null, 'change_amount' => (float) $payment->change_amount > 0 ? number_format((float) $payment->change_amount, 0, ',', '.') : null, 'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false])->toArray();
-    $creditNotesData = $data?->credit_note_applications ?? $sale->creditNoteApplicationsAsDestination->map(fn($app) => ['credit_note_number' => $app->creditNote->credit_note_number ?? 'NC', 'amount' => number_format((float) $app->amount, 0, ',', '.')])->toArray();
+    $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 2, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 2, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 2, ',', '.'), 'total' => number_format((float) $item->total, 2, ',', '.')])->toArray();
+    $totalsData = $data?->totals ?? ['subtotal' => number_format((float) $sale->subtotal, 2, ',', '.'), 'discount_total' => number_format((float) $sale->discount_total, 2, ',', '.'), 'tax_total' => number_format((float) $sale->tax_total, 2, ',', '.'), 'rounding_total' => number_format((float) $sale->rounding_total, 2, ',', '.'), 'total' => number_format((float) $sale->total, 2, ',', '.')];
+    $paymentsData = $data?->payments ?? $sale->payments->map(fn($payment) => ['method' => $payment->paymentMethod->name ?? 'Pago', 'amount' => number_format((float) $payment->amount, 2, ',', '.'), 'reference' => $payment->reference ?? null, 'received_amount' => (float) $payment->received_amount > 0 ? number_format((float) $payment->received_amount, 2, ',', '.') : null, 'change_amount' => (float) $payment->change_amount > 0 ? number_format((float) $payment->change_amount, 2, ',', '.') : null, 'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false])->toArray();
+    $creditNotesData = $data?->credit_note_applications ?? $sale->creditNoteApplicationsAsDestination->map(fn($app) => ['credit_note_number' => $app->creditNote->credit_note_number ?? 'NC', 'amount' => number_format((float) $app->amount, 2, ',', '.')])->toArray();
+    $money = static fn ($amount) => number_format((float) str_replace(['.', ','], ['', '.'], (string) $amount), 2, ',', '.');
     $paymentSummaryData = $data?->payment_summary ?? ['is_mixed' => $sale->payments->count() >= 2];
     $loyaltyData = $data?->loyalty ?? $loyalty;
     $cashSessionData = $data?->cash_session ?? ($sale->cashSession ? ['session_number' => $sale->cashSession->session_number, 'cash_register_name' => $sale->cashSession->cashRegister->name] : null);
     $footerMessage = $data?->footer_message ?? 'Gracias por su compra';
+    $companyLogo = ! empty($company->logo) ? (($pdfMode ?? false) ? 'file://'.public_path('storage/'.$company->logo) : asset('storage/'.$company->logo)) : null;
 @endphp
 <main class="receipt format-{{ $format }}" data-receipt-format="{{ $format }}">
     <header>
+        @if($companyLogo)<img class="company-logo" src="{{ $companyLogo }}" alt="{{ $companyData['trade_name'] }}">@endif
         <h1 class="brand">{{ $companyData['trade_name'] }}</h1>
         <p class="center muted">{{ $companyData['legal_name'] }}<br>{{ $companyData['identification_number'] }}<br>{{ $branchData['name'] }} · {{ $branchData['phone'] }}<br>{{ $branchData['address'] }}</p>
         <p class="center muted" style="font-size:9px;letter-spacing:.06em;margin-top:4px;">MVS Commerce</p>
@@ -115,8 +119,8 @@
             <div class="item58">
                 <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="muted">{{ $item['product_code'] }}</span>@endif</div>
                 <div class="item58-line">
-                    <span class="left">{{ $item['quantity'] }} x ₡{{ $item['unit_price'] }}@if((float) $item['discount_total'] > 0) -₡{{ $item['discount_total'] }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $item['tax_total'] }}@endif</span>
-                    <span class="right">₡{{ $item['total'] }}</span>
+                    <span class="left">{{ $item['quantity'] }} x ₡{{ $money($item['unit_price']) }}@if((float) $item['discount_total'] > 0) -₡{{ $money($item['discount_total']) }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $money($item['tax_total']) }}@endif</span>
+                    <span class="right">₡{{ $money($item['total']) }}</span>
                 </div>
             </div>
         @endforeach
@@ -129,10 +133,10 @@
                 <tr>
                     <td>{{ $item['description'] }}<br><span class="muted">{{ $item['product_code'] }}</span></td>
                     <td>{{ $item['quantity'] }}</td>
-                    <td>₡{{ $item['unit_price'] }}</td>
-                    <td>₡{{ $item['discount_total'] }}</td>
-                    <td>₡{{ $item['tax_total'] }}</td>
-                    <td>₡{{ $item['total'] }}</td>
+                    <td>₡{{ $money($item['unit_price']) }}</td>
+                    <td>₡{{ $money($item['discount_total']) }}</td>
+                    <td>₡{{ $money($item['tax_total']) }}</td>
+                    <td>₡{{ $money($item['total']) }}</td>
                 </tr>
             @endforeach
             </tbody>
@@ -162,15 +166,15 @@
     @endif
     <div class="rule"></div>
     <table class="totals">
-        <tr><td>Subtotal</td><td>₡{{ $totalsData['subtotal'] }}</td></tr>
+        <tr><td>Subtotal</td><td>₡{{ $money($totalsData['subtotal']) }}</td></tr>
         @if((float) $totalsData['discount_total'] > 0)
-            <tr><td>Descuento</td><td>-₡{{ $totalsData['discount_total'] }}</td></tr>
+            <tr><td>Descuento</td><td>-₡{{ $money($totalsData['discount_total']) }}</td></tr>
         @endif
-        <tr><td>Impuesto</td><td>₡{{ $totalsData['tax_total'] }}</td></tr>
+        <tr><td>Impuesto</td><td>₡{{ $money($totalsData['tax_total']) }}</td></tr>
         @if((float) $totalsData['rounding_total'] !== 0.0)
-            <tr><td>Redondeo</td><td>₡{{ $totalsData['rounding_total'] }}</td></tr>
+            <tr><td>Redondeo</td><td>₡{{ $money($totalsData['rounding_total']) }}</td></tr>
         @endif
-        <tr class="grand"><td>TOTAL</td><td>₡{{ $totalsData['total'] }}</td></tr>
+        <tr class="grand"><td>TOTAL</td><td>₡{{ $money($totalsData['total']) }}</td></tr>
     </table>
 
     @if(count($creditNotesData) > 0)
@@ -178,7 +182,7 @@
     <p><strong>Notas de crédito aplicadas</strong></p>
     <table class="{{ $format === '58mm' ? 'pay-table' : '' }}">
         @foreach($creditNotesData as $cn)
-            <tr><td>{{ $cn['credit_note_number'] }}</td><td>₡{{ $cn['amount'] }}</td></tr>
+            <tr><td>{{ $cn['credit_note_number'] }}</td><td>₡{{ $money($cn['amount']) }}</td></tr>
         @endforeach
     </table>
     @endif
@@ -187,12 +191,12 @@
     <p><strong>Formas de pago</strong>@if($paymentSummaryData['is_mixed']) — Pago mixto @endif</p>
     <table class="{{ $format === '58mm' ? 'pay-table' : '' }}">
         @foreach($paymentsData as $payment)
-            <tr><td>{{ $payment['method'] }}</td><td>₡{{ $payment['amount'] }}</td></tr>
+            <tr><td>{{ $payment['method'] }}</td><td>₡{{ $money($payment['amount']) }}</td></tr>
             @if($payment['reference'])
                 <tr><td class="muted">Referencia</td><td class="muted">{{ $payment['reference'] }}</td></tr>
             @endif
             @if($payment['allows_change'] && $payment['received_amount'] !== null && $payment['change_amount'] !== null)
-                <tr><td class="muted">Recibido / vuelto</td><td class="muted">₡{{ $payment['received_amount'] }} / ₡{{ $payment['change_amount'] }}</td></tr>
+                <tr><td class="muted">Recibido / vuelto</td><td class="muted">₡{{ $money($payment['received_amount']) }} / ₡{{ $money($payment['change_amount']) }}</td></tr>
             @endif
         @endforeach
     </table>

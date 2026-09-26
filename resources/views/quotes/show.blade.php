@@ -9,7 +9,8 @@
             <h1 class="text-2xl font-bold">{{ $quote->quote_number }}</h1>
             <p>{{ $quote->customer?->name ?? 'Consumidor Final' }} · {{ $quote->branch->name }}</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
+            @include('quotes.partials.send-modal', ['quote' => $quote])
             <a href="{{ route('cotizaciones.print', $quote) }}" target="_blank" class="rounded border px-4 py-2">Imprimir</a>
             @can('cotizaciones.editar')
                 @if($quote->effective_status === 'active')

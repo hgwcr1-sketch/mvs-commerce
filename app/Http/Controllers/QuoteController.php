@@ -29,7 +29,7 @@ class QuoteController extends Controller
         $quotes = Quote::query()
             ->where('company_id', session('active_company_id'))
             ->where('branch_id', session('active_branch_id'))
-            ->with(['customer', 'user'])
+            ->with(['customer', 'user', 'company'])
             ->when($filters['number'] ?? null, fn ($query, $number) => $query->where('quote_number', 'like', '%'.$number.'%'))
             ->when($filters['customer'] ?? null, function ($query, $customer) {
                 $query->whereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', '%'.$customer.'%'));

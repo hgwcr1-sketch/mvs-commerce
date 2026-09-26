@@ -69,8 +69,8 @@ class QuoteTest extends TestCase
         $product = $this->product($company);
         $quoteId = $this->createQuote($user, $company, $branch, $product)->json('quote_id');
 
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.index'))->assertOk()->assertSee('COT-00000001');
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.show', $quoteId))->assertOk()->assertSee($product->name);
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.index'))->assertOk()->assertSee('COT-00000001')->assertSee('Enviar');
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.show', $quoteId))->assertOk()->assertSee($product->name)->assertSee('Enviar cotización');
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('cotizaciones.print', $quoteId))->assertOk()->assertSee('COTIZACIÓN')->assertSee('NO ES COMPROBANTE FISCAL');
 
         $otherBranch = $this->branch($company, 'Otra');

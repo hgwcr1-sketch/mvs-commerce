@@ -2277,6 +2277,7 @@ document.addEventListener('alpine:init', () => {
                 const payload = await this.readFetchResponse(response);
                 this.quoteId = payload.quote_id;
                 this.notice = payload.message;
+                if (this.showQuoteSend(payload)) return;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
             } catch (error) { this.notice = error.message; }
@@ -2295,10 +2296,16 @@ document.addEventListener('alpine:init', () => {
                 });
                 const payload = await this.readFetchResponse(response);
                 this.notice = payload.message;
+                if (this.showQuoteSend(payload)) return;
                 await this.searchProducts(false);
                 this.$nextTick(() => this.focusSearch());
             } catch (error) { this.notice = error.message; }
             finally { this.creatingQuote = false; }
+        },
+        showQuoteSend(payload) {
+            if (!payload.show_url || typeof window.location.assign !== 'function') return false;
+            window.location.assign(`${payload.show_url}?send=1`);
+            return true;
         },
         async loadQuote(id) {
             try {
