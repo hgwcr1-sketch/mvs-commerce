@@ -66,6 +66,9 @@ mapfile -t TABLES < <(psqlq "SELECT table_name FROM information_schema.tables WH
 
 EXCLUDED=()
 UNCLASSIFIED=()
+PLAN_TABLES=()
+PLAN_KIND=()
+PLAN_SQL=()
 ENTRIES="${OUT}/.entries.jsonl"
 : > "$ENTRIES"
 exported=0
@@ -94,6 +97,131 @@ for tb in "${TABLES[@]}"; do
         fi
     fi
 
+    PLAN_TABLES+=("$tb")
+    PLAN_KIND+=("$kind")
+    PLAN_SQL+=("$sql")
+done
+
+if [[ ${#UNCLASSIFIED[@]} -gt 0 ]]; then
+    echo "Tablas sin clasificar (agregar a company-tables.json):" >&2
+    printf '  %s\n' "${UNCLASSIFIED[@]}" >&2
+    exit 6
+fi
+
+# Users miembros de la empresa + users referenciados por FK desde las filas exportadas.
+USERS_SQL="$(jq -r '.indirect["users"] // empty' "$MAP" | sed "s/{{ID}}/${CID}/g")"
+[[ -n "$USERS_SQL" ]] || { echo "Sin regla indirecta para users en company-tables.json" >&2; exit 6; }
+
+REF_TMP="${OUT}/.users-ref.txt"
+: > "$REF_TMP"
+
+REF_PAIRS="$(psqlq "
+SELECT DISTINCT table_name || '|' || column_name FROM (
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND data_type IN ('bigint', 'integer', 'smallint')
+      AND (column_name ~ '(^user_id$|_user_id$|_by$)' OR column_name IN ('actor_id', 'assigned_to'))
+    UNION
+    SELECT c.relname, a.attname
+    FROM pg_constraint con
+    JOIN pg_class c ON c.oid = con.conrelid
+    JOIN pg_class rc ON rc.oid = con.confrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+    WHERE con.contype = 'f' AND n.nspname = 'public' AND rc.relname = 'users'
+) src ORDER BY 1" | tr -d '\r')"
+
+for i in "${!PLAN_TABLES[@]}"; do
+    tb="${PLAN_TABLES[$i]}"
+    sql="${PLAN_SQL[$i]}"
+    cols="$(printf '%s\n' "$REF_PAIRS" | awk -F'|' -v t="$tb" '$1 == t {print $2}')"
+    [[ -n "$cols" ]] || continue
+    union_sql=""
+    while IFS= read -r col; do
+        [[ -n "$col" ]] || continue
+        [[ -n "$union_sql" ]] && union_sql="${union_sql} UNION ALL "
+        union_sql="${union_sql}SELECT x.\"${col}\" AS ref_id FROM ( ${sql} ) x WHERE x.\"${col}\" IS NOT NULL"
+    done <<< "$cols"
+    psqlq "SELECT ref_id FROM ( ${union_sql} ) refs WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = refs.ref_id)" | tr -d '\r' >> "$REF_TMP"
+done
+
+mapfile -t REF_IDS < <(sort -u "$REF_TMP")
+rm -f "$REF_TMP"
+
+EXTRA_IDS=()
+CROSS_USERS=()
+HAS_PADMIN="$(psqlq "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'is_platform_admin'" | tr -d '\r')"
+PADMIN_SEL="false"
+[[ "$HAS_PADMIN" == "1" ]] && PADMIN_SEL="u.is_platform_admin"
+
+if [[ ${#REF_IDS[@]} -gt 0 ]]; then
+    for ((start = 0; start < ${#REF_IDS[@]}; start += 500)); do
+        chunk=("${REF_IDS[@]:start:500}")
+        ids_csv="$(IFS=,; echo "${chunk[*]}")"
+        ref_rows="$(psqlq "
+SELECT u.id, ${PADMIN_SEL},
+       EXISTS(SELECT 1 FROM company_user cu WHERE cu.user_id = u.id AND cu.company_id = ${CID}),
+       EXISTS(SELECT 1 FROM branch_user bu JOIN branches b ON b.id = bu.branch_id WHERE bu.user_id = u.id AND b.company_id = ${CID}),
+       EXISTS(SELECT 1 FROM company_user cu WHERE cu.user_id = u.id AND cu.company_id <> ${CID}),
+       EXISTS(SELECT 1 FROM branch_user bu JOIN branches b ON b.id = bu.branch_id WHERE bu.user_id = u.id AND b.company_id <> ${CID})
+FROM users u
+WHERE u.id IN (${ids_csv})
+ORDER BY u.id" | tr -d '\r')"
+        while IFS='|' read -r uid padmin in_a in_a_br in_o in_o_br; do
+            [[ -n "${uid:-}" ]] || continue
+            if [[ "$in_a" == "t" || "$in_a_br" == "t" ]]; then
+                continue
+            fi
+            if [[ "$padmin" == "t" || "$padmin" == "true" ]]; then
+                EXTRA_IDS+=("$uid")
+                continue
+            fi
+            if [[ "$in_o" == "t" || "$in_o_br" == "t" ]]; then
+                CROSS_USERS+=("$uid")
+                continue
+            fi
+            EXTRA_IDS+=("$uid")
+        done <<< "$ref_rows"
+    done
+fi
+
+if [[ ${#CROSS_USERS[@]} -gt 0 ]]; then
+    cross_csv="$(IFS=,; echo "${CROSS_USERS[*]}")"
+    echo "RECHAZADO: users referenciados por filas exportadas pertenecen a otra empresa tenant." >&2
+    echo "La empresa ${CID} no se exporta; revisar vinculacion de usuarios antes de repetir." >&2
+    psqlq "
+SELECT u.id || ' | ' || COALESCE(u.email, '') || ' | empresas=' || COALESCE((
+    SELECT string_agg(DISTINCT x.company_id::text, ',')
+    FROM (
+        SELECT cu.company_id FROM company_user cu WHERE cu.user_id = u.id AND cu.company_id <> ${CID}
+        UNION
+        SELECT b.company_id FROM branch_user bu JOIN branches b ON b.id = bu.branch_id WHERE bu.user_id = u.id AND b.company_id <> ${CID}
+    ) x
+), 'ninguna')
+FROM users u WHERE u.id IN (${cross_csv}) ORDER BY u.id" | tr -d '\r' >&2
+    exit 7
+fi
+
+if [[ ${#EXTRA_IDS[@]} -gt 0 ]]; then
+    extra_csv="$(IFS=,; echo "${EXTRA_IDS[*]}")"
+    USERS_SQL="${USERS_SQL} UNION (SELECT u.* FROM users u WHERE u.id IN (${extra_csv}))"
+fi
+
+for i in "${!PLAN_TABLES[@]}"; do
+    if [[ "${PLAN_TABLES[$i]}" == "users" ]]; then
+        PLAN_SQL[$i]="$USERS_SQL"
+    fi
+done
+
+echo "Users referenciados: ${#REF_IDS[@]} ids unicos, ${#EXTRA_IDS[@]} adicionales incluidos, ${#CROSS_USERS[@]} cross-company"
+
+for i in "${!PLAN_TABLES[@]}"; do
+    tb="${PLAN_TABLES[$i]}"
+    kind="${PLAN_KIND[$i]}"
+    sql="${PLAN_SQL[$i]}"
+
     rows="$(psqlq "SELECT COUNT(*) FROM ( ${sql} ) AS mvs_count")"
     file="${tb}.csv.gz"
     psqlq "COPY ( ${sql} ) TO STDOUT WITH (FORMAT csv, HEADER true)" | gzip -n -9 > "${OUT}/${file}"
@@ -115,12 +243,6 @@ PY
         '{table: $t, kind: $k, rows: $r, file: $f, sha256: $s, sql: $sql}' >> "$ENTRIES"
     exported=$((exported + 1))
 done
-
-if [[ ${#UNCLASSIFIED[@]} -gt 0 ]]; then
-    echo "Tablas sin clasificar (agregar a company-tables.json):" >&2
-    printf '  %s\n' "${UNCLASSIFIED[@]}" >&2
-    exit 6
-fi
 
 created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 pgv="$(psqlq "SHOW server_version")"
