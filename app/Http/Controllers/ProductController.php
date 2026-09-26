@@ -281,6 +281,8 @@ if ($request->expectsJson()) {
      */
     public function show(Product $producto)
     {
+        $this->scoped($producto);
+
         return view('productos.show', compact('producto'));
     }
 
@@ -289,6 +291,7 @@ if ($request->expectsJson()) {
      */
     public function edit(Product $producto)
 {
+    $this->scoped($producto);
     $companyId = session('active_company_id');
     $branchId = session('active_branch_id');
 
@@ -357,8 +360,8 @@ if ($request->expectsJson()) {
      */
     public function update(UpdateProductRequest $request, Product $producto)
     {
+        $this->scoped($producto);
         $data = $request->validated();
-        $data['company_id'] = session('active_company_id');
 
         if ($request->has('subcategory_id') && $request->subcategory_id) {
             $data['category_id'] = $request->subcategory_id;
@@ -420,6 +423,8 @@ if ($branchId) {
      */
     public function destroy(Product $producto)
     {
+        $this->scoped($producto);
+
         if ($producto->image) {
             Storage::disk('public')->delete($producto->image);
         }
@@ -522,4 +527,13 @@ if ($branchId) {
 
 }
 
+    private function scoped(Product $producto): Product
+    {
+        abort_unless(
+            (int) $producto->company_id === (int) session('active_company_id'),
+            404
+        );
+
+        return $producto;
+    }
 }
