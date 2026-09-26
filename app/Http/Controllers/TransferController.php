@@ -343,6 +343,7 @@ class TransferController extends Controller
      */
     public function prepare(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
+        $transfer = $this->scoped($transfer);
         $inventory->prepareTransfer($transfer, (int) $request->user()->id, $request->input('notes'));
 
         return redirect()
@@ -355,6 +356,7 @@ class TransferController extends Controller
      */
     public function dispatch(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
+        $transfer = $this->scoped($transfer);
         $inventory->dispatchTransfer($transfer, (int) $request->user()->id, $request->input('notes'));
 
         return redirect()
@@ -367,6 +369,8 @@ class TransferController extends Controller
      */
     public function review(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
+        $transfer = $this->scoped($transfer);
+
         if (! $transfer->isInTransit()) {
             throw ValidationException::withMessages([
                 'transfer' => 'Solo se puede iniciar revisión de un traslado con estatus in_transit.',
@@ -386,6 +390,7 @@ class TransferController extends Controller
      */
     public function receive(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
+        $transfer = $this->scoped($transfer);
         $receivedQuantity = $request->input('received_quantity');
         if ($request->has('received_products')) {
             // Phase A adapter: never silently discard per-line differences into the legacy scalar API.
@@ -430,6 +435,8 @@ class TransferController extends Controller
      */
     public function cancel(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
     {
+        $transfer = $this->scoped($transfer);
+
         if (! in_array($transfer->status, [InventoryTransfer::STATUS_PENDING, InventoryTransfer::STATUS_PREPARED])) {
             throw ValidationException::withMessages([
                 'transfer' => 'No se puede cancelar un traslado en su estado actual.',
@@ -472,5 +479,15 @@ class TransferController extends Controller
         $statusLabels = self::STATUS_LABELS;
 
         return view('transferencias.show', compact('transfer', 'dispatcher', 'statusLabels'));
+    }
+
+    private function scoped(InventoryTransfer $transfer): InventoryTransfer
+    {
+        abort_unless(
+            (int) $transfer->company_id === (int) session('active_company_id'),
+            404
+        );
+
+        return $transfer;
     }
 }
