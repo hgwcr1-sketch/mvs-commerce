@@ -95,6 +95,55 @@ use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
+if (app()->environment('local')) {
+    Route::get('/_local/preview/cash-session-closed/{session?}', function (?int $session = null) {
+        $cashSession = \App\Models\CashSession::query()
+            ->where('status', \App\Models\CashSession::STATUS_CLOSED)
+            ->when($session, fn ($query) => $query->whereKey($session))
+            ->latest('closed_at')
+            ->first();
+
+        if ($session !== null && $cashSession === null) {
+            abort(404);
+        }
+
+        if ($cashSession === null) {
+            $company = new \App\Models\Company(['trade_name' => 'MVS Demo', 'timezone' => 'America/Costa_Rica']);
+            $branch = new \App\Models\Branch(['name' => 'Sucursal Demo']);
+            $register = new \App\Models\CashRegister(['name' => 'Caja Demo']);
+            $user = new \App\Models\User(['name' => 'Operador Demo']);
+            $cashSession = new \App\Models\CashSession([
+                'session_number' => 'CAJA-DEMO-0001',
+                'status' => \App\Models\CashSession::STATUS_CLOSED,
+                'opening_amount' => '25000.0000',
+                'expected_cash' => '125000.0000',
+                'counted_cash' => '125000.0000',
+                'difference_amount' => '0.0000',
+                'opened_at' => now()->subHours(8),
+                'closed_at' => now(),
+            ]);
+            $cashSession->setAttribute('id', -1);
+            $cashSession->setRelations([
+                'company' => $company,
+                'branch' => $branch,
+                'cashRegister' => $register,
+                'openedBy' => $user,
+                'closedBy' => $user,
+                'differenceAuthorizedBy' => null,
+                'countDetails' => collect(),
+                'paymentReconciliations' => collect([
+                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'Tarjeta', 'payment_method_type_snapshot' => 'card', 'sales_amount' => '20000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '20000.0000']),
+                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'SINPE', 'payment_method_type_snapshot' => 'sinpe', 'sales_amount' => '15000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '15000.0000']),
+                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'Puntos', 'payment_method_type_snapshot' => 'loyalty_points', 'sales_amount' => '5000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '5000.0000']),
+                ]),
+            ]);
+        }
+
+        return response((new \App\Mail\CashSessionClosedMail($cashSession))->render())
+            ->header('Content-Type', 'text/html; charset=UTF-8');
+    })->whereNumber('session')->name('local.preview.cash-session-closed');
+}
+
 /*
 |--------------------------------------------------------------------------
 | Autenticación

@@ -314,6 +314,9 @@ class CashSessionMailNotificationTest extends TestCase
         $method = PaymentMethod::create(['company_id' => $company->id, 'code' => 'historical', 'name' => 'Actual', 'type' => 'other', 'is_active' => true, 'affects_cash' => false, 'sort_order' => 1]);
         CashPaymentReconciliation::create(['cash_session_id' => $session->id, 'payment_method_id' => $method->id, 'payment_method_code_snapshot' => 'old-code', 'payment_method_name_snapshot' => 'Nombre histórico', 'payment_method_type_snapshot' => 'other', 'expected_amount' => 100, 'reported_amount' => 90, 'difference_amount' => -10, 'reconciled_by' => $user->id, 'reconciled_at' => now()]);
         $closingHtml = (new CashSessionClosedMail($session->fresh()))->render();
+        $this->assertStringContainsString('RESUMEN DEL CIERRE', $closingHtml);
+        $this->assertStringContainsString('Efectivo generado del día', $closingHtml);
+        $this->assertStringContainsString('TOTAL GENERAL', $closingHtml);
         $this->assertStringContainsString('Total esperado', $closingHtml);
         $this->assertStringContainsString('1.100,00', $closingHtml);
         $this->assertStringContainsString('1.090,00', $closingHtml);

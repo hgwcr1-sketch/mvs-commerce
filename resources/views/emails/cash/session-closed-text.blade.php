@@ -1,5 +1,16 @@
 MVS Commerce — Cierre de Caja
 
+RESUMEN DEL CIERRE
+Total de comprobantes: {{ $incomeSummary['documents_count'] }}
+Efectivo generado del día: ₡{{ number_format((float) $incomeSummary['cash_generated'],2,',','.') }}
+Total Tarjeta: ₡{{ number_format((float) $incomeSummary['card'],2,',','.') }}
+Total SINPE: ₡{{ number_format((float) $incomeSummary['sinpe'],2,',','.') }}
+Total Puntos: ₡{{ number_format((float) $incomeSummary['points'],2,',','.') }}
+@foreach($incomeSummary['others'] as $other)
+{{ $other['name'] }}: ₡{{ number_format((float) $other['amount'],2,',','.') }}
+@endforeach
+TOTAL GENERAL: ₡{{ number_format((float) $incomeSummary['general'],2,',','.') }}
+
 Sesión: {{ $session->session_number }}
 Empresa: {{ $session->company->trade_name }}
 Sucursal: {{ $session->branch->name }}
