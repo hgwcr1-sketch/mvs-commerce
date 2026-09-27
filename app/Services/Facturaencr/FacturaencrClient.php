@@ -13,12 +13,25 @@ class FacturaencrClient
     private string $apiSecret;
     private int $timeout;
 
-    public function __construct()
+    public function __construct(
+        ?string $apiKey = null,
+        ?string $apiSecret = null,
+        ?string $baseUrl = null,
+        ?int $timeout = null,
+    ) {
+        $this->baseUrl = $baseUrl ?? Config::get('facturaencr.base_url');
+        $this->apiKey = $apiKey ?? Config::get('facturaencr.api_key');
+        $this->apiSecret = $apiSecret ?? Config::get('facturaencr.api_secret');
+        $this->timeout = $timeout ?? Config::get('facturaencr.timeout', 30);
+    }
+
+    /**
+     * Verificación de credenciales SIN emitir (endpoint oficial
+     * auth/verify). No crea documentos, no consume cuota ni sandbox.
+     */
+    public function verify(): FacturaencrResponse
     {
-        $this->baseUrl = Config::get('facturaencr.base_url');
-        $this->apiKey = Config::get('facturaencr.api_key');
-        $this->apiSecret = Config::get('facturaencr.api_secret');
-        $this->timeout = Config::get('facturaencr.timeout', 30);
+        return $this->post('auth/verify', [], '');
     }
 
     public function post(string $endpoint, array $payload, string $idempotencyKey = ''): FacturaencrResponse

@@ -11,24 +11,36 @@ use App\Models\SalePayment;
 
 class FacturaencrEmissionService
 {
+    public function __construct(private readonly ?FacturaencrClient $client = null)
+    {
+    }
+
+    private function client(): FacturaencrClient
+    {
+        return $this->client ?? new FacturaencrClient();
+    }
+
     public function emit(
         Sale $sale,
         Company $company,
         Customer $customer,
         array $saleItems,
-        ?SalePayment $salePayment = null
+        ?SalePayment $salePayment = null,
+        ?FacturaencrClient $client = null,
+        ?string $environment = null,
     ): ElectronicDocument {
-        $mapper = new FacturaencrInvoiceMapper();
+        $mapper = new FacturaencrInvoiceMapper(environment: $environment);
         $documentType = $mapper->documentType($sale);
         $this->assertScope($sale, $company, $customer);
         $idempotencyKey = $mapper->idempotencyKey($sale, $documentType);
+        $environment ??= config('facturaencr.environment', 'sandbox');
 
         $existing = ElectronicDocument::query()
             ->where('company_id', $company->id)
             ->where('sale_id', $sale->id)
             ->where('provider', 'facturaencr')
             ->where('document_type', $documentType)
-            ->where('environment', config('facturaencr.environment', 'sandbox'))
+            ->where('environment', $environment)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
@@ -43,12 +55,12 @@ class FacturaencrEmissionService
             'sale_id' => $sale->id,
             'provider' => 'facturaencr',
             'document_type' => $documentType,
-            'environment' => config('facturaencr.environment', 'sandbox'),
+            'environment' => $environment,
             'idempotency_key' => $idempotencyKey,
             'status' => 'queued',
         ]);
 
-        $client = new FacturaencrClient();
+        $client ??= $this->client();
         $response = $client->post($this->endpointFor($documentType), $payload, $idempotencyKey);
 
         if ($response->isSuccess()) {
@@ -91,7 +103,7 @@ class FacturaencrEmissionService
      * el estado de un documento no final. Es idempotente: documentos en estado
      * final o sin identificador de proveedor no generan HTTP.
      */
-    public function syncStatus(ElectronicDocument $document): ElectronicDocument
+    public function syncStatus(ElectronicDocument $document, ?FacturaencrClient $client = null): ElectronicDocument
     {
         if ($document->isFinal()) {
             return $document;
@@ -105,7 +117,7 @@ class FacturaencrEmissionService
             return $document;
         }
 
-        $client = new FacturaencrClient();
+        $client ??= $this->client();
         $response = $client->get($endpoint);
 
         if (!$response->isSuccess()) {

@@ -3,7 +3,9 @@
 namespace App\Services\Facturaencr;
 
 use App\Contracts\Fiscal\FiscalProviderInterface;
+use App\Contracts\Fiscal\FiscalConnectionVerifiable;
 use App\Contracts\Fiscal\FiscalTaxpayerLookupInterface;
+use App\DTOs\Fiscal\FiscalConnectionResult;
 use App\DTOs\Fiscal\FiscalDocumentStatus;
 use App\DTOs\Fiscal\FiscalError;
 use App\DTOs\Fiscal\FiscalEmissionRequest;
@@ -19,7 +21,7 @@ use App\Models\ElectronicDocument;
  * unidades, reintentos, códigos de error) y expone únicamente tipos
  * MVS: cualquier detalle FacturaEnCR sale traducido antes de devolver.
  */
-class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLookupInterface
+class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLookupInterface, FiscalConnectionVerifiable
 {
     private readonly FacturaencrEmissionService $emissionService;
 
@@ -38,11 +40,63 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
         return 'facturaencr';
     }
 
+    /**
+     * Verifica credenciales SIN emitir: ningún documento, ningún consumo.
+     * Interpreta la respuesta oficial auth/verify en mensajes propios.
+     */
+    public function verifyConnection(array $credentials): FiscalConnectionResult
+    {
+        $key = trim((string) ($credentials['api_key'] ?? ''));
+        $secret = trim((string) ($credentials['api_secret'] ?? ''));
+
+        if ($key === '' || $secret === '') {
+            return FiscalConnectionResult::failed('missing_credentials', 'Faltan las credenciales del proveedor.');
+        }
+
+        $response = (new FacturaencrClient($key, $secret))->verify();
+
+        if ($response->isSuccess() && (bool) ($response->data['ok'] ?? false)) {
+            return FiscalConnectionResult::ok();
+        }
+
+        if (in_array($response->httpStatusCode, [401, 403], true)) {
+            return FiscalConnectionResult::failed('invalid_credentials', 'Las credenciales fueron rechazadas por el proveedor.');
+        }
+
+        return FiscalConnectionResult::failed(
+            $response->errorCode ?? 'verify_failed',
+            'No se pudo verificar la conexión. Reintente en unos minutos.'
+        );
+    }
+
+    /**
+     * Contexto operativo de la empresa: credenciales propias si configuró,
+     * defaults globales si no (compatibilidad/desarrollo).
+     *
+     * @return array{api_key: string, api_secret: string, environment: string}
+     */
+    private function contextFor(\App\Models\Company $company): array
+    {
+        return app(\App\Services\Fiscal\CompanyFiscalConfigService::class)->contextFor($company);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function clientCredentials(\App\Models\Company $company): array
+    {
+        $context = $this->contextFor($company);
+
+        return [$context['api_key'], $context['api_secret']];
+    }
+
     public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
     {
         if ($request->adjustment !== null) {
             return $this->emitAdjustment($request);
         }
+
+        $context = $this->contextFor($request->company);
 
         try {
             $document = $this->emissionService->emit(
@@ -51,6 +105,8 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
                 $request->customer,
                 $request->saleItems,
                 $request->salePayment,
+                new FacturaencrClient($context['api_key'], $context['api_secret']),
+                $context['environment'],
             );
         } catch (FacturaencrValidationException $exception) {
             return $this->failedResult(new FiscalError(
@@ -115,8 +171,10 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             $original = ElectronicDocument::query()->find($adjustment->reference->electronicDocumentId);
 
             $medioPago = $this->medioPagoForAdjustment($request, $condicionVenta);
+            $context = $this->contextFor($request->company);
+            $environment = $context['environment'];
 
-            $mapper = new FacturaencrAdjustmentMapper();
+            $mapper = new FacturaencrAdjustmentMapper(environment: $environment);
             $payload = $mapper->map($adjustment, $request->company, $original, $condicionVenta, $medioPago);
             $endpoint = $mapper->endpoint($adjustment->documentType);
         } catch (FacturaencrValidationException $exception) {
@@ -136,7 +194,7 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             ->where('sale_id', $request->sale->id)
             ->where('provider', 'facturaencr')
             ->where('document_type', $adjustment->documentType)
-            ->where('environment', config('facturaencr.environment', 'sandbox'))
+            ->where('environment', $environment)
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
@@ -158,7 +216,7 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             ->where('sale_id', $request->sale->id)
             ->where('provider', 'facturaencr')
             ->where('document_type', $adjustment->documentType)
-            ->where('environment', config('facturaencr.environment', 'sandbox'))
+            ->where('environment', $environment)
             ->orderByDesc('attempt_number')
             ->first();
 
@@ -193,9 +251,9 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
                 'source_id' => $adjustment->sourceId,
                 'original_document_id' => $adjustment->reference->electronicDocumentId,
                 'attempt_number' => $adjustment->attempt,
-                'provider' => 'facturaencr',
-                'document_type' => $adjustment->documentType,
-                'environment' => config('facturaencr.environment', 'sandbox'),
+            'provider' => 'facturaencr',
+            'document_type' => $adjustment->documentType,
+            'environment' => $environment,
                 'idempotency_key' => $idempotencyKey,
                 'status' => 'queued',
             ]);
@@ -208,7 +266,7 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
                 ->where('sale_id', $request->sale->id)
                 ->where('provider', 'facturaencr')
                 ->where('document_type', $adjustment->documentType)
-                ->where('environment', config('facturaencr.environment', 'sandbox'))
+                ->where('environment', $environment)
                 ->orderByDesc('attempt_number')
                 ->first();
 
@@ -227,7 +285,7 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             throw new FacturaencrValidationException(['documento' => 'El intento fiscal no pudo registrarse por concurrencia.']);
         }
 
-        $response = (new FacturaencrClient())->post($endpoint, $payload, $idempotencyKey);
+        $response = (new FacturaencrClient($context['api_key'], $context['api_secret']))->post($endpoint, $payload, $idempotencyKey);
 
         if ($response->isSuccess()) {
             $data = $response->data ?? [];
@@ -310,7 +368,12 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus
     {
-        $document = $this->emissionService->syncStatus($document);
+        $company = $document->company;
+        $client = $company !== null
+            ? new FacturaencrClient(...$this->clientCredentials($company))
+            : null;
+
+        $document = $this->emissionService->syncStatus($document, $client);
 
         return new FiscalDocumentStatus(
             state: $this->normalizeState($document->status),

@@ -30,6 +30,18 @@ class FiscalManager
 
     private ?FiscalCabysCatalogInterface $cabysCatalog = null;
 
+    /**
+     * Proveedor efectivo de la empresa: el configurado en su portal fiscal
+     * (dentro de los registrados en config/fiscal.php; el futuro
+     * MvsFiscalProvider se suma ahí sin cambiar consumidores).
+     */
+    public function providerForCompany(\App\Models\Company $company): FiscalProviderInterface
+    {
+        $code = app(CompanyFiscalConfigService::class)->providerCodeFor($company);
+
+        return $this->provider($code);
+    }
+
     public function provider(?string $providerCode = null): FiscalProviderInterface
     {
         $code = $providerCode !== null && $providerCode !== ''
@@ -89,7 +101,7 @@ class FiscalManager
             );
         }
 
-        $result = $this->provider()->emit($request);
+        $result = $this->providerForCompany($request->company)->emit($request);
 
         if (! $result->isError() && $result->electronicDocumentId !== null) {
             $document = ElectronicDocument::query()->find($result->electronicDocumentId);

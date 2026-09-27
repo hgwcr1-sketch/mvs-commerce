@@ -35,8 +35,10 @@ class FacturaencrAdjustmentMapper
      */
     private const MEDIO_PAGO_CODES = ['01', '02', '04', '06'];
 
-    public function __construct(private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService())
-    {
+    public function __construct(
+        private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService(),
+        private readonly ?string $environment = null,
+    ) {
     }
 
     /**
@@ -241,7 +243,7 @@ class FacturaencrAdjustmentMapper
 
     private function emisorLegalId(Company $company): string
     {
-        if (config('facturaencr.environment', 'sandbox') === 'sandbox') {
+        if (($this->environment ?? config('facturaencr.environment', 'sandbox')) === 'sandbox') {
             return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
         }
 

@@ -26,8 +26,10 @@ class FacturaencrInvoiceMapper
         'sinpe' => '06',
     ];
 
-    public function __construct(private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService())
-    {
+    public function __construct(
+        private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService(),
+        private readonly ?string $environment = null,
+    ) {
     }
 
     public function map(
@@ -126,7 +128,7 @@ class FacturaencrInvoiceMapper
     ): array {
         $errors = [];
 
-        if (config('facturaencr.environment', 'sandbox') !== 'sandbox'
+        if (($this->environment ?? config('facturaencr.environment', 'sandbox')) !== 'sandbox'
             && config('facturaencr.sandbox_emisor', 'EMISORPRUEBA') === $company->identification_number) {
             $errors['emisor'] = 'EMISORPRUEBA solo puede utilizarse en ambiente sandbox';
         }
@@ -262,7 +264,7 @@ class FacturaencrInvoiceMapper
 
     private function emisorLegalId(Company $company): string
     {
-        if (config('facturaencr.environment', 'sandbox') === 'sandbox') {
+        if (($this->environment ?? config('facturaencr.environment', 'sandbox')) === 'sandbox') {
             return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
         }
 

@@ -23,7 +23,7 @@ class PosEmissionDispatcher
     public function forSale(Sale $sale): bool
     {
         try {
-            if (! (bool) config('fiscal.emission.auto_emit', false)) {
+            if (! $this->autoEmitEnabled((int) $sale->company_id)) {
                 return false;
             }
 
@@ -47,6 +47,21 @@ class PosEmissionDispatcher
 
             return false;
         }
+    }
+
+    /**
+     * Emisión automática: manda la preferencia de la empresa cuando tiene
+     * portal fiscal configurado; si no, el default técnico global.
+     */
+    private function autoEmitEnabled(int $companyId): bool
+    {
+        $config = \App\Models\CompanyFiscalConfig::query()->where('company_id', $companyId)->first();
+
+        if ($config !== null) {
+            return (bool) $config->auto_emit_enabled;
+        }
+
+        return (bool) config('fiscal.emission.auto_emit', false);
     }
 
     private function emittable(Sale $sale): bool
