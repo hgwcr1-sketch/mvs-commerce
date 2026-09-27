@@ -179,7 +179,7 @@ class PosCheckoutTest extends TestCase
         $cashSession = CashSession::findOrFail(Sale::findOrFail($saleId)->cash_session_id);
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))
-            ->assertOk()->assertSee('Comprobante interno — pendiente de integración con Hacienda')->assertSee($cashSession->session_number);
+            ->assertOk()->assertSee('TIQUETE')->assertDontSee('TIQUETE ELECTRÓNICO')->assertSee($cashSession->session_number);
 
         $viewer = $this->user($company, $branch, ['pos.acceder', 'ventas.ver']);
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))->assertOk();
@@ -189,6 +189,40 @@ class PosCheckoutTest extends TestCase
 
         [$otherCompany, $otherBranch, $otherUser] = $this->context('Ajena');
         $this->actingAs($otherUser)->withSession($this->activeSession($otherCompany, $otherBranch))->get(route('pos.receipt', $saleId))->assertNotFound();
+    }
+
+    public function test_receipt_shows_the_label_of_each_document_type(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $session = $this->activeSession($company, $branch);
+
+        $labels = [
+            Sale::DOCUMENT_TICKET => 'TIQUETE',
+            Sale::DOCUMENT_ELECTRONIC_TICKET => 'TIQUETE ELECTRÓNICO',
+            Sale::DOCUMENT_ELECTRONIC_INVOICE => 'FACTURA ELECTRÓNICA',
+        ];
+
+        foreach ($labels as $documentType => $label) {
+            $sale = Sale::create([
+                'company_id' => $company->id, 'branch_id' => $branch->id, 'user_id' => $user->id,
+                'sale_number' => 'POS-' . strtoupper(Str::random(12)), 'document_type' => $documentType,
+                'sale_condition' => Sale::CONDITION_CASH, 'status' => Sale::STATUS_COMPLETED,
+                'currency_code' => 'CRC', 'exchange_rate' => 1, 'subtotal' => 0, 'discount_total' => 0,
+                'tax_total' => 0, 'total' => 0, 'paid_total' => 0, 'balance_due' => 0, 'completed_at' => now(),
+            ]);
+
+            $response = $this->actingAs($user)->withSession($session)->get(route('pos.receipt', $sale->id));
+            $response->assertOk()->assertSee($label, false);
+
+            foreach (['TIQUETE ELECTRÓNICO', 'FACTURA ELECTRÓNICA'] as $long) {
+                if ($long !== $label) {
+                    $response->assertDontSee($long, false);
+                }
+            }
+        }
+
+        $this->assertSame('COMPROBANTE', Sale::receiptLabel(null));
+        $this->assertSame('COMPROBANTE', Sale::receiptLabel('legado'));
     }
 
     public function test_sequence_is_independent_per_company(): void

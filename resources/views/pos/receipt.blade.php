@@ -78,7 +78,7 @@
         <h2 class="center">{{ $company->trade_name }}</h2>
         <p class="center muted">{{ $company->legal_name }}<br>{{ $company->identification_number }}<br>{{ $sale->branch->name }} · {{ $sale->branch->phone }}<br>{{ $sale->branch->address ?: $company->address }}</p>
     </header>
-    <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">TICKET ELECTRÓNICO</div>
+    <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">{{ \App\Models\Sale::receiptLabel($sale->document_type) }}</div>
     @if($sale->status === \App\Models\Sale::STATUS_VOIDED)
         <div class="warning">VENTA ANULADA</div>
     @endif
