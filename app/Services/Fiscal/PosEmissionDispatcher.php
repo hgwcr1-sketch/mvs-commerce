@@ -27,6 +27,10 @@ class PosEmissionDispatcher
                 return false;
             }
 
+            if (! app(FiscalConsumptionService::class)->isFiscalEnabled((int) $sale->company_id)) {
+                return false;
+            }
+
             if (! $this->emittable($sale)) {
                 return false;
             }

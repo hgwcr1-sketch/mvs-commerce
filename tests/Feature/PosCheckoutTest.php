@@ -305,6 +305,8 @@ class PosCheckoutTest extends TestCase
 public function test_electronic_invoice_requires_customer_and_is_saved_when_customer_is_valid(): void
 {
     $company = $this->company('Empresa Factura ');
+    app(\App\Services\CompanyLicenseService::class)->ensure($company);
+    \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
     $branch = $this->branch($company, 'Principal');
 
     $user = $this->user($company, $branch, [

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Company;
 use App\Models\Sale;
+use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\PosDefaultDocumentType;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -79,6 +80,14 @@ class StorePosSaleRequest extends FormRequest
             'document_type' => [
                 'required',
                 'in:'.Sale::DOCUMENT_TICKET.','.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if (
+                        in_array($value, [Sale::DOCUMENT_ELECTRONIC_TICKET, Sale::DOCUMENT_ELECTRONIC_INVOICE], true)
+                        && ! app(FiscalConsumptionService::class)->isFiscalEnabled($companyId)
+                    ) {
+                        $fail('El servicio fiscal no está habilitado para esta empresa.');
+                    }
+                },
             ],
 
             'payments' => ['present', 'array', $this->filled('requested_points') ? 'min:0' : 'min:1'],

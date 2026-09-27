@@ -481,6 +481,9 @@ class PosElectronicEmissionTriggerTest extends TestCase
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
 
+        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
+
         return [$company, $branch, $user, $this->payment($company)];
     }
 

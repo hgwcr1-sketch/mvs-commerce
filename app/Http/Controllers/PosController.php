@@ -20,6 +20,7 @@ use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\Fiscal\PosEmissionDispatcher;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
+use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
 use App\Services\PosDefaultDocumentType;
@@ -81,6 +82,7 @@ class PosController extends Controller
             'canDiscount' => $request->user()->hasPermission('pos.aplicar_descuento', $company),
             'canOverridePrice' => $request->user()->hasPermission('pos.cambiar_precio', $company),
             'defaultDocumentType' => app(PosDefaultDocumentType::class)->resolve($companyId),
+            'fiscalEnabled' => app(FiscalConsumptionService::class)->isFiscalEnabled($companyId),
         ]);
     }
 

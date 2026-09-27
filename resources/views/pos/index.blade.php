@@ -410,6 +410,7 @@
     <span class="block text-[11px] font-normal opacity-80">No se envía a Hacienda</span>
 </button>
 
+@if($fiscalEnabled ?? false)
 <button
     type="button"
     @click.prevent.stop="
@@ -444,6 +445,7 @@
     Factura electrónica
     <span class="block text-[11px] font-normal opacity-80">Se envía a Hacienda</span>
 </button>
+@endif
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
             <button type="button" @click="openSuspended" class="whitespace-nowrap rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white">Suspendidas</button>

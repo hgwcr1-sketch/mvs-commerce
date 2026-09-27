@@ -11,6 +11,7 @@ use App\DTOs\Fiscal\FiscalDocumentStatus;
 use App\DTOs\Fiscal\FiscalEmissionRequest;
 use App\DTOs\Fiscal\FiscalEmissionResult;
 use App\DTOs\Fiscal\FiscalTaxpayerInfo;
+use App\Exceptions\FiscalQuotaException;
 use App\Models\ElectronicDocument;
 
 /**
@@ -55,9 +56,42 @@ class FiscalManager
         return $this->resolved[$code] = $provider;
     }
 
+    /**
+     * Emisión con gate fiscal común (manual y automática pasan por aquí):
+     * servicio deshabilitado, tipo no consumible o cuota agotada sin
+     * excedentes bloquean ANTES del POST. Solo un documento aceptado por
+     * el proveedor registra consumo en el ledger (una unidad por documento).
+     *
+     * @throws \App\Exceptions\FiscalQuotaException
+     */
     public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
     {
-        return $this->provider()->emit($request);
+        $consumption = app(FiscalConsumptionService::class);
+        $documentType = $consumption->documentTypeForSale($request->sale);
+        $decision = $consumption->authorize((int) $request->company->id, $documentType);
+
+        if (! $decision['allowed']) {
+            throw new FiscalQuotaException(
+                match ($decision['reason']) {
+                    'fiscal_disabled' => 'El servicio fiscal no está habilitado para esta empresa.',
+                    'quota_exhausted' => 'Cuota mensual de documentos fiscales agotada y sin excedentes permitidos.',
+                    default => 'Documento fiscal no autorizable.',
+                },
+                $decision['reason']
+            );
+        }
+
+        $result = $this->provider()->emit($request);
+
+        if (! $result->isError() && $result->electronicDocumentId !== null) {
+            $document = ElectronicDocument::query()->find($result->electronicDocumentId);
+
+            if ($document !== null) {
+                $consumption->record($document);
+            }
+        }
+
+        return $result;
     }
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus

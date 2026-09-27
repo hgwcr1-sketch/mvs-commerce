@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Services\CompanyLicenseService;
+use App\Services\Fiscal\FiscalConsumptionService;
 use Illuminate\View\View;
 
 class CompanyLicenseController extends Controller
@@ -12,7 +13,8 @@ class CompanyLicenseController extends Controller
     {
         $company = Company::findOrFail(session('active_company_id'));
         $license = $licenses->refresh($licenses->ensure($company));
+        $fiscalUsage = app(FiscalConsumptionService::class)->monthlyUsage($company->id);
 
-        return view('license.status', compact('company', 'license'));
+        return view('license.status', compact('company', 'license', 'fiscalUsage'));
     }
 }

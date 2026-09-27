@@ -7,6 +7,14 @@
         <p class="mt-3 text-slate-600">Estado: <strong>{{ ucfirst($license->status) }}</strong> · Plan: {{ $license->plan }}</p>
         @if($license->expires_at)<p class="mt-2 text-sm text-slate-600">Vencimiento: {{ $license->expires_at->format('d/m/Y H:i') }}</p>@endif
         @if(!$license->isOperable())<div class="mt-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">La operación está temporalmente bloqueada. Sus datos permanecen intactos y volverán a estar disponibles cuando el administrador de plataforma reactive la licencia.</div>@else<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">La empresa puede operar normalmente.</div>@endif
+        <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+            <p class="font-bold">Documentos fiscales del mes</p>
+            @if($license->fiscal_enabled)
+                <p class="mt-1">Consumidos: <strong>{{ $fiscalUsage }}</strong>@if($license->fiscal_monthly_quota !== null) de {{ $license->fiscal_monthly_quota }}@else (sin límite)@endif.</p>
+            @else
+                <p class="mt-1">Servicio fiscal no habilitado para esta empresa. El POS solo emite tiquetes internos.</p>
+            @endif
+        </div>
     </section>
 </div>
 @endsection
