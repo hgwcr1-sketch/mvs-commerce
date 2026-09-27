@@ -5,6 +5,7 @@ import qz from 'qz-tray';
 
 import './modules/clientes';
 import './modules/compras';
+import './modules/identificacion';
 import './mvs-print/qz';
 import './navigation';
 import './scanner';

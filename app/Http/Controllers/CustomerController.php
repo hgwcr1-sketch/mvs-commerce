@@ -17,6 +17,8 @@ use App\Services\CustomerPublicCodeService;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\PhoneNumberService;
 use App\Services\RouteosAuditService;
+use App\Services\TaxpayerLookupService;
+use App\Support\IdentificationRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -591,6 +593,28 @@ class CustomerController extends Controller
             ]);
 
         return response()->json($customers);
+    }
+
+    /**
+     * Consulta de contribuyente en Hacienda para autocompletar nombre/razón social.
+     * Nunca bloquea el formulario: si Hacienda no responde se informa y se continúa.
+     */
+    public function taxpayerLookup(Request $request)
+    {
+        $type = (string) $request->query('tipo', '');
+        $identification = trim((string) $request->query('identificacion', ''));
+
+        if (! IdentificationRules::isComplete($type, $identification)) {
+            return response()->json([
+                'status' => TaxpayerLookupService::STATUS_INVALID,
+                'name' => null,
+                'message' => 'La identificación no está completa para el tipo seleccionado.',
+            ], 422);
+        }
+
+        return response()->json(
+            app(TaxpayerLookupService::class)->lookup($identification)
+        );
     }
 
     private function activeCompanyId(): int

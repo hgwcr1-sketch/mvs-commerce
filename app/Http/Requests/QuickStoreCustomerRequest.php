@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidIdentification;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -50,7 +51,7 @@ class QuickStoreCustomerRequest extends FormRequest
             'identification' => [
                 'nullable',
                 'string',
-                'max:50',
+                new ValidIdentification($this->input('identification_type')),
                 Rule::unique('customers', 'identification')
                     ->where('company_id', session('active_company_id')),
             ],
