@@ -318,10 +318,12 @@ class FiscalAdjustmentTest extends TestCase
         return [$company, $branch, $user];
     }
 
-    private function enableFiscal(Company $company): void
+    private function enableFiscal(Company $company, array $attributes = []): void
     {
         app(\App\Services\CompanyLicenseService::class)->ensure($company);
-        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
+        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(array_merge([
+            'fiscal_enabled' => true,
+        ], $attributes));
     }
 
     private function completedSale(Company $company, Branch $branch, User $user): Sale
@@ -336,6 +338,104 @@ class FiscalAdjustmentTest extends TestCase
             'subtotal' => 1000, 'discount_total' => 0, 'tax_total' => 0, 'total' => 1000,
             'paid_total' => 1000, 'balance_due' => 0, 'completed_at' => now(),
         ]);
+    }
+
+    public function test_nc03_local_e2e_creates_single_document_and_consumption(): void
+    {
+        config(['fiscal.provider' => 'fake', 'fiscal.providers.fake' => AdjustmentEmitFakeProvider::class]);
+        AdjustmentEmitFakeProvider::reset();
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted',
+            'clave' => 'K-ORIG', 'consecutivo' => 'C-ORIG',
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+        $this->assertNotNull($result->electronicDocumentId);
+        $this->assertSame(1, AdjustmentEmitFakeProvider::requests());
+
+        $nc = ElectronicDocument::findOrFail($result->electronicDocumentId);
+        $this->assertSame('03', $nc->document_type);
+        $this->assertSame($adjustment->idempotencyKey(), $nc->idempotency_key);
+        $this->assertSame(1, \App\Models\FiscalConsumption::where('electronic_document_id', $nc->id)->count());
+        $this->assertSame('included', \App\Models\FiscalConsumption::where('electronic_document_id', $nc->id)->value('classification'));
+
+        $retry = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+        $this->assertSame($nc->id, $retry->electronicDocumentId);
+        $this->assertSame(1, ElectronicDocument::where('document_type', '03')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+
+        $status = app(FiscalManager::class)->fetchStatus($nc);
+        $this->assertTrue($status->final);
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_nc03_quota_overage_and_disabled_gates(): void
+    {
+        config(['fiscal.provider' => 'fake', 'fiscal.providers.fake' => AdjustmentEmitFakeProvider::class]);
+        AdjustmentEmitFakeProvider::reset();
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 1, 'fiscal_overage_enabled' => true, 'fiscal_overage_unit_price' => '7.2500']);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '04', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-04"), 'status' => 'accepted', 'clave' => 'K-O4',
+        ]);
+
+        $first = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+        app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale, $company, $sale->customer, [], null, $first));
+
+        $sale2 = $this->completedSale($company, $branch, $user);
+        $second = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R2', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+        $secondResult = app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale2, $company, $sale2->customer, [], null, $second));
+        $this->assertNotNull($secondResult->electronicDocumentId);
+
+        $overage = \App\Models\FiscalConsumption::where('classification', 'overage')->sole();
+        $this->assertSame('7.2500', $overage->unit_price);
+
+        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => false]);
+
+        $sale3 = $this->completedSale($company, $branch, $user);
+        $third = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R3', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+
+        try {
+            app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale3, $company, $sale3->customer, [], null, $third));
+            $this->fail('Fiscal deshabilitado debió bloquear la NC.');
+        } catch (\App\Exceptions\FiscalQuotaException $e) {
+            $this->assertSame('fiscal_disabled', $e->reason);
+        }
+
+        Http::assertNothingSent();
     }
 }
 
@@ -370,6 +470,81 @@ class AdjustmentFakeProvider implements FiscalProviderInterface
         return new FiscalDocumentStatus(
             state: FiscalEmissionResult::STATE_ERROR,
             final: false,
+        );
+    }
+}
+
+class AdjustmentEmitFakeProvider implements FiscalProviderInterface
+{
+    private static int $calls = 0;
+
+    public static function requests(): int
+    {
+        return self::$calls;
+    }
+
+    public static function reset(): void
+    {
+        self::$calls = 0;
+    }
+
+    public function providerCode(): string
+    {
+        return 'fake';
+    }
+
+    public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
+    {
+        self::$calls++;
+
+        $adjustment = $request->adjustment;
+
+        if ($adjustment === null) {
+            throw new \RuntimeException('Este fake solo emite ajustes neutrales.');
+        }
+
+        $existing = ElectronicDocument::query()
+            ->where('company_id', $request->sale->company_id)
+            ->where('sale_id', $request->sale->id)
+            ->where('provider', $this->providerCode())
+            ->where('document_type', $adjustment->documentType)
+            ->first();
+
+        if ($existing !== null) {
+            return new FiscalEmissionResult(
+                state: FiscalEmissionResult::STATE_ACCEPTED,
+                electronicDocumentId: $existing->id,
+                providerReference: $existing->provider_document_id,
+                fiscalReference: $existing->clave,
+            );
+        }
+
+        $document = ElectronicDocument::create([
+            'company_id' => $request->sale->company_id,
+            'sale_id' => $request->sale->id,
+            'provider' => $this->providerCode(),
+            'document_type' => $adjustment->documentType,
+            'environment' => 'sandbox',
+            'idempotency_key' => $adjustment->idempotencyKey(),
+            'provider_document_id' => 'fake-nc-' . $request->sale->id . '-' . $adjustment->sourceId,
+            'status' => 'accepted',
+        ]);
+
+        return new FiscalEmissionResult(
+            state: FiscalEmissionResult::STATE_ACCEPTED,
+            electronicDocumentId: $document->id,
+            providerReference: $document->provider_document_id,
+            fiscalReference: $document->clave,
+        );
+    }
+
+    public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus
+    {
+        return new FiscalDocumentStatus(
+            state: FiscalEmissionResult::STATE_ACCEPTED,
+            final: true,
+            providerReference: $document->provider_document_id,
+            fiscalReference: $document->clave,
         );
     }
 }
