@@ -13,6 +13,13 @@ Fuente: código real de la rama `feature/factura-electronica`. No afirmar soport
 
 Sandbox NC03/ND02 = **PENDIENTE**: adapter implementado contra documentación oficial, sin emisión real a sandbox todavía. Sin módulo comercial de Nota de Crédito/Débito en esta rama: el origen es neutral (`return`/`debit` + snapshots congelados).
 
+## Portal fiscal por empresa
+
+Rutas `fiscal.*` ("Facturación Electrónica"): estado, ambiente, consumo,
+historial FE/TE/NC/ND y asistente de conexión con verificación SIN emitir.
+Proveedor por empresa (hoy FacturaEnCR; futuro MvsFiscalProvider sin rehacer
+portal/POS). Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
 Notas:
 
 - Consumo auditable (`fiscal_consumptions`) y gate por licencia aplican a todo tipo consumible presente o futuro.

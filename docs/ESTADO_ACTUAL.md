@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Fiscal reemisión tras rechazo (2026-09-27, rama feature/factura-electronica)
+## Portal Fiscal MVS por empresa (2026-09-27, rama feature/factura-electronica)
 
-Doc3 rejected intacto (sin tocar). Ciclo modelado: `attempt_number` + unique `(company,sale,type,attempt)` + idempotency por intento (attempt 1 conserva formato histórico); solo `rejected` habilita N+1, otro estado devuelve el vigente sin fila/POST; secuencia estricta; backstop de concurrencia con retorno del ganador; consumo por intento, retry/polling = 0. Migración `2026_09_27_000005` aplicada en dev. Cobertura 03/02 con HTTP falso + backstop unique + aislamiento + FE/TE sin regresión. Evidencia: `FiscalAdjustmentTest` 34/34, CERO HTTP real. Segundo E2E NC03 desbloqueado a nivel esquema (requiere orden explícita).
+Portal "Facturación Electrónica" (`fiscal.*`): estado, ambiente, consumo, historial FE/TE/NC/ND, diagnóstico y asistente de 5 pasos con verificación SIN emitir. Config por empresa (`company_fiscal_configs`, secretos cifrados, sandbox/producción separados); manager resuelve proveedor por empresa; FacturaEnCR opera con contexto empresarial; futuro MvsFiscalProvider sin rehacer portal/POS. Panel Maestro sigue autoridad comercial; tenant solo consulta. Evidencia: `FiscalPortalTest` 15/15, fiscal core 46/46, CERO HTTP real. Preexistente ajeno: `ResponsiveNavigationTest::test_tenant_header...logo` falla también en HEAD limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Fiscal reemisión tras rechazo (2026-09-27, histórico, previo al portal)
+
+Doc3 rejected intacto (sin tocar). Ciclo modelado: `attempt_number` + unique `(company,sale,type,attempt)` + idempotency por intento (attempt 1 conserva formato histórico); solo `rejected` habilita N+1, otro estado devuelve el vigente sin fila/POST; secuencia estricta; backstop de concurrencia con retorno del ganador; consumo por intento, retry/polling = 0. Migración `2026_09_27_000005` aplicada en dev. Cobertura 03/02 con HTTP falso + backstop unique + aislamiento + FE/TE sin regresión. Evidencia entonces: `FiscalAdjustmentTest` 34/34, CERO HTTP real.
 
 ## Fiscal NC03 -496 corregido (2026-09-27, histórico, superado por reemisión)
 
