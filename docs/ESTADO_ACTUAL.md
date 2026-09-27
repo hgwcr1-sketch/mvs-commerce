@@ -2,6 +2,12 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Primer E2E fiscal Sandbox exitoso (2026-09-27, documentado sin commit de código)
+
+Sale ID 6 / `electronic_ticket` / tipoDocumento 04; ElectronicDocument ID 1; CABYS `0111100000100` (Trigo duro, para siembra) con perfil fiscal IVA 1% (ID 2, `01`/`02`); exactamente **1 POST** real al Sandbox FacturaEnCR vía `FiscalManager → FiscalProviderInterface → FacturaencrProvider`; estado inicial `queued`; **2 GET** de seguimiento al mismo documento; estado final `accepted`; clave `50627092600310191287705001034040000000001192986306` y consecutivo `05001034040000000001` generados correctamente; `fiscal.emission.auto_emit` permaneció **false**; cero producción, sin cambios de código.
+
+Aprendizajes para MVS Fiscal: preflight/mapper local obligatorio antes de cualquier POST; evidencia E2E auditable (sale/documento/clave/consecutivo/conteo POST+GET); idempotency key estable `company+sale+provider`; `queued`/`pending` ≠ `accepted` (requiere polling); CABYS validado contra proveedor (13 dígitos + impuesto real 1%); validación de identificación por tipo (01 acepta cédula 9 dígitos como `109880401`); sandbox ≠ producción.
+
 ## S3b — Trigger de emisión electrónica POS (2026-09-25, local sin commit)
 
 Rama `feature/factura-electronica`, base `afb3976`, trabajo local sin commit ni push. Nuevo `app/Jobs/EmitElectronicDocument` (ShouldQueue + ShouldBeUnique, tries=1, captura total de Throwable, guard idempotente `company_id+sale_id+provider`) y `app/Services/Fiscal/PosEmissionDispatcher` invocado desde `PosController::checkout` después del commit; flag `fiscal.emission.auto_emit` en `config/fiscal.php` default **false** (dispatch condicionado), no toca venta/caja/inventario ni reglas B1–B7, sin HTTP real ni `Facturaencr*` desde POS. Evidencia: `PosElectronicEmissionTriggerTest` **9/9, 66 aserciones**; Unit **222/222, 796 aserciones**; filtro `Pos|Fiscal|Facturaencr|Electronic|Layaway|Quote` **547 tests, 538 aprobados, 8 fallos + 1 error**, los nueve reproducidos idénticos en base sin cambios (preexistentes, ver "Fallos históricos conocidos"); `git diff --check` limpio. Sin commit, push, migraciones ni producción.
