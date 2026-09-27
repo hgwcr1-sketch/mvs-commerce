@@ -68,6 +68,35 @@ class CompanyFiscalConfigService
     }
 
     /**
+     * Datos fiscales del emisor: actividad económica y códigos de
+     * sucursal/terminal para series (dominio Hacienda, NO proveedor).
+     * Formatos oficiales: actividad libre, sucursal 3 dígitos, terminal 5.
+     */
+    public function updateFiscalData(Company $company, array $attributes): CompanyFiscalConfig
+    {
+        $config = $this->ensure($company);
+
+        if (array_key_exists('economic_activity', $attributes)) {
+            $activity = trim((string) $attributes['economic_activity']);
+            $config->economic_activity = $activity !== '' ? substr($activity, 0, 30) : null;
+        }
+
+        if (array_key_exists('fiscal_branch_code', $attributes)) {
+            $branch = trim((string) $attributes['fiscal_branch_code']);
+            $config->fiscal_branch_code = $branch !== '' ? $branch : null;
+        }
+
+        if (array_key_exists('fiscal_terminal_code', $attributes)) {
+            $terminal = trim((string) $attributes['fiscal_terminal_code']);
+            $config->fiscal_terminal_code = $terminal !== '' ? $terminal : null;
+        }
+
+        $config->save();
+
+        return $config->fresh();
+    }
+
+    /**
      * Datos fiscales de identidad (vive en Company, fuente única).
      */
     public function updateIdentity(Company $company, array $attributes): Company
