@@ -31,8 +31,9 @@ class FiscalAdjustmentBuilder
         array $totals,
         FiscalDocumentReference $reference,
         ?string $originalTotalCap = null,
+        int $attempt = 1,
     ): FiscalDocument {
-        return self::build('03', $companyId, $sourceType, $sourceId, $receptor, $currency, $exchangeRate, $lines, $totals, $reference, $originalTotalCap);
+        return self::build('03', $companyId, $sourceType, $sourceId, $receptor, $currency, $exchangeRate, $lines, $totals, $reference, $originalTotalCap, $attempt);
     }
 
     /**
@@ -51,8 +52,9 @@ class FiscalAdjustmentBuilder
         array $totals,
         FiscalDocumentReference $reference,
         ?string $originalTotalCap = null,
+        int $attempt = 1,
     ): FiscalDocument {
-        return self::build('02', $companyId, $sourceType, $sourceId, $receptor, $currency, $exchangeRate, $lines, $totals, $reference, $originalTotalCap);
+        return self::build('02', $companyId, $sourceType, $sourceId, $receptor, $currency, $exchangeRate, $lines, $totals, $reference, $originalTotalCap, $attempt);
     }
 
     /**
@@ -72,6 +74,7 @@ class FiscalAdjustmentBuilder
         array $totals,
         FiscalDocumentReference $reference,
         ?string $originalTotalCap,
+        int $attempt = 1,
     ): FiscalDocument {
         if ($originalTotalCap !== null && bccomp((string) ($totals['total'] ?? '0'), $originalTotalCap, 4) > 0) {
             throw new FiscalReferenceException(
@@ -82,7 +85,7 @@ class FiscalAdjustmentBuilder
 
         $document = new FiscalDocument(
             $companyId, $documentType, $sourceType, $sourceId, $receptor,
-            $currency, $exchangeRate, array_values($lines), $totals, $reference
+            $currency, $exchangeRate, array_values($lines), $totals, $reference, $attempt
         );
         $document->validate();
 

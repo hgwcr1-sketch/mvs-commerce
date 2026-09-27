@@ -14,6 +14,7 @@ class ElectronicDocument extends Model
         'source_type',
         'source_id',
         'original_document_id',
+        'attempt_number',
         'provider',
         'document_type',
         'environment',
@@ -30,6 +31,8 @@ class ElectronicDocument extends Model
     protected $casts = [
         'sale_id' => 'integer',
         'company_id' => 'integer',
+        'original_document_id' => 'integer',
+        'attempt_number' => 'integer',
     ];
 
     public function company()

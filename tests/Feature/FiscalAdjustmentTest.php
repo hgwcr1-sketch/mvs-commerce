@@ -1111,6 +1111,332 @@ class FiscalAdjustmentTest extends TestCase
 
         Http::assertNothingSent();
     }
+
+    private function attemptAdjustment(int $companyId, ElectronicDocument $original, string $type, string $sourceId, int $attempt, string $refCode = '01'): FiscalDocument
+    {
+        $ref = new FiscalDocumentReference(
+            $original->id, $original->document_type, (string) $original->clave,
+            $original->consecutivo, '2026-09-27T10:00:00-06:00', $refCode, 'Motivo intento', $original->provider
+        );
+
+        $builder = $type === '02' ? 'debitNote' : 'creditNote';
+
+        return \App\Services\Fiscal\FiscalAdjustmentBuilder::$builder(
+            $companyId, 'sale', $sourceId, $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $ref, '1010.0000', $attempt
+        );
+    }
+
+    private function acceptedOriginal(Company $company, Sale $sale, string $provider = 'facturaencr', string $type = '01'): ElectronicDocument
+    {
+        return ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => $provider,
+            'document_type' => $type, 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-{$type}-" . uniqid()), 'status' => 'accepted',
+            'clave' => str_repeat('5', 50), 'consecutivo' => 'C-ORIG',
+        ]);
+    }
+
+    private function rejectedAttempt(ElectronicDocument $original, string $type, string $sourceId, int $attempt = 1): ElectronicDocument
+    {
+        $adjustment = $this->attemptAdjustment((int) $original->company_id, $original, $type, $sourceId, $attempt);
+
+        return ElectronicDocument::create([
+            'company_id' => $original->company_id, 'sale_id' => $original->sale_id,
+            'source_type' => $adjustment->sourceType, 'source_id' => $adjustment->sourceId,
+            'original_document_id' => $original->id, 'attempt_number' => $attempt,
+            'provider' => 'facturaencr', 'document_type' => $type, 'environment' => 'sandbox',
+            'idempotency_key' => $adjustment->idempotencyKey(), 'status' => 'rejected',
+            'provider_document_id' => 'doc-rejected-' . $attempt,
+            'clave' => str_repeat('6', 50), 'consecutivo' => 'C-REJ-' . $attempt,
+            'last_error_code' => 'HACIENDA_REJECTED', 'last_error_message' => 'Rechazo histórico preservado.',
+        ]);
+    }
+
+    public function test_attempt_identity_is_stable_and_distinct(): void
+    {
+        $company = Company::create(['trade_name' => 'A' . uniqid(), 'is_active' => true]);
+        $ref = new FiscalDocumentReference(1, '01', str_repeat('5', 50), null, '2026-09-27T10:00:00-06:00', '01', 'M', 'fake');
+
+        $first = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'sale', 'S1', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref, '1010.0000', 1
+        );
+        $this->assertSame(md5("{$company->id}-sale-S1-03"), $first->idempotencyKey());
+
+        $second = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'sale', 'S1', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref, '1010.0000', 2
+        );
+        $this->assertNotSame($first->idempotencyKey(), $second->idempotencyKey());
+        $this->assertSame($second->idempotencyKey(), \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'sale', 'S1', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref, '1010.0000', 2
+        )->idempotencyKey());
+
+        try {
+            \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+                $company->id, 'sale', 'S1', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref, '1010.0000', 0
+            );
+            $this->fail('Attempt 0 debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('invalid_attempt', $e->reason);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_rejected_enables_new_attempt_nc03(): void
+    {
+        config(['fiscal.provider' => 'facturaencr']);
+        $this->resetHttp();
+        Http::fake([
+            'documents/nota-credito' => Http::response([
+                'documentId' => 'doc-nc-a2', 'clave' => str_repeat('7', 50),
+                'consecutivo' => 'C-NC-A2', 'status' => 'accepted',
+            ], 200),
+        ]);
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 50]);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $attempt1 = $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+
+        $adjustment2 = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 2);
+        $this->assertNotSame($attempt1->idempotency_key, $adjustment2->idempotencyKey());
+
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+        $this->assertNotSame($attempt1->id, $result->electronicDocumentId);
+
+        $attempt2 = ElectronicDocument::findOrFail($result->electronicDocumentId);
+        $this->assertSame(2, (int) $attempt2->attempt_number);
+        $this->assertSame($adjustment2->idempotencyKey(), $attempt2->idempotency_key);
+        $this->assertSame($original->id, (int) $attempt2->original_document_id);
+        $this->assertSame(1, \App\Models\FiscalConsumption::where('electronic_document_id', $attempt2->id)->count());
+
+        $frozen1 = ElectronicDocument::findOrFail($attempt1->id);
+        $this->assertSame('rejected', $frozen1->status);
+        $this->assertSame($attempt1->clave, $frozen1->clave);
+        $this->assertSame($attempt1->consecutivo, $frozen1->consecutivo);
+
+        Http::assertSentCount(1);
+
+        $retry = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+        $this->assertSame($attempt2->id, $retry->electronicDocumentId);
+        Http::assertSentCount(1);
+        $this->assertSame(2, ElectronicDocument::where('document_type', '03')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+    }
+
+    public function test_accepted_blocks_new_attempt(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $attempt1 = $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+        $attempt1->update(['status' => 'accepted', 'last_error_code' => null, 'last_error_message' => null]);
+
+        $adjustment2 = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 2);
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+
+        $this->assertSame($attempt1->id, $result->electronicDocumentId);
+        $this->assertSame(1, ElectronicDocument::where('document_type', '03')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_queued_blocks_new_attempt(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $attempt1 = $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+        $attempt1->update(['status' => 'queued']);
+
+        $adjustment2 = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 2);
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+
+        $this->assertSame($attempt1->id, $result->electronicDocumentId);
+        $this->assertSame(FiscalEmissionResult::STATE_QUEUED, $result->state);
+        $this->assertSame(1, ElectronicDocument::where('document_type', '03')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_wrong_attempt_sequence_is_blocked(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $skipped = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 2);
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $skipped
+        ));
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('invalid_attempt_sequence', $result->error->code);
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertSame(0, ElectronicDocument::where('document_type', '03')->count());
+        Http::assertNothingSent();
+
+        $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+        $jumped = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 3);
+
+        $retry = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $jumped
+        ));
+
+        $this->assertTrue($retry->isError());
+        $this->assertSame('invalid_attempt_sequence', $retry->error->code);
+        $this->assertSame(1, ElectronicDocument::where('document_type', '03')->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_unique_backstop_rejects_duplicate_attempt_row(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $sale = $this->completedSale($company, $branch, $user);
+        $original = $this->acceptedOriginal($company, $sale);
+        $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+
+        $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+    }
+
+    public function test_rejected_enables_new_attempt_nd02(): void
+    {
+        config(['fiscal.provider' => 'facturaencr']);
+        $this->resetHttp();
+        Http::fake([
+            'documents/nota-debito' => Http::response([
+                'documentId' => 'doc-nd-a2', 'clave' => str_repeat('8', 50),
+                'consecutivo' => 'C-ND-A2', 'status' => 'accepted',
+            ], 200),
+        ]);
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 50]);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale, 'card');
+        $original = $this->acceptedOriginal($company, $sale, 'facturaencr', '04');
+
+        $attempt1 = $this->rejectedAttempt($original, '02', (string) $sale->id, 1);
+        $adjustment2 = $this->attemptAdjustment($company->id, $original, '02', (string) $sale->id, 2, '02');
+
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+
+        $attempt2 = ElectronicDocument::findOrFail($result->electronicDocumentId);
+        $this->assertSame('02', $attempt2->document_type);
+        $this->assertSame(2, (int) $attempt2->attempt_number);
+        $this->assertNotSame($attempt1->idempotency_key, $attempt2->idempotency_key);
+        $this->assertSame($original->id, (int) $attempt2->original_document_id);
+
+        Http::assertSent(function ($request) {
+            return str_ends_with($request->url(), 'documents/nota-debito')
+                && $request['medioPago'] === ['02'];
+        });
+
+        $this->assertSame('rejected', ElectronicDocument::findOrFail($attempt1->id)->status);
+    }
+
+    public function test_attempt_isolation_across_company_and_type(): void
+    {
+        config(['fiscal.provider' => 'facturaencr']);
+        $this->resetHttp();
+        Http::fake([
+            'documents/nota-credito' => Http::response([
+                'documentId' => 'doc-iso', 'clave' => str_repeat('9', 50),
+                'consecutivo' => 'C-ISO', 'status' => 'accepted',
+            ], 200),
+        ]);
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 50]);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+
+        [$other] = [Company::create(['trade_name' => 'O' . uniqid(), 'is_active' => true])];
+        $this->enableFiscal($other, ['fiscal_monthly_quota' => 50]);
+        $saleB = $this->completedSale($other, Branch::create(['company_id' => $other->id, 'name' => 'B', 'code' => 'B' . $other->id, 'is_active' => true]), $user);
+        $this->salePayment($saleB);
+        $originalB = $this->acceptedOriginal($other, $saleB);
+
+        $firstB = $this->attemptAdjustment($other->id, $originalB, '03', (string) $saleB->id, 1);
+        $resultB = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $saleB, $other, $saleB->customer, [], null, $firstB
+        ));
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $resultB->state);
+        $this->assertSame(1, (int) ElectronicDocument::findOrFail($resultB->electronicDocumentId)->attempt_number);
+
+        $ndFirst = $this->attemptAdjustment($company->id, $original, '02', (string) $sale->id, 1);
+        $this->assertNotSame($firstB->idempotencyKey(), $ndFirst->idempotencyKey());
+    }
+
+    public function test_consumptions_follow_attempts_without_retry_duplicates(): void
+    {
+        config(['fiscal.provider' => 'facturaencr']);
+        $this->resetHttp();
+        Http::fake([
+            'documents/nota-credito' => Http::response([
+                'documentId' => 'doc-nc-a2c', 'clave' => str_repeat('3', 50),
+                'consecutivo' => 'C-NC-A2C', 'status' => 'accepted',
+            ], 200),
+        ]);
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 50]);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
+        $original = $this->acceptedOriginal($company, $sale);
+
+        $attempt1 = $this->rejectedAttempt($original, '03', (string) $sale->id, 1);
+        app(\App\Services\Fiscal\FiscalConsumptionService::class)->record($attempt1);
+
+        $adjustment2 = $this->attemptAdjustment($company->id, $original, '03', (string) $sale->id, 2);
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+
+        $this->assertSame(1, \App\Models\FiscalConsumption::where('electronic_document_id', $attempt1->id)->count());
+        $this->assertSame(1, \App\Models\FiscalConsumption::where('electronic_document_id', $result->electronicDocumentId)->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 2);
+
+        app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment2
+        ));
+        $this->assertDatabaseCount('fiscal_consumptions', 2);
+    }
 }
 
 class AdjustmentFakeProvider implements FiscalProviderInterface

@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Fiscal NC03 -496 corregido, segundo E2E listo (2026-09-27, rama feature/factura-electronica)
+## Fiscal reemisión tras rechazo (2026-09-27, rama feature/factura-electronica)
 
-Doc3 rechazado preservado (-496 bloqueante + -37 acompañante, sin reenvío, consumo INCLUDED intacto). Fix: `medioPago` derivado de pagos completados de la venta original (uno → código; varios → tipo/monto; crédito exento; contado sin pagos o método no mapeable bloquea pre-POST, nada hardcodeado). -37 es configuración del emisor sandbox (payloads nunca envían ubicación; FE01/TE04 aceptadas igual). Preflight endurecido a nivel mapper + provider. Venta7 tiene 1 pago cash 1010.00 → segundo E2E derivable. Evidencia: `FiscalAdjustmentTest` 25/25, CERO HTTP real. Sin commit de datos E2E (doc3/consumo solo en `database.sqlite` local).
+Doc3 rejected intacto (sin tocar). Ciclo modelado: `attempt_number` + unique `(company,sale,type,attempt)` + idempotency por intento (attempt 1 conserva formato histórico); solo `rejected` habilita N+1, otro estado devuelve el vigente sin fila/POST; secuencia estricta; backstop de concurrencia con retorno del ganador; consumo por intento, retry/polling = 0. Migración `2026_09_27_000005` aplicada en dev. Cobertura 03/02 con HTTP falso + backstop unique + aislamiento + FE/TE sin regresión. Evidencia: `FiscalAdjustmentTest` 34/34, CERO HTTP real. Segundo E2E NC03 desbloqueado a nivel esquema (requiere orden explícita).
+
+## Fiscal NC03 -496 corregido (2026-09-27, histórico, superado por reemisión)
+
+Doc3 rechazado preservado (-496 bloqueante + -37 acompañante, sin reenvío, consumo INCLUDED intacto). Fix: `medioPago` derivado de pagos completados de la venta original (uno → código; varios → tipo/monto; crédito exento; contado sin pagos o método no mapeable bloquea pre-POST, nada hardcodeado). -37 es configuración del emisor sandbox (payloads nunca envían ubicación; FE01/TE04 aceptadas igual). Preflight endurecido a nivel mapper + provider. Venta7 tiene 1 pago cash 1010.00 → segundo E2E derivable. Evidencia entonces: `FiscalAdjustmentTest` 25/25, CERO HTTP real. Sin commit de datos E2E (doc3/consumo solo en `database.sqlite` local).
 
 ## Fiscal NC03/ND02 adapter oficial (2026-09-27, histórico, superado por fix -496)
 

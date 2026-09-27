@@ -119,3 +119,19 @@ Fuente: https://facturaencr.com/docs (API v2, Hacienda v4.4). Base local
   del emisor sandbox, no al payload MVS. No se falsea solución.
 - Preflight endurecido: contado sin medioPago derivable, datos obligatorios
   faltantes y referencia inválida impiden el POST a nivel mapper + provider.
+
+## 10. Reemisión tras rechazo (2026-09-27, sin HTTP real)
+
+RETRY técnico ≠ REEMISIÓN: el mismo intento conserva `attempt` e
+idempotency (una sola fila, 0 consumo extra); tras un `rejected` definitivo,
+reemitir es un NUEVO intento (`attempt+1`, nueva idempotency, nueva fila con
+mismo source/original, historial del rechazado intacto).
+
+Reglas: solo `rejected` habilita el siguiente intento; con queued/pending/
+sent/polling/accepted/error vigente se devuelve el intento actual SIN fila
+ni POST (nunca dos intentos activos). Secuencia estricta (`attempt` debe ser
+último+1). Concurrencia: unique compuesta
+`(company, sale, type, attempt_number)` como backstop + retorno del ganador.
+Consumo: el del rejected se preserva; el nuevo intento consume solo si
+corresponde; polling/retry = 0 adicional. Vale para 03/02; 01/04 usan
+`attempt=1` y no regresionan.

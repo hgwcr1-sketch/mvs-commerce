@@ -6,6 +6,10 @@ namespace App\DTOs\Fiscal;
  * Documento fiscal neutral (provider-independent): 01 FE, 04 TE, 03 NC, 02 ND.
  * Todo dato comercial viaja congelado como snapshot; ningún adapter y ningún
  * proveedor forman parte de este contrato.
+ *
+ * RETRY técnico ≠ REEMISIÓN tras rechazo: reintentar el MISMO intento conserva
+ * attempt e idempotency (una sola fila); reemitir tras un rejected definitivo
+ * es un NUEVO intento (attempt+1, nueva idempotency, nueva fila histórica).
  */
 final class FiscalDocument
 {
@@ -27,6 +31,7 @@ final class FiscalDocument
         public readonly array $lines,
         public readonly array $totals,
         public readonly ?FiscalDocumentReference $reference = null,
+        public readonly int $attempt = 1,
     ) {
     }
 
@@ -35,10 +40,17 @@ final class FiscalDocument
         return in_array($this->documentType, ['03', '02'], true);
     }
 
-    /** Identidad local estable: sin timestamps, random ni llaves externas. */
+    /**
+     * Identidad local estable: sin timestamps, random ni llaves externas.
+     * Attempt 1 conserva el formato histórico; attempt ≥2 lo extiende.
+     */
     public function idempotencyKey(): string
     {
-        return md5("{$this->companyId}-{$this->sourceType}-{$this->sourceId}-{$this->documentType}");
+        if ($this->attempt <= 1) {
+            return md5("{$this->companyId}-{$this->sourceType}-{$this->sourceId}-{$this->documentType}");
+        }
+
+        return md5("{$this->companyId}-{$this->sourceType}-{$this->sourceId}-{$this->documentType}-attempt{$this->attempt}");
     }
 
     /**
@@ -86,6 +98,10 @@ final class FiscalDocument
 
         if (! $this->isModifier() && $this->reference !== null) {
             throw new FiscalReferenceException('Solo 03/02 admiten referencia.', 'unexpected_reference');
+        }
+
+        if ($this->attempt < 1) {
+            throw new FiscalReferenceException('El intento fiscal debe ser mayor o igual a 1.', 'invalid_attempt');
         }
     }
 }

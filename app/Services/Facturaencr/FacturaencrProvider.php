@@ -149,18 +149,83 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             );
         }
 
-        $document = ElectronicDocument::create([
-            'company_id' => $request->company->id,
-            'sale_id' => $request->sale->id,
-            'source_type' => $adjustment->sourceType,
-            'source_id' => $adjustment->sourceId,
-            'original_document_id' => $adjustment->reference->electronicDocumentId,
-            'provider' => 'facturaencr',
-            'document_type' => $adjustment->documentType,
-            'environment' => config('facturaencr.environment', 'sandbox'),
-            'idempotency_key' => $idempotencyKey,
-            'status' => 'queued',
-        ]);
+        // Ciclo de reemisión: solo un rejected definitivo habilita el
+        // siguiente intento (attempt = último + 1). Cualquier otro estado
+        // (queued/pending/sent/polling/accepted/error) devuelve el intento
+        // vigente SIN nueva fila y SIN POST: nunca dos intentos activos.
+        $latest = ElectronicDocument::query()
+            ->where('company_id', $request->company->id)
+            ->where('sale_id', $request->sale->id)
+            ->where('provider', 'facturaencr')
+            ->where('document_type', $adjustment->documentType)
+            ->where('environment', config('facturaencr.environment', 'sandbox'))
+            ->orderByDesc('attempt_number')
+            ->first();
+
+        $expectedAttempt = $latest !== null ? $latest->attempt_number + 1 : 1;
+
+        if ($adjustment->attempt !== $expectedAttempt) {
+            return $this->failedResult(new FiscalError(
+                code: 'invalid_attempt_sequence',
+                message: "Secuencia de intentos inválida: se esperaba el intento {$expectedAttempt}.",
+                category: FiscalError::CATEGORY_VALIDATION,
+                retryable: false,
+            ));
+        }
+
+        if ($latest !== null && $latest->status !== 'rejected') {
+            return new FiscalEmissionResult(
+                state: $this->normalizeState($latest->status),
+                electronicDocumentId: $latest->id,
+                providerReference: $latest->provider_document_id,
+                fiscalReference: $latest->clave,
+                error: $latest->status === 'error'
+                    ? $this->toError($latest->last_error_code, $latest->last_error_message)
+                    : null,
+            );
+        }
+
+        try {
+            $document = ElectronicDocument::create([
+                'company_id' => $request->company->id,
+                'sale_id' => $request->sale->id,
+                'source_type' => $adjustment->sourceType,
+                'source_id' => $adjustment->sourceId,
+                'original_document_id' => $adjustment->reference->electronicDocumentId,
+                'attempt_number' => $adjustment->attempt,
+                'provider' => 'facturaencr',
+                'document_type' => $adjustment->documentType,
+                'environment' => config('facturaencr.environment', 'sandbox'),
+                'idempotency_key' => $idempotencyKey,
+                'status' => 'queued',
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Carrera real: otro proceso creó el intento concurrente. La
+            // unique compuesta es el backstop: se devuelve el ganador sin
+            // crear fila ni emitir de más. Máximo un nuevo attempt.
+            $winner = ElectronicDocument::query()
+                ->where('company_id', $request->company->id)
+                ->where('sale_id', $request->sale->id)
+                ->where('provider', 'facturaencr')
+                ->where('document_type', $adjustment->documentType)
+                ->where('environment', config('facturaencr.environment', 'sandbox'))
+                ->orderByDesc('attempt_number')
+                ->first();
+
+            if ($winner !== null) {
+                return new FiscalEmissionResult(
+                    state: $this->normalizeState($winner->status),
+                    electronicDocumentId: $winner->id,
+                    providerReference: $winner->provider_document_id,
+                    fiscalReference: $winner->clave,
+                    error: $winner->status === 'error'
+                        ? $this->toError($winner->last_error_code, $winner->last_error_message)
+                        : null,
+                );
+            }
+
+            throw new FacturaencrValidationException(['documento' => 'El intento fiscal no pudo registrarse por concurrencia.']);
+        }
 
         $response = (new FacturaencrClient())->post($endpoint, $payload, $idempotencyKey);
 

@@ -50,7 +50,9 @@ class FacturaencrTest extends TestCase
         $indexNames = array_map(fn ($i) => $i->name, $indexes);
 
         $this->assertContains('idx_electronic_documents_idempotency', $indexNames);
-        $this->assertContains('uq_electronic_documents_company_sale_type', $indexNames);
+        $this->assertContains('uq_electronic_documents_company_sale_type_attempt', $indexNames);
+        $this->assertNotContains('uq_electronic_documents_company_sale_type', $indexNames);
+        $this->assertTrue(Schema::hasColumn('electronic_documents', 'attempt_number'));
     }
 
     public function test_electronic_documents_table_foreign_key_on_company(): void
