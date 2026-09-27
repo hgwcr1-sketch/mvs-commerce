@@ -124,10 +124,11 @@
             </div>
         @endcan
 
-        {{-- En Nueva Compra / Editar Compra el cambio de sucursal NO recarga
-             la página: se actualiza la sesión por fetch y el estado Alpine de
-             la vista toma la nueva sucursal en vivo, sin perder el borrador. --}}
-        @php($mvsFreezeBranchSelector = request()->routeIs('compras.create', 'compras.edit'))
+        {{-- En Nueva Compra / Editar Compra y en Ajustes de Inventario el cambio
+             de sucursal NO recarga la página: se actualiza la sesión por fetch y
+             el estado Alpine de la vista toma la nueva sucursal en vivo, sin
+             perder el borrador. --}}
+        @php($mvsFreezeBranchSelector = request()->routeIs('compras.create', 'compras.edit', 'ajustes-inventario.create'))
 
         @if($headerBranches->isNotEmpty() && (!$canConsolidate || !request()->routeIs('dashboard')))
 

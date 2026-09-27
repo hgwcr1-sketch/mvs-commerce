@@ -234,6 +234,116 @@ class InventoryPostingService
     }
 
     /**
+     * Ajuste manual de inventario (entrada o salida) sobre una sucursal.
+     *
+     * Se ejecuta dentro de la transacción del lote: si una fila posterior
+     * falla, el rollback revierte también los movimientos ya aplicados.
+     */
+    public function postAdjustment(
+        Branch $branch,
+        Product $product,
+        int $userId,
+        string $movementType,
+        string $quantity,
+        string $reason,
+        ?string $notes = null,
+    ): InventoryMovement {
+        if (! in_array($movementType, ['entry', 'exit'], true)) {
+            throw ValidationException::withMessages([
+                'adjustment_type' => 'El tipo de ajuste no es válido.',
+            ]);
+        }
+
+        if ((int) $branch->company_id !== (int) $product->company_id) {
+            throw ValidationException::withMessages([
+                'product_id' => 'La sucursal y el producto pertenecen a empresas distintas.',
+            ]);
+        }
+
+        if (trim($reason) === '') {
+            throw ValidationException::withMessages([
+                'reason' => 'El motivo del ajuste es obligatorio.',
+            ]);
+        }
+
+        $quantity = $this->transferQuantity($quantity);
+        $this->assertQuantityPrecision($product, $quantity);
+
+        DB::table('branch_product')->insertOrIgnore([
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'stock' => '0.0000',
+            'minimum_stock' => 0,
+            'maximum_stock' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $inventory = DB::table('branch_product')
+            ->where('branch_id', $branch->id)
+            ->where('product_id', $product->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($inventory === null) {
+            throw ValidationException::withMessages([
+                'quantity' => 'No se pudo bloquear el inventario de la sucursal.',
+            ]);
+        }
+
+        $previousStock = $this->inventoryDecimal($inventory->stock);
+        $newStock = $movementType === 'entry'
+            ? bcadd($previousStock, $quantity, self::QUANTITY_SCALE)
+            : bcsub($previousStock, $quantity, self::QUANTITY_SCALE);
+
+        if (bccomp($newStock, '0', self::QUANTITY_SCALE) < 0) {
+            throw ValidationException::withMessages([
+                'quantity' => "Stock insuficiente para {$product->name}. Disponible: {$previousStock}. Solicitado: {$quantity}.",
+            ]);
+        }
+
+        DB::table('branch_product')
+            ->where('id', $inventory->id)
+            ->update([
+                'stock' => $newStock,
+                'updated_at' => now(),
+            ]);
+
+        return InventoryMovement::create([
+            'company_id' => $branch->company_id,
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'user_id' => $userId,
+            'type' => $movementType,
+            'quantity' => $quantity,
+            'previous_stock' => $previousStock,
+            'new_stock' => $newStock,
+            'reason' => trim($reason),
+            'notes' => $notes,
+        ]);
+    }
+
+    /**
+     * Unidades sin decimales no admiten fracciones en la cantidad.
+     */
+    public function assertQuantityPrecision(Product $product, string $quantity): void
+    {
+        if ($product->unit?->allows_decimals) {
+            return;
+        }
+
+        $dot = strpos($quantity, '.');
+
+        if ($dot === false || rtrim(substr($quantity, $dot + 1), '0') === '') {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'quantity' => 'Este producto solo admite cantidades enteras.',
+        ]);
+    }
+
+    /**
      * Entrada por anulación de venta (devolución del inventario vendido).
      *
      * Restaurado: fue eliminado por la regresión de 9d491fe y es requerido por

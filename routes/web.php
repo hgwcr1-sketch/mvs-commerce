@@ -572,9 +572,13 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->only(['index'])
         ->middleware('permission:inventario.ver');
 
+    Route::post('ajustes-inventario/validar', [InventoryAdjustmentController::class, 'revalidate'])
+        ->middleware(['active.branch', 'permission:inventario.ajustar'])
+        ->name('ajustes-inventario.revalidate');
+
     Route::resource('ajustes-inventario', InventoryAdjustmentController::class)
         ->only(['create', 'store'])
-        ->middleware('permission:inventario.ajustar');
+        ->middleware(['active.branch', 'permission:inventario.ajustar']);
 
     Route::resource('kardex', KardexController::class)
         ->only(['index'])
