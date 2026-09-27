@@ -1,6 +1,12 @@
 @extends('layouts.app')
 @section('content')
 <div class="mx-auto max-w-2xl space-y-5 pb-24 md:pb-8">
+    @if($config->isProduction())
+        <div class="rounded-2xl bg-slate-950 p-4 text-center text-sm font-bold text-[#D4AF37]">AMBIENTE PRODUCCIÓN — documentos con validez fiscal</div>
+    @else
+        <div class="rounded-2xl bg-amber-100 p-4 text-center text-sm font-bold text-amber-900">PRUEBAS — SIN VALOR FISCAL</div>
+    @endif
+
     <section class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-7">
         <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Facturación Electrónica</p>
         <h1 class="mt-2 text-2xl font-bold text-slate-950">{{ $company->trade_name }}</h1>
@@ -20,15 +26,24 @@
                     {{ $status === 'ready' ? 'bg-emerald-100 text-emerald-900' : ($status === 'attention' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900') }}">
                     {{ $statusLabel }}
                 </span>
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Ambiente: {{ $environmentLabel }}</span>
+                <span class="rounded-full px-3 py-1 font-bold {{ $config->isProduction() ? 'bg-slate-950 text-[#D4AF37]' : 'bg-slate-100 text-slate-700' }}">
+                    {{ $environmentLabel }}
+                </span>
             </div>
 
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
-                <div class="flex justify-between gap-3"><dt>Identificación fiscal</dt><dd class="font-bold text-right">{{ $company->identification_number ?: 'Pendiente' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Nombre fiscal</dt><dd class="font-bold text-right">{{ $company->legal_name ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Emisor</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }} ({{ $company->identification_number ?: 'pendiente' }})</dd></div>
+                <div class="flex justify-between gap-3"><dt>Actividad económica</dt><dd class="font-bold text-right">{{ $config->economic_activity ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Llave registrada</dt><dd class="font-bold text-right">{{ $config->maskedKey() ?: 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Última comprobación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Sin verificar' }}</dd></div>
             </dl>
+
+            <div class="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
+                <div class="rounded-xl bg-emerald-50 p-3"><p class="text-2xl font-bold text-emerald-900">{{ $counts['accepted'] }}</p><p class="text-emerald-800">Aceptados</p></div>
+                <div class="rounded-xl bg-rose-50 p-3"><p class="text-2xl font-bold text-rose-900">{{ $counts['rejected'] }}</p><p class="text-rose-800">Rechazados</p></div>
+                <div class="rounded-xl bg-amber-50 p-3"><p class="text-2xl font-bold text-amber-900">{{ $counts['pending'] }}</p><p class="text-amber-800">En proceso</p></div>
+            </div>
 
             <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
                 <p class="font-bold">Consumo del mes{{ $quotaText }}</p>
@@ -46,10 +61,14 @@
         @endif
 
         @can('fiscal.editar')
-            <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-               class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
-                {{ $status === 'ready' ? 'Revisar conexión' : 'Conectar facturación' }}
-            </a>
+            <div class="mt-5 flex flex-wrap gap-2">
+                <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
+                   class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
+                    {{ $status === 'ready' ? 'Revisar conexión' : 'Conectar facturación' }}
+                </a>
+                <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
+                <a href="{{ route('fiscal.switch') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Proveedor</a>
+            </div>
         @endcan
     </section>
 
@@ -66,15 +85,19 @@
                     <thead>
                         <tr class="text-left text-slate-500">
                             <th class="py-2 pr-3">Tipo</th>
-                            <th class="py-2 pr-3 hidden md:table-cell">Fecha</th>
+                            <th class="py-2 pr-3 hidden md:table-cell">Intento</th>
+                            <th class="py-2 pr-3 hidden md:table-cell">Proveedor</th>
                             <th class="py-2 pr-3">Estado</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($recent as $doc)
                             <tr class="border-t border-slate-100">
-                                <td class="py-2 pr-3 font-bold">{{ $typeLabels[$doc->document_type] ?? $doc->document_type }}</td>
-                                <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->created_at->format('d/m/Y H:i') }}</td>
+                                <td class="py-2 pr-3 font-bold">
+                                    <a href="{{ route('fiscal.documents.show', $doc) }}" class="underline decoration-amber-500">{{ $typeLabels[$doc->document_type] ?? $doc->document_type }}</a>
+                                </td>
+                                <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->attempt_number }}</td>
+                                <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->provider }}</td>
                                 <td class="py-2 pr-3">{{ $statusLabels[$doc->status] ?? $doc->status }}</td>
                             </tr>
                         @endforeach

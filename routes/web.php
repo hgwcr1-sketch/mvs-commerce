@@ -223,6 +223,18 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::post('/facturacion-electronica/verificar', [FiscalPortalController::class, 'verify'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.verify');
+    Route::get('/facturacion-electronica/historial/{document}', [FiscalPortalController::class, 'showDocument'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.show');
+    Route::get('/facturacion-electronica/series', [FiscalPortalController::class, 'series'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.series');
+    Route::post('/facturacion-electronica/series', [FiscalPortalController::class, 'importSeries'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.series.import');
+    Route::get('/facturacion-electronica/cambio-proveedor', [FiscalPortalController::class, 'switchChecklist'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.switch');
 
     /*
     |--------------------------------------------------------------------------

@@ -311,6 +311,10 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             ? $this->toError($document->last_error_code, $document->last_error_message)
             : null;
 
+        $fresh = $document->fresh();
+        app(\App\Services\Fiscal\FiscalSeriesService::class)->observe($fresh);
+        app(\App\Services\Fiscal\FiscalCustodyService::class)->record($fresh, $payload, (array) ($response->data ?? []));
+
         return new FiscalEmissionResult(
             state: $this->normalizeState($document->status),
             electronicDocumentId: $document->id,

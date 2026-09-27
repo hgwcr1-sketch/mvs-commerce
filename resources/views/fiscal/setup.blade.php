@@ -45,6 +45,20 @@
                     <label class="text-sm font-bold" for="email">Correo fiscal</label>
                     <input id="email" type="email" name="email" value="{{ old('email', $company->email) }}" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
+                <div>
+                    <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
+                    <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-sm font-bold" for="fiscal_branch_code">Sucursal fiscal (3 dígitos)</label>
+                        <input id="fiscal_branch_code" name="fiscal_branch_code" inputmode="numeric" value="{{ old('fiscal_branch_code', $config->fiscal_branch_code) }}" placeholder="001" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                    </div>
+                    <div>
+                        <label class="text-sm font-bold" for="fiscal_terminal_code">Terminal fiscal (5 dígitos)</label>
+                        <input id="fiscal_terminal_code" name="fiscal_terminal_code" inputmode="numeric" value="{{ old('fiscal_terminal_code', $config->fiscal_terminal_code) }}" placeholder="00001" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                    </div>
+                </div>
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y continuar</button>
             </form>
         @elseif($step === 'conexion')

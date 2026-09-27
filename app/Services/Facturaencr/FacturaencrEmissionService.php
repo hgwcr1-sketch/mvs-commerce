@@ -81,6 +81,10 @@ class FacturaencrEmissionService
             ]);
         }
 
+        app(\App\Services\Fiscal\FiscalCustodyService::class)->record(
+            $document->fresh(), $payload, (array) ($response->data ?? [])
+        );
+
         return $document;
     }
 
@@ -152,6 +156,10 @@ class FacturaencrEmissionService
         }
 
         $document->update($attributes);
+        $document = $document->fresh();
+
+        app(\App\Services\Fiscal\FiscalSeriesService::class)->observe($document);
+        app(\App\Services\Fiscal\FiscalCustodyService::class)->recordResponse($document, (array) $data);
 
         return $document;
     }

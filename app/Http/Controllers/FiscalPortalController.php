@@ -72,6 +72,20 @@ class FiscalPortalController extends Controller
             ->orderByDesc('updated_at')
             ->first();
 
+        $period = now()->startOfMonth();
+
+        $counts = [
+            'accepted' => ElectronicDocument::query()->where('company_id', $company->id)->where('status', 'accepted')->where('created_at', '>=', $period)->count(),
+            'rejected' => ElectronicDocument::query()->where('company_id', $company->id)->where('status', 'rejected')->where('created_at', '>=', $period)->count(),
+            'pending' => ElectronicDocument::query()->where('company_id', $company->id)->whereIn('status', ['pending', 'queued', 'signing', 'sent', 'polling'])->where('created_at', '>=', $period)->count(),
+        ];
+
+        $series = \App\Models\FiscalSeries::query()
+            ->where('company_id', $company->id)
+            ->orderBy('environment')->orderBy('document_type')
+            ->limit(6)
+            ->get();
+
         return view('fiscal.index', [
             'company' => $company,
             'license' => $license,
@@ -83,6 +97,8 @@ class FiscalPortalController extends Controller
             'quotaText' => $this->quotaText($license, $usage),
             'recent' => $recent,
             'latest' => $latest,
+            'counts' => $counts,
+            'series' => $series,
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
             'diagnostic' => $this->diagnostic($company, $license, $config, $latest),
@@ -169,9 +185,13 @@ class FiscalPortalController extends Controller
             'identification_number' => ['required', 'string', 'max:30'],
             'legal_name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
+            'economic_activity' => ['nullable', 'string', 'max:30'],
+            'fiscal_branch_code' => ['nullable', 'regex:/^\d{3}$/'],
+            'fiscal_terminal_code' => ['nullable', 'regex:/^\d{5}$/'],
         ]);
 
         $this->configs->updateIdentity($company, $validated);
+        $this->configs->updateFiscalData($company, $validated);
     }
 
     private function storeConnection(Request $request, Company $company): void
@@ -255,6 +275,8 @@ class FiscalPortalController extends Controller
      */
     private function diagnostic(Company $company, CompanyLicense $license, CompanyFiscalConfig $config, ?ElectronicDocument $latest): array
     {
+        $seriesCount = \App\Models\FiscalSeries::query()->where('company_id', $company->id)->count();
+
         return [
             [
                 'label' => 'Conexión',
@@ -271,20 +293,118 @@ class FiscalPortalController extends Controller
                     : 'Módulo no habilitado. El POS solo emite tiquetes internos.',
             ],
             [
-                'label' => 'Configuración fiscal',
-                'ok' => $this->configs->identityComplete($company) && $config->hasCredentials(),
-                'detail' => $this->configs->identityComplete($company) && $config->hasCredentials()
-                    ? 'Datos fiscales y credenciales registradas.'
-                    : 'Faltan datos fiscales o credenciales.',
+                'label' => 'Datos fiscales',
+                'ok' => $this->configs->identityComplete($company),
+                'detail' => $this->configs->identityComplete($company)
+                    ? 'Identificación y nombre fiscal registrados.'
+                    : 'Faltan datos fiscales de la empresa.',
             ],
             [
-                'label' => 'Última comunicación',
+                'label' => 'Credenciales',
+                'ok' => $config->hasCredentials(),
+                'detail' => $config->hasCredentials()
+                    ? 'Credenciales registradas (' . ($config->maskedKey() ?? '—') . ').'
+                    : 'Faltan credenciales del proveedor.',
+            ],
+            [
+                'label' => 'Proveedor',
+                'ok' => true,
+                'detail' => $config->provider === CompanyFiscalConfig::PROVIDER_FACTURAENCR
+                    ? 'FacturaEnCR (proveedor técnico actual).'
+                    : 'Proveedor ' . $config->provider . '.',
+            ],
+            [
+                'label' => 'Series',
+                'ok' => true,
+                'detail' => $seriesCount > 0
+                    ? "{$seriesCount} serie(s) observada(s), sin resets."
+                    : 'Sin series observadas todavía.',
+            ],
+            [
+                'label' => 'Última respuesta',
                 'ok' => $latest !== null && $latest->status === 'accepted',
                 'detail' => $latest !== null
                     ? (self::STATUS_LABELS[$latest->status] ?? $latest->status) . ' el ' . $latest->updated_at->format('d/m/Y H:i') . '.'
                     : 'Aún no se ha emitido ningún documento.',
             ],
         ];
+    }
+
+    public function series(): View
+    {
+        $company = $this->company();
+
+        return view('fiscal.series', [
+            'company' => $company,
+            'series' => \App\Models\FiscalSeries::query()
+                ->where('company_id', $company->id)
+                ->orderBy('environment')->orderBy('document_type')
+                ->orderBy('branch_code')->orderBy('terminal_code')
+                ->paginate(20),
+            'typeLabels' => self::TYPE_LABELS,
+        ]);
+    }
+
+    public function importSeries(Request $request): RedirectResponse
+    {
+        $company = $this->company();
+
+        $validated = $request->validate([
+            'environment' => ['required', 'string', 'in:sandbox,production'],
+            'branch_code' => ['required', 'regex:/^\d{3}$/'],
+            'terminal_code' => ['required', 'regex:/^\d{5}$/'],
+            'document_type' => ['required', 'string', 'in:01,04,03,02'],
+            'last_consecutivo' => ['required', 'regex:/^\d{20}$/'],
+        ]);
+
+        try {
+            app(\App\Services\Fiscal\FiscalSeriesService::class)->import(
+                $company->id,
+                $validated['environment'],
+                $validated['branch_code'],
+                $validated['terminal_code'],
+                $validated['document_type'],
+                $validated['last_consecutivo'],
+            );
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->route('fiscal.series')->withErrors(['last_consecutivo' => $e->getMessage()]);
+        }
+
+        return redirect()->route('fiscal.series')->with('status', 'Serie registrada. Nunca se retrocede ni se resetea.');
+    }
+
+    public function showDocument(ElectronicDocument $document): View
+    {
+        $company = $this->company();
+
+        abort_unless((int) $document->company_id === (int) $company->id, 404);
+
+        return view('fiscal.document', [
+            'company' => $company,
+            'document' => $document,
+            'typeLabels' => self::TYPE_LABELS,
+            'statusLabels' => self::STATUS_LABELS,
+            'custody' => \App\Models\FiscalDocumentCustody::query()
+                ->where('electronic_document_id', $document->id)
+                ->first(),
+        ]);
+    }
+
+    public function switchChecklist(Request $request): View
+    {
+        $company = $this->company();
+        $target = (string) $request->query('to', '');
+        $check = $target !== ''
+            ? app(\App\Services\Fiscal\FiscalProviderSwitchService::class)->canSwitch($company, $target)
+            : null;
+
+        return view('fiscal.switch', [
+            'company' => $company,
+            'current' => $this->configs->ensure($company)->provider,
+            'providers' => array_keys((array) config('fiscal.providers', [])),
+            'target' => $target,
+            'check' => $check,
+        ]);
     }
 
     private function friendlyError(?string $code): string
