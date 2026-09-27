@@ -11,6 +11,7 @@ use App\Models\Branch;
 use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\CompanyCashSetting;
 use App\Models\Customer;
 use App\Models\ElectronicDocument;
 use App\Models\PaymentMethod;
@@ -24,6 +25,7 @@ use App\Models\User;
 use App\Services\Facturaencr\FacturaencrProvider;
 use App\Services\Fiscal\FiscalManager;
 use App\Services\Fiscal\PosEmissionDispatcher;
+use App\Services\PosDefaultDocumentType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -103,7 +105,9 @@ class PosElectronicEmissionTriggerTest extends TestCase
         $this->checkout($user, $company, $branch, $method, [[
             'product_id' => $product->id,
             'quantity' => 1,
-        ]], 2000)->assertOk();
+        ]], 2000, [
+            'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+        ])->assertOk();
 
         $sale = Sale::latest('id')->firstOrFail();
 
@@ -136,6 +140,144 @@ class PosElectronicEmissionTriggerTest extends TestCase
         Queue::assertPushed(EmitElectronicDocument::class, 1);
         Queue::assertPushed(EmitElectronicDocument::class, fn (EmitElectronicDocument $job) => $job->saleId === $electronica->id);
         Http::assertNothingSent();
+    }
+
+    public function test_internal_ticket_checkout_dispatches_no_job(): void
+    {
+        Queue::fake();
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company, $branch, $user, $method] = $this->context();
+        $product = $this->product($company, false);
+
+        $this->checkout($user, $company, $branch, $method, [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]], 2000, [
+            'document_type' => Sale::DOCUMENT_TICKET,
+        ])->assertOk();
+
+        $sale = Sale::latest('id')->firstOrFail();
+
+        $this->assertSame(Sale::DOCUMENT_TICKET, $sale->document_type);
+        $this->assertSame(Sale::STATUS_COMPLETED, $sale->status);
+        Queue::assertNotPushed(EmitElectronicDocument::class);
+        $this->assertDatabaseCount('electronic_documents', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_dispatcher_rejects_internal_ticket_but_accepts_fiscal_types(): void
+    {
+        Queue::fake();
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company, $branch, $user] = $this->context();
+        $dispatcher = app(PosEmissionDispatcher::class);
+
+        $internal = $this->sale($company, $branch, $user, ['document_type' => Sale::DOCUMENT_TICKET]);
+        $ticket = $this->sale($company, $branch, $user, ['document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET]);
+        $invoice = $this->sale($company, $branch, $user, ['document_type' => Sale::DOCUMENT_ELECTRONIC_INVOICE]);
+
+        $this->assertFalse($dispatcher->forSale($internal));
+        $this->assertTrue($dispatcher->forSale($ticket));
+        $this->assertTrue($dispatcher->forSale($invoice));
+
+        Queue::assertPushed(EmitElectronicDocument::class, 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_missing_document_type_falls_back_to_company_default_ticket(): void
+    {
+        Queue::fake();
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company, $branch, $user, $method] = $this->context();
+        $product = $this->product($company, false);
+
+        $this->assertDatabaseMissing('company_cash_settings', ['company_id' => $company->id]);
+
+        $this->checkout($user, $company, $branch, $method, [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]], 2000)->assertOk();
+
+        $sale = Sale::latest('id')->firstOrFail();
+
+        $this->assertSame(Sale::DOCUMENT_TICKET, $sale->document_type);
+        Queue::assertNotPushed(EmitElectronicDocument::class);
+        $this->assertDatabaseCount('electronic_documents', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_configured_te_default_is_used_when_document_type_missing(): void
+    {
+        Queue::fake();
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company, $branch, $user, $method] = $this->context();
+        $product = $this->product($company, false);
+
+        CompanyCashSetting::query()->updateOrCreate(
+            ['company_id' => $company->id],
+            ['default_document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET]
+        );
+
+        $this->checkout($user, $company, $branch, $method, [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]], 2000)->assertOk();
+
+        $sale = Sale::latest('id')->firstOrFail();
+
+        $this->assertSame(Sale::DOCUMENT_ELECTRONIC_TICKET, $sale->document_type);
+        Queue::assertPushed(EmitElectronicDocument::class, 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_configured_fe_default_is_used_when_document_type_missing(): void
+    {
+        Queue::fake();
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company, $branch, $user, $method] = $this->context();
+        $product = $this->product($company, false);
+
+        CompanyCashSetting::query()->updateOrCreate(
+            ['company_id' => $company->id],
+            ['default_document_type' => Sale::DOCUMENT_ELECTRONIC_INVOICE]
+        );
+
+        $this->checkout($user, $company, $branch, $method, [[
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]], 2000, [], $this->customer($company)->id)->assertOk();
+
+        $sale = Sale::latest('id')->firstOrFail();
+
+        $this->assertSame(Sale::DOCUMENT_ELECTRONIC_INVOICE, $sale->document_type);
+        Queue::assertPushed(EmitElectronicDocument::class, 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_invalid_configured_default_falls_back_to_ticket(): void
+    {
+        config(['fiscal.emission.auto_emit' => true]);
+
+        [$company] = $this->context();
+
+        CompanyCashSetting::query()->updateOrCreate(
+            ['company_id' => $company->id],
+            ['default_document_type' => 'factura_magica']
+        );
+
+        $this->assertSame(
+            Sale::DOCUMENT_TICKET,
+            app(PosDefaultDocumentType::class)->resolve($company->id)
+        );
+        $this->assertSame(
+            Sale::DOCUMENT_TICKET,
+            app(PosDefaultDocumentType::class)->resolve(null)
+        );
     }
 
     public function test_dispatch_happens_after_the_sale_transaction_is_committed(): void

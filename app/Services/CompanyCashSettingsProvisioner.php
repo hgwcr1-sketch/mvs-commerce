@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyCashSetting;
+use App\Models\Sale;
 
 class CompanyCashSettingsProvisioner
 {
@@ -24,6 +25,7 @@ class CompanyCashSettingsProvisioner
                 'usd_exchange_rate_max' => null,
                 'usd_change_policy' => CompanyCashSetting::USD_CHANGE_CRC_ONLY,
                 'closure_email_recipients' => null,
+                'default_document_type' => Sale::DOCUMENT_TICKET,
             ],
         );
     }

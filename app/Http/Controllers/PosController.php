@@ -22,6 +22,7 @@ use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
+use App\Services\PosDefaultDocumentType;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
@@ -79,6 +80,7 @@ class PosController extends Controller
             'canOpenCash' => $request->user()->hasPermission('caja.abrir', $company),
             'canDiscount' => $request->user()->hasPermission('pos.aplicar_descuento', $company),
             'canOverridePrice' => $request->user()->hasPermission('pos.cambiar_precio', $company),
+            'defaultDocumentType' => app(PosDefaultDocumentType::class)->resolve($companyId),
         ]);
     }
 

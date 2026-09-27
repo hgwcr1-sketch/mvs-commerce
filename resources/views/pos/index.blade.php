@@ -398,14 +398,32 @@
     type="button"
     @click.prevent.stop="
         if (quoteMode) leaveQuoteMode();
+        documentType = 'ticket';
+        notice = '';
+    "
+    :class="documentType === 'ticket'
+        ? 'bg-amber-500 text-black'
+        : 'border border-slate-300 bg-white text-slate-700'"
+    title="Comprobante interno. No se envía a Hacienda."
+    class="min-h-[44px] whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal">
+    Tiquete
+    <span class="block text-[11px] font-normal opacity-80">No se envía a Hacienda</span>
+</button>
+
+<button
+    type="button"
+    @click.prevent.stop="
+        if (quoteMode) leaveQuoteMode();
         documentType = 'electronic_ticket';
         notice = '';
     "
     :class="documentType === 'electronic_ticket'
         ? 'bg-amber-500 text-black'
         : 'border border-slate-300 bg-white text-slate-700'"
-    class="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal">
+    title="Tiquete Electrónico 04. Se envía a Hacienda."
+    class="min-h-[44px] whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal">
     Tiquete electrónico
+    <span class="block text-[11px] font-normal opacity-80">Se envía a Hacienda</span>
 </button>
 
 <button
@@ -421,8 +439,10 @@
     :class="documentType === 'electronic_invoice'
         ? 'bg-amber-500 text-black'
         : 'border border-slate-300 bg-white text-slate-700'"
-    class="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal hover:bg-amber-100">
+    title="Factura Electrónica 01. Se envía a Hacienda."
+    class="min-h-[44px] whitespace-nowrap rounded-lg px-3 py-2 text-sm font-normal hover:bg-amber-100">
     Factura electrónica
+    <span class="block text-[11px] font-normal opacity-80">Se envía a Hacienda</span>
 </button>
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="whitespace-nowrap rounded-lg border border-amber-400 px-3 py-2 text-sm font-bold text-amber-800 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"></button>
@@ -794,7 +814,7 @@ document.addEventListener('alpine:init', () => {
         notice: '',
         imageModal: { open: false, url: null, name: '' },
         customerId: null,
-        documentType: 'electronic_ticket',
+        documentType: @json($defaultDocumentType ?? 'ticket'),
         selectedCustomer: null,
         customerQuery: '',
         customerResults: [],
@@ -1405,7 +1425,7 @@ document.addEventListener('alpine:init', () => {
                 this.customerId = null;
                 this.selectedCustomer = null;
                 if (this.documentType === 'electronic_invoice') {
-    this.documentType = 'electronic_ticket';
+    this.documentType = @json($defaultDocumentType ?? 'ticket');
 }
                 this.clearSuspendedRecovery();
                 this.quoteId = null;

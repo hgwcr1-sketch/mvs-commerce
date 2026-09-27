@@ -233,6 +233,7 @@ class EscPosSaleTicket
         return match ($documentType) {
             'electronic_invoice' => 'FACTURA ELECTRONICA',
             'electronic_ticket' => 'TICKET ELECTRONICO',
+            'ticket' => 'TIQUETE',
             default => 'COMPROBANTE',
         };
     }
