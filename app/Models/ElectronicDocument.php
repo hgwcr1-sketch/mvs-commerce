@@ -11,6 +11,9 @@ class ElectronicDocument extends Model
     protected $fillable = [
         'company_id',
         'sale_id',
+        'source_type',
+        'source_id',
+        'original_document_id',
         'provider',
         'document_type',
         'environment',
@@ -37,6 +40,16 @@ class ElectronicDocument extends Model
     public function sale()
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function originalDocument()
+    {
+        return $this->belongsTo(self::class, 'original_document_id');
+    }
+
+    public function adjustments()
+    {
+        return $this->hasMany(self::class, 'original_document_id');
     }
 
     public function scopeForCompany($query, int $companyId)
