@@ -87,6 +87,13 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
         'credit' => '02',
     ];
 
+    private const ADJUSTMENT_MEDIO_PAGO_MAP = [
+        'cash' => '01',
+        'card' => '02',
+        'bank_transfer' => '04',
+        'sinpe' => '06',
+    ];
+
     /**
      * Documentos modificadores (NC03/ND02) contra endpoints oficiales
      * (documents/nota-credito, documents/nota-debito). Flujo idéntico al
@@ -107,8 +114,10 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
 
             $original = ElectronicDocument::query()->find($adjustment->reference->electronicDocumentId);
 
+            $medioPago = $this->medioPagoForAdjustment($request, $condicionVenta);
+
             $mapper = new FacturaencrAdjustmentMapper();
-            $payload = $mapper->map($adjustment, $request->company, $original, $condicionVenta);
+            $payload = $mapper->map($adjustment, $request->company, $original, $condicionVenta, $medioPago);
             $endpoint = $mapper->endpoint($adjustment->documentType);
         } catch (FacturaencrValidationException $exception) {
             return $this->failedResult(new FiscalError(
@@ -186,6 +195,52 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             fiscalReference: $document->clave,
             error: $error,
         );
+    }
+
+    /**
+     * Medio de pago derivado de los pagos COMPLETADOS de la venta original
+     * (historial congelado, jamás inventado): uno → código simple; varios →
+     * objetos tipo/monto (forma oficial para pago mixto). Crédito (02) va
+     * sin medioPago por exención documentada. Contado sin pagos derivables
+     * bloquea ANTES del POST (Hacienda -496 verificado en sandbox).
+     *
+     * @return array<int, string|array{tipo: string, monto: float}>
+     *
+     * @throws \App\Exceptions\Facturaencr\FacturaencrValidationException
+     */
+    private function medioPagoForAdjustment(FiscalEmissionRequest $request, string $condicionVenta): array
+    {
+        if ($condicionVenta === '02') {
+            return [];
+        }
+
+        $payments = \App\Models\SalePayment::query()
+            ->where('sale_id', $request->sale->id)
+            ->where('status', \App\Models\SalePayment::STATUS_COMPLETED)
+            ->orderBy('id')
+            ->get();
+
+        if ($payments->isEmpty()) {
+            throw new FacturaencrValidationException(['medioPago' => 'La venta original no tiene pagos completados para derivar el medio de pago.']);
+        }
+
+        $mapped = [];
+
+        foreach ($payments as $payment) {
+            $code = self::ADJUSTMENT_MEDIO_PAGO_MAP[$payment->paymentMethod?->code ?? ''] ?? null;
+
+            if ($code === null) {
+                throw new FacturaencrValidationException(['medioPago' => 'Método de pago de la venta original no mapeable a FacturaEnCR.']);
+            }
+
+            $mapped[] = ['tipo' => $code, 'monto' => (float) $payment->amount];
+        }
+
+        if (count($mapped) === 1) {
+            return [$mapped[0]['tipo']];
+        }
+
+        return $mapped;
     }
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus

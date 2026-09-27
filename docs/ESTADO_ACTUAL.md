@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Fiscal NC03/ND02 adapter oficial (2026-09-27, rama feature/factura-electronica)
+## Fiscal NC03 -496 corregido, segundo E2E listo (2026-09-27, rama feature/factura-electronica)
 
-Push recuperado (`0e7d03e..d6fb2ef`). Docs oficiales facturaencr.com/docs (API v2 v4.4) consultados: NC03 → `POST documents/nota-credito`, ND02 → `POST documents/nota-debito`, `referencia[]` obligatoria (tipoDocumento/numero clave-50/fechaEmision/codigo/razon). Adapter implementado SIN inferencias: mapper emite `referencia[]` oficial (corregido `informacionReferencia`), clave-50 validada localmente, provider con idempotencia + conciliación igual que 01/04. Tests con HTTP falso: emisión 03/02 aceptada, error sin consumo, retry sin duplicar. CERO POST real, CERO sandbox, sin Sale6/Sale7 ni producción. Evidencia: `FiscalAdjustmentTest` 20/20. **Sandbox NC03/ND02 = PENDIENTE** (primera emisión real). Sin módulo comercial NC/ND.
+Doc3 rechazado preservado (-496 bloqueante + -37 acompañante, sin reenvío, consumo INCLUDED intacto). Fix: `medioPago` derivado de pagos completados de la venta original (uno → código; varios → tipo/monto; crédito exento; contado sin pagos o método no mapeable bloquea pre-POST, nada hardcodeado). -37 es configuración del emisor sandbox (payloads nunca envían ubicación; FE01/TE04 aceptadas igual). Preflight endurecido a nivel mapper + provider. Venta7 tiene 1 pago cash 1010.00 → segundo E2E derivable. Evidencia: `FiscalAdjustmentTest` 25/25, CERO HTTP real. Sin commit de datos E2E (doc3/consumo solo en `database.sqlite` local).
+
+## Fiscal NC03/ND02 adapter oficial (2026-09-27, histórico, superado por fix -496)
+
+Push recuperado (`0e7d03e..d6fb2ef`). Docs oficiales facturaencr.com/docs (API v2 v4.4) consultados: NC03 → `POST documents/nota-credito`, ND02 → `POST documents/nota-debito`, `referencia[]` obligatoria (tipoDocumento/numero clave-50/fechaEmision/codigo/razon). Adapter implementado SIN inferencias: mapper emite `referencia[]` oficial (corregido `informacionReferencia`), clave-50 validada localmente, provider con idempotencia + conciliación igual que 01/04. Tests con HTTP falso: emisión 03/02 aceptada, error sin consumo, retry sin duplicar. CERO POST real, CERO sandbox, sin Sale6/Sale7 ni producción. Evidencia entonces: `FiscalAdjustmentTest` 20/20. Sin módulo comercial NC/ND.
 
 ## Fiscal NC03/ND02 local previo (2026-09-27, histórico, superado por adapter oficial)
 

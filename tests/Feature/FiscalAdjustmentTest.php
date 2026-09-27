@@ -229,7 +229,7 @@ class FiscalAdjustmentTest extends TestCase
         );
 
         $mapper = new \App\Services\Facturaencr\FacturaencrAdjustmentMapper();
-        $payload = $mapper->map($document, $company);
+        $payload = $mapper->map($document, $company, null, '01', ['01']);
 
         $this->assertSame('03', $payload['tipoDocumento']);
         $this->assertSame('109880401', $payload['receptor']['numeroIdentificacion']);
@@ -299,6 +299,7 @@ class FiscalAdjustmentTest extends TestCase
         [$company, $branch, $user] = $this->posContext();
         $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
         $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
 
         $original = ElectronicDocument::create([
             'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
@@ -325,7 +326,8 @@ class FiscalAdjustmentTest extends TestCase
             return str_ends_with($request->url(), 'documents/nota-credito')
                 && $request['referencia'][0]['numero'] === $claveOriginal
                 && $request['referencia'][0]['codigo'] === '01'
-                && $request['tipoDocumento'] === '03';
+                && $request['tipoDocumento'] === '03'
+                && $request['medioPago'] === ['01'];
         });
 
         $nc = ElectronicDocument::findOrFail($result->electronicDocumentId);
@@ -362,6 +364,7 @@ class FiscalAdjustmentTest extends TestCase
         [$company, $branch, $user] = $this->posContext();
         $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
         $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale, 'card');
 
         $original = ElectronicDocument::create([
             'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
@@ -386,7 +389,8 @@ class FiscalAdjustmentTest extends TestCase
         Http::assertSent(function ($request) {
             return str_ends_with($request->url(), 'documents/nota-debito')
                 && $request['referencia'][0]['codigo'] === '02'
-                && $request['tipoDocumento'] === '02';
+                && $request['tipoDocumento'] === '02'
+                && $request['medioPago'] === ['02'];
         });
 
         $nd = ElectronicDocument::findOrFail($result->electronicDocumentId);
@@ -410,6 +414,7 @@ class FiscalAdjustmentTest extends TestCase
         [$company, $branch, $user] = $this->posContext();
         $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
         $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale);
         $claveOriginal = str_repeat('5', 50);
 
         $original = ElectronicDocument::create([
@@ -436,6 +441,168 @@ class FiscalAdjustmentTest extends TestCase
         $this->assertSame('error', $doc->status);
         $this->assertSame('validation_error', $doc->last_error_code);
         $this->assertDatabaseCount('fiscal_consumptions', 0);
+    }
+
+    public function test_facturaencr_mapper_blocks_cash_without_medio_pago(): void
+    {
+        $company = Company::create(['trade_name' => 'G' . uniqid(), 'is_active' => true]);
+        $document = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RGATE', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(),
+            new FiscalDocumentReference(1, '01', str_repeat('5', 50), null, '2026-09-27T10:00:00-06:00', '01', 'Motivo', 'facturaencr')
+        );
+
+        try {
+            (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '01', []);
+            $this->fail('Contado sin medio de pago debió bloquearse (Hacienda -496).');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $e) {
+            $this->assertArrayHasKey('medioPago', $e->getErrors());
+        }
+
+        try {
+            (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '01', ['99']);
+            $this->fail('Medio de pago desconocido debió bloquearse.');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException $e) {
+            $this->assertArrayHasKey('medioPago', $e->getErrors());
+        }
+
+        $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map(
+            $document, $company, null, '01', [['tipo' => '01', 'monto' => 6000.0], ['tipo' => '02', 'monto' => 1010.0]]
+        );
+        $this->assertSame([['tipo' => '01', 'monto' => 6000.0], ['tipo' => '02', 'monto' => 1010.0]], $payload['medioPago']);
+
+        $credit = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '02', []);
+        $this->assertArrayNotHasKey('medioPago', $credit);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_facturaencr_provider_blocks_cash_without_derivable_payments(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+        $claveOriginal = str_repeat('5', 50);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted', 'clave' => $claveOriginal,
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RNOPAY', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(),
+            new FiscalDocumentReference($original->id, '01', $claveOriginal, null, '2026-09-27T10:00:00-06:00', '01', 'Sin pagos', 'facturaencr'),
+            '1010.0000'
+        );
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('validation_failed', $result->error->code);
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertDatabaseCount('electronic_documents', 1);
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_facturaencr_provider_blocks_unmappable_payment_method(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+        $this->salePayment($sale, 'loyalty_points');
+        $claveOriginal = str_repeat('5', 50);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted', 'clave' => $claveOriginal,
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RLOYAL', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(),
+            new FiscalDocumentReference($original->id, '01', $claveOriginal, null, '2026-09-27T10:00:00-06:00', '01', 'Puntos', 'facturaencr'),
+            '1010.0000'
+        );
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('validation_failed', $result->error->code);
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_facturaencr_provider_omits_medio_pago_for_credit(): void
+    {
+        config(['fiscal.provider' => 'facturaencr']);
+        $this->resetHttp();
+        Http::fake([
+            'documents/nota-credito' => Http::response([
+                'documentId' => 'doc-nc-credit', 'clave' => str_repeat('6', 50),
+                'consecutivo' => '00100001030000000002', 'status' => 'accepted',
+            ], 200),
+        ]);
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
+        $sale = $this->completedSale($company, $branch, $user);
+        $sale->update(['sale_condition' => 'credit']);
+        $claveOriginal = str_repeat('5', 50);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted', 'clave' => $claveOriginal,
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RCREDIT', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(),
+            new FiscalDocumentReference($original->id, '01', $claveOriginal, null, '2026-09-27T10:00:00-06:00', '02', 'Ajuste crédito', 'facturaencr'),
+            '1010.0000'
+        );
+
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale->fresh(), $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+        Http::assertSent(function ($request) {
+            return str_ends_with($request->url(), 'documents/nota-credito')
+                && ! isset($request['medioPago'])
+                && $request['condicionVenta'] === '02';
+        });
+    }
+
+    public function test_facturaencr_payload_carries_no_location_fields(): void
+    {
+        $company = Company::create(['trade_name' => 'U' . uniqid(), 'is_active' => true]);
+        $clave = str_repeat('5', 50);
+        $ref = new FiscalDocumentReference(1, '01', $clave, null, '2026-09-27T10:00:00-06:00', '01', 'Motivo', 'facturaencr');
+
+        foreach (['03', '02'] as $type) {
+            $document = $type === '03'
+                ? \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote($company->id, 'return', 'RU', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref)
+                : \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote($company->id, 'debit', 'DU', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals(), $ref);
+
+            $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '01', ['01']);
+
+            $this->assertArrayNotHasKey('ubicacion', $payload);
+            $this->assertArrayNotHasKey('ubicacion', $payload['receptor']);
+            $this->assertArrayNotHasKey('provincia', $payload);
+            $this->assertArrayNotHasKey('canton', $payload);
+        }
+
+        Http::assertNothingSent();
     }
 
     private function nc(string $originalType): FiscalDocument
@@ -514,6 +681,20 @@ class FiscalAdjustmentTest extends TestCase
             'status' => Sale::STATUS_COMPLETED, 'currency_code' => 'CRC', 'exchange_rate' => 1,
             'subtotal' => 1000, 'discount_total' => 0, 'tax_total' => 0, 'total' => 1000,
             'paid_total' => 1000, 'balance_due' => 0, 'completed_at' => now(),
+        ]);
+    }
+
+    private function salePayment(Sale $sale, string $methodCode = 'cash', string $amount = '1010.0000'): \App\Models\SalePayment
+    {
+        $method = \App\Models\PaymentMethod::create([
+            'company_id' => $sale->company_id, 'code' => $methodCode,
+            'name' => 'M-' . $methodCode, 'type' => $methodCode, 'is_active' => true,
+        ]);
+
+        return \App\Models\SalePayment::create([
+            'sale_id' => $sale->id, 'payment_method_id' => $method->id,
+            'amount' => $amount, 'status' => \App\Models\SalePayment::STATUS_COMPLETED,
+            'created_by' => $sale->user_id,
         ]);
     }
 
@@ -753,7 +934,7 @@ class FiscalAdjustmentTest extends TestCase
         );
 
         $mapper = new \App\Services\Facturaencr\FacturaencrAdjustmentMapper();
-        $payload = $mapper->map($adjustment, $company, $original);
+        $payload = $mapper->map($adjustment, $company, $original, '01', ['01']);
         $this->assertSame('02', $payload['tipoDocumento']);
         $this->assertSame($claveOriginal, $payload['referencia'][0]['numero']);
         $this->assertSame('02', $payload['referencia'][0]['codigo']);
@@ -873,7 +1054,7 @@ class FiscalAdjustmentTest extends TestCase
         );
         $document->validate();
 
-        $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company);
+        $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '01', ['01']);
         $this->assertCount(2, $payload['detalle']);
         $this->assertSame(100.0, $payload['detalle'][0]['descuento']);
         $this->assertCount(2, $payload['detalle'][1]['impuesto']);

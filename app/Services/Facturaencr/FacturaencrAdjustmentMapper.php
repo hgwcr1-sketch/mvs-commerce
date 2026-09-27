@@ -29,14 +29,21 @@ use Carbon\Carbon;
  */
 class FacturaencrAdjustmentMapper
 {
+    /**
+     * Códigos de medio de pago que el adapter sabe derivar (mismo mapa
+     * verificado del mapper FE/TE). Nada fuera de esta lista se envía.
+     */
+    private const MEDIO_PAGO_CODES = ['01', '02', '04', '06'];
+
     public function __construct(private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService())
     {
     }
 
     /**
+     * @param array<int, string|array{tipo: string, monto: float}> $medioPago
      * @throws FacturaencrValidationException
      */
-    public function map(FiscalDocument $document, Company $company, ?ElectronicDocument $original = null, string $condicionVenta = '01'): array
+    public function map(FiscalDocument $document, Company $company, ?ElectronicDocument $original = null, string $condicionVenta = '01', array $medioPago = []): array
     {
         $document->validate();
 
@@ -52,6 +59,15 @@ class FacturaencrAdjustmentMapper
             throw new FacturaencrValidationException(['condicionVenta' => 'Condición de venta no soportada para NC/ND: 01/02.']);
         }
 
+        // Verificado contra Hacienda sandbox (NC03 doc3, error -496): con
+        // condicionVenta 01 el nodo Medio de Pago es obligatorio. Crédito
+        // (02) está exento por documentación oficial.
+        if ($condicionVenta === '01' && $medioPago === []) {
+            throw new FacturaencrValidationException(['medioPago' => 'Contado requiere medio de pago derivado de la venta original.']);
+        }
+
+        $this->validateMedioPago($medioPago);
+
         $payload = [
             'emisorLegalId' => $this->emisorLegalId($company),
             'tipoDocumento' => $document->documentType,
@@ -62,6 +78,10 @@ class FacturaencrAdjustmentMapper
             'detalle' => $this->mapDetalle($document),
             'referencia' => [$this->mapReferencia($document, $original)],
         ];
+
+        if ($medioPago !== []) {
+            $payload['medioPago'] = array_values($medioPago);
+        }
 
         return array_filter($payload, static fn (mixed $value): bool => $value !== null);
     }
@@ -81,6 +101,29 @@ class FacturaencrAdjustmentMapper
                 'endpoint' => "Tipo de documento no soportado por FacturaEnCR: {$documentType}.",
             ]),
         };
+    }
+
+    /**
+     * @param array<int, string|array{tipo: string, monto: float}> $medioPago
+     * @throws FacturaencrValidationException
+     */
+    private function validateMedioPago(array $medioPago): void
+    {
+        foreach ($medioPago as $medio) {
+            if (is_string($medio)) {
+                if (! in_array($medio, self::MEDIO_PAGO_CODES, true)) {
+                    throw new FacturaencrValidationException(['medioPago' => "Medio de pago no soportado para NC/ND: {$medio}."]);
+                }
+                continue;
+            }
+
+            $tipo = is_array($medio) ? ($medio['tipo'] ?? null) : null;
+            $monto = is_array($medio) ? ($medio['monto'] ?? null) : null;
+
+            if (! is_string($tipo) || ! in_array($tipo, self::MEDIO_PAGO_CODES, true) || ! is_numeric($monto) || (float) $monto <= 0) {
+                throw new FacturaencrValidationException(['medioPago' => 'Medio de pago múltiple requiere tipo válido y monto mayor a 0.']);
+            }
+        }
     }
 
     /**

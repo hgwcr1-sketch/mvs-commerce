@@ -104,3 +104,18 @@ Fuente: https://facturaencr.com/docs (API v2, Hacienda v4.4). Base local
   retry sin duplicar), error 400 sin consumo, referencia inválida sin HTTP.
   CERO POST real, CERO sandbox. Sandbox NC03/ND02 sigue PENDIENTE (primera
   emisión real con EMISORPRUEBA, sin tocar Sale6/Sale7 ni producción).
+
+## 9. Lecciones del primer E2E real NC03 (2026-09-27, doc3 rechazado, sin reenvío)
+
+- **-496 (bloqueante):** con `condicionVenta` 01 Hacienda exige el nodo Medio
+  de Pago (exentas 02/08/10). El adapter ahora deriva `medioPago` de los pagos
+  COMPLETADOS de la venta original (uno → código simple; varios → objetos
+  tipo/monto, forma oficial de pago mixto); crédito va sin `medioPago`;
+  contado sin pagos derivables o con método no mapeable bloquea ANTES del
+  POST. Nada hardcodeado, nada inventado.
+- **-37 (acompañante):** ubicación del emisor vs padrón DGT. Nuestros payloads
+  (FE01/TE04 aceptadas y NC03) jamás envían ubicación de emisor ni de receptor
+  (se resuelve del certificado en el proveedor); pertenece a la configuración
+  del emisor sandbox, no al payload MVS. No se falsea solución.
+- Preflight endurecido: contado sin medioPago derivable, datos obligatorios
+  faltantes y referencia inválida impiden el POST a nivel mapper + provider.
