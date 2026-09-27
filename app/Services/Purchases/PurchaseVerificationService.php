@@ -71,6 +71,10 @@ class PurchaseVerificationService
             }
             $locked->update(['status' => $hasDifferences ? 'differences' : 'conform', 'verified_by' => $user->id, 'verified_at' => now(), 'started_at' => $locked->started_at ?: now()]);
 
+            if (! $hasDifferences) {
+                $this->alertDispatcher->resolveForEntity($locked->company_id, PurchaseVerification::class, $locked->id, $user->id);
+            }
+
             return $locked->fresh('items');
         });
     }
@@ -86,6 +90,7 @@ class PurchaseVerificationService
                 throw ValidationException::withMessages(['resolution_notes' => 'Indique cómo se resolvió la diferencia.']);
             }
             $locked->update(['status' => 'closed', 'resolved_by' => $resolver->id, 'resolved_at' => now(), 'resolution_notes' => $notes]);
+            $this->alertDispatcher->resolveForEntity($locked->company_id, PurchaseVerification::class, $locked->id, $resolver->id);
         });
     }
 

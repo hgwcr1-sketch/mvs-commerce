@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Alert;
 use App\Models\InventoryLot;
 use App\Models\InventoryTransfer;
 use App\Models\InventoryTransferItem;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Inventory\InventoryPostingService;
+use App\Services\Notifications\AlertDispatcher;
+use App\Services\Notifications\AlertTypeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -354,10 +357,22 @@ class TransferController extends Controller
     /**
      * Despachar un traslado prepared.
      */
-    public function dispatch(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
+    public function dispatch(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory, AlertDispatcher $alerts)
     {
         $transfer = $this->scoped($transfer);
-        $inventory->dispatchTransfer($transfer, (int) $request->user()->id, $request->input('notes'));
+        $transfer = $inventory->dispatchTransfer($transfer, (int) $request->user()->id, $request->input('notes'));
+        $alerts->dispatch(AlertTypeRegistry::TYPE_TRANSFER_RECEIPT, [
+            'company_id' => $transfer->company_id,
+            'branch_id' => $transfer->to_branch_id,
+            'severity' => Alert::SEVERITY_ATTENTION,
+            'actor_id' => $request->user()->id,
+            'entity_type' => InventoryTransfer::class,
+            'entity_id' => $transfer->id,
+            'link' => route('transferencias.show', $transfer),
+            'dedupe_key' => (string) $transfer->id,
+            'metadata' => ['transfer_number' => $transfer->transfer_number],
+            'notes' => 'Traslado '.$transfer->transfer_number.' pendiente de recepción.',
+        ]);
 
         return redirect()
             ->route('transferencias.index')
@@ -388,7 +403,7 @@ class TransferController extends Controller
     /**
      * Recibir un traslado in_review.
      */
-    public function receive(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory)
+    public function receive(Request $request, InventoryTransfer $transfer, InventoryPostingService $inventory, AlertDispatcher $alerts)
     {
         $transfer = $this->scoped($transfer);
         $receivedQuantity = $request->input('received_quantity');
@@ -423,7 +438,8 @@ class TransferController extends Controller
             }
             $receivedQuantity = $items->count() === 1 ? (string) $lines->first()['quantity'] : null;
         }
-        $inventory->receiveTransfer($transfer, (int) $request->user()->id, $request->input('notes'), $receivedQuantity);
+        $transfer = $inventory->receiveTransfer($transfer, (int) $request->user()->id, $request->input('notes'), $receivedQuantity);
+        $alerts->resolveForEntity($transfer->company_id, InventoryTransfer::class, $transfer->id, (int) $request->user()->id);
 
         return redirect()
             ->route('transferencias.index')

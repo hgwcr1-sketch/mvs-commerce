@@ -20,12 +20,20 @@ class AlertTypeRegistry
 {
     public const TYPE_PURCHASE_VERIFICATION = 'purchase_verification';
 
+    public const TYPE_TRANSFER_RECEIPT = 'transfer_receipt';
+
     public const TYPES = [
         self::TYPE_PURCHASE_VERIFICATION => [
             'label' => 'Verificación de compras',
             'module' => 'Compras',
             'notification_permission' => 'notificaciones.compras',
             'source_permissions' => ['compras.recepcion.verificar', 'compras.recepcion.asignar', 'compras.recepcion.resolver'],
+        ],
+        self::TYPE_TRANSFER_RECEIPT => [
+            'label' => 'Recepción de traslados',
+            'module' => 'Inventario',
+            'notification_permission' => 'notificaciones.inventario',
+            'source_permissions' => ['inventario.transferir'],
         ],
     ];
 

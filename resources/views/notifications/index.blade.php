@@ -30,6 +30,8 @@
     <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
         @php
             $tabs = [
+                'pending' => ['label' => 'Pendientes', 'count' => $counts['pending']],
+                'reviewed' => ['label' => 'Revisadas/Listas', 'count' => $counts['reviewed']],
                 'all' => ['label' => 'Todas', 'count' => $counts['all']],
                 'unread' => ['label' => 'No leídas', 'count' => $counts['unread']],
                 'critical' => ['label' => 'Críticas', 'count' => $counts['critical']],

@@ -28,11 +28,14 @@ class NotificationCenterController extends Controller
 
         abort_unless($user->hasPermission('notificaciones.ver', $company), 403);
 
-        $filter = $request->input('filter', 'all');
-        $alerts = Alert::query()
+        $filter = $request->input('filter', 'pending');
+        $visibleAlerts = Alert::query()
             ->where('alerts.company_id', $company->id)
             ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
-            ->with(['recipients' => fn ($q) => $q->where('user_id', $user->id)])
+            ->with(['recipients' => fn ($q) => $q->where('user_id', $user->id)]);
+        $alerts = (clone $visibleAlerts)
+            ->when($filter === 'pending', fn ($q) => $q->pending())
+            ->when($filter === 'reviewed', fn ($q) => $q->reviewed())
             ->when($filter === 'unread', fn ($q) => $q->whereHas('recipients', fn ($r) => $r->where('user_id', $user->id)->whereNull('read_at')))
             ->when($filter === 'critical', fn ($q) => $q->where('severity', Alert::SEVERITY_CRITICAL))
             ->when($filter === 'attention', fn ($q) => $q->where('severity', Alert::SEVERITY_ATTENTION))
@@ -42,29 +45,13 @@ class NotificationCenterController extends Controller
             ->withQueryString();
 
         $counts = [
-            'all' => Alert::query()
-                ->where('alerts.company_id', $company->id)
-                ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
-                ->count(),
-            'unread' => Alert::query()
-                ->where('alerts.company_id', $company->id)
-                ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at')->whereNull('read_at'))
-                ->count(),
-            'critical' => Alert::query()
-                ->where('alerts.company_id', $company->id)
-                ->where('severity', Alert::SEVERITY_CRITICAL)
-                ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
-                ->count(),
-            'attention' => Alert::query()
-                ->where('alerts.company_id', $company->id)
-                ->where('severity', Alert::SEVERITY_ATTENTION)
-                ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
-                ->count(),
-            'info' => Alert::query()
-                ->where('alerts.company_id', $company->id)
-                ->where('severity', Alert::SEVERITY_INFO)
-                ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
-                ->count(),
+            'pending' => (clone $visibleAlerts)->pending()->count(),
+            'reviewed' => (clone $visibleAlerts)->reviewed()->count(),
+            'all' => (clone $visibleAlerts)->count(),
+            'unread' => (clone $visibleAlerts)->pending()->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('read_at'))->count(),
+            'critical' => (clone $visibleAlerts)->pending()->where('severity', Alert::SEVERITY_CRITICAL)->count(),
+            'attention' => (clone $visibleAlerts)->pending()->where('severity', Alert::SEVERITY_ATTENTION)->count(),
+            'info' => (clone $visibleAlerts)->pending()->where('severity', Alert::SEVERITY_INFO)->count(),
         ];
 
         return view('notifications.index', compact('alerts', 'filter', 'counts'));
@@ -79,7 +66,8 @@ class NotificationCenterController extends Controller
 
         $count = Alert::query()
             ->where('alerts.company_id', $company->id)
-            ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('read_at')->whereNull('dismissed_at'))
+            ->pending()
+            ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
             ->count();
 
         return response()->json(['count' => $count]);
@@ -94,6 +82,7 @@ class NotificationCenterController extends Controller
 
         $alerts = Alert::query()
             ->where('alerts.company_id', $company->id)
+            ->pending()
             ->whereHas('recipients', fn ($q) => $q->where('user_id', $user->id)->whereNull('dismissed_at'))
             ->with(['recipients' => fn ($q) => $q->where('user_id', $user->id)])
             ->orderByDesc('occurred_at')

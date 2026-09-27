@@ -89,6 +89,20 @@ class AlertDispatcher
         });
     }
 
+    public function resolveForEntity(int $companyId, string $entityType, int $entityId, int $resolvedBy): void
+    {
+        Alert::query()
+            ->where('company_id', $companyId)
+            ->where('entity_type', $entityType)
+            ->where('entity_id', $entityId)
+            ->pending()
+            ->update([
+                'status' => Alert::STATUS_RESOLVED,
+                'resolved_at' => now(),
+                'resolved_by' => $resolvedBy,
+            ]);
+    }
+
     /**
      * Resuelve y persiste destinatarios, luego envía notificación Laravel por database/email.
      */

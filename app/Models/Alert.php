@@ -99,4 +99,14 @@ class Alert extends Model
     {
         return $query->whereIn('status', [self::STATUS_NEW, self::STATUS_IN_PROGRESS]);
     }
+
+    public function scopePending($query)
+    {
+        return $query->whereIn('status', [self::STATUS_NEW, self::STATUS_VIEWED, self::STATUS_IN_PROGRESS]);
+    }
+
+    public function scopeReviewed($query)
+    {
+        return $query->where('status', self::STATUS_RESOLVED);
+    }
 }

@@ -631,6 +631,30 @@ class NotificationCenterTest extends TestCase
 
     // ── HELPER METHODS ──────────────────────────────────────────────────
 
+    public function test_pending_notifications_keep_resolved_items_in_history(): void
+    {
+        [$company, $branch, $user] = $this->context(['notificaciones.ver', 'notificaciones.compras', 'compras.recepcion.verificar', 'notificaciones.inventario', 'inventario.transferir']);
+        $dispatcher = app(AlertDispatcher::class);
+        $purchase = $dispatcher->dispatch(AlertTypeRegistry::TYPE_PURCHASE_VERIFICATION, $this->payload($company, $branch, 'pending-purchase'));
+        $transfer = $dispatcher->dispatch(AlertTypeRegistry::TYPE_TRANSFER_RECEIPT, [
+            ...$this->payload($company, $branch, 'reviewed-transfer'),
+            'entity_type' => InventoryTransfer::class,
+            'entity_id' => 987,
+            'notes' => 'Traslado listo para historial',
+        ]);
+        $dispatcher->resolveForEntity($company->id, InventoryTransfer::class, 987, $user->id);
+
+        $session = ['active_company_id' => $company->id, 'active_branch_id' => $branch->id];
+        $this->actingAs($user)->withSession($session)->get(route('notifications.index'))
+            ->assertOk()->assertSee($purchase->notes)->assertDontSee('Traslado listo para historial');
+        $this->actingAs($user)->withSession($session)->get(route('notifications.index', ['filter' => 'reviewed']))
+            ->assertOk()->assertSee('Traslado listo para historial')->assertDontSee($purchase->notes);
+        $this->actingAs($user)->withSession($session)->getJson(route('notifications.unread-count'))
+            ->assertJson(['count' => 1]);
+
+        $this->assertSame(Alert::STATUS_RESOLVED, $transfer->fresh()->status);
+    }
+
     private function company(string $name = 'Empresa'): array
     {
         $company = Company::create([
