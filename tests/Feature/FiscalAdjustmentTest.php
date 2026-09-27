@@ -437,6 +437,333 @@ class FiscalAdjustmentTest extends TestCase
 
         Http::assertNothingSent();
     }
+
+    public function test_nd02_local_e2e_creates_single_document_and_consumption(): void
+    {
+        config(['fiscal.provider' => 'fake', 'fiscal.providers.fake' => AdjustmentEmitFakeProvider::class]);
+        AdjustmentEmitFakeProvider::reset();
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted',
+            'clave' => 'K-ORIG-ND', 'consecutivo' => 'C-ORIG-ND',
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'D1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+        $this->assertNotNull($result->electronicDocumentId);
+        $this->assertSame(1, AdjustmentEmitFakeProvider::requests());
+
+        $nd = ElectronicDocument::findOrFail($result->electronicDocumentId);
+        $this->assertSame('02', $nd->document_type);
+        $this->assertSame($adjustment->idempotencyKey(), $nd->idempotency_key);
+        $this->assertSame('debit', $nd->source_type);
+        $this->assertSame('D1', $nd->source_id);
+        $this->assertSame($original->id, (int) $nd->original_document_id);
+        $this->assertSame($original->id, (int) $nd->originalDocument->id);
+        $this->assertTrue($original->adjustments()->where('id', $nd->id)->exists());
+        $this->assertSame(1, \App\Models\FiscalConsumption::where('electronic_document_id', $nd->id)->count());
+        $this->assertSame('included', \App\Models\FiscalConsumption::where('electronic_document_id', $nd->id)->value('classification'));
+
+        $retry = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+        $this->assertSame($nd->id, $retry->electronicDocumentId);
+        $this->assertSame(1, ElectronicDocument::where('document_type', '02')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+
+        $status = app(FiscalManager::class)->fetchStatus($nd);
+        $this->assertTrue($status->final);
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_nd02_quota_overage_disabled_retry_and_tenant_isolation(): void
+    {
+        config(['fiscal.provider' => 'fake', 'fiscal.providers.fake' => AdjustmentEmitFakeProvider::class]);
+        AdjustmentEmitFakeProvider::reset();
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 1, 'fiscal_overage_enabled' => true, 'fiscal_overage_unit_price' => '7.2500']);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '04', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-04"), 'status' => 'accepted', 'clave' => 'K-O4-ND',
+        ]);
+
+        $first = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'D1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+        app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale, $company, $sale->customer, [], null, $first));
+
+        $sale2 = $this->completedSale($company, $branch, $user);
+        $second = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'D2', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+        $secondResult = app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale2, $company, $sale2->customer, [], null, $second));
+        $this->assertNotNull($secondResult->electronicDocumentId);
+        $this->assertSame('7.2500', \App\Models\FiscalConsumption::where('classification', 'overage')->sole()->unit_price);
+
+        $retry = app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale2, $company, $sale2->customer, [], null, $second));
+        $this->assertSame($secondResult->electronicDocumentId, $retry->electronicDocumentId);
+        $this->assertSame(2, ElectronicDocument::where('document_type', '02')->count());
+        $this->assertDatabaseCount('fiscal_consumptions', 2);
+
+        $other = Company::create(['trade_name' => 'X' . uniqid(), 'is_active' => true]);
+        $cross = new FiscalDocument(
+            $other->id, '02', 'debit', 'DX', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original)
+        );
+
+        try {
+            app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale2, $other, $sale2->customer, [], null, $cross));
+            $this->fail('ND cross-company debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('cross_company', $e->reason);
+        }
+
+        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => false]);
+
+        $sale3 = $this->completedSale($company, $branch, $user);
+        $third = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'D3', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+
+        try {
+            app(FiscalManager::class)->emit(new FiscalEmissionRequest($sale3, $company, $sale3->customer, [], null, $third));
+            $this->fail('Fiscal deshabilitado debió bloquear la ND.');
+        } catch (\App\Exceptions\FiscalQuotaException $e) {
+            $this->assertSame('fiscal_disabled', $e->reason);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_facturaencr_provider_blocks_nd_without_http_document_or_consumption(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted', 'clave' => 'K1-ND',
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'D1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original)
+        );
+
+        $mapper = new \App\Services\Facturaencr\FacturaencrAdjustmentMapper();
+        $payload = $mapper->map($adjustment, $company);
+        $this->assertSame('02', $payload['tipoDocumento']);
+
+        try {
+            $mapper->endpoint('02');
+            $this->fail('El endpoint 02 debió marcarse pendiente.');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException) {
+            $this->assertTrue(true);
+        }
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('adjustment_endpoint_pending', $result->error->code);
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_adjustment_reference_negatives_and_frozen_snapshot(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5('neg' . uniqid()), 'status' => 'accepted', 'clave' => 'K-NEG',
+        ]);
+
+        $mismatch = new FiscalDocumentReference(
+            $original->id, '01', 'K-DISTINTA', null, null, '01', 'Motivo', 'fake'
+        );
+        try {
+            $mismatch->validateAgainst($original, $company->id, '03');
+            $this->fail('Clave distinta debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('mismatch', $e->reason);
+        }
+
+        $missingReason = new FiscalDocumentReference(
+            $original->id, '01', 'K-NEG', null, null, '', '', 'fake'
+        );
+        try {
+            $missingReason->validateAgainst($original, $company->id, '03');
+            $this->fail('Motivo vacío debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('missing_reason', $e->reason);
+        }
+
+        $nc = ElectronicDocument::create([
+            'company_id' => $company->id, 'provider' => 'fake', 'document_type' => '03',
+            'environment' => 'sandbox', 'idempotency_key' => md5('ncneg' . uniqid()), 'status' => 'accepted', 'clave' => 'K-NC',
+        ]);
+        try {
+            $this->referenceFor($nc)->validateAgainst($nc, $company->id, '02');
+            $this->fail('ND sobre NC debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('invalid_modifier', $e->reason);
+        }
+
+        try {
+            (new FiscalDocument($company->id, '09', 'return', 'R9', $this->receptor(), 'CRC', '1', [$this->line()], $this->totals()))->validate();
+            $this->fail('Tipo modificador inválido debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('unsupported_type', $e->reason);
+        }
+
+        $frozenTotals = $this->totals();
+        $frozenReceptor = $this->receptor();
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RFROZEN', $frozenReceptor, 'CRC', '1',
+            [$this->line()], $frozenTotals, $this->referenceFor($original), '1010.0000'
+        );
+
+        $sale->update(['total' => 99999]);
+        $sale->customer->update(['name' => 'Mutado']);
+
+        $this->assertSame('1010.0000', $adjustment->totals['total']);
+        $this->assertSame('Receptor', $adjustment->receptor['name']);
+        $this->assertSame('K-NEG', $adjustment->reference->clave);
+        $adjustment->validate();
+        Http::assertNothingSent();
+    }
+
+    public function test_fiscal_lines_cover_iva_exento_multi_tax_discount_bcmath(): void
+    {
+        $tax = new \App\Services\Fiscal\FiscalTaxService();
+
+        foreach ([
+            [['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13]],
+            [['codigo' => '01', 'codigoTarifa' => '02']],
+            [['codigo' => '01', 'codigoTarifa' => '03']],
+            [['codigo' => '01', 'codigoTarifa' => '04']],
+            [['codigo' => '01', 'codigoTarifa' => '01', 'tarifa' => 0]],
+            [['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13, 'exoneracion' => ['tipoDocumento' => '15', 'numeroDocumento' => 'E-1', 'nombreInstitucion' => 'Inst', 'fechaEmision' => '2026-09-01', 'porcentajeExoneracion' => 50]]],
+            [['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13], ['codigo' => '99', 'codigoTarifaOtro' => 'OT-01']],
+        ] as $taxes) {
+            $tax->validateSnapshot(['source' => 'frozen', 'source_version' => '1', 'taxes' => $taxes], '03');
+            $tax->validateSnapshot(['source' => 'frozen', 'source_version' => '1', 'taxes' => $taxes], '02');
+            $this->assertTrue(true);
+        }
+
+        try {
+            $tax->validateSnapshot(['source' => 'frozen', 'source_version' => '1', 'taxes' => [['codigo' => '99', 'codigoTarifaOtro' => 'OT-01']]], '03');
+            $this->fail('Sin familia IVA debió bloquearse: 0 no se infiere como exento.');
+        } catch (\InvalidArgumentException) {
+            $this->assertTrue(true);
+        }
+
+        foreach ([0, 8, null] as $ambiguous) {
+            try {
+                $tax->resolveLegacyTaxRate($ambiguous === null ? null : (float) $ambiguous, '03');
+                $this->fail('Tasa legada ambigua debió bloquearse.');
+            } catch (\InvalidArgumentException) {
+                $this->assertTrue(true);
+            }
+        }
+
+        $company = Company::create(['trade_name' => 'T' . uniqid(), 'is_active' => true]);
+        $lineDiscount = new FiscalDocumentLine('0111100000100', 'Trigo desc', '2.0000', '1000.0000', '100.0000', '1900.0000', [['codigo' => '01', 'codigoTarifa' => '08', 'tarifa' => 13]], '247.0000', '2147.0000');
+        $lineMulti = new FiscalDocumentLine('0111100000100', 'Trigo multi', '1.0000', '500.0000', '0.0000', '500.0000', [['codigo' => '01', 'codigoTarifa' => '02'], ['codigo' => '99', 'codigoTarifaOtro' => 'OT-01']], '5.0000', '505.0000');
+        $document = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'RMULTI', $this->receptor(), 'CRC', '1',
+            [$lineDiscount, $lineMulti],
+            ['subtotal' => '2400.0000', 'discount_total' => '100.0000', 'tax_total' => '252.0000', 'total' => '2652.0000'],
+            $this->reference(), '9999.0000'
+        );
+        $document->validate();
+
+        $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company);
+        $this->assertCount(2, $payload['detalle']);
+        $this->assertSame(100.0, $payload['detalle'][0]['descuento']);
+        $this->assertCount(2, $payload['detalle'][1]['impuesto']);
+        $this->assertSame(0, bccomp('2652.0000', $document->totals['total'], 4));
+
+        try {
+            (new FiscalDocument($company->id, '03', 'r', '1', $this->receptor(), 'CRC', '1', [$this->line('123')], $this->totals(), $this->reference()))->validate();
+            $this->fail('CABYS inválido debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('invalid_cabys', $e->reason);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_adjustment_documents_are_observable_without_secrets(): void
+    {
+        config(['fiscal.provider' => 'fake', 'fiscal.providers.fake' => AdjustmentEmitFakeProvider::class]);
+        AdjustmentEmitFakeProvider::reset();
+
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 5]);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'fake',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted',
+            'clave' => 'K-OBS', 'consecutivo' => 'C-OBS',
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            $company->id, 'debit', 'DOBS', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original), '1010.0000'
+        );
+        $result = app(FiscalManager::class)->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $doc = ElectronicDocument::findOrFail($result->electronicDocumentId);
+        $this->assertSame('debit', $doc->source_type);
+        $this->assertSame('DOBS', $doc->source_id);
+        $this->assertSame($original->id, (int) $doc->original_document_id);
+        $this->assertSame('fake', $doc->provider);
+        $this->assertSame($adjustment->idempotencyKey(), $doc->idempotency_key);
+        $this->assertSame('02', $doc->document_type);
+        $this->assertSame('accepted', $doc->status);
+        $this->assertNull($doc->last_error_code);
+        $this->assertNull($doc->last_error_message);
+
+        foreach (['token', 'secret', 'password', 'api_key', 'apikey'] as $forbidden) {
+            $this->assertArrayNotHasKey($forbidden, $doc->getAttributes());
+        }
+
+        Http::assertNothingSent();
+    }
 }
 
 class AdjustmentFakeProvider implements FiscalProviderInterface
@@ -522,6 +849,9 @@ class AdjustmentEmitFakeProvider implements FiscalProviderInterface
         $document = ElectronicDocument::create([
             'company_id' => $request->sale->company_id,
             'sale_id' => $request->sale->id,
+            'source_type' => $adjustment->sourceType,
+            'source_id' => $adjustment->sourceId,
+            'original_document_id' => $adjustment->reference->electronicDocumentId,
             'provider' => $this->providerCode(),
             'document_type' => $adjustment->documentType,
             'environment' => 'sandbox',
