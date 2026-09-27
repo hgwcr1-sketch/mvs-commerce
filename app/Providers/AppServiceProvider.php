@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use App\Models\User;
 use App\Models\Company;
 
@@ -23,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->pinApplicationUrl();
+
         Paginator::useTailwind();
 
         Gate::before(function (User $user, string $ability) {
@@ -37,5 +40,22 @@ class AppServiceProvider extends ServiceProvider
                 ? true
                 : null;
         });
+    }
+
+    private function pinApplicationUrl(): void
+    {
+        if (!app()->environment('production')) {
+            return;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $scheme = parse_url($appUrl, PHP_URL_SCHEME);
+
+        if ($appUrl === '' || !in_array($scheme, ['http', 'https'], true)) {
+            return;
+        }
+
+        URL::useOrigin($appUrl);
+        URL::forceScheme($scheme);
     }
 }
