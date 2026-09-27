@@ -22,12 +22,16 @@ Rama `feature/factura-electronica`. Cero HTTP. Sin copiar `feature/notas-credito
 - `FiscalTaxService`: `snapshotForSaleItem/validateSnapshot/serializeSnapshot`
   con `documentType` como parámetro (ya acepta `02`/`03` en validaciones).
 
-## 2. Reutilización / faltantes
+## 2. Reutilización / faltantes (actualizado)
 
-Reutilizar: snapshots congelados, `FiscalTaxService`, `ElectronicDocument`,
+Reutilizado: snapshots congelados, `FiscalTaxService`, `ElectronicDocument`,
 `FiscalManager`, gate/consumo, `SaleReturn` como futuro origen (no duplicarlo).
-Falta: DTO neutral de documento, referencia inmutable al original, mapper NC/ND,
-endpoint de proveedor para `03`/`02`, job/Gate de disparo NC/ND.
+Implementado local: DTO neutral (`FiscalDocument` 01/04/03/02 + `Line` + `Reference`),
+`FiscalAdjustmentBuilder::creditNote/debitNote`, `FiscalManager::authorizeAdjustment`,
+mapper neutral `FacturaencrAdjustmentMapper` (payload local), ledger `03/02`,
+observabilidad (`source_type/source_id/original_document_id` + relaciones).
+Falta verificable: endpoint/payload 03/02 de FacturaEnCR y job/Gate de disparo
+comercial NC/ND (sin módulo comercial en esta rama).
 
 ## 3. Límite dominio comercial ↔ fiscal
 
@@ -56,3 +60,21 @@ licencia siempre antes del POST.
 
 `FiscalDocument` (neutral) → cada adapter traduce a su payload. FacturaEnCR
 nunca es dominio interno: solo su adapter conoce endpoints y llaves.
+
+## 7. Estado local vs sandbox (2026-09-27)
+
+- NC03 LOCAL: e2e fake (1 documento 03 + 1 consumo included), retry sin duplicar,
+  cuota/overage/deshabilitado pre-provider, referencia congelada. Verde.
+- ND02 LOCAL: espejo de NC03 con tipo 02 (e2e + cuota + retry + aislamiento +
+  observabilidad). Verde.
+- Referencias negativas: original inexistente, otra company, original no emitido,
+  clave distinta, motivo vacío, modificador inválido, tipo no soportado, snapshot
+  congelado. Verdes.
+- Casos fiscales locales: IVA 13/4/2/1, exento explícito, exoneración parcial,
+  multi-tax, descuento, múltiples líneas, BCMath, CABYS inválido, tasa legada
+  ambigua bloqueada (0 jamás se infiere como exento). Verdes.
+- Provider FacturaEnCR 03/02: `endpoint()` lanza `endpoint pendiente`;
+  `emitAdjustment` retorna `adjustment_endpoint_pending` SIN HTTP, sin documento,
+  sin consumo. Información externa faltante: ruta/método de emisión 03/02,
+  payload exacto (incluida `informacionReferencia`) y credenciales/ambiente del
+  proveedor. Sandbox NC03/ND02 = PENDIENTE hasta verificarlo.

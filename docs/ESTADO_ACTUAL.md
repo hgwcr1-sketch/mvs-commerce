@@ -2,6 +2,10 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Fiscal NC03/ND02 local (2026-09-27, rama feature/factura-electronica)
+
+TE04 sandbox accepted REAL (Sale 6/doc 1). FE01 sandbox accepted REAL (Sale 7/doc 2). NC03 LOCAL implementado: referencia congelada, builder, `FiscalManager`, mapper neutral, `ElectronicDocument(03)`, 1 consumo, cuota/overage, retry sin duplicar, gates pre-provider, CERO HTTP (fake). ND02 LOCAL espejo con tipo 02 en verde. Referencias negativas, casos fiscales locales (IVA 13/4/2/1, exento explícito, exoneración parcial, multi-tax, descuento, multi-línea, BCMath, CABYS inválido, tasa ambigua bloqueada) y observabilidad (`source_type/source_id/original_document_id`, sin secretos) en verde. Provider FacturaEnCR 03/02 bloqueado explícito (`adjustment_endpoint_pending`, sin HTTP/doc/consumo). **Sandbox NC03/ND02 = PENDIENTE** (falta endpoint/payload verificados). Evidencia: `FiscalAdjustmentTest` 17/17. Matriz: `docs/MATRIZ_COMPROBANTES_FISCALES.md`; diseño: `docs/fiscal/NC03_ND02_DESIGN.md`.
+
 ## Fiscal: concurrencia, UI de consumo y matriz (2026-09-27, local sin commit)
 
 `FiscalConsumptionService::record()` endurecido contra race check-then-insert (lock de licencia + recuento del ledger + backstop de constraint único que devuelve la fila ganadora); doble consumo/cobro imposible. Licencia tenant muestra uso del mes con desglose por tipo, disponibles y excedentes (2 decimales, solo lectura); Panel Maestro suma bloque de consumo y administra habilitación/cuota/excedentes/precio. NC03 auditado: sin modelo/mapper/endpoint/job en esta rama (E2E BLOCKED); gate y ledger probados listos para `03` sin POST. Matriz real en `docs/MATRIZ_COMPROBANTES_FISCALES.md` (TE04/FE01 E2E accepted; NC03/ND02 no implementados). Evidencia: `FiscalConsumptionTest` 16/16; regresión S3b 15/15, caja 21/21, checkout 19/19, licencias/plataforma 35/35; `git diff --check` limpio. Sin HTTP nuevo, sin emisiones reales, sin producción.
