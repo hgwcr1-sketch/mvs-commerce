@@ -10,6 +10,7 @@ use App\DTOs\Fiscal\FiscalCabysSearchResult;
 use App\DTOs\Fiscal\FiscalDocumentStatus;
 use App\DTOs\Fiscal\FiscalEmissionRequest;
 use App\DTOs\Fiscal\FiscalEmissionResult;
+use App\DTOs\Fiscal\FiscalReferenceException;
 use App\DTOs\Fiscal\FiscalTaxpayerInfo;
 use App\Exceptions\FiscalQuotaException;
 use App\Models\ElectronicDocument;
@@ -67,8 +68,15 @@ class FiscalManager
     public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
     {
         $consumption = app(FiscalConsumptionService::class);
-        $documentType = $consumption->documentTypeForSale($request->sale);
-        $decision = $consumption->authorize((int) $request->company->id, $documentType);
+
+        if ($request->adjustment !== null) {
+            [$companyId, $documentType] = $this->authorizeAdjustment($request);
+        } else {
+            $companyId = (int) $request->company->id;
+            $documentType = $consumption->documentTypeForSale($request->sale);
+        }
+
+        $decision = $consumption->authorize($companyId, $documentType);
 
         if (! $decision['allowed']) {
             throw new FiscalQuotaException(
@@ -92,6 +100,34 @@ class FiscalManager
         }
 
         return $result;
+    }
+
+    /**
+     * Gate del documento modificador neutral: validación estructural,
+     * mismo tenant, referencia contra el documento original emitido y tipo.
+     *
+     * @return array{0: int, 1: string}
+     *
+     * @throws \App\DTOs\Fiscal\FiscalReferenceException
+     */
+    private function authorizeAdjustment(FiscalEmissionRequest $request): array
+    {
+        $adjustment = $request->adjustment;
+        $adjustment->validate();
+
+        if ((int) $request->company->id !== $adjustment->companyId) {
+            throw new FiscalReferenceException('El ajuste pertenece a otra empresa.', 'cross_company');
+        }
+
+        $original = ElectronicDocument::query()->find($adjustment->reference->electronicDocumentId);
+
+        if ($original === null) {
+            throw new FiscalReferenceException('Documento original no encontrado.', 'original_not_found');
+        }
+
+        $adjustment->reference->validateAgainst($original, $adjustment->companyId, $adjustment->documentType);
+
+        return [$adjustment->companyId, $adjustment->documentType];
     }
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus
