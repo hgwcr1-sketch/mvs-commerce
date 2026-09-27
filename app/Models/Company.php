@@ -63,6 +63,11 @@ class Company extends Model
         return $this->hasOne(CompanyLicense::class);
     }
 
+    public function fiscalConfig()
+    {
+        return $this->hasOne(CompanyFiscalConfig::class);
+    }
+
     public function isModuleEnabled(string $moduleKey): bool
     {
         $module = $this->relationLoaded('modules')
