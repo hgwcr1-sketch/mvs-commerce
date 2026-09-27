@@ -37,6 +37,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataCenterController;
 use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
+use App\Http\Controllers\FiscalPortalController;
 // Compras
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
@@ -198,6 +199,30 @@ Route::middleware(['auth', 'active.company'])->group(function () {
 });
 
 Route::middleware(['auth', 'active.company', 'company.licensed'])->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Portal Fiscal MVS (Facturación Electrónica por empresa)
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get('/facturacion-electronica', [FiscalPortalController::class, 'index'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.index');
+    Route::get('/facturacion-electronica/historial', [FiscalPortalController::class, 'history'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.history');
+    Route::get('/facturacion-electronica/conexion/{step}', [FiscalPortalController::class, 'setup'])
+        ->whereIn('step', ['datos', 'conexion', 'verificar', 'preferencias', 'confirmacion'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup');
+    Route::put('/facturacion-electronica/conexion/{step}', [FiscalPortalController::class, 'store'])
+        ->whereIn('step', ['datos', 'conexion', 'preferencias'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup.store');
+    Route::post('/facturacion-electronica/verificar', [FiscalPortalController::class, 'verify'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.verify');
 
     /*
     |--------------------------------------------------------------------------

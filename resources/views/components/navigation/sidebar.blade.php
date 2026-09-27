@@ -132,6 +132,10 @@
         <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
     @endcanany
 
+    @can('fiscal.ver')
+        <x-navigation.item route="fiscal.index" icon="document" label="Facturación Electrónica" :active="request()->routeIs('fiscal.*')" />
+    @endcan
+
         {{-- PRODUCTOS --}}
     <div class="nav-desktop-group">
     @canany([
