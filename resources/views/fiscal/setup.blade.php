@@ -129,7 +129,7 @@
                 <div class="flex justify-between gap-3"><dt>Empresa</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $status }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $statusLabel }}</dd></div>
             </dl>
             <a href="{{ route('fiscal.index') }}" class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Ir al portal fiscal</a>
         @endif

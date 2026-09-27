@@ -134,13 +134,15 @@ class FiscalPortalController extends Controller
         $company = $this->company();
         $config = $this->configs->ensure($company);
         $license = $this->licenses->refresh($this->licenses->ensure($company));
+        $status = $this->configs->status($company, $license);
 
         return view('fiscal.setup', [
             'company' => $company,
             'config' => $config,
             'license' => $license,
             'step' => $step,
-            'status' => $this->configs->status($company, $license),
+            'status' => $status,
+            'statusLabel' => $this->statusLabel($status),
             'providers' => $this->providerOptions(),
         ]);
     }

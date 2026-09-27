@@ -386,4 +386,18 @@ class FiscalPortalTest extends TestCase
             'paid_total' => 1000, 'balance_due' => 0, 'completed_at' => now(),
         ]);
     }
+
+    public function test_permission_seeder_registers_fiscal_permissions(): void
+    {
+        $this->assertFalse(Permission::where('name', 'fiscal.ver')->exists());
+
+        (new \Database\Seeders\PermissionSeeder())->run();
+
+        $this->assertTrue(Permission::where('name', 'fiscal.ver')->where('is_active', true)->exists());
+        $this->assertTrue(Permission::where('name', 'fiscal.editar')->where('is_active', true)->exists());
+
+        (new \Database\Seeders\PermissionSeeder())->run();
+
+        $this->assertSame(1, Permission::where('name', 'fiscal.ver')->count());
+    }
 }
