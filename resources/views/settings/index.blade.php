@@ -17,19 +17,19 @@
     @php
         $dec = fn ($v) => is_numeric($v) ? number_format((float) $v, 2, '.', '') : $v;
         $settingsTabs = [
-            ['id' => 'fidelizacion', 'label' => 'Fidelización'],
             ['id' => 'whatsapp', 'label' => 'WhatsApp'],
         ];
     @endphp
-    @can('fidelidad.configuracion')
-        @php $settingsTabs[] = ['id' => 'plantillas', 'label' => 'Plantillas']; @endphp
-    @endcan
     @can('notas_credito.configurar')
         @php $settingsTabs[] = ['id' => 'notas-credito', 'label' => 'Notas de Crédito']; @endphp
     @endcan
+    @php $settingsTabs[] = ['id' => 'fidelizacion', 'label' => 'Fidelización']; @endphp
+    @can('fidelidad.configuracion')
+        @php $settingsTabs[] = ['id' => 'plantillas', 'label' => 'Plantillas']; @endphp
+    @endcan
 
-    <x-tabs :tabs="$settingsTabs" active-tab="fidelizacion" variant="pills" aria-label="Secciones de configuración">
-    <div id="panel-fidelizacion" role="tabpanel" aria-labelledby="tab-fidelizacion" x-show="activeTab === 'fidelizacion'">
+    <x-tabs :tabs="$settingsTabs" active-tab="whatsapp" variant="pills" aria-label="Secciones de configuración">
+    <div id="panel-fidelizacion" role="tabpanel" aria-labelledby="tab-fidelizacion" x-show="activeTab === 'fidelizacion'" x-cloak>
 
     <x-card>
         <x-slot:header>
@@ -158,7 +158,7 @@
     </x-card>
     </div>
 
-    <div id="panel-whatsapp" role="tabpanel" aria-labelledby="tab-whatsapp" x-show="activeTab === 'whatsapp'" x-cloak>
+    <div id="panel-whatsapp" role="tabpanel" aria-labelledby="tab-whatsapp" x-show="activeTab === 'whatsapp'">
 
     <x-card>
         <x-slot:header>
