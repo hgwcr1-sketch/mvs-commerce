@@ -928,9 +928,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
             Route::match(['put', 'patch'], '/', [CompanyCashSettingController::class, 'update'])->name('update');
         });
 
-    Route::resource('configuracion', SettingController::class)
-        ->only(['index'])
-        ->middleware('permission:configuracion.ver');
+    Route::get('configuracion', [SettingController::class, 'index'])
+        ->middleware('permission:configuracion.ver')
+        ->name('configuracion.index');
 
     Route::put('configuracion/whatsapp', [SettingController::class, 'updateWhatsApp'])
         ->middleware('permission:configuracion.editar')
@@ -944,9 +944,13 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware('permission:fidelidad.configuracion')
         ->name('configuracion.loyalty-templates.update');
 
-    Route::resource('configuracion', SettingController::class)
-        ->only(['update'])
-        ->middleware('permission:configuracion.editar');
+    Route::match(['put', 'patch'], 'configuracion/{configuracion}', [SettingController::class, 'update'])
+        ->middleware('permission:configuracion.editar')
+        ->name('configuracion.update');
+
+    Route::get('ayuda', function () {
+        return view('support.index');
+    })->name('support.index');
 
     Route::prefix('configuracion/pos/formas-pago')
         ->name('settings.pos.payment-methods.')

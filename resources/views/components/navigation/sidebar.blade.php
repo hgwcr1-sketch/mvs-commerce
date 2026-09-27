@@ -359,6 +359,14 @@
 
             @endcan
 
+            @can('configuracion.ver')
+
+                <x-navigation.submenu
+                    route="branches.index"
+                    label="Sucursales" />
+
+            @endcan
+
 
         </x-navigation.dropdown>
 
@@ -415,7 +423,6 @@
     <div x-cloak x-show="open" x-transition class="nav-sub mt-2 space-y-1 pl-5">
         @can('configuracion.ver')
             <a href="{{ route('configuracion.index') }}" class="block py-1 text-xs {{ request()->routeIs('configuracion.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración general</a>
-            <a href="{{ route('branches.index') }}" class="block py-1 text-xs {{ request()->routeIs('branches.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Sucursales</a>
         @endcan
         @can('caja.administrar')
             <a href="{{ route('settings.cash.edit') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash.edit', 'settings.cash.update') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración de Caja</a>
@@ -433,7 +440,7 @@
     </div>
 </div>
 @endcanany
-<a href="#" class="mb-3 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
+<a href="{{ route('support.index') }}" class="mb-3 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
 
     <svg xmlns="http://www.w3.org/2000/svg"
         class="h-3.5 w-3.5"
