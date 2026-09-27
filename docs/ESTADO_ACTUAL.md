@@ -2,6 +2,10 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Fiscal: concurrencia, UI de consumo y matriz (2026-09-27, local sin commit)
+
+`FiscalConsumptionService::record()` endurecido contra race check-then-insert (lock de licencia + recuento del ledger + backstop de constraint único que devuelve la fila ganadora); doble consumo/cobro imposible. Licencia tenant muestra uso del mes con desglose por tipo, disponibles y excedentes (2 decimales, solo lectura); Panel Maestro suma bloque de consumo y administra habilitación/cuota/excedentes/precio. NC03 auditado: sin modelo/mapper/endpoint/job en esta rama (E2E BLOCKED); gate y ledger probados listos para `03` sin POST. Matriz real en `docs/MATRIZ_COMPROBANTES_FISCALES.md` (TE04/FE01 E2E accepted; NC03/ND02 no implementados). Evidencia: `FiscalConsumptionTest` 16/16; regresión S3b 15/15, caja 21/21, checkout 19/19, licencias/plataforma 35/35; `git diff --check` limpio. Sin HTTP nuevo, sin emisiones reales, sin producción.
+
 ## Primera FE01 real aceptada en Sandbox (2026-09-27, documentado sin cambios de código)
 
 Sale ID 7 / `electronic_invoice` / tipoDocumento 01; ElectronicDocument ID 2; receptor `01`/`109880401` válido; CABYS `0111100000100` IVA 1% intacto; preflight mapper FE01 → `documents/factura`; exactamente **1 POST** vía `FiscalManager` (idempotency estable `1d30621c…`, provider_ref `6ab9101eede704dd046aafc0`); estado inicial `queued`; **accepted en el primer GET** (sin más polling); clave `50627092600310191287705001034010000000001114095176`, consecutivo `05001034010000000001`; gate fiscal local habilitado con cuota 50 (`authorize` = included pre-POST); `fiscal_consumptions` exactamente **1 fila INCLUDED** con `unit_price` NULL; el GET no agregó consumo; Sale 6 / doc 1 TE04 `accepted` intacto; `auto_emit` **false**; sandbox únicamente, cero producción.
