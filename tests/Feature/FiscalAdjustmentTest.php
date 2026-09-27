@@ -180,6 +180,98 @@ class FiscalAdjustmentTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_builder_assembles_total_and_partial_nc_with_original_cap(): void
+    {
+        $reference = $this->reference();
+
+        $total = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            5, 'return', 'R1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $reference, '1010.0000'
+        );
+        $total->validate();
+        $this->assertSame('03', $total->documentType);
+
+        $partial = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            5, 'return', 'R2', $this->receptor(), 'CRC', '1',
+            [$this->line()], ['subtotal' => '500.0000', 'discount_total' => '0.0000', 'tax_total' => '5.0000', 'total' => '505.0000'],
+            $reference, '1010.0000'
+        );
+        $partial->validate();
+        $this->assertSame('505.0000', $partial->totals['total']);
+
+        try {
+            \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+                5, 'return', 'R3', $this->receptor(), 'CRC', '1',
+                [$this->line()], ['subtotal' => '2000.0000', 'discount_total' => '0.0000', 'tax_total' => '20.0000', 'total' => '2020.0000'],
+                $reference, '1010.0000'
+            );
+            $this->fail('NC sobre el total original debió bloquearse.');
+        } catch (FiscalReferenceException $e) {
+            $this->assertSame('exceeds_original', $e->reason);
+        }
+
+        $debit = \App\Services\Fiscal\FiscalAdjustmentBuilder::debitNote(
+            5, 'debit', 'D1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $reference, '1010.0000'
+        );
+        $debit->validate();
+        $this->assertSame('02', $debit->documentType);
+    }
+
+    public function test_facturaencr_mapper_builds_payload_and_marks_endpoint_pending(): void
+    {
+        $company = Company::create(['trade_name' => 'M' . uniqid(), 'is_active' => true]);
+        $document = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->reference()
+        );
+
+        $mapper = new \App\Services\Facturaencr\FacturaencrAdjustmentMapper();
+        $payload = $mapper->map($document, $company);
+
+        $this->assertSame('03', $payload['tipoDocumento']);
+        $this->assertSame('109880401', $payload['receptor']['numeroIdentificacion']);
+        $this->assertSame('0111100000100', $payload['detalle'][0]['codigoCabys']);
+        $this->assertSame('K1', $payload['informacionReferencia']['numero']);
+
+        try {
+            $mapper->endpoint('03');
+            $this->fail('El endpoint 03 debió marcarse pendiente.');
+        } catch (\App\Exceptions\Facturaencr\FacturaencrValidationException) {
+            $this->assertTrue(true);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_facturaencr_provider_blocks_nc_without_http_document_or_consumption(): void
+    {
+        [$company, $branch, $user] = $this->posContext();
+        $this->enableFiscal($company);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $original = ElectronicDocument::create([
+            'company_id' => $company->id, 'sale_id' => $sale->id, 'provider' => 'facturaencr',
+            'document_type' => '01', 'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-01"), 'status' => 'accepted', 'clave' => 'K1',
+        ]);
+
+        $adjustment = \App\Services\Fiscal\FiscalAdjustmentBuilder::creditNote(
+            $company->id, 'return', 'R1', $this->receptor(), 'CRC', '1',
+            [$this->line()], $this->totals(), $this->referenceFor($original)
+        );
+
+        $result = app(FiscalManager::class)->provider('facturaencr')->emit(new FiscalEmissionRequest(
+            $sale, $company, $sale->customer, [], null, $adjustment
+        ));
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('adjustment_endpoint_pending', $result->error->code);
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertDatabaseCount('fiscal_consumptions', 0);
+        Http::assertNothingSent();
+    }
+
     private function nc(string $originalType): FiscalDocument
     {
         return new FiscalDocument(

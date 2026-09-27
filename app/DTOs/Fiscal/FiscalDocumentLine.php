@@ -22,6 +22,7 @@ final class FiscalDocumentLine
         public readonly array $taxes,
         public readonly string $taxTotal,
         public readonly string $total,
+        public readonly string $unitCode = 'Unid',
     ) {
     }
 }

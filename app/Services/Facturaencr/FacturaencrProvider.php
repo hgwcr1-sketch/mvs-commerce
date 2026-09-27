@@ -40,6 +40,10 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
 
     public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
     {
+        if ($request->adjustment !== null) {
+            return $this->emitAdjustment($request);
+        }
+
         try {
             $document = $this->emissionService->emit(
                 $request->sale,
@@ -76,6 +80,35 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             fiscalReference: $document->clave,
             error: $error,
         );
+    }
+
+    /**
+     * Documentos modificadores (NC03/ND02): el mapper neutral valida y
+     * construye el payload localmente, pero el endpoint de emisión 03/02 no
+     * está verificado en FacturaEnCR: se retorna error SIN HTTP, sin crear
+     * documento y sin consumo. Límite verificable explícito.
+     */
+    private function emitAdjustment(FiscalEmissionRequest $request): FiscalEmissionResult
+    {
+        try {
+            (new FacturaencrAdjustmentMapper())->map($request->adjustment, $request->company);
+            (new FacturaencrAdjustmentMapper())->endpoint($request->adjustment->documentType);
+        } catch (FacturaencrValidationException $exception) {
+            return $this->failedResult(new FiscalError(
+                code: 'adjustment_endpoint_pending',
+                message: $exception->getMessage(),
+                category: FiscalError::CATEGORY_VALIDATION,
+                retryable: false,
+                context: $exception->getErrors(),
+            ));
+        }
+
+        return $this->failedResult(new FiscalError(
+            code: 'adjustment_endpoint_pending',
+            message: 'Emisión 03/02 pendiente de endpoint verificado.',
+            category: FiscalError::CATEGORY_VALIDATION,
+            retryable: false,
+        ));
     }
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus
