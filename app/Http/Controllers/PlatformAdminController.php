@@ -99,11 +99,13 @@ class PlatformAdminController extends Controller
 
         $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
         $company->license->load(['events.actor']);
+        $fiscalUsage = app(\App\Services\Fiscal\FiscalConsumptionService::class)->monthlyBreakdown($company->id);
 
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+            'fiscalUsage' => $fiscalUsage,
         ]);
     }
 

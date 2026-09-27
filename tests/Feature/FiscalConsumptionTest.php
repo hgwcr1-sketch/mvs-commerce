@@ -201,6 +201,36 @@ class FiscalConsumptionTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_repeated_records_and_unique_backstop_prevent_double_charge(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->enableFiscal($company);
+        $sale = $this->sale($company, $branch, $user);
+        $service = app(FiscalConsumptionService::class);
+        $manager = app(FiscalManager::class);
+
+        (new EmitElectronicDocument($sale->id, $sale->document_type))->handle($manager);
+
+        $document = ElectronicDocument::sole();
+        $this->assertSame($service->record($document)->id, $service->record($document)->id);
+
+        try {
+            FiscalConsumption::create([
+                'company_id' => $company->id,
+                'electronic_document_id' => $document->id,
+                'document_type' => '01',
+                'period' => $service->periodFor()->toDateString(),
+                'classification' => FiscalConsumption::CLASSIFICATION_INCLUDED,
+            ]);
+            $this->fail('El constraint único debió bloquear la segunda fila.');
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            $this->assertTrue(true);
+        }
+
+        $this->assertDatabaseCount('fiscal_consumptions', 1);
+        $this->assertSame(1, $service->monthlyUsage($company->id));
+    }
+
     public function test_provider_error_consumes_nothing_and_preserves_history(): void
     {
         config(['fiscal.providers.fake' => FiscalQuotaFailingProvider::class]);
@@ -308,6 +338,71 @@ class FiscalConsumptionTest extends TestCase
 
         $this->assertTrue(app(FiscalConsumptionService::class)->isFiscalEnabled($company->id));
         $this->assertSame(10, CompanyLicense::query()->where('company_id', $company->id)->value('fiscal_monthly_quota'));
+    }
+
+    public function test_tenant_license_view_shows_readonly_usage_breakdown(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 10]);
+        $sale = $this->sale($company, $branch, $user);
+        (new EmitElectronicDocument($sale->id, $sale->document_type))->handle(app(FiscalManager::class));
+
+        $response = $this->actingAs($user)->withSession([
+            'active_company_id' => $company->id, 'active_branch_id' => $branch->id,
+        ])->get(route('license.status'));
+
+        $response->assertOk();
+        $response->assertSee('Documentos fiscales del mes', false);
+        $response->assertSee('Facturas electrónicas (01)', false);
+        $response->assertDontSee('fiscal_monthly_quota', false);
+    }
+
+    public function test_platform_view_shows_usage_and_contract_without_secrets(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 10]);
+        $sale = $this->sale($company, $branch, $user);
+        (new EmitElectronicDocument($sale->id, $sale->document_type))->handle(app(FiscalManager::class));
+
+        $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
+
+        $response = $this->actingAs($admin)->get(route('platform.companies.show', $company));
+
+        $response->assertOk();
+        $response->assertSee('Consumo fiscal del mes', false);
+        $response->assertSee('Servicio fiscal', false);
+        $response->assertDontSee('api_key', false);
+        $response->assertDontSee('secret', false);
+    }
+
+    public function test_nc03_type_is_consumable_ready_without_post(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 10]);
+        $service = app(FiscalConsumptionService::class);
+
+        $this->assertContains('03', FiscalConsumptionService::CONSUMABLE_TYPES);
+        $decision = $service->authorize($company->id, '03');
+        $this->assertTrue($decision['allowed']);
+        $this->assertSame(FiscalConsumption::CLASSIFICATION_INCLUDED, $decision['classification']);
+
+        $sale = $this->sale($company, $branch, $user);
+        $document = ElectronicDocument::create([
+            'company_id' => $company->id,
+            'sale_id' => $sale->id,
+            'provider' => 'fake',
+            'document_type' => '03',
+            'environment' => 'sandbox',
+            'idempotency_key' => md5("{$company->id}-{$sale->id}-03"),
+            'status' => 'accepted',
+        ]);
+
+        $service->record($document);
+
+        $this->assertSame(1, $service->monthlyUsage($company->id));
+        $this->assertSame(['03' => 1], $service->monthlyBreakdown($company->id)['by_type']);
+        $this->assertSame(0, FiscalQuotaFakeProvider::requests());
+        Http::assertNothingSent();
     }
 
     private function context(string $name = 'Empresa'): array

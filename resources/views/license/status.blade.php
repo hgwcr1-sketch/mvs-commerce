@@ -10,7 +10,17 @@
         <div class="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
             <p class="font-bold">Documentos fiscales del mes</p>
             @if($license->fiscal_enabled)
-                <p class="mt-1">Consumidos: <strong>{{ $fiscalUsage }}</strong>@if($license->fiscal_monthly_quota !== null) de {{ $license->fiscal_monthly_quota }}@else (sin límite)@endif.</p>
+                <p class="mt-1">Consumidos: <strong>{{ $fiscal['total'] }}</strong>{{ $fiscalQuotaText }}</p>
+                @if(count($fiscal['by_type']) > 0)
+                    <ul class="mt-2 space-y-1">
+                        @foreach($fiscal['by_type'] as $type => $count)
+                            <li>{{ $fiscalTypeLabels[$type] ?? ('Documento ' . $type) }}: <strong>{{ $count }}</strong></li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if($fiscal['overage'] > 0)
+                    <p class="mt-2">Excedentes del mes: <strong>{{ $fiscal['overage'] }}</strong>{{ $fiscalOverageText }}</p>
+                @endif
             @else
                 <p class="mt-1">Servicio fiscal no habilitado para esta empresa. El POS solo emite tiquetes internos.</p>
             @endif

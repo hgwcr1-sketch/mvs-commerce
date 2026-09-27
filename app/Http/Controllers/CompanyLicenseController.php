@@ -13,8 +13,15 @@ class CompanyLicenseController extends Controller
     {
         $company = Company::findOrFail(session('active_company_id'));
         $license = $licenses->refresh($licenses->ensure($company));
-        $fiscalUsage = app(FiscalConsumptionService::class)->monthlyUsage($company->id);
+        $fiscal = app(FiscalConsumptionService::class)->monthlyBreakdown($company->id);
+        $fiscalQuotaText = $license->fiscal_monthly_quota !== null
+            ? ' de ' . $license->fiscal_monthly_quota . ' (disponibles: ' . max(0, $license->fiscal_monthly_quota - $fiscal['total']) . ').'
+            : ' (sin límite).';
+        $fiscalOverageText = $license->fiscal_overage_unit_price !== null
+            ? ' a ₡' . number_format((float) $license->fiscal_overage_unit_price, 2) . ' c/u.'
+            : '.';
+        $fiscalTypeLabels = ['01' => 'Facturas electrónicas (01)', '04' => 'Tiquetes electrónicos (04)'];
 
-        return view('license.status', compact('company', 'license', 'fiscalUsage'));
+        return view('license.status', compact('company', 'license', 'fiscal', 'fiscalQuotaText', 'fiscalOverageText', 'fiscalTypeLabels'));
     }
 }

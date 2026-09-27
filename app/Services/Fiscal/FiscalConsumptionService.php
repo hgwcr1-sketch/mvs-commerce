@@ -8,6 +8,7 @@ use App\Models\ElectronicDocument;
 use App\Models\FiscalConsumption;
 use App\Models\Sale;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -47,6 +48,32 @@ class FiscalConsumptionService
             ->where('company_id', $companyId)
             ->whereDate('period', $this->periodFor($period)->toDateString())
             ->count();
+    }
+
+    /**
+     * Uso del período desglosado por tipo fiscal + total. Solo lectura para
+     * vistas de licencia (tenant y Panel Maestro). Montos con 2 decimales
+     * se formatean en la vista.
+     *
+     * @return array{total: int, overage: int, by_type: array<string, int>}
+     */
+    public function monthlyBreakdown(int $companyId, ?CarbonImmutable $period = null): array
+    {
+        $rows = FiscalConsumption::query()
+            ->where('company_id', $companyId)
+            ->whereDate('period', $this->periodFor($period)->toDateString())
+            ->get(['document_type', 'classification']);
+
+        $byType = [];
+        foreach ($rows as $row) {
+            $byType[$row->document_type] = ($byType[$row->document_type] ?? 0) + 1;
+        }
+
+        return [
+            'total' => $rows->count(),
+            'overage' => $rows->where('classification', FiscalConsumption::CLASSIFICATION_OVERAGE)->count(),
+            'by_type' => $byType,
+        ];
     }
 
     /**
@@ -119,14 +146,29 @@ class FiscalConsumptionService
                 }
             }
 
-            return FiscalConsumption::create([
-                'company_id' => $document->company_id,
-                'electronic_document_id' => $document->id,
-                'document_type' => $document->document_type,
-                'period' => $this->periodFor($document->created_at?->toImmutable() ?? null)->toDateString(),
-                'classification' => $classification,
-                'unit_price' => $unitPrice,
-            ]);
+            try {
+                return FiscalConsumption::create([
+                    'company_id' => $document->company_id,
+                    'electronic_document_id' => $document->id,
+                    'document_type' => $document->document_type,
+                    'period' => $this->periodFor($document->created_at?->toImmutable() ?? null)->toDateString(),
+                    'classification' => $classification,
+                    'unit_price' => $unitPrice,
+                ]);
+            } catch (UniqueConstraintViolationException $exception) {
+                // Race real check-then-insert (dos procesos con el mismo
+                // documento): el constraint único es el backstop definitivo.
+                // Se devuelve la fila ganadora sin consumir de nuevo.
+                $winner = FiscalConsumption::query()
+                    ->where('electronic_document_id', $document->id)
+                    ->first();
+
+                if ($winner !== null) {
+                    return $winner;
+                }
+
+                throw $exception;
+            }
         });
     }
 
