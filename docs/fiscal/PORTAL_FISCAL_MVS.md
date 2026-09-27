@@ -55,3 +55,30 @@ correo. El tiquete interno jamás sale a Hacienda ni consume.
 Permisos `fiscal.ver` / `fiscal.editar`, CSRF, aislamiento por empresa
 activa, secretos cifrados y enmascarados, verificación sin emisión y
 producción/sandbox diferenciados.
+
+## Fase 2 — Master (2026-09-27)
+
+- Onboarding completo: actividad económica + sucursal/terminal fiscales
+  (3/5 dígitos, formato oficial) en el paso de datos; ubicación fiscal =
+  campos existentes de Company; certificados/custodia quedan en el
+  proveedor (nunca se sube `.p12` a MVS).
+- Series (`fiscal_series`, provider-neutral por empresa+ambiente+sucursal+
+  terminal+tipo): observa consecutivos reales (parseo oficial 3+5+2+10),
+  sugiere el siguiente, importa controladamente (nunca retrocede), reserva
+  con lock para concurrencia y NUNCA resetea (tampoco al cambiar proveedor).
+  La numeración productiva sigue en el proveedor hasta MVS Fiscal.
+- Cambio de proveedor: gate `FiscalProviderSwitchService::canSwitch`
+  (sin documentos en vuelo, series reconciliadas, destino registrado y
+  verificado, auditoría en log); la ejecución reusa conexión+verificación
+  existentes. Sin MvsFiscalProvider real todavía.
+- Webhooks: contrato neutral listo (`FiscalWebhookEvent` +
+  `FiscalWebhookHandler`); receptor FacturaEnCR NO implementado porque la
+  documentación oficial no detalla firma/secreto/esquema (no se inventa).
+  El polling sigue como mecanismo principal y probado.
+- Custodia (`fiscal_document_custody`, por documento): payload enviado
+  inmutable + última respuesta del proveedor; sin XML fabricado.
+- Dashboard centro de control: banner de ambiente (PRUEBAS sin valor
+  fiscal / PRODUCCIÓN identificable), emisor, actividad, sucursal/terminal,
+  conteos aceptados/rechazados/en proceso, consumo, series, diagnóstico
+  extendido (licencia, datos, credenciales, proveedor, series, última
+  respuesta) y detalle por documento con custodia.

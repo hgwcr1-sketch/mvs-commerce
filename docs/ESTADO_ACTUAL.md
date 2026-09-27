@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Portal Fiscal MVS por empresa (2026-09-27, rama feature/factura-electronica)
+## Master Fiscal MVS fase 2 (2026-09-27, rama feature/factura-electronica)
 
-Portal "Facturación Electrónica" (`fiscal.*`): estado, ambiente, consumo, historial FE/TE/NC/ND, diagnóstico y asistente de 5 pasos con verificación SIN emitir. Config por empresa (`company_fiscal_configs`, secretos cifrados, sandbox/producción separados); manager resuelve proveedor por empresa; FacturaEnCR opera con contexto empresarial; futuro MvsFiscalProvider sin rehacer portal/POS. Panel Maestro sigue autoridad comercial; tenant solo consulta. Evidencia: `FiscalPortalTest` 15/15, fiscal core 46/46, CERO HTTP real. Preexistente ajeno: `ResponsiveNavigationTest::test_tenant_header...logo` falla también en HEAD limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+Portal convertido en centro de control: banner de ambiente (PRUEBAS sin valor fiscal / PRODUCCIÓN), emisor, actividad, sucursal/terminal, conteos, series, diagnóstico extendido y detalle por documento con custodia. Onboarding con actividad + códigos 3/5; series provider-neutrales (observan, importan sin retroceder, sin resets, claim con lock); gate de cambio de proveedor (sin MvsFiscal real); webhooks con contrato neutral pero receptor NO implementado (docs oficiales sin espec de firma — bloqueador documentado, polling vigente); custodia payload-inmutable + respuesta. Evidencia: `FiscalMasterTest` 15/15, portal 15/15, core 49/49, CERO HTTP real. Docs: `PORTAL_FISCAL_MVS.md`, `MIGRACION_PROVEEDOR_FISCAL.md`.
+
+## Portal Fiscal MVS por empresa (2026-09-27, histórico, previo a fase 2)
+
+Portal "Facturación Electrónica" (`fiscal.*`): estado, ambiente, consumo, historial FE/TE/NC/ND, diagnóstico y asistente de 5 pasos con verificación SIN emitir. Config por empresa (`company_fiscal_configs`, secretos cifrados, sandbox/producción separados); manager resuelve proveedor por empresa; FacturaEnCR opera con contexto empresarial; futuro MvsFiscalProvider sin rehacer portal/POS. Panel Maestro sigue autoridad comercial; tenant solo consulta. Evidencia entonces: `FiscalPortalTest` 15/15, fiscal core 46/46, CERO HTTP real. Preexistente ajeno: `ResponsiveNavigationTest::test_tenant_header...logo` falla también en HEAD limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
 
 ## Fiscal reemisión tras rechazo (2026-09-27, histórico, previo al portal)
 
