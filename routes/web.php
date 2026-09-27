@@ -516,6 +516,11 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::get('/clientes-buscar', [CustomerController::class, 'search'])
         ->name('clientes.search');
 
+    // Consulta de contribuyente en Hacienda (autocompletado de nombre/razón social).
+    Route::get('/clientes/contribuyente', [CustomerController::class, 'taxpayerLookup'])
+        ->middleware(['permission:clientes.crear', 'throttle:30,1'])
+        ->name('clientes.contribuyente');
+
     Route::patch('/clientes/{cliente}/estado', [CustomerController::class, 'toggleStatus'])
         ->name('clientes.toggle-status');
 

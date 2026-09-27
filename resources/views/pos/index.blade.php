@@ -977,7 +977,7 @@
 
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-slate-700">Tipo de identificación</label>
-                        <select x-model="quickCustomer.form.identification_type" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <select x-model="quickCustomer.form.identification_type" x-on:change="identificationTypeChange()" class="w-full rounded-xl border border-slate-300 px-4 py-3">
                             <option value="">Seleccione…</option>
                             <option value="01">Cédula física</option>
                             <option value="02">Cédula jurídica</option>
@@ -990,8 +990,15 @@
 
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-slate-700">Identificación</label>
-                        <input x-model="quickCustomer.form.identification" maxlength="50" class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <input :value="quickCustomer.form.identification"
+                               x-on:input="identificationInput()"
+                               :maxlength="window.MvsIdentification.maxLength(quickCustomer.form.identification_type)"
+                               :placeholder="window.MvsIdentification.placeholder(quickCustomer.form.identification_type)"
+                               :inputmode="window.MvsIdentification.RULES[quickCustomer.form.identification_type]?.digits ? 'numeric' : 'text'"
+                               autocomplete="off"
+                               class="w-full rounded-xl border border-slate-300 px-4 py-3">
                         <p x-show="quickCustomer.errors.identification" x-text="quickCustomer.errors.identification?.[0]" class="mt-1 text-xs text-red-600"></p>
+                        <p x-show="identStatusText()" x-text="identStatusText()" role="status" aria-live="polite" class="mt-1 text-xs font-medium" :class="identStatusClass()"></p>
                     </div>
 
                     <div>
@@ -1181,6 +1188,7 @@ document.addEventListener('alpine:init', () => {
             errors: {},
             message: '',
             delivery: null,
+            ident: { status: '', name: '', timer: null, token: 0 },
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
@@ -2511,6 +2519,68 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
             this.quickCustomer.delivery = null;
+            this.quickCustomer.ident.status = '';
+            this.quickCustomer.ident.name = '';
+        },
+        identificationInput() {
+            const form = this.quickCustomer.form;
+            form.identification = window.MvsIdentification.format(form.identification_type, form.identification);
+            this.quickCustomer.ident.status = '';
+            this.quickCustomer.ident.name = '';
+            this.scheduleTaxpayerLookup();
+        },
+        identificationTypeChange() {
+            const form = this.quickCustomer.form;
+            form.identification = window.MvsIdentification.transform(form.identification_type, form.identification);
+            this.quickCustomer.ident.status = '';
+            this.quickCustomer.ident.name = '';
+            this.scheduleTaxpayerLookup();
+        },
+        scheduleTaxpayerLookup() {
+            const identification = window.MvsIdentification;
+            const state = this.quickCustomer.ident;
+
+            if (state.timer) clearTimeout(state.timer);
+
+            const type = this.quickCustomer.form.identification_type;
+            const value = this.quickCustomer.form.identification;
+
+            if (!identification.canLookup(type) || !identification.complete(type, value)) {
+                state.token += 1;
+                return;
+            }
+
+            state.timer = setTimeout(() => this.runTaxpayerLookup(type, value), 450);
+        },
+        async runTaxpayerLookup(type, value) {
+            const identification = window.MvsIdentification;
+            const state = this.quickCustomer.ident;
+            const token = ++state.token;
+
+            state.status = 'loading';
+            state.name = '';
+
+            try {
+                const data = await identification.consult(type, value);
+                if (token !== state.token) return;
+
+                if (data.status === 'found') {
+                    state.status = 'found';
+                    state.name = data.name || '';
+                    if (!this.quickCustomer.form.name.trim()) this.quickCustomer.form.name = data.name;
+                    return;
+                }
+
+                state.status = data.status === 'not_found' ? 'not_found' : 'error';
+            } catch (error) {
+                if (token === state.token) state.status = 'error';
+            }
+        },
+        identStatusText() {
+            return window.MvsIdentification.statusText(this.quickCustomer.ident.status, this.quickCustomer.ident.name);
+        },
+        identStatusClass() {
+            return window.MvsIdentification.statusClass(this.quickCustomer.ident.status);
         },
         copyPortalAccess() {
             const text = this.quickCustomer.delivery?.copy_text || '';
@@ -2530,6 +2600,8 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.open = false;
             this.quickCustomer.delivery = null;
             this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false };
+            this.quickCustomer.ident.status = '';
+            this.quickCustomer.ident.name = '';
         },
         async storeQuickCustomer() {
             if (this.quickCustomer.saving || !this.quickCustomer.form.name.trim()) return;

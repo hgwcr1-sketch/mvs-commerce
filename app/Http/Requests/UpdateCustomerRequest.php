@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidIdentification;
 use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -65,7 +66,7 @@ class UpdateCustomerRequest extends FormRequest
             'identification' => [
                 'nullable',
                 'string',
-                'max:50',
+                new ValidIdentification($this->input('identification_type')),
                 Rule::unique('customers', 'identification')
                     ->where('company_id', session('active_company_id'))
                     ->ignore($customer),

@@ -85,6 +85,8 @@
     label="Número de Identificación"
     :value="old('identification', $customer->identification ?? '')" />
 
+        <p id="identification_status" role="status" aria-live="polite" class="mt-1 text-xs font-medium text-slate-500" hidden></p>
+
         <x-input
             name="name"
             label="Nombre"
