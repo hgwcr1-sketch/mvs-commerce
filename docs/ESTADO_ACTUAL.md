@@ -2,6 +2,12 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Primera FE01 real aceptada en Sandbox (2026-09-27, documentado sin cambios de código)
+
+Sale ID 7 / `electronic_invoice` / tipoDocumento 01; ElectronicDocument ID 2; receptor `01`/`109880401` válido; CABYS `0111100000100` IVA 1% intacto; preflight mapper FE01 → `documents/factura`; exactamente **1 POST** vía `FiscalManager` (idempotency estable `1d30621c…`, provider_ref `6ab9101eede704dd046aafc0`); estado inicial `queued`; **accepted en el primer GET** (sin más polling); clave `50627092600310191287705001034010000000001114095176`, consecutivo `05001034010000000001`; gate fiscal local habilitado con cuota 50 (`authorize` = included pre-POST); `fiscal_consumptions` exactamente **1 fila INCLUDED** con `unit_price` NULL; el GET no agregó consumo; Sale 6 / doc 1 TE04 `accepted` intacto; `auto_emit` **false**; sandbox únicamente, cero producción.
+
+Aprendizaje para MVS Fiscal: `queued` ≠ `accepted` (requiere polling); polling/retry del mismo documento no duplica consumo (identidad local estable); el consumo vive atado al documento fiscal local, no a la venta; el gate comercial/licencia debe ocurrir siempre antes del POST.
+
 ## Primer E2E fiscal Sandbox exitoso (2026-09-27, documentado sin commit de código)
 
 Sale ID 6 / `electronic_ticket` / tipoDocumento 04; ElectronicDocument ID 1; CABYS `0111100000100` (Trigo duro, para siembra) con perfil fiscal IVA 1% (ID 2, `01`/`02`); exactamente **1 POST** real al Sandbox FacturaEnCR vía `FiscalManager → FiscalProviderInterface → FacturaencrProvider`; estado inicial `queued`; **2 GET** de seguimiento al mismo documento; estado final `accepted`; clave `50627092600310191287705001034040000000001192986306` y consecutivo `05001034040000000001` generados correctamente; `fiscal.emission.auto_emit` permaneció **false**; cero producción, sin cambios de código.
