@@ -17,6 +17,7 @@ use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
+use App\Services\Fiscal\PosEmissionDispatcher;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
@@ -408,7 +409,7 @@ class PosController extends Controller
         ));
     }
 
-    public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse
+    public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor, PosEmissionDispatcher $emissionDispatcher): JsonResponse
     {
         try {
             $result = $processor->process(
@@ -423,6 +424,9 @@ class PosController extends Controller
                 'errors' => $exception->errors(),
             ], 422);
         }
+
+        $emissionDispatcher->forSale($result['sale']);
+
         $sale = $result['sale']->load('payments.paymentMethod');
         $payments = $sale->payments;
         $firstPayment = $payments->first();
