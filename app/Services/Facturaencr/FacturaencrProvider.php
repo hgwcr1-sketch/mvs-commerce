@@ -82,20 +82,37 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
         );
     }
 
+    private const ADJUSTMENT_CONDICION_VENTA_MAP = [
+        'cash' => '01',
+        'credit' => '02',
+    ];
+
     /**
-     * Documentos modificadores (NC03/ND02): el mapper neutral valida y
-     * construye el payload localmente, pero el endpoint de emisión 03/02 no
-     * está verificado en FacturaEnCR: se retorna error SIN HTTP, sin crear
-     * documento y sin consumo. Límite verificable explícito.
+     * Documentos modificadores (NC03/ND02) contra endpoints oficiales
+     * (documents/nota-credito, documents/nota-debito). Flujo idéntico al
+     * 01/04: idempotencia local, documento en queued, POST con
+     * Idempotency-Key y conciliación de respuesta. Sin documento aceptado
+     * no hay consumo (lo registra FiscalManager).
      */
     private function emitAdjustment(FiscalEmissionRequest $request): FiscalEmissionResult
     {
+        $adjustment = $request->adjustment;
+
         try {
-            (new FacturaencrAdjustmentMapper())->map($request->adjustment, $request->company);
-            (new FacturaencrAdjustmentMapper())->endpoint($request->adjustment->documentType);
+            $condicionVenta = self::ADJUSTMENT_CONDICION_VENTA_MAP[$request->sale->sale_condition ?? ''] ?? null;
+
+            if ($condicionVenta === null) {
+                throw new FacturaencrValidationException(['condicionVenta' => 'La venta original no tiene condición mapeable a NC/ND: cash/credit.']);
+            }
+
+            $original = ElectronicDocument::query()->find($adjustment->reference->electronicDocumentId);
+
+            $mapper = new FacturaencrAdjustmentMapper();
+            $payload = $mapper->map($adjustment, $request->company, $original, $condicionVenta);
+            $endpoint = $mapper->endpoint($adjustment->documentType);
         } catch (FacturaencrValidationException $exception) {
             return $this->failedResult(new FiscalError(
-                code: 'adjustment_endpoint_pending',
+                code: 'validation_failed',
                 message: $exception->getMessage(),
                 category: FiscalError::CATEGORY_VALIDATION,
                 retryable: false,
@@ -103,12 +120,72 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             ));
         }
 
-        return $this->failedResult(new FiscalError(
-            code: 'adjustment_endpoint_pending',
-            message: 'Emisión 03/02 pendiente de endpoint verificado.',
-            category: FiscalError::CATEGORY_VALIDATION,
-            retryable: false,
-        ));
+        $idempotencyKey = $adjustment->idempotencyKey();
+
+        $existing = ElectronicDocument::query()
+            ->where('company_id', $request->company->id)
+            ->where('sale_id', $request->sale->id)
+            ->where('provider', 'facturaencr')
+            ->where('document_type', $adjustment->documentType)
+            ->where('environment', config('facturaencr.environment', 'sandbox'))
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+
+        if ($existing !== null) {
+            return new FiscalEmissionResult(
+                state: $this->normalizeState($existing->status),
+                electronicDocumentId: $existing->id,
+                providerReference: $existing->provider_document_id,
+                fiscalReference: $existing->clave,
+            );
+        }
+
+        $document = ElectronicDocument::create([
+            'company_id' => $request->company->id,
+            'sale_id' => $request->sale->id,
+            'source_type' => $adjustment->sourceType,
+            'source_id' => $adjustment->sourceId,
+            'original_document_id' => $adjustment->reference->electronicDocumentId,
+            'provider' => 'facturaencr',
+            'document_type' => $adjustment->documentType,
+            'environment' => config('facturaencr.environment', 'sandbox'),
+            'idempotency_key' => $idempotencyKey,
+            'status' => 'queued',
+        ]);
+
+        $response = (new FacturaencrClient())->post($endpoint, $payload, $idempotencyKey);
+
+        if ($response->isSuccess()) {
+            $data = $response->data ?? [];
+            $document->update([
+                'status' => in_array($data['status'] ?? null, ['pending', 'queued', 'signing', 'sent', 'polling', 'accepted', 'rejected'], true)
+                    ? $data['status']
+                    : 'queued',
+                'provider_document_id' => $data['documentId'] ?? null,
+                'clave' => $data['clave'] ?? null,
+                'consecutivo' => $data['consecutivo'] ?? null,
+                'provider_request_id' => $data['requestId'] ?? $idempotencyKey,
+            ]);
+        } else {
+            $document->update([
+                'status' => 'error',
+                'last_error_code' => $response->errorCode,
+                'last_error_message' => $response->errorMessage,
+                'provider_request_id' => $response->httpStatusCode ? (string) $response->httpStatusCode : $idempotencyKey,
+            ]);
+        }
+
+        $error = $document->status === 'error'
+            ? $this->toError($document->last_error_code, $document->last_error_message)
+            : null;
+
+        return new FiscalEmissionResult(
+            state: $this->normalizeState($document->status),
+            electronicDocumentId: $document->id,
+            providerReference: $document->provider_document_id,
+            fiscalReference: $document->clave,
+            error: $error,
+        );
     }
 
     public function fetchStatus(ElectronicDocument $document): FiscalDocumentStatus

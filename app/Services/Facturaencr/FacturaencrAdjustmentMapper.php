@@ -6,17 +6,26 @@ use App\DTOs\Fiscal\FiscalDocument;
 use App\DTOs\Fiscal\FiscalDocumentLine;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Models\Company;
+use App\Models\ElectronicDocument;
 use App\Services\Fiscal\FiscalTaxService;
+use Carbon\Carbon;
 
 /**
  * Mapper neutral → FacturaEnCR para documentos modificadores (NC03/ND02).
  *
- * Límite verificable: reutiliza bloques probados del mapper FE/TE
- * (emisor, receptor, detalle, impuestos congelados). El ENDPOINT de emisión
- * 03/02 no está documentado en el repositorio: endpoint() lo marca como
- * pendiente en lugar de inventarlo. El bloque informacionReferencia sigue la
- * normativa pública de Hacienda y queda pendiente de confirmación contra el
- * proveedor antes de cualquier POST real.
+ * Contrato verificado contra la documentación oficial
+ * (https://facturaencr.com/docs, API v2 v4.4):
+ * - NC03 → POST documents/nota-credito, ND02 → POST documents/nota-debito.
+ * - `referencia` (array) obligatoria con tipoDocumento/numero/fechaEmision/
+ *   codigo/razon; codigo obligatorio en NC/ND; numero = clave de 50 para
+ *   comprobantes electrónicos; la API rellena codigo/razon si faltan, pero
+ *   aquí siempre se envían (nunca se pisan).
+ * - `receptor` opcional; `detalle` con la misma estructura de factura; los
+ *   totales los calcula la plataforma y no se envían.
+ *
+ * Límite explícito: condicionVenta se deriva de la venta original (único dato
+ * comercial disponible); medioPago/plazoCredito no se envían por no estar
+ * documentados como requeridos para NC/ND.
  */
 class FacturaencrAdjustmentMapper
 {
@@ -27,7 +36,7 @@ class FacturaencrAdjustmentMapper
     /**
      * @throws FacturaencrValidationException
      */
-    public function map(FiscalDocument $document, Company $company): array
+    public function map(FiscalDocument $document, Company $company, ?ElectronicDocument $original = null, string $condicionVenta = '01'): array
     {
         $document->validate();
 
@@ -39,36 +48,86 @@ class FacturaencrAdjustmentMapper
             throw new FacturaencrValidationException(['empresa' => 'La empresa no coincide con el documento.']);
         }
 
-        $reference = $document->reference;
+        if (! in_array($condicionVenta, ['01', '02'], true)) {
+            throw new FacturaencrValidationException(['condicionVenta' => 'Condición de venta no soportada para NC/ND: 01/02.']);
+        }
 
-        return array_filter([
+        $payload = [
             'emisorLegalId' => $this->emisorLegalId($company),
             'tipoDocumento' => $document->documentType,
+            'condicionVenta' => $condicionVenta,
             'currency' => $document->currency,
             'exchangeRate' => (float) $document->exchangeRate,
             'receptor' => $this->mapReceptor($document->receptor),
             'detalle' => $this->mapDetalle($document),
-            'informacionReferencia' => [
-                'tipoDoc' => $reference->originalDocumentType,
-                'numero' => $reference->clave,
-                'fechaEmision' => $reference->issuedAt,
-                'codigo' => $reference->referenceCode,
-                'razon' => $reference->reason,
-            ],
-        ], static fn (mixed $value): bool => $value !== null);
+            'referencia' => [$this->mapReferencia($document, $original)],
+        ];
+
+        return array_filter($payload, static fn (mixed $value): bool => $value !== null);
     }
 
     /**
-     * Endpoint de emisión 03/02 PENDIENTE: no documentado en el repositorio.
-     * Se marca explícitamente en lugar de inventar la ruta del proveedor.
+     * Endpoints oficiales (docs FacturaEnCR, API v2 v4.4):
+     * NC03 → documents/nota-credito, ND02 → documents/nota-debito.
      *
      * @throws FacturaencrValidationException
      */
     public function endpoint(string $documentType): string
     {
-        throw new FacturaencrValidationException([
-            'endpoint' => "Emisión {$documentType} pendiente de endpoint verificado en FacturaEnCR.",
-        ]);
+        return match ($documentType) {
+            '03' => 'documents/nota-credito',
+            '02' => 'documents/nota-debito',
+            default => throw new FacturaencrValidationException([
+                'endpoint' => "Tipo de documento no soportado por FacturaEnCR: {$documentType}.",
+            ]),
+        };
+    }
+
+    /**
+     * Referencia oficial: tipoDocumento/numero/fechaEmision/codigo/razon.
+     * Para comprobantes electrónicos el numero es la clave de 50 (se valida
+     * el largo localmente para no quemar consecutivos con un -80).
+     *
+     * @throws FacturaencrValidationException
+     */
+    private function mapReferencia(FiscalDocument $document, ?ElectronicDocument $original): array
+    {
+        $reference = $document->reference;
+
+        $clave = trim((string) $reference->clave);
+
+        if (
+            in_array($reference->originalDocumentType, ['01', '02', '03', '04', '08', '09', '10', '19', '20'], true)
+            && strlen($clave) !== 50
+        ) {
+            throw new FacturaencrValidationException(['referencia.numero' => 'La clave del comprobante electrónico referenciado debe tener 50 caracteres.']);
+        }
+
+        return [
+            'tipoDocumento' => $reference->originalDocumentType,
+            'numero' => $clave,
+            'fechaEmision' => $this->referenceIssuedAt($reference, $original),
+            'codigo' => $reference->referenceCode,
+            'razon' => $reference->reason,
+        ];
+    }
+
+    /**
+     * @throws FacturaencrValidationException
+     */
+    private function referenceIssuedAt(\App\DTOs\Fiscal\FiscalDocumentReference $reference, ?ElectronicDocument $original): string
+    {
+        $raw = $reference->issuedAt ?? $original?->created_at;
+
+        if ($raw === null || trim((string) $raw) === '') {
+            throw new FacturaencrValidationException(['referencia.fechaEmision' => 'La fecha de emisión del documento referenciado es obligatoria.']);
+        }
+
+        try {
+            return Carbon::parse($raw)->setTimezone('America/Costa_Rica')->toIso8601String();
+        } catch (\Throwable) {
+            throw new FacturaencrValidationException(['referencia.fechaEmision' => 'Fecha de emisión del documento referenciado inválida.']);
+        }
     }
 
     /**

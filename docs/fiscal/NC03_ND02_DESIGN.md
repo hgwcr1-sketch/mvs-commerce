@@ -30,8 +30,10 @@ Implementado local: DTO neutral (`FiscalDocument` 01/04/03/02 + `Line` + `Refere
 `FiscalAdjustmentBuilder::creditNote/debitNote`, `FiscalManager::authorizeAdjustment`,
 mapper neutral `FacturaencrAdjustmentMapper` (payload local), ledger `03/02`,
 observabilidad (`source_type/source_id/original_document_id` + relaciones).
-Falta verificable: endpoint/payload 03/02 de FacturaEnCR y job/Gate de disparo
-comercial NC/ND (sin módulo comercial en esta rama).
+Adapter FacturaEnCR verificado contra docs oficiales (ver §8): endpoints
+`documents/nota-credito` y `documents/nota-debito`, `referencia[]` oficial.
+Falta: job/Gate de disparo comercial NC/ND (sin módulo comercial en esta rama)
+y primera emisión real a sandbox.
 
 ## 3. Límite dominio comercial ↔ fiscal
 
@@ -78,3 +80,27 @@ nunca es dominio interno: solo su adapter conoce endpoints y llaves.
   sin consumo. Información externa faltante: ruta/método de emisión 03/02,
   payload exacto (incluida `informacionReferencia`) y credenciales/ambiente del
   proveedor. Sandbox NC03/ND02 = PENDIENTE hasta verificarlo.
+
+## 8. Adapter verificado contra docs oficiales (2026-09-27, sin emisión real)
+
+Fuente: https://facturaencr.com/docs (API v2, Hacienda v4.4). Base local
+`config/facturaencr.base_url` = misma base documentada.
+
+- NC03 → `POST documents/nota-credito`; ND02 → `POST documents/nota-debito`.
+- `referencia[]` obligatoria: tipoDocumento (catálogo Nota 10 Anexo v4.4) /
+  numero (clave de 50 si electrónico, largo validado localmente para no quemar
+  consecutivos con -80) / fechaEmision ISO -06:00 (issuedAt o created_at del
+  original, nunca inventada) / codigo (obligatorio en NC/ND: 01 anula, 02
+  corrige monto, catálogo Nota 9; la API rellena codigo/razon si faltan, aquí
+  siempre se envían) / razon (opcional).
+- `receptor` opcional (identificación atada); `detalle` igual que factura;
+  totales los calcula la plataforma y no se envían; `medioPago` solo en REP.
+- `condicionVenta` se deriva de la venta original (cash→01/credit→02, mapeo ya
+  verificado en FE/TE); `plazoCredito` no se envía por no estar documentado
+  para NC/ND.
+- Hallazgo corregido: el mapper usaba `informacionReferencia` (nodo XML de
+  Hacienda) en vez del `referencia[]` del API. Ahora es `referencia[]`.
+- Cobertura con HTTP falso: emisión 03/02 aceptada (documento + 1 consumo +
+  retry sin duplicar), error 400 sin consumo, referencia inválida sin HTTP.
+  CERO POST real, CERO sandbox. Sandbox NC03/ND02 sigue PENDIENTE (primera
+  emisión real con EMISORPRUEBA, sin tocar Sale6/Sale7 ni producción).

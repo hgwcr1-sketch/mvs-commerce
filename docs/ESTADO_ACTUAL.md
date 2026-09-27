@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Fiscal NC03/ND02 local (2026-09-27, rama feature/factura-electronica)
+## Fiscal NC03/ND02 adapter oficial (2026-09-27, rama feature/factura-electronica)
 
-TE04 sandbox accepted REAL (Sale 6/doc 1). FE01 sandbox accepted REAL (Sale 7/doc 2). NC03 LOCAL implementado: referencia congelada, builder, `FiscalManager`, mapper neutral, `ElectronicDocument(03)`, 1 consumo, cuota/overage, retry sin duplicar, gates pre-provider, CERO HTTP (fake). ND02 LOCAL espejo con tipo 02 en verde. Referencias negativas, casos fiscales locales (IVA 13/4/2/1, exento explícito, exoneración parcial, multi-tax, descuento, multi-línea, BCMath, CABYS inválido, tasa ambigua bloqueada) y observabilidad (`source_type/source_id/original_document_id`, sin secretos) en verde. Provider FacturaEnCR 03/02 bloqueado explícito (`adjustment_endpoint_pending`, sin HTTP/doc/consumo). **Sandbox NC03/ND02 = PENDIENTE** (falta endpoint/payload verificados). Evidencia: `FiscalAdjustmentTest` 17/17. Matriz: `docs/MATRIZ_COMPROBANTES_FISCALES.md`; diseño: `docs/fiscal/NC03_ND02_DESIGN.md`.
+Push recuperado (`0e7d03e..d6fb2ef`). Docs oficiales facturaencr.com/docs (API v2 v4.4) consultados: NC03 → `POST documents/nota-credito`, ND02 → `POST documents/nota-debito`, `referencia[]` obligatoria (tipoDocumento/numero clave-50/fechaEmision/codigo/razon). Adapter implementado SIN inferencias: mapper emite `referencia[]` oficial (corregido `informacionReferencia`), clave-50 validada localmente, provider con idempotencia + conciliación igual que 01/04. Tests con HTTP falso: emisión 03/02 aceptada, error sin consumo, retry sin duplicar. CERO POST real, CERO sandbox, sin Sale6/Sale7 ni producción. Evidencia: `FiscalAdjustmentTest` 20/20. **Sandbox NC03/ND02 = PENDIENTE** (primera emisión real). Sin módulo comercial NC/ND.
+
+## Fiscal NC03/ND02 local previo (2026-09-27, histórico, superado por adapter oficial)
+
+TE04 sandbox accepted REAL (Sale 6/doc 1). FE01 sandbox accepted REAL (Sale 7/doc 2). NC03 LOCAL implementado: referencia congelada, builder, `FiscalManager`, mapper neutral, `ElectronicDocument(03)`, 1 consumo, cuota/overage, retry sin duplicar, gates pre-provider, CERO HTTP (fake). ND02 LOCAL espejo con tipo 02 en verde. Referencias negativas, casos fiscales locales (IVA 13/4/2/1, exento explícito, exoneración parcial, multi-tax, descuento, multi-línea, BCMath, CABYS inválido, tasa ambigua bloqueada) y observabilidad (`source_type/source_id/original_document_id`, sin secretos) en verde. Evidencia entonces: `FiscalAdjustmentTest` 17/17. Matriz: `docs/MATRIZ_COMPROBANTES_FISCALES.md`; diseño: `docs/fiscal/NC03_ND02_DESIGN.md`.
 
 ## Fiscal: concurrencia, UI de consumo y matriz (2026-09-27, local sin commit)
 
