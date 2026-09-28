@@ -230,6 +230,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::post('/facturacion-electronica/desconectar', [FiscalPortalController::class, 'disconnect'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.disconnect');
+    Route::post('/facturacion-electronica/finalizar', [FiscalPortalController::class, 'finish'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup.finish');
     Route::get('/facturacion-electronica/historial/{document}', [FiscalPortalController::class, 'showDocument'])
         ->middleware('permission:fiscal.ver')
         ->name('fiscal.documents.show');

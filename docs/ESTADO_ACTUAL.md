@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Fix visual wizard fiscal (2026-09-27, rama feature/factura-electronica)
+## Pulido final configurador fiscal (2026-09-27, rama feature/factura-electronica)
 
-Causa botón fantasma: `bg-[#D4AF37]` no estaba en el CSS compilado (build desactualizado); rebuild `npm run build` + affordance (sombra/focus) en CTAs. Título del wizard por estado (Conectar vs Configuración de Facturación Electrónica). Navegación 1→5 con mensajes por paso + enlaces Anterior (datos persisten en servidor, PUTs idempotentes). Series solo en Configuración avanzada. Evidencia: portal+master 47/47, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+Causa CTA fantasma: CSS desactualizado (rebuild Vite); títulos por estado; cadena 1→5 con Paso 5 "Revisar y finalizar" real (preferencias→confirmación→finalizar), mensajes por paso y Anterior en cada paso; pendiente oculta fecha vieja de verificación; desconexión en Zona de seguridad; Series solo en avanzada. Evidencia: portal+master 49/49, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Fix visual wizard fiscal (2026-09-27, histórico, previo a pulido final)
+
+Causa botón fantasma: `bg-[#D4AF37]` no estaba en el CSS compilado (build desactualizado); rebuild `npm run build` + affordance (sombra/focus) en CTAs. Título del wizard por estado (Conectar vs Configuración de Facturación Electrónica). Navegación 1→5 con mensajes por paso + enlaces Anterior (datos persisten en servidor, PUTs idempotentes). Series solo en Configuración avanzada. Evidencia entonces: portal+master 47/47, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
 
 ## Limpieza tenant master fiscal (2026-09-27, histórico, previo a fix visual)
 

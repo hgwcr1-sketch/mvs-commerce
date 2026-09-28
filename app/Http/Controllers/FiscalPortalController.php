@@ -167,7 +167,7 @@ class FiscalPortalController extends Controller
         };
 
         if ($step === 'preferencias') {
-            return redirect()->route('fiscal.index')->with('status', 'Preferencias guardadas.');
+            return redirect()->route('fiscal.setup', ['step' => 'confirmacion'])->with('status', 'Preferencias guardadas. Revise y finalice.');
         }
 
         $next = $this->nextStep($step);
@@ -253,6 +253,12 @@ class FiscalPortalController extends Controller
 
         return redirect()->route('fiscal.index')
             ->with('status', 'Conexión retirada. El historial fiscal se conserva.');
+    }
+
+    public function finish(): RedirectResponse
+    {
+        return redirect()->route('fiscal.index')
+            ->with('status', 'Configuración finalizada. Revise el estado en el portal.');
     }
 
     private function storePreferences(Request $request, Company $company): void

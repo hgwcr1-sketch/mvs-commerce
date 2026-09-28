@@ -9,7 +9,7 @@
                 @case('conexion') Paso 2 de 5 · Conexión fiscal @break
                 @case('verificar') Paso 3 de 5 · Verificar conexión @break
                 @case('preferencias') Paso 4 de 5 · Preferencias @break
-                @default Paso 5 de 5 · Confirmación
+                @default Paso 5 de 5 · Revisar y finalizar
             @endswitch
         </h1>
 
@@ -149,13 +149,17 @@
                 <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
             </form>
             @if($config->hasCredentials())
-                <form method="POST" action="{{ route('fiscal.disconnect') }}" class="mt-6 border-t border-slate-200 pt-4" onsubmit="return confirm('¿Retirar la conexión fiscal? El historial se conserva.');">
-                    @csrf
-                    <label class="flex min-h-[44px] items-center gap-2 text-sm">
-                        <input type="checkbox" name="disconnect_confirm" value="1" class="h-5 w-5"> Confirmo que quiero retirar la conexión
-                    </label>
-                    <button type="submit" class="mt-2 inline-flex min-h-[44px] items-center text-sm font-bold text-rose-700">Retirar conexión</button>
-                </form>
+                <section aria-label="Zona de seguridad" class="mt-6 rounded-2xl border-2 border-rose-300 bg-rose-50/50 p-4">
+                    <h3 class="font-bold text-rose-900">Zona de seguridad</h3>
+                    <p class="mt-1 text-sm text-rose-800">Retirar la conexión impide emitir hasta reconfigurar. El historial fiscal se conserva siempre.</p>
+                    <form method="POST" action="{{ route('fiscal.disconnect') }}" class="mt-3" onsubmit="return confirm('¿Retirar la conexión fiscal? El historial se conserva.');">
+                        @csrf
+                        <label class="flex min-h-[44px] items-center gap-2 text-sm text-rose-900">
+                            <input type="checkbox" name="disconnect_confirm" value="1" class="h-5 w-5"> Confirmo que quiero retirar la conexión
+                        </label>
+                        <button type="submit" class="mt-2 inline-flex min-h-[44px] items-center rounded-xl border border-rose-300 bg-white px-4 text-sm font-bold text-rose-700">Retirar conexión</button>
+                    </form>
+                </section>
             @endif
         @elseif($step === 'verificar')
             @if($config->hasPending())
@@ -168,7 +172,9 @@
                 <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
                 <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Omitir por ahora</a>
             </form>
-            @if($config->last_verified_at)
+            @if($config->hasPending())
+                <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">Hay cambios pendientes de verificación: al verificar con éxito se activan. Si falla, la conexión actual sigue intacta.</div>
+            @elseif($config->last_verified_at)
                 <p class="mt-3 text-sm text-emerald-800">Última verificación: {{ $config->last_verified_at->format('d/m/Y H:i') }}.</p>
             @endif
         @elseif($step === 'preferencias')
@@ -192,14 +198,21 @@
                 <a href="{{ route('fiscal.setup', ['step' => 'verificar']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
             </form>
         @else
+            <p class="mt-4 text-sm text-slate-600">Revise que todo esté correcto antes de finalizar. Puede volver a cualquier paso sin perder datos.</p>
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
-                <div class="flex justify-between gap-3"><dt>Empresa</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Empresa</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }} <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
+                <div class="flex justify-between gap-3"><dt>Identificación</dt><dd class="font-bold text-right">{{ $company->identification_number ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }} <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
+                <div class="flex justify-between gap-3"><dt>Conexión</dt><dd class="font-bold text-right">{{ $config->hasCredentials() ? 'Credenciales registradas' : 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at && !$config->hasPending() ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Documento</dt><dd class="font-bold text-right">{{ $config->default_document === '04' ? 'Tiquete electrónico' : 'Factura electrónica' }} <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
                 <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $statusLabel }}</dd></div>
             </dl>
-            <a href="{{ route('fiscal.index') }}" class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Ir al portal fiscal</a>
-            <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
+            <form method="POST" action="{{ route('fiscal.setup.finish') }}" class="mt-5">
+                @csrf
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Confirmar y finalizar</button>
+                <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
+            </form>
         @endif
     </section>
 </div>

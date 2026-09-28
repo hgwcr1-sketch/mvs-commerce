@@ -67,7 +67,7 @@
                 <div class="flex justify-between gap-3"><dt>Actividad económica</dt><dd class="font-bold text-right">{{ $config->economic_activity ?: 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Conexión fiscal</dt><dd class="font-bold text-right">{{ $config->last_error_code !== null ? 'Requiere atención' : ($config->last_verified_at ? 'Verificada' : 'Pendiente') }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Última comprobación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Sin verificar' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Última comprobación</dt><dd class="font-bold text-right">{{ $config->hasPending() ? 'Verificación pendiente' : ($config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Sin verificar') }}</dd></div>
             </dl>
 
             <div class="mt-4 grid grid-cols-3 gap-2 text-center text-sm">

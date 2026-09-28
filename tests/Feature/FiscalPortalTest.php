@@ -455,7 +455,7 @@ class FiscalPortalTest extends TestCase
         $this->put(route('fiscal.setup.store', ['step' => 'preferencias']), [
             'default_document' => '01',
             'auto_emit_enabled' => '1',
-        ])->assertRedirect(route('fiscal.index'));
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'confirmacion']));
 
         $this->assertTrue($dispatcher->forSale($sale));
         Queue::assertPushed(\App\Jobs\EmitElectronicDocument::class);
@@ -748,13 +748,63 @@ class FiscalPortalTest extends TestCase
 
         $this->put(route('fiscal.setup.store', ['step' => 'preferencias']), [
             'default_document' => '04',
-        ])->assertRedirect(route('fiscal.index'));
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'confirmacion']));
 
         $this->assertSame('04', \App\Models\CompanyFiscalConfig::where('company_id', $company->id)->first()->default_document);
+
+        $this->post(route('fiscal.setup.finish'))->assertRedirect(route('fiscal.index'));
 
         foreach (['conexion', 'verificar', 'preferencias', 'confirmacion'] as $step) {
             $this->get(route('fiscal.setup', ['step' => $step]))->assertSee('Anterior');
         }
+    }
+
+    public function test_step_four_goes_to_review_and_finish_closes(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $this->put(route('fiscal.setup.store', ['step' => 'preferencias']), [
+            'default_document' => '04',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'confirmacion']));
+
+        $review = $this->get(route('fiscal.setup', ['step' => 'confirmacion']));
+        $review->assertOk();
+        $review->assertSee('Revisar y finalizar');
+        $review->assertSee('Demo S.A.');
+        $review->assertSee('Tiquete electrónico');
+        $review->assertSee('Confirmar y finalizar');
+
+        $this->post(route('fiscal.setup.finish'))
+            ->assertRedirect(route('fiscal.index'))
+            ->assertSessionHas('status');
+
+        $this->get(route('fiscal.setup.finish'))->assertStatus(405);
+    }
+
+    public function test_pending_hides_old_verification_date(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_A', 'api_secret' => 'efs_A']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $service->stageConnection($company, ['api_key' => 'efk_B', 'api_secret' => 'efs_B']);
+
+        $html = $this->get(route('fiscal.index'))->getContent();
+        $this->assertStringContainsString('Verificación pendiente', $html);
     }
 
     public function test_master_has_single_series_access(): void
