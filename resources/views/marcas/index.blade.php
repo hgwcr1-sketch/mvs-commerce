@@ -28,7 +28,7 @@
     </a>
 
     <a href="{{ route('marcas.create') }}"
-       class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow hover:bg-blue-700 transition">
+       class="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2.5 font-medium text-white shadow hover:bg-amber-600 transition">
 
         <svg xmlns="http://www.w3.org/2000/svg"
              class="h-5 w-5"
@@ -102,7 +102,7 @@
                 name="search"
                 value="{{ $search ?? '' }}"
                 placeholder="Buscar marca..."
-                class="border rounded-lg px-4 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                class="border rounded-lg px-4 py-2 flex-1 focus:outline-none focus:ring-2 focus:ring-amber-500">
 
             <button
                 type="submit"

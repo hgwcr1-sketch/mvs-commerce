@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\CustomerPublicCodeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -13,6 +15,7 @@ class Customer extends Model
 
     protected $fillable = [
         'company_id',
+        'customer_code',
         'customer_type',
         'identification_type',
         'identification',
@@ -20,8 +23,11 @@ class Customer extends Model
         'commercial_name',
         'taxpayer_name',
         'phone',
+        'phone_country_code',
         'mobile',
+        'phone_verified_at',
         'email',
+        'email_verified_at',
         'accepts_email_invoice',
         'country_id',
         'province_id',
@@ -31,9 +37,11 @@ class Customer extends Model
         'notes',
         'credit_limit',
         'credit_days',
+        'price_level',
         'points',
         'birth_date',
         'is_active',
+        'public_code',
     ];
 
     protected $casts = [
@@ -41,13 +49,39 @@ class Customer extends Model
         'credit_limit' => 'decimal:2',
         'is_active' => 'boolean',
         'accepts_email_invoice' => 'boolean',
+        'phone_verified_at' => 'datetime',
+        'email_verified_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Customer $customer) {
+            if (empty($customer->public_code)) {
+                $customer->public_code = app(CustomerPublicCodeService::class)->randomCode();
+                // Reserva: reintentar si colisión dentro del mismo request (único por empresa)
+                $attempts = 0;
+                while ($attempts < 5 && static::query()->where('company_id', $customer->company_id)->where('public_code', $customer->public_code)->exists()) {
+                    $customer->public_code = app(CustomerPublicCodeService::class)->randomCode();
+                    $attempts++;
+                }
+            }
+
+            if (empty($customer->customer_code) && !empty($customer->company_id)) {
+                $customer->customer_code = \App\Models\CompanySequence::nextCustomerCode($customer->company_id);
+            }
+        });
+    }
 
     /*
     |--------------------------------------------------------------------------
     | Relaciones
     |--------------------------------------------------------------------------
     */
+
+    public function getFormattedCustomerCodeAttribute(): ?string
+    {
+        return $this->customer_code;
+    }
 
     public function company(): BelongsTo
     {
@@ -87,5 +121,15 @@ class Customer extends Model
     public function addresses()
     {
         return $this->hasMany(CustomerAddress::class);
+    }
+
+    public function accountsReceivable(): HasMany
+    {
+        return $this->hasMany(AccountReceivable::class);
+    }
+
+    public function loyaltyContacts(): HasMany
+    {
+        return $this->hasMany(LoyaltyCustomerContact::class);
     }
 }

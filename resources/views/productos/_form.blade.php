@@ -28,10 +28,33 @@
             :value="$product->internal_code ?? ''"
             required />
 
-        <x-input
-            name="barcode"
-            label="Código de Barras"
-            :value="$product->barcode ?? ''" />
+        <div x-data="{ cameraAvailable: !!window.mvsScannerAvailable }"
+             @mvs-scan.window="if($event.detail?.code) $refs.barcodeInput.value = $event.detail.code">
+            <label for="barcode" class="form-label">Código de Barras</label>
+            <div class="flex gap-2">
+                <input id="barcode"
+                       name="barcode"
+                       x-ref="barcodeInput"
+                       type="text"
+                       value="{{ old('barcode', $product->barcode ?? '') }}"
+                       class="form-input flex-1">
+                <button type="button"
+                        x-show="cameraAvailable"
+                        x-cloak
+                        @click="$dispatch('mvs-scanner-open')"
+                        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                        aria-label="Escanear código de barras"
+                        title="Escanear código de barras">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25A2.25 2.25 0 0 1 5.25 6h1.4l1.13-1.69a.75.75 0 0 1 .62-.31h3.2a.75.75 0 0 1 .62.31L13.35 6h5.4A2.25 2.25 0 0 1 21 8.25v9a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 17.25v-9Z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Zm3 0c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Zm3 0c0 .414.168.75.375.75s.375-.336.375-.75-.168-.75-.375-.75-.375.336-.375.75Z"/>
+                    </svg>
+                </button>
+            </div>
+            @error('barcode')
+                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
 
         <x-input
             name="cabys_code"
@@ -54,7 +77,7 @@
 
             <option value="">Seleccione...</option>
 
-            @foreach($categories as $category)
+            @foreach($categories->whereNull('parent_id') as $category)
 
                 <option
                     value="{{ $category->id }}"
@@ -64,6 +87,31 @@
 
                 </option>
 
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="subcategory_id"
+            label="Subcategoría / Subrubro">
+
+            <option value="">Seleccione...</option>
+
+            @php
+                $selectedCategoryId = old('category_id', $product->category_id ?? null);
+                $subcategories = $categories->where('parent_id', '!=', null);
+                if ($selectedCategoryId) {
+                    $subcategories = $categories->where('parent_id', $selectedCategoryId);
+                }
+            @endphp
+
+            @foreach($subcategories as $sub)
+                <option
+                    value="{{ $sub->id }}"
+                    @selected(old('subcategory_id', $product->category_id ?? '')==$sub->id)
+                    data-parent="{{ $sub->parent_id }}">
+                    {{ $sub->name }}
+                </option>
             @endforeach
 
         </x-select>
@@ -98,9 +146,70 @@
 
                 <option
                     value="{{ $unit->id }}"
+                    data-allows-decimals="{{ $unit->allows_decimals ? '1' : '0' }}"
                     @selected(old('unit_id',$product->unit_id ?? '')==$unit->id)>
 
                     {{ $unit->name }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="style_id"
+            label="Estilo">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($styles as $style)
+
+                <option
+                    value="{{ $style->id }}"
+                    @selected(old('style_id',$product->style_id ?? '')==$style->id)>
+
+                    {{ $style->name }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="size_id"
+            label="Talla">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($sizes as $size)
+
+                <option
+                    value="{{ $size->id }}"
+                    @selected(old('size_id',$product->size_id ?? '')==$size->id)>
+
+                    {{ $size->name }}{{ $size->abbreviation ? ' ('.$size->abbreviation.')' : '' }}
+
+                </option>
+
+            @endforeach
+
+        </x-select>
+
+        <x-select
+            name="color_id"
+            label="Color">
+
+            <option value="">Seleccione...</option>
+
+            @foreach($colors as $color)
+
+                <option
+                    value="{{ $color->id }}"
+                    @selected(old('color_id',$product->color_id ?? '')==$color->id)>
+
+                    {{ $color->name }}{{ $color->hex_code ? ' ('.$color->hex_code.')' : '' }}
 
                 </option>
 
@@ -120,83 +229,103 @@
 <x-card class="mt-6">
 
     <x-slot:header>
-
         <h3 class="text-lg font-semibold">
             Precios
         </h3>
-
     </x-slot:header>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="cost"
             label="Costo"
-            :value="$product->cost ?? 0" />
+            :value="old('cost', $product->cost ?? 0)" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="sale_price"
             label="Precio Venta"
-            :value="$product->sale_price ?? 0" />
+            :value="old('sale_price', $product->sale_price ?? 0)" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="wholesale_price"
             label="Precio Mayorista"
-            :value="$product->wholesale_price ?? ''" />
+            :value="old('wholesale_price', $product->wholesale_price ?? '')" />
 
         <x-input
             type="number"
-            step="0.01"
+            step="1"
             name="special_price"
             label="Precio Oferta"
-            <x-select
-    name="tax_rate"
-    label="Impuesto *">
+            :value="old('special_price', $product->special_price ?? '')" />
 
-    <option value="">Seleccione...</option>
+        <x-input
+            type="number"
+            step="1"
+            name="price_a"
+            label="Precio A"
+            :value="old('price_a', $product->price_a ?? '')" />
 
-    <option value="0"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '0')>
-        Exento (0%)
-    </option>
+        <x-input
+            type="number"
+            step="1"
+            name="price_b"
+            label="Precio B"
+            :value="old('price_b', $product->price_b ?? '')" />
 
-    <option value="1"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '1')>
-        IVA 1%
-    </option>
+        <x-input
+            type="number"
+            step="1"
+            name="price_c"
+            label="Precio C"
+            :value="old('price_c', $product->price_c ?? '')" />
 
-    <option value="2"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '2')>
-        IVA 2%
-    </option>
+        <x-select
+            name="tax_rate"
+            label="Impuesto *">
 
-    <option value="4"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '4')>
-        IVA 4%
-    </option>
+            <option value="">Seleccione...</option>
 
-    <option value="8"
-        @selected(old('tax_rate', $product->tax_rate ?? '') == '8')>
-        IVA 8%
-    </option>
+            <option value="0"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '0')>
+                Exento (0%)
+            </option>
 
-    <option value="13"
-        @selected(old('tax_rate', $product->tax_rate ?? '13') == '13')>
-        IVA 13%
-    </option>
+            <option value="1"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '1')>
+                IVA 1%
+            </option>
 
-</x-select>
+            <option value="2"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '2')>
+                IVA 2%
+            </option>
+
+            <option value="4"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '4')>
+                IVA 4%
+            </option>
+
+            <option value="8"
+                @selected(old('tax_rate', $product->tax_rate ?? '') == '8')>
+                IVA 8%
+            </option>
+
+            <option value="13"
+                @selected(old('tax_rate', $product->tax_rate ?? '13') == '13')>
+                IVA 13%
+            </option>
+
+        </x-select>
 
     </div>
 
 </x-card>
-
 
 {{-- =========================
     INVENTARIO
@@ -223,7 +352,7 @@
 
             <input
                 type="number"
-                step="0.01"
+                step="{{ $product->unit?->allows_decimals ? '0.0001' : '1' }}"
                 value="{{ $product->branch_stock ?? 0 }}"
                 readonly
                 class="form-input w-full bg-slate-100 cursor-not-allowed">
@@ -237,7 +366,7 @@
 
         <x-input
             type="number"
-            step="0.01"
+            step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
             name="stock"
             label="Stock Inicial"
             :value="old('stock', 0)" />
@@ -246,7 +375,7 @@
 
     <x-input
         type="number"
-        step="0.01"
+        step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
         name="minimum_stock"
         label="Stock Mínimo"
         :value="old(
@@ -258,7 +387,7 @@
 
     <x-input
         type="number"
-        step="0.01"
+        step="{{ old('unit_id', $product->unit_id ?? null) && $units->firstWhere('id', (int) old('unit_id', $product->unit_id ?? 0))?->allows_decimals ? '0.0001' : '1' }}"
         name="maximum_stock"
         label="Stock Máximo"
         :value="old(
@@ -271,6 +400,48 @@
 </div>
 
 </x-card>
+
+@once
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const unit = document.querySelector('[name="unit_id"]');
+    if (!unit) return;
+    const quantities = ['stock', 'minimum_stock', 'maximum_stock']
+        .map(name => document.querySelector(`[name="${name}"]`))
+        .filter(Boolean);
+    const syncQuantityStep = () => {
+        const fractional = unit.selectedOptions[0]?.dataset.allowsDecimals === '1';
+        quantities.forEach(input => {
+            input.min = '0';
+            input.step = fractional ? '0.0001' : '1';
+        });
+    };
+    unit.addEventListener('change', syncQuantityStep);
+    syncQuantityStep();
+
+    const categorySelect = document.querySelector('[name="category_id"]');
+    const subcategorySelect = document.querySelector('[name="subcategory_id"]');
+    if (!categorySelect || !subcategorySelect) return;
+
+    const allSubOptions = Array.from(subcategorySelect.options).slice(1);
+
+    const filterSubcategories = () => {
+        const parentId = categorySelect.value;
+        subcategorySelect.innerHTML = '<option value="">Seleccione...</option>';
+        allSubOptions.forEach(opt => {
+            if (!parentId || opt.dataset.parent === parentId) {
+                subcategorySelect.appendChild(opt.cloneNode(true));
+            }
+        });
+    };
+
+    categorySelect.addEventListener('change', () => {
+        filterSubcategories();
+    });
+    filterSubcategories();
+});
+</script>
+@endonce
 
 
 {{-- =========================
@@ -361,4 +532,14 @@
         name="image"
         class="form-input">
 
+    <p class="mt-1 text-xs text-slate-500">
+        Formatos aceptados: JPG, JPEG, PNG o WEBP. Tamaño máximo: 5 MB.
+    </p>
+
+    @error('image')
+        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+    @enderror
+
 </x-card>
+
+<x-scanner.mvs-scanner />

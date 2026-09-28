@@ -128,7 +128,7 @@
 
                         <option
                             value="{{ $country->id }}"
-                            @selected(old('country_id') == $country->id)>
+                            @selected(old('country_id', $countries->firstWhere('is_default', true)?->id) == $country->id)>
 
                             {{ $country->name }}
 
@@ -266,6 +266,23 @@
 
         {{-- Botones --}}
 
+        <section class="mt-6 border-t border-slate-200 pt-6">
+            <h2 class="text-lg font-semibold text-slate-800">Primera sucursal</h2>
+            <p class="mt-1 text-sm text-slate-500">Esta sucursal quedará activa al finalizar el registro.</p>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label for="branch_name" class="mb-2 block text-sm font-semibold text-slate-700">Nombre *</label>
+                    <input id="branch_name" name="branch_name" required value="{{ old('branch_name', 'Principal') }}" class="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3">
+                    @error('branch_name')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="branch_code" class="mb-2 block text-sm font-semibold text-slate-700">Código *</label>
+                    <input id="branch_code" name="branch_code" required value="{{ old('branch_code', 'PRINCIPAL') }}" class="min-h-11 w-full rounded-xl border border-slate-300 px-4 py-3">
+                    @error('branch_code')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+        </section>
+
         <div class="mt-6 flex justify-end gap-3">
 
             <a
@@ -283,88 +300,5 @@
     </form>
 
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-
-    const country = document.querySelector('[name="country_id"]');
-    const province = document.querySelector('[name="province_id"]');
-    const canton = document.querySelector('[name="canton_id"]');
-    const district = document.querySelector('[name="district_id"]');
-
-    if (!country || !province || !canton || !district) {
-        return;
-    }
-
-    function resetSelect(select, text = 'Seleccione...') {
-        select.innerHTML = `<option value="">${text}</option>`;
-    }
-
-    function loadOptions(url, select, selectedValue = null) {
-
-        fetch(url)
-            .then(response => response.json())
-            .then(items => {
-
-                resetSelect(select);
-
-                items.forEach(item => {
-
-                    const option = document.createElement('option');
-
-                    option.value = item.id;
-                    option.textContent = item.name;
-
-                    if (selectedValue && String(item.id) === String(selectedValue)) {
-                        option.selected = true;
-                    }
-
-                    select.appendChild(option);
-                });
-
-            });
-    }
-
-    country.addEventListener('change', function () {
-
-        resetSelect(province);
-        resetSelect(canton);
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/provincias/${this.value}`,
-            province
-        );
-    });
-
-    province.addEventListener('change', function () {
-
-        resetSelect(canton);
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/cantones/${this.value}`,
-            canton
-        );
-    });
-
-    canton.addEventListener('change', function () {
-
-        resetSelect(district);
-
-        if (!this.value) return;
-
-        loadOptions(
-            `/ubicaciones/distritos/${this.value}`,
-            district
-        );
-    });
-
-});
-</script>
 
 @endsection

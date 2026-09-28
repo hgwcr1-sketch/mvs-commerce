@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Brand;
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\Size;
+use App\Models\Style;
 use App\Models\Unit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -32,11 +36,12 @@ class ProductController extends Controller
          * Buscador.
          */
         if ($search = request('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhere('cabys_code', 'like', "%{$search}%");
+            $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($q) use ($search, $likeOperator) {
+                $q->where('name', $likeOperator, "%{$search}%")
+                    ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('barcode', $likeOperator, "%{$search}%")
+                    ->orWhere('cabys_code', $likeOperator, "%{$search}%");
             });
         }
 
@@ -168,10 +173,29 @@ $lowStockProducts = $statsProducts
             ->orderBy('name')
             ->get();
 
+        $styles = Style::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $sizes = Size::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        $colors = Color::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
         return view('productos.create', compact(
             'categories',
             'brands',
-            'units'
+            'units',
+            'styles',
+            'sizes',
+            'colors'
         ));
     }
 
@@ -182,6 +206,11 @@ $lowStockProducts = $statsProducts
     {
         $data = $request->validated();
         $data['company_id'] = session('active_company_id');
+
+        if ($request->has('subcategory_id') && $request->subcategory_id) {
+            $data['category_id'] = $request->subcategory_id;
+        }
+        unset($data['subcategory_id']);
 
         if ($request->hasFile('image')) {
             $data['image'] = $request
@@ -272,6 +301,22 @@ if ($request->expectsJson()) {
         ->orderBy('name')
         ->get();
 
+    $styles = Style::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get();
+
+    $sizes = Size::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->orderBy('name')
+        ->get();
+
+    $colors = Color::where('company_id', $companyId)
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get();
+
     $branch = $producto->branches()
         ->where('branches.id', $branchId)
         ->first();
@@ -294,7 +339,10 @@ if ($request->expectsJson()) {
         'product',
         'categories',
         'brands',
-        'units'
+        'units',
+        'styles',
+        'sizes',
+        'colors'
     ));
 }
 
@@ -305,6 +353,11 @@ if ($request->expectsJson()) {
     {
         $data = $request->validated();
         $data['company_id'] = session('active_company_id');
+
+        if ($request->has('subcategory_id') && $request->subcategory_id) {
+            $data['category_id'] = $request->subcategory_id;
+        }
+        unset($data['subcategory_id']);
 
         if ($request->hasFile('image')) {
             if ($producto->image) {
@@ -384,13 +437,25 @@ if ($branchId) {
         }
 
         $companyId = session('active_company_id');
+        $branchId = request('branch_id') ?: session('active_branch_id');
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
         $products = Product::where('company_id', $companyId)
+            ->with(['unit:id,allows_decimals'])
+            ->with([
+                'branches' => function ($query) use ($branchId) {
+                    $query->where('branches.id', $branchId);
+                },
+            ])
             ->where('is_active', true)
-            ->where(function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('internal_code', 'like', "%{$search}%")
-                    ->orWhere('barcode', 'like', "%{$search}%");
+            ->where(function ($query) use ($search, $likeOperator) {
+                $query->where('name', $likeOperator, "%{$search}%")
+                    ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('barcode', $likeOperator, "%{$search}%")
+                    ->orWhereHas('barcodes', function ($q) use ($search, $likeOperator) {
+                        $q->where('is_active', true)
+                            ->where('barcode', $likeOperator, "%{$search}%");
+                    });
             })
             ->orderBy('name')
             ->limit(10)
@@ -399,9 +464,29 @@ if ($branchId) {
                 'name',
                 'internal_code',
                 'barcode',
+                'unit_id',
+                'sale_price',
+                'cost',
+                'tax_rate',
+                'track_inventory',
             ]);
 
-        return response()->json($products);
+        return response()->json($products->map(function (Product $product) {
+            $branch = $product->branches->first();
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'barcode' => $product->barcode,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
+                'sale_price' => (float) $product->sale_price,
+                'cost' => (float) $product->cost,
+                'tax_rate' => (float) $product->tax_rate,
+                'track_inventory' => (bool) $product->track_inventory,
+                'branch_stock' => $branch ? (float) $branch->pivot->stock : null,
+            ];
+        }));
     }
 
     public function createProduct(Request $request)

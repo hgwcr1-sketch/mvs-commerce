@@ -4,10 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
@@ -18,6 +18,9 @@ class Product extends Model
         'category_id',
         'brand_id',
         'unit_id',
+        'style_id',
+        'size_id',
+        'color_id',
         'name',
         'internal_code',
         'barcode',
@@ -29,6 +32,9 @@ class Product extends Model
         'sale_price',
         'wholesale_price',
         'special_price',
+        'price_a',
+        'price_b',
+        'price_c',
         'stock',
         'track_inventory',
         'minimum_stock',
@@ -37,17 +43,22 @@ class Product extends Model
         'tax_rate',
         'image',
         'is_active',
+        'prints_label',
     ];
 
     protected $casts = [
-        'cost' => 'decimal:2',
+        'cost' => 'decimal:4',
         'sale_price' => 'decimal:2',
         'wholesale_price' => 'decimal:2',
         'special_price' => 'decimal:2',
+        'price_a' => 'decimal:2',
+        'price_b' => 'decimal:2',
+        'price_c' => 'decimal:2',
         'stock' => 'decimal:2',
         'track_inventory' => 'boolean',
         'allow_negative_stock' => 'boolean',
         'is_active' => 'boolean',
+        'prints_label' => 'boolean',
     ];
 
     /**
@@ -83,6 +94,30 @@ class Product extends Model
     }
 
     /**
+     * Estilo del producto.
+     */
+    public function style()
+    {
+        return $this->belongsTo(Style::class, 'style_id');
+    }
+
+    /**
+     * Talla del producto.
+     */
+    public function size()
+    {
+        return $this->belongsTo(Size::class, 'size_id');
+    }
+
+    /**
+     * Color del producto.
+     */
+    public function color()
+    {
+        return $this->belongsTo(Color::class, 'color_id');
+    }
+
+    /**
      * Sucursales donde existe el producto.
      */
     public function branches(): BelongsToMany
@@ -96,7 +131,7 @@ class Product extends Model
             ->withTimestamps();
     }
 
-        /**
+    /**
      * Códigos de barras adicionales del producto.
      */
     public function barcodes()
@@ -110,5 +145,71 @@ class Product extends Model
     public function inventoryLots(): HasMany
     {
         return $this->hasMany(InventoryLot::class);
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function productSuppliers(): HasMany
+    {
+        return $this->hasMany(ProductSupplier::class);
+    }
+
+    public function suppliers(): BelongsToMany
+    {
+        return $this->belongsToMany(Supplier::class, 'product_suppliers')
+            ->withPivot(['company_id', 'supplier_product_code', 'current_cost', 'is_primary', 'is_active', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function purchaseOrderItems(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderItem::class);
+    }
+
+    public function getPortalAvailabilityAttribute(): string
+    {
+        $stock = $this->availableStock();
+        if ($stock === null) {
+            return 'Sin existencias';
+        }
+        if ((float) $stock <= 0) {
+            return 'Agotado';
+        }
+
+        return 'Disponible';
+    }
+
+    public function getPortalLoyaltyBenefitAttribute(): ?string
+    {
+        $percentage = $this->companyLoyaltyEarningPercentage();
+        if ($percentage === null || (float) $percentage <= 0) {
+            return null;
+        }
+        $decimal = rtrim(rtrim(number_format((float) $percentage, 2, ',', '.'), '0'), ',');
+
+        return "{$decimal}% en puntos";
+    }
+
+    public function availableStock(): ?string
+    {
+        $pivot = $this->branches()->first();
+        if ($pivot && isset($pivot->pivot->stock)) {
+            return (string) $pivot->pivot->stock;
+        }
+
+        return null;
+    }
+
+    private function companyLoyaltyEarningPercentage(): ?string
+    {
+        $setting = LoyaltySetting::query()->where('company_id', $this->company_id)->first();
+        if (! $setting) {
+            return null;
+        }
+
+        return (string) $setting->earning_percentage;
     }
 }

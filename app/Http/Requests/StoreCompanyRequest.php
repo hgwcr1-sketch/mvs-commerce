@@ -49,6 +49,10 @@ class StoreCompanyRequest extends FormRequest
 
             'timezone' => 'nullable|string|max:100',
 
+            'branch_name' => 'required|string|max:255',
+
+            'branch_code' => 'required|string|max:50',
+
         ];
     }
 

@@ -26,19 +26,29 @@
 
             <a
                 href="{{ route('roles.index') }}"
-                class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                class="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
                 Volver
             </a>
 
             <a
                 href="{{ route('roles.edit', $role) }}"
-                class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+                class="inline-flex min-h-11 items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
                 Editar
             </a>
 
         </div>
 
     </div>
+
+    @php
+        $roleTabs = [
+            ['id' => 'resumen', 'label' => 'Resumen'],
+            ['id' => 'usuarios', 'label' => 'Usuarios', 'badge' => $role->users->count()],
+            ['id' => 'permisos', 'label' => 'Permisos', 'badge' => $role->permissions->count()],
+        ];
+    @endphp
+    <x-tabs :tabs="$roleTabs" active-tab="resumen" variant="pills" aria-label="Secciones del rol">
+    <div id="panel-resumen" role="tabpanel" aria-labelledby="tab-resumen" x-show="activeTab === 'resumen'" class="space-y-6">
 
     {{-- Información general --}}
 
@@ -122,7 +132,10 @@
 
     </x-card>
 
+    </div>
+
     {{-- Usuarios --}}
+    <div id="panel-usuarios" role="tabpanel" aria-labelledby="tab-usuarios" x-show="activeTab === 'usuarios'" x-cloak>
 
     <x-card>
 
@@ -176,7 +189,10 @@
 
     </x-card>
 
+    </div>
+
     {{-- Permisos --}}
+    <div id="panel-permisos" role="tabpanel" aria-labelledby="tab-permisos" x-show="activeTab === 'permisos'" x-cloak>
 
     <x-card>
 
@@ -255,6 +271,8 @@
         @endif
 
     </x-card>
+    </div>
+    </x-tabs>
 
 </div>
 

@@ -1,0 +1,35 @@
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const html = require('node:fs').readFileSync(0, 'utf8');
+const script = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]).find(s => s.includes("Alpine.data('posTerminal'"));
+assert.ok(script);
+let factory;
+vm.runInNewContext(script, { document: { addEventListener: (_, fn) => fn() }, Alpine: { data: (_, fn) => { factory = fn; } }, console });
+const pos = factory();
+pos.cart = [{ id: 1, quantity: 1, sale_price: 2000, tax_rate: 0, _discount: 0, _unitPrice: '' }];
+pos.selectedCustomer = { id: 1 };
+Object.assign(pos.loyalty, { available: true, eligible: true, offers_allowed: true, point_value: '2.0000', max_redeemable_points: '1000.0000', requested: '1000' });
+assert.equal(pos.loyaltyRedeemedEstimate, 2000);
+assert.equal(pos.pendingBalance, 0);
+assert.equal(pos.checkoutCanConfirm, true);
+assert.equal(pos.checkout.payments.length, 0);
+pos.loyalty.requested = '500';
+assert.equal(pos.pendingBalance, 1000);
+assert.equal(pos.checkoutCanConfirm, false);
+pos.checkout.payments = [{ payment_method_id: 1, amount: 1000 }];
+assert.equal(pos.checkoutCanConfirm, true);
+for (const value of ['-1', '0', '1001', '500.00001', 'NaN', '1000']) {
+    pos.loyalty.requested = value;
+    assert.ok(pos.loyaltyInputError, value);
+    assert.equal(pos.checkoutCanConfirm, false, value);
+}
+pos.loyalty.requested = '500';
+pos.loyalty.loading = true;
+assert.equal(pos.checkoutCanConfirm, false);
+pos.loyalty.loading = false;
+pos.selectedCustomer = null;
+assert.equal(pos.checkoutCanConfirm, false);
+pos.loyalty.requested = '';
+pos.checkout.payments[0].amount = 2000;
+assert.equal(pos.checkoutCanConfirm, true);
+console.log('Loyalty UI OK');

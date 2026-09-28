@@ -67,9 +67,9 @@
             </p>
 
             <a
-                href="{{ route('importaciones.inventario') }}"
+                href="{{ route('importaciones.inventario-migracion') }}"
                 class="mt-5 inline-block rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">
-                Importar inventario
+                Importar inventario inicial P36
             </a>
         </div>
 

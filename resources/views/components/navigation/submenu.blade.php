@@ -1,12 +1,14 @@
 @props([
     'route',
     'label',
+    'parameters' => [],
+    'active' => null,
 ])
 
 <a
-    href="{{ route($route) }}"
+    href="{{ route($route, $parameters) }}"
     class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-white
-    {{ request()->routeIs($route.'*')
+    {{ ($active ?? request()->routeIs($route.'*'))
         ? 'bg-slate-800 text-white'
         : '' }}">
 

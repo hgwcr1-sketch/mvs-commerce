@@ -1,0 +1,74 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class SalePayment extends Model
+{
+    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_VOIDED = 'voided';
+
+    protected $fillable = [
+        'sale_id',
+        'cash_session_id',
+        'payment_method_id',
+        'affects_cash_snapshot',
+        'created_by',
+        'amount',
+        'received_amount',
+        'change_amount',
+        'cash_effect_amount',
+        'received_amount_usd',
+        'change_amount_usd',
+        'exchange_rate_snapshot',
+        'cash_effect_amount_usd',
+        'reference',
+        'status',
+        'voided_by',
+        'voided_at',
+        'void_reason',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'amount' => 'decimal:4',
+            'received_amount' => 'decimal:4',
+            'change_amount' => 'decimal:4',
+            'affects_cash_snapshot' => 'boolean',
+            'cash_effect_amount' => 'decimal:4',
+            'received_amount_usd' => 'decimal:4',
+            'change_amount_usd' => 'decimal:4',
+            'exchange_rate_snapshot' => 'decimal:4',
+            'cash_effect_amount_usd' => 'decimal:4',
+            'voided_at' => 'datetime',
+        ];
+    }
+
+    public function sale(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class);
+    }
+
+    public function paymentMethod(): BelongsTo
+    {
+        return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function cashSession(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
+    }
+}

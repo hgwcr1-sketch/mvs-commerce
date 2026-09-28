@@ -24,9 +24,9 @@ class InventoryMovement extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'decimal:2',
-        'previous_stock' => 'decimal:2',
-        'new_stock' => 'decimal:2',
+        'quantity' => 'decimal:4',
+        'previous_stock' => 'decimal:4',
+        'new_stock' => 'decimal:4',
     ];
 
     public function company(): BelongsTo

@@ -54,4 +54,9 @@ class PurchaseItem extends Model
     {
         return $this->hasMany(InventoryLot::class);
     }
+
+    public function purchaseOrderSourceConversions(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderSourceConversion::class);
+    }
 }

@@ -1,0 +1,123 @@
+@extends('layouts.app')
+@section('title', 'Cierre de Caja')
+@section('content')
+<div class="mx-auto max-w-5xl space-y-6" x-data="cashClosing()">
+    <div class="flex items-start justify-between gap-4">
+        <div><h2 class="text-2xl font-semibold text-slate-800">Conteo de cierre</h2><p class="text-sm text-slate-600">{{ $cashSession->session_number }} — {{ $cashSession->cashRegister->name }}</p></div>
+        <div class="flex items-center gap-3">
+            <a href="{{ route('cash.index') }}" class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 py-2">Volver</a>
+            <a href="{{ route('cash.drawer-receipt', 'closing') }}?cash_session_id={{ $cashSession->id }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500" title="Imprime comprobante para abrir el cajón físicamente">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2-2v4a2 2 0 002 2h6m-6-4V7"/></svg>
+                <span>Abrir cajón</span>
+            </a>
+        </div>
+    </div>
+    <div class="rounded-xl bg-slate-50 p-4 text-sm"><span class="font-semibold text-slate-700">Documentos/Transacciones de la sesión: </span><strong class="text-slate-900">{{ $documentsCount ?? $cashSession->documents_count }}</strong></div>
+    @if($errors->any())<div class="rounded-lg bg-red-50 p-4 text-red-700">{{ $errors->first() }}</div>@endif
+    @if($blind)<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Cierre ciego activo. Registre lo contado; los valores esperados y las diferencias se calcularán internamente al confirmar.</div>@endif
+    <form x-ref="closingForm" method="POST" action="{{ route('cash.closing.submit', $cashSession) }}" autocomplete="off" class="space-y-6" @submit.prevent="requestConfirmation">
+        @csrf
+        <input type="hidden" name="request_token" value="{{ old('request_token', $requestToken) }}">
+        <x-card>
+            <x-slot:header><h3 class="text-lg font-semibold">Billetes</h3></x-slot:header>
+            <div class="space-y-3">@foreach($denominations->where('type','bill') as $denomination)<div class="grid grid-cols-[minmax(0,1fr)_5rem] sm:grid-cols-[minmax(0,1fr)_7rem_9rem] items-center gap-3"><label for="denomination-{{ $denomination->id }}">{{ $denomination->label }}</label><input id="denomination-{{ $denomination->id }}" name="denominations[{{ $denomination->id }}]" x-model.number="quantities[{{ $denomination->id }}]" type="number" min="0" step="1" autocomplete="off" required class="min-h-11 w-full min-w-0 rounded-xl border border-slate-400 px-3 py-2 text-right focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"><span class="col-span-2 text-right sm:col-span-1" x-text="money({{ (float)$denomination->value }}*(Number(quantities[{{ $denomination->id }}])||0))"></span></div>@endforeach</div>
+        </x-card>
+        <x-card>
+            <x-slot:header><h3 class="text-lg font-semibold">Monedas</h3></x-slot:header>
+            <div class="space-y-3">@foreach($denominations->where('type','coin') as $denomination)<div class="grid grid-cols-[minmax(0,1fr)_5rem] sm:grid-cols-[minmax(0,1fr)_7rem_9rem] items-center gap-3"><label for="denomination-{{ $denomination->id }}">{{ $denomination->label }}</label><input id="denomination-{{ $denomination->id }}" name="denominations[{{ $denomination->id }}]" x-model.number="quantities[{{ $denomination->id }}]" type="number" min="0" step="1" autocomplete="off" required class="min-h-11 w-full min-w-0 rounded-xl border border-slate-400 px-3 py-2 text-right focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"><span class="col-span-2 text-right sm:col-span-1" x-text="money({{ (float)$denomination->value }}*(Number(quantities[{{ $denomination->id }}])||0))"></span></div>@endforeach</div>
+            <div class="mt-5 border-t pt-4 text-right"><span class="text-sm text-slate-500">Total de efectivo contado</span><strong class="block text-3xl" x-text="money(cashTotal)"></strong></div>
+            @unless($blind)<div class="mt-3 text-right text-sm text-slate-600">Esperado: ₡{{ number_format($expectedCash,0,',','.') }}</div>@endunless
+        </x-card>
+        <x-card>
+            <x-slot:header><h3 class="text-lg font-semibold">Formas de pago</h3></x-slot:header>
+            @if($cashSession->accepts_usd_snapshot)
+                @php($expectedUsd = $blind ? null : app(\App\Services\Cash\CashExpectedAmountService::class)->calculateUsdDecimal($cashSession))
+                <section class="mb-5 space-y-3 rounded-xl border border-slate-400 p-4" x-data="{ countedUsd: @js((string) old('counted_cash_usd', '')) }">
+                    <h3 class="text-lg font-semibold">Efectivo en dólares</h3>
+                    <label for="counted-cash-usd" class="block font-medium">US$ contado físicamente</label>
+                    <input id="counted-cash-usd" name="counted_cash_usd" x-model="countedUsd" type="number" inputmode="decimal" min="0" step="0.0001" required class="min-h-11 w-full rounded-xl border border-slate-400 px-4 py-3 text-right">
+                    <p class="text-sm text-slate-600">Registre 0 si no hay dólares físicos. Este conteo es independiente de las denominaciones CRC.</p>
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <p>Contado US$ <strong x-text="countedUsd || '—'"></strong></p>
+                        @unless($blind)
+                            <p>Esperado US$ <strong>{{ $expectedUsd }}</strong></p>
+                            <p>Diferencia US$ <strong x-text="usdDiff(countedUsd, @js($expectedUsd))"></strong></p>
+                        @endunless
+                    </div>
+                </section>
+            @endif
+            <div class="space-y-5">
+                @forelse($methods as $method)
+                    @php($source = $expectedBreakdown->get($method->id, ['sales'=>0,'receivables'=>0,'layaways'=>0,'payables'=>0,'total'=>0]))
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+                            <div>
+                                <h4 class="mb-3 text-lg font-semibold text-slate-900">{{ $method->name }}</h4>
+                                @unless($blind)<dl class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+                                    <dt class="text-slate-600">Ventas</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['sales'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">CxC</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['receivables'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">Apartados</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['layaways'],0,',','.') }}</dd>
+                                    <dt class="text-slate-600">CxP</dt><dd class="text-right font-medium">₡{{ number_format((float)$source['payables'],0,',','.') }}</dd>
+                                    <dt class="border-t pt-2 font-semibold">Total esperado</dt><dd class="border-t pt-2 text-right font-bold">₡{{ number_format((float)$source['total'],0,',','.') }}</dd>
+                                </dl>@endunless
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+                                <div><label class="mb-2 block font-medium" for="payment-{{ $method->id }}">Monto reportado</label><input id="payment-{{ $method->id }}" name="payments[{{ $method->id }}][reported_amount]" x-model="reportedPayments[{{ $method->id }}]" type="number" @if($cashSession->accepts_usd_snapshot && $method->type === 'cash') step="0.0001" @else min="0" step="1" @endif autocomplete="off" required value="{{ old("payments.$method->id.reported_amount","") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 text-right focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
+                                <div><label class="mb-2 block text-sm">Referencia</label><input name="payments[{{ $method->id }}][reference]" maxlength="150" value="{{ old("payments.$method->id.reference") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
+                                <div><label class="mb-2 block text-sm">Notas</label><input name="payments[{{ $method->id }}][notes]" maxlength="5000" value="{{ old("payments.$method->id.notes") }}" class="w-full rounded-xl border border-slate-400 px-4 py-3 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"></div>
+                            </div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-slate-500">No hay formas de pago configuradas.</p>
+                @endforelse
+            </div>
+        </x-card>
+        <x-card><label class="mb-2 block font-medium" for="closing_notes">Notas del cierre <span class="font-normal text-slate-500">(opcional)</span></label><textarea id="closing_notes" name="closing_notes" x-model="closingNotes" rows="3" maxlength="5000" class="w-full rounded-xl border border-slate-400 px-4 py-3 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20">{{ old('closing_notes') }}</textarea></x-card>
+        <div class="sticky bottom-20 z-10 flex flex-wrap justify-end gap-3 rounded-xl bg-white p-3 shadow-sm"><button type="submit" form="cancel-closing" class="rounded-xl border border-slate-300 px-5 py-3">Cancelar cierre</button><button type="submit" :disabled="processing" class="rounded-xl bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600 disabled:opacity-50">Revisar y confirmar</button></div>
+    </form>
+    <form id="cancel-closing" method="POST" action="{{ route('cash.closing.cancel',$cashSession) }}">@csrf</form>
+
+    <div x-cloak x-show="confirmationOpen" x-transition.opacity class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="closing-confirmation-title" @keydown.escape.window="if (!processing) confirmationOpen=false" @keydown.enter.window="if (confirmationOpen) { $event.preventDefault(); confirmSubmit() }">
+        <div class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl" @click.outside="if (!processing) confirmationOpen=false">
+            <h3 id="closing-confirmation-title" class="text-xl font-semibold text-slate-900">Revise el conteo declarado</h3>
+            <p class="mt-1 text-sm text-slate-600">Confirme que estos son los valores que contó antes de cerrar la caja.</p>
+
+            <div class="mt-5 rounded-xl bg-slate-50 p-4">
+                <span class="text-sm text-slate-600">Total de efectivo contado</span>
+                <strong class="block text-3xl text-slate-900" x-text="money(cashTotal)"></strong>
+            </div>
+
+            <div class="mt-5 space-y-2">
+                <h4 class="font-semibold text-slate-900">Denominaciones declaradas</h4>
+                <template x-for="denomination in positiveDenominations" :key="denomination.id">
+                    <p class="flex justify-between gap-4 text-sm"><span x-text="`${denomination.quantity} × ${money(denomination.value)}`"></span><span x-text="money(denomination.quantity * denomination.value)"></span></p>
+                </template>
+                <p x-show="positiveDenominations.length === 0" class="text-sm text-slate-500">No se declararon billetes ni monedas.</p>
+            </div>
+
+            <div class="mt-5 space-y-2">
+                <h4 class="font-semibold text-slate-900">Formas de pago declaradas</h4>
+                @forelse($methods as $method)
+                    <p class="flex justify-between gap-4 text-sm"><span>{{ $method->name }}</span><span x-text="money(Number(reportedPayments[{{ $method->id }}]) || 0)"></span></p>
+                @empty
+                    <p class="text-sm text-slate-500">No hay otras formas de pago configuradas.</p>
+                @endforelse
+            </div>
+
+            <div x-show="closingNotes.trim() !== ''" class="mt-5">
+                <h4 class="font-semibold text-slate-900">Notas del cierre</h4>
+                <p class="mt-1 whitespace-pre-wrap text-sm text-slate-700" x-text="closingNotes"></p>
+            </div>
+
+            <div class="mt-6 flex flex-wrap justify-end gap-3">
+                <button type="button" :disabled="processing" @click="confirmationOpen=false" class="rounded-xl border border-slate-300 px-5 py-3 disabled:opacity-50">Volver a revisar</button>
+                <button type="button" :disabled="processing" @click="confirmSubmit()" class="rounded-xl bg-amber-500 px-6 py-3 font-normal text-black hover:bg-amber-600 disabled:opacity-50" x-text="processing?'Enviando…':'Confirmar cierre'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function cashClosing(){return{usdDiff(counted, expected){const parse=(value)=>{if(!/^\d+(?:\.\d{1,4})?$/.test(String(value)))return null;const [whole, fraction=""]=String(value).split(".");return BigInt(whole)*10000n+BigInt(fraction.padEnd(4,"0"))};const c=parse(counted),e=parse(expected);if(c===null||e===null)return "—";const diff=c-e,absolute=diff<0n?-diff:diff;return (diff<0n?"-":"")+String(absolute/10000n)+"."+String(absolute%10000n).padStart(4,"0")},processing:false,confirmationOpen:false,quantities:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>old("denominations.$d->id","")])),values:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>(float)$d->value])),labels:@js($denominations->mapWithKeys(fn($d)=>[$d->id=>$d->label])),reportedPayments:@js($methods->mapWithKeys(fn($m)=>[$m->id=>old("payments.$m->id.reported_amount","")])),closingNotes:@js((string)old('closing_notes','')),money(value){return new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0}).format(Number(value)||0)},get cashTotal(){return Object.entries(this.values).reduce((sum,[id,value])=>sum+value*(Number(this.quantities[id])||0),0)},get positiveDenominations(){return Object.entries(this.values).map(([id,value])=>({id,quantity:Number(this.quantities[id])||0,value,label:this.labels[id]})).filter(item=>item.quantity>0)},requestConfirmation(){if(this.processing)return;this.confirmationOpen=true},confirmSubmit(){if(this.processing)return;this.processing=true;this.$nextTick(()=>this.$refs.closingForm.submit())}}}
+</script>
+@endsection

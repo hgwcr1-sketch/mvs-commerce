@@ -61,8 +61,10 @@ items: window.purchaseEdit?.items || [],
 
             try {
 
+                const searchUrl = this.$el.dataset.searchSuppliers || '/proveedores-buscar';
+
                 const response = await fetch(
-                    `/proveedores-buscar?search=${encodeURIComponent(search)}`,
+                    `${searchUrl}?search=${encodeURIComponent(search)}`,
                     {
                         headers: {
                             'Accept': 'application/json'
@@ -216,8 +218,10 @@ const data = JSON.parse(text);
 
             try {
 
+                const searchUrl = this.$el.dataset.searchProducts || '/compras-buscar-productos';
+
                 const response = await fetch(
-                    `/compras-buscar-productos?q=${encodeURIComponent(search)}`,
+                    `${searchUrl}?q=${encodeURIComponent(search)}`,
                     {
                         headers: {
                             'Accept': 'application/json'
@@ -520,7 +524,12 @@ const data = JSON.parse(responseText);
 
 alert(data.message);
 
-window.location.href = data.redirect;
+window.location.href = isEditing
+    ? data.redirect
+    : this.$root.dataset.purchaseShowUrl.replace(
+        '__PURCHASE_ID__',
+        data.purchase_id
+    );
 
     } catch (error) {
 
@@ -542,7 +551,8 @@ window.location.href = data.redirect;
             return new Intl.NumberFormat('es-CR', {
                 style: 'currency',
                 currency: 'CRC',
-                minimumFractionDigits: 2
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
             }).format(Number(value || 0));
         },
 

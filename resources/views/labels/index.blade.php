@@ -1,0 +1,212 @@
+@extends('layouts.app')
+
+@php
+$defaultPrintMode = $setting->default_print_mode ?? 'a4';
+$useCustom = $setting->use_custom_size ?? false;
+$customWidth = $setting->custom_width ?? 50;
+$customHeight = $setting->custom_height ?? 30;
+@endphp
+
+@section('content')
+<div class="mx-auto max-w-7xl space-y-5" data-responsive="360 768 1280">
+    <header>
+        <p class="text-sm font-semibold text-[#B1922D]">Productos</p>
+        <h1 class="text-2xl font-bold text-slate-900">Centro de Etiquetas</h1>
+        <p class="mt-1 text-sm text-slate-600">Selecciona productos, define cantidades y revisa el lote antes de imprimir.</p>
+    </header>
+
+    @if(session('success'))<div class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('success') }}</div>@endif
+
+    @can('productos.etiquetas.configurar')
+    <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" @if(session('success')) open @endif>
+        <summary class="min-h-11 cursor-pointer py-2 font-semibold text-slate-800">Configuración de esta sucursal</summary>
+        <form method="POST" action="{{ route('labels.settings.update') }}" class="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            @csrf @method('PUT')
+            <fieldset><legend class="form-label">Responsable de impresión</legend>
+                <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="print_destinations[]" value="cashier" @checked(in_array('cashier', $setting->print_destinations ?? []))> Cajero</label>
+                <label class="flex min-h-11 items-center gap-2"><input type="checkbox" name="print_destinations[]" value="administrator" @checked(in_array('administrator', $setting->print_destinations ?? []))> Administrador</label>
+            </fieldset>
+            <label><span class="form-label">Plantilla predeterminada</span><select name="default_template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select></label>
+            <label><span class="form-label">Tamaño predeterminado (A4)</span><select name="default_size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select></label>
+            <label><span class="form-label">Encabezado de plantilla simple</span><input class="form-input w-full" name="custom_heading" maxlength="80" value="{{ $setting->custom_heading }}"></label>
+            <label><span class="form-label">Formato de impresión predeterminado</span>
+                <select name="default_print_mode" class="form-input w-full">
+                    <option value="a4" @selected($defaultPrintMode === 'a4')>Hoja A4</option>
+                    <option value="thermal" @selected($defaultPrintMode === 'thermal')>Impresora térmica</option>
+                </select>
+            </label>
+            <div class="md:col-span-2 lg:col-span-4" id="settingsThermalSection">
+                <label class="flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" name="use_custom_size" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($useCustom)>
+                    Tamaño personalizado de etiqueta térmica
+                </label>
+                <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3" id="settingsCustomInputs" style="{{ $useCustom ? '' : 'display:none' }}">
+                    <label><span class="form-label">Ancho / Horizontal (mm)</span><input type="number" name="custom_width" min="10" max="200" value="{{ $customWidth }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <label><span class="form-label">Alto / Vertical (mm)</span><input type="number" name="custom_height" min="10" max="200" value="{{ $customHeight }}" class="form-input w-full text-right" inputmode="numeric"></label>
+                    <div class="flex items-end text-sm text-slate-500">Ej: {{ $customWidth }} × {{ $customHeight }} mm</div>
+                </div>
+            </div>
+            <button class="min-h-11 rounded-xl bg-slate-800 px-4 font-semibold text-white md:col-span-2 lg:col-span-5">Guardar configuración</button>
+        </form>
+    </details>
+    @endcan
+
+    <form method="GET" class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2 lg:grid-cols-5">
+        <div class="relative lg:col-span-2">
+            <input id="label-search" name="search" value="{{ request('search') }}" class="form-input w-full" placeholder="Nombre, código o barcode" autocomplete="off">
+            <div id="label-search-results" class="absolute left-0 right-0 top-full z-50 mt-1 hidden max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg"></div>
+        </div>
+        <select name="category_id" class="form-input w-full"><option value="">Todas las categorías</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected(request('category_id')==$category->id)>{{ $category->name }}</option>@endforeach</select>
+        <select name="brand_id" class="form-input w-full"><option value="">Todas las marcas</option>@foreach($brands as $brand)<option value="{{ $brand->id }}" @selected(request('brand_id')==$brand->id)>{{ $brand->name }}</option>@endforeach</select>
+        <select name="prints_label" class="form-input w-full"><option value="">Etiqueta: todos</option><option value="1" @selected(request('prints_label')==='1')>Sí imprime</option><option value="0" @selected(request('prints_label')==='0')>No imprime</option></select>
+        <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-semibold lg:col-span-5">Filtrar productos</button>
+    </form>
+
+    <div class="space-y-4">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            @forelse($products as $product)
+            @php($code = $product->barcode ?: $product->barcodes->first()?->barcode)
+            <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex gap-3"><input form="labelBatch" class="mt-1 h-6 w-6" type="checkbox" name="products[]" value="{{ $product->id }}" aria-label="Seleccionar {{ $product->name }}"><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">{{ $product->name }}</h2><p class="text-xs text-slate-500">{{ $product->internal_code }} · {{ $code ?: 'Sin barcode' }}</p><p class="mt-1 text-lg font-bold">₡{{ number_format($product->sale_price, 2, ',', '.') }}</p></div></div>
+                <div class="mt-3 grid grid-cols-2 gap-3"><label><span class="text-xs font-medium">Cantidad</span><input form="labelBatch" type="number" inputmode="numeric" min="1" max="500" value="1" name="quantities[{{ $product->id }}]" class="form-input w-full text-right"></label>
+                    <div><span class="text-xs font-medium">Imprime etiqueta</span><form method="POST" action="{{ route('labels.products.update', $product) }}">@csrf @method('PATCH')<input type="hidden" name="prints_label" value="{{ $product->prints_label ? 0 : 1 }}"><button class="mt-1 min-h-10 w-full rounded-lg {{ $product->prints_label ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700' }}">{{ $product->prints_label ? 'Sí' : 'No' }}</button></form></div></div>
+            </article>
+            @empty <p class="text-sm text-slate-500">No hay productos con estos filtros.</p> @endforelse
+        </div>
+        {{ $products->links() }}
+        <form id="labelBatch" method="POST" action="{{ route('labels.preview') }}" class="sticky bottom-20 z-10 grid gap-3 rounded-2xl border border-slate-300 bg-white/95 p-4 shadow-xl backdrop-blur md:bottom-4 md:grid-cols-3">
+            @csrf
+            <select name="template" class="form-input w-full">@foreach($templates as $key=>$label)<option value="{{ $key }}" @selected($setting->default_template===$key)>{{ $label }}</option>@endforeach</select>
+            <select name="size" class="form-input w-full">@foreach($sizes as $key=>$label)<option value="{{ $key }}" @selected($setting->default_size===$key)>{{ $label }}</option>@endforeach</select>
+            <select name="print_mode" id="printMode" class="form-input w-full">
+                <option value="a4" @selected($defaultPrintMode === 'a4')>Hoja A4</option>
+                <option value="thermal" @selected($defaultPrintMode === 'thermal')>Impresora térmica</option>
+            </select>
+            <div id="thermalCustom" class="{{ $defaultPrintMode === 'thermal' ? '' : 'hidden' }} md:col-span-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label class="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" name="use_custom_size" id="useCustomSize" value="1" class="h-5 w-5 rounded border-slate-300 text-amber-500" @checked($useCustom)>
+                        Tamaño personalizado
+                    </label>
+                    <div id="customSizeInputs" class="flex items-center gap-2" style="{{ $useCustom ? '' : 'display:none' }}">
+                        <div><label class="text-xs text-slate-500">Ancho / Horizontal (mm)</label><input type="number" name="custom_width" id="customWidth" min="10" max="200" value="{{ $customWidth }}" class="form-input w-20 text-right" inputmode="numeric"></div>
+                        <span class="text-sm text-slate-500">×</span>
+                        <div><label class="text-xs text-slate-500">Alto / Vertical (mm)</label><input type="number" name="custom_height" id="customHeight" min="10" max="200" value="{{ $customHeight }}" class="form-input w-20 text-right" inputmode="numeric"></div>
+                        <span class="text-sm text-slate-500">mm</span>
+                    </div>
+                </div>
+            </div>
+            <button class="min-h-11 rounded-xl bg-amber-500 text-black px-4 font-bold md:col-span-3">Vista previa del lote</button>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const mode = document.getElementById('printMode');
+    const thermalCustom = document.getElementById('thermalCustom');
+    const useCustom = document.getElementById('useCustomSize');
+    const customInputs = document.getElementById('customSizeInputs');
+    const settingsMode = document.querySelector('select[name="default_print_mode"]');
+    const settingsCustomSection = document.getElementById('settingsThermalSection');
+    const settingsCustomInputs = document.getElementById('settingsCustomInputs');
+    const settingsUseCustom = settingsCustomSection?.querySelector('input[name="use_custom_size"]');
+
+    function toggleThermal() {
+        const isThermal = mode.value === 'thermal';
+        thermalCustom.classList.toggle('hidden', !isThermal);
+        if (!isThermal) { useCustom.checked = false; customInputs.style.display = 'none'; }
+    }
+    function toggleCustom() { customInputs.style.display = useCustom.checked ? '' : 'none'; }
+    function toggleSettingsThermal() {
+        if (!settingsMode || !settingsCustomSection) return;
+        const isThermal = settingsMode.value === 'thermal';
+        settingsCustomSection.classList.toggle('hidden', !isThermal);
+        if (!isThermal && settingsUseCustom) { settingsUseCustom.checked = false; toggleSettingsCustom(); }
+    }
+    function toggleSettingsCustom() {
+        if (!settingsCustomInputs || !settingsUseCustom) return;
+        settingsCustomInputs.style.display = settingsUseCustom.checked ? '' : 'none';
+    }
+    if (mode) { mode.addEventListener('change', toggleThermal); toggleThermal(); }
+    if (useCustom) { useCustom.addEventListener('change', toggleCustom); toggleCustom(); }
+    if (settingsMode) { settingsMode.addEventListener('change', toggleSettingsThermal); toggleSettingsThermal(); }
+    if (settingsUseCustom) { settingsUseCustom.addEventListener('change', toggleSettingsCustom); }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('label-search');
+    const resultsBox = document.getElementById('label-search-results');
+    if (!searchInput || !resultsBox) return;
+
+    let timer;
+    let requestCount = 0;
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value ?? '';
+        return div.innerHTML;
+    }
+
+    function doSearch(term) {
+        clearTimeout(timer);
+        if (!term || term.length < 2) {
+            resultsBox.innerHTML = '';
+            resultsBox.classList.add('hidden');
+            return;
+        }
+        const thisRequest = ++requestCount;
+        timer = setTimeout(async function () {
+            try {
+                const response = await fetch(
+                    `{{ route('productos.search') }}?q=${encodeURIComponent(term)}`,
+                    { headers: { 'Accept': 'application/json' } }
+                );
+                if (!response.ok) throw new Error('Error al buscar');
+                if (thisRequest !== requestCount) return;
+                const products = await response.json();
+                resultsBox.innerHTML = '';
+                if (products.length === 0) {
+                    resultsBox.innerHTML = '<div class="px-4 py-3 text-sm text-slate-500">No se encontraron productos.</div>';
+                    resultsBox.classList.remove('hidden');
+                    return;
+                }
+                products.forEach(function (product) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-amber-50';
+                    const stockLabel = product.branch_stock != null ? ' · Stock: ' + Number(product.branch_stock).toLocaleString() : '';
+                    item.innerHTML = `
+                        <div class="font-semibold text-slate-800">${escapeHtml(product.name)}</div>
+                        <div class="mt-1 text-xs text-slate-500">
+                            ${escapeHtml(product.internal_code ?? '')}
+                            ${product.barcode ? ' · ' + escapeHtml(product.barcode) : ''}
+                            ${stockLabel}
+                        </div>`;
+                    item.addEventListener('click', function () {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set('search', product.internal_code);
+                        window.location.href = '{{ route("labels.index") }}?' + params.toString();
+                    });
+                    resultsBox.appendChild(item);
+                });
+                resultsBox.classList.remove('hidden');
+            } catch (error) {
+                console.error(error);
+                if (thisRequest !== requestCount) return;
+                resultsBox.innerHTML = '<div class="px-4 py-3 text-sm text-red-600">Error al buscar productos.</div>';
+                resultsBox.classList.remove('hidden');
+            }
+        }, 250);
+    }
+
+    searchInput.addEventListener('input', function () { doSearch(this.value.trim()); });
+
+    document.addEventListener('click', function (event) {
+        if (event.target !== searchInput && !resultsBox.contains(event.target)) {
+            resultsBox.classList.add('hidden');
+        }
+    });
+});
+</script>
+@endsection

@@ -8,6 +8,17 @@
 
 <div class="space-y-6">
 
+    @php
+        $customerTabs = [
+            ['id' => 'informacion', 'label' => 'Información'],
+            ['id' => 'identificacion-seguridad', 'label' => 'Identificación y seguridad'],
+            ['id' => 'contactos-direcciones', 'label' => 'Contactos y direcciones'],
+        ];
+    @endphp
+    <x-tabs :tabs="$customerTabs" active-tab="informacion" variant="pills" aria-label="Secciones del cliente">
+
+    <div id="panel-informacion" role="tabpanel" aria-labelledby="tab-informacion" x-show="activeTab === 'informacion'">
+
     <x-card>
 
         <x-slot:header>
@@ -31,6 +42,11 @@
         </x-slot:header>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+            <div>
+                <label class="text-sm text-slate-500">Código Comercial</label>
+                <p class="font-semibold font-mono">{{ $customer->customer_code ?: '-' }}</p>
+            </div>
 
             <div>
                 <label class="text-sm text-slate-500">Nombre</label>
@@ -97,7 +113,7 @@
 
             <div>
                 <label class="text-sm text-slate-500">Teléfono</label>
-                <p>{{ $customer->phone ?: '-' }}</p>
+                <p>{{ $customer->phone ? trim(($customer->phone_country_code ?? '').' '.$customer->phone) : '-' }}</p>
             </div>
 
             <div>
@@ -137,7 +153,7 @@
 
             <div>
                 <label class="text-sm text-slate-500">Límite de Crédito</label>
-                <p>₡ {{ number_format($customer->credit_limit,2) }}</p>
+                <p>₡ {{ number_format($customer->credit_limit,0) }}</p>
             </div>
 
             <div>
@@ -197,9 +213,79 @@
 
         </x-slot:footer>
 
+        </x-card>
+    </div>
+
+    <div id="panel-identificacion-seguridad" role="tabpanel" aria-labelledby="tab-identificacion-seguridad" x-show="activeTab === 'identificacion-seguridad'" x-cloak class="space-y-6">
+
+    <x-card>
+        <x-slot:header>
+            <h3 class="text-lg font-semibold">Identificación pública del cliente</h3>
+        </x-slot:header>
+        <div class="grid gap-6 md:grid-cols-[1.2fr_1fr_1fr] items-start">
+            <div class="space-y-3">
+                <div>
+                    <label class="text-sm text-slate-500">Código público</label>
+                    <p class="mt-1 font-mono text-xl font-bold tracking-widest text-slate-900">{{ $customer->public_code }}</p>
+                    <p class="mt-1 text-xs text-slate-500">No expone cédula, teléfono ni ID interno. Base para QR y Code128.</p>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <button type="button" onclick="navigator.clipboard.writeText(@js($customer->public_code)).then(()=>{this.textContent='¡Copiado!'; setTimeout(()=>this.textContent='Copiar código',1500)}).catch(()=>prompt('Copia manualmente:', @js($customer->public_code)))" class="min-h-11 flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Copiar código</button>
+                    <button type="button" onclick="window.print()" class="min-h-11 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Imprimir</button>
+                </div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <p class="text-xs font-semibold uppercase text-slate-500">QR (código público)</p>
+                @if($qrSvg)
+                    <div class="mx-auto mt-2 max-w-[180px] rounded-lg border border-slate-100 bg-white p-2">{!! $qrSvg !!}</div>
+                    <p class="mt-1 font-mono text-xs">{{ $customer->public_code }}</p>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">QR no disponible</p>
+                @endif
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <p class="text-xs font-semibold uppercase text-slate-500">Code 128</p>
+                @if($barcodeSvg)
+                    <div class="mx-auto mt-2 overflow-x-auto bg-white p-2">{!! $barcodeSvg !!}</div>
+                    <p class="mt-1 font-mono text-xs">{{ $customer->public_code }}</p>
+                @else
+                    <p class="mt-2 text-sm text-slate-500">Barcode no disponible</p>
+                @endif
+            </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">Generados localmente por MVS, sin servicio externo. Úsalos para seleccionar al cliente en POS (P09C). No confiar solo en QR estático para canjes.</p>
     </x-card>
 
-</div>
+    <x-card>
+        <x-slot:header>
+            <h3 class="text-lg font-semibold">PIN temporal para canjes y autorizaciones sensibles</h3>
+        </x-slot:header>
+        <p class="text-sm text-slate-600">El QR estático no basta para canjes. Genera un PIN/QR de un solo uso, válido 5 minutos.</p>
+        <form method="POST" action="{{ route('clientes.pin.generate', $customer) }}" class="mt-3">
+            @csrf
+            <button type="submit" class="min-h-11 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white">Generar PIN temporal</button>
+        </form>
+        @if(session('one_time_pin'))
+            <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p class="text-xs font-semibold uppercase text-amber-800">PIN de un solo uso (válido 5 min)</p>
+                <p class="mt-1 font-mono text-2xl font-bold tracking-widest text-slate-900">{{ session('one_time_pin') }}</p>
+                @if(session('one_time_qr'))
+                    <div class="mx-auto mt-2 max-w-[180px] rounded-lg border border-white bg-white p-2">{!! session('one_time_qr') !!}</div>
+                @endif
+                <p class="mt-1 text-xs text-amber-700">Vence: {{ session('one_time_expires') ? \Carbon\Carbon::parse(session('one_time_expires'))->format('H:i:s d/m/Y') : '' }} · De un solo uso.</p>
+            </div>
+        @endif
+        <form method="POST" action="{{ route('clientes.pin.verify', $customer) }}" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+            @csrf
+            <input name="pin" placeholder="Ingresa PIN para verificar" maxlength="6" inputmode="numeric" class="min-h-11 rounded-xl border-slate-300 px-3">
+            <button type="submit" class="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold">Verificar PIN</button>
+        </form>
+        @if($errors->has('pin') || $errors->has('token'))<p class="mt-2 text-sm text-red-600">{{ $errors->first('pin') ?: $errors->first('token') }}</p>@endif
+        @if(session('success') && str_contains(session('success'), 'PIN verificado'))<p class="mt-2 text-sm font-semibold text-emerald-700">{{ session('success') }}</p>@endif
+    </x-card>
+    </div>
+
+    <div id="panel-contactos-direcciones" role="tabpanel" aria-labelledby="tab-contactos-direcciones" x-show="activeTab === 'contactos-direcciones'" x-cloak class="space-y-6">
 
 <x-card>
 
@@ -591,6 +677,9 @@
 
 @endif
 
-</x-card>   
+</x-card>
+    </div>
+    </x-tabs>
+</div>
 
 @endsection

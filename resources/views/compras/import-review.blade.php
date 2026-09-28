@@ -129,7 +129,7 @@
                     </td>
 
                     <td class="px-4 py-3 text-right">
-                        ₡{{ number_format($item['cost'],2,',','.') }}
+                        ₡{{ number_format($item['cost'],0,',','.') }}
                     </td>
 
                 </tr>
@@ -184,7 +184,7 @@
 
             <div>
                 <strong>Costo:</strong>
-                ₡{{ number_format($item['cost'],2,',','.') }}
+                ₡{{ number_format($item['cost'],0,',','.') }}
             </div>
 
 

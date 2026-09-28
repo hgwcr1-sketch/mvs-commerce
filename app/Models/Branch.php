@@ -16,10 +16,13 @@ class Branch extends Model
         'phone',
         'address',
         'is_active',
+        'receipt_format',
+        'receipt_auto_print',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'receipt_auto_print' => 'boolean',
     ];
 
     public function company(): BelongsTo
@@ -47,5 +50,20 @@ class Branch extends Model
     public function inventoryLots(): HasMany
     {
         return $this->hasMany(InventoryLot::class);
+    }
+
+    public function cashRegisters(): HasMany
+    {
+        return $this->hasMany(CashRegister::class);
+    }
+
+    public function cashSessions(): HasMany
+    {
+        return $this->hasMany(CashSession::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
     }
 }

@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Model;
     'identification_type',
     'identification_number',
     'phone',
+    'whatsapp_enabled',
+    'default_phone_country_code',
+    'whatsapp_phone_country_code',
+    'whatsapp_phone',
     'email',
     'country_id',
     'province_id',
@@ -21,6 +25,10 @@ use Illuminate\Database\Eloquent\Model;
     'logo',
     'currency',
     'timezone',
+    'credit_alert_days',
+    'layaway_validity_days',
+    'layaway_alert_days',
+    'payable_alert_days',
     'is_active',
 ])]
 
@@ -30,6 +38,11 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'whatsapp_enabled' => 'boolean',
+            'credit_alert_days' => 'integer',
+            'layaway_validity_days' => 'integer',
+            'layaway_alert_days' => 'integer',
+            'payable_alert_days' => 'integer',
         ];
     }
 
@@ -38,6 +51,25 @@ class Company extends Model
         return $this->belongsToMany(User::class)
             ->withPivot('role_id')
             ->withTimestamps();
+    }
+
+    public function modules()
+    {
+        return $this->hasMany(CompanyModule::class);
+    }
+
+    public function license()
+    {
+        return $this->hasOne(CompanyLicense::class);
+    }
+
+    public function isModuleEnabled(string $moduleKey): bool
+    {
+        $module = $this->relationLoaded('modules')
+            ? $this->modules->firstWhere('module_key', $moduleKey)
+            : $this->modules()->where('module_key', $moduleKey)->first();
+
+        return $module?->is_enabled ?? true;
     }
 
     public function owner()
@@ -118,5 +150,25 @@ class Company extends Model
     public function purchaseSetting()
     {
         return $this->hasOne(CompanyPurchaseSetting::class);
+    }
+
+    public function cashSetting()
+    {
+        return $this->hasOne(CompanyCashSetting::class);
+    }
+
+    public function cashRegisters()
+    {
+        return $this->hasMany(CashRegister::class);
+    }
+
+    public function cashSessions()
+    {
+        return $this->hasMany(CashSession::class);
+    }
+
+    public function cashDenominations()
+    {
+        return $this->hasMany(CashDenomination::class);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Notifications\ResetPasswordNotification;
+use App\Services\Modules\ModuleRegistry;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,6 +17,9 @@ use Illuminate\Notifications\Notifiable;
     'photo',
     'password',
     'is_active',
+    'is_platform_admin',
+    'tenant_invited_at',
+    'tenant_activated_at',
     'last_login_at',
 ])]
 
@@ -34,6 +38,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_platform_admin' => 'boolean',
+            'tenant_invited_at' => 'datetime',
+            'tenant_activated_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -50,6 +57,11 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->is_active;
+    }
+
+    public function isPlatformAdmin(): bool
+    {
+        return $this->is_active && $this->is_platform_admin;
     }
 
     public function updateLastLogin(): void
@@ -117,7 +129,7 @@ class User extends Authenticatable
             ->where('companies.id', $company->id)
             ->first();
 
-        if (!$companyAccess || !$companyAccess->pivot->role_id) {
+        if (! $companyAccess || ! $companyAccess->pivot->role_id) {
             return null;
         }
 
@@ -127,9 +139,14 @@ class User extends Authenticatable
 
     public function hasPermission(string $permission, Company $company): bool
     {
+        $module = app(ModuleRegistry::class)->forPermission($permission);
+        if ($module !== null && ! $company->isModuleEnabled($module)) {
+            return false;
+        }
+
         $role = $this->roleInCompany($company);
 
-        if (!$role || !$role->is_active) {
+        if (! $role || ! $role->is_active) {
             return false;
         }
 
@@ -137,5 +154,25 @@ class User extends Authenticatable
             ->where('permissions.name', $permission)
             ->where('permissions.is_active', true)
             ->exists();
+    }
+
+    /**
+     * Verifica si el usuario puede operar en contexto global de sucursales.
+     * Platform Admin O usuario con permiso dashboard.admin para la empresa activa.
+     */
+    public function canUseGlobalBranchContext(Company $company): bool
+    {
+        return $this->isPlatformAdmin()
+            || $this->hasPermission('dashboard.admin', $company);
+    }
+
+    public function openedCashSessions()
+    {
+        return $this->hasMany(CashSession::class, 'opened_by');
+    }
+
+    public function cashMovements()
+    {
+        return $this->hasMany(CashMovement::class, 'created_by');
     }
 }

@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
-use App\Models\Customer;
-use App\Models\Country;
-use App\Models\Province;
 use App\Models\Canton;
+use App\Models\Company;
+use App\Models\Country;
+use App\Models\Customer;
+use App\Models\CustomerOneTimeToken;
 use App\Models\District;
+use App\Models\LoyaltyPortalCredential;
+use App\Models\Province;
+use App\Services\CustomerOneTimeTokenService;
+use App\Services\CustomerPublicCodeService;
+use App\Services\Loyalty\LoyaltyPortalDeliveryService;
+use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
@@ -21,7 +29,7 @@ class CustomerController extends Controller
         $companyId = $this->activeCompanyId();
         $search = $request->search;
         $status = $request->status;
-$type = $request->type;
+        $type = $request->type;
 
         $customers = Customer::forCompany($companyId)
 
@@ -30,16 +38,16 @@ $type = $request->type;
                 $query->where(function ($q) use ($search) {
 
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('identification', 'like', "%{$search}%")
-                      ->orWhere('phone', 'like', "%{$search}%")
-                      ->orWhere('mobile', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('identification', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('mobile', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('customer_code', 'like', "%{$search}%");
 
                 });
 
             })
-            
-                        ->when($status !== null && $status !== '', function ($query) use ($status) {
+            ->when($status !== null && $status !== '', function ($query) use ($status) {
 
                 $query->where('is_active', $status);
 
@@ -68,265 +76,403 @@ $type = $request->type;
         ];
 
         return view('clientes.index', compact(
-    'customers',
-    'stats',
-    'search',
-    'status',
-    'type'
-));
+            'customers',
+            'stats',
+            'search',
+            'status',
+            'type'
+        ));
     }
 
     /**
      * Mostrar formulario de creación.
      */
     public function create()
-{
-    return view('clientes.create', [
+    {
+        $defaultPhoneCountryCode = Company::query()
+            ->whereKey($this->activeCompanyId())
+            ->value('default_phone_country_code');
 
-        'customer' => new Customer(),
+        return view('clientes.create', [
 
-        'countries' => Country::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'customer' => new Customer,
+            'defaultPhoneCountryCode' => $defaultPhoneCountryCode,
 
-        'provinces' => Province::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'countries' => Country::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'cantons' => Canton::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'provinces' => Province::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'districts' => District::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'cantons' => Canton::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-    ]);
-}
+            'districts' => District::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+
+        ]);
+    }
 
     /**
      * Guardar cliente.
      */
     public function store(StoreCustomerRequest $request)
-{
-    $data = $request->validated();
+    {
+        $data = $request->validated();
 
-    $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
-    $data['is_active'] = $request->boolean('is_active');
-    $data['company_id'] = $this->activeCompanyId();
+        $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
+        $data['is_active'] = $request->boolean('is_active');
+        $data['company_id'] = $this->activeCompanyId();
+        $createPortalAccess = $request->boolean('create_portal_access');
+        unset($data['create_portal_access']);
 
-    Customer::create($data);
+        $customer = Customer::create($data);
 
-    return redirect()
-        ->route('clientes.index')
-        ->with('success', 'Cliente registrado correctamente.');
-}
+        $portalResult = null;
+        if ($createPortalAccess) {
+            $portalResult = $this->createPortalAccessForCustomer($customer, $request);
+            if ($portalResult['created']) {
+                $delivery = app(LoyaltyPortalDeliveryService::class)->build(
+                    Company::query()->findOrFail($this->activeCompanyId()),
+                    $customer,
+                    $portalResult['username'],
+                    $portalResult['password']
+                );
+                $portalResult = array_merge($portalResult, $delivery);
+                return redirect()
+                    ->route('clientes.index')
+                    ->with('success', 'Cliente registrado correctamente. Acceso al Portal creado: usuario ' . $portalResult['username'] . ' / contraseña temporal ' . $portalResult['password'])
+                    ->with('portal_access', $portalResult);
+            }
+            if ($portalResult['error']) {
+                return redirect()
+                    ->route('clientes.index')
+                    ->with('success', 'Cliente registrado correctamente.')
+                    ->with('warning', $portalResult['error']);
+            }
+        }
+
+        return redirect()
+            ->route('clientes.index')
+            ->with('success', 'Cliente registrado correctamente.');
+    }
+
+    private function createPortalAccessForCustomer(Customer $customer, Request $request): array
+    {
+        $companyId = (int) $customer->company_id;
+        // No duplicar si ya existe
+        if (LoyaltyPortalCredential::query()->where('customer_id', $customer->id)->exists()) {
+            return ['created' => false, 'error' => 'Este cliente ya tiene acceso al Portal.'];
+        }
+
+        $resolver = app(\App\Services\Loyalty\LoyaltyPortalUsernameResolver::class);
+        $resolved = $resolver->resolve($customer, Company::query()->findOrFail($companyId));
+        $username = $resolved['username'];
+        $emailNormalized = $resolved['emailNormalized'];
+        $phoneNormalized = $resolved['phoneNormalized'];
+
+        // Validar unicidad dentro de la empresa (usa misma regla que el resolver)
+        $exists = LoyaltyPortalCredential::query()
+            ->where('company_id', $companyId)
+            ->where(function ($q) use ($username, $emailNormalized) {
+                $q->where('username', $username);
+                if ($emailNormalized) {
+                    $q->orWhere('email', $emailNormalized);
+                }
+            })->exists();
+
+        if ($exists) {
+            return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
+        }
+        if (!$username) {
+            return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
+        }
+
+        $plainPassword = chr(random_int(97, 122)).chr(random_int(65, 90)).str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+
+        $credential = LoyaltyPortalCredential::create([
+            'company_id' => $companyId,
+            'customer_id' => $customer->id,
+            'username' => $username,
+            'email' => $emailNormalized ?? $username . '@portal.local',
+            'password' => $plainPassword,
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+
+        return ['created' => true, 'username' => $username, 'password' => $plainPassword, 'email' => $credential->email];
+    }
 
     /**
      * Mostrar cliente.
      */
+    public function show(Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
 
-public function show(Customer $cliente)
-{
-    $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $cliente->load([
+            'country',
+            'province',
+            'canton',
+            'district',
+            'contacts',
+            'addresses.country',
+            'addresses.province',
+            'addresses.canton',
+            'addresses.district',
+        ]);
 
-    $cliente->load([
-        'country',
-        'province',
-        'canton',
-        'district',
-        'contacts',
-        'addresses.country',
-        'addresses.province',
-        'addresses.canton',
-        'addresses.district'
-    ]);
+        $publicCodeService = app(\App\Services\CustomerPublicCodeService::class);
+        $publicCodeService->ensure($cliente);
+        $cliente->refresh();
+        $qrSvg = null;
+        $barcodeSvg = null;
+        try {
+            $qrSvg = $publicCodeService->qrSvg($cliente);
+        } catch (\Throwable $e) {
+            $qrSvg = null;
+        }
+        try {
+            $barcodeSvg = $publicCodeService->barcodeSvg($cliente);
+        } catch (\Throwable $e) {
+            $barcodeSvg = null;
+        }
 
-    return view('clientes.show', [
-        'customer' => $cliente,
+        return view('clientes.show', [
+            'customer' => $cliente,
+            'qrSvg' => $qrSvg,
+            'barcodeSvg' => $barcodeSvg,
 
-        'countries' => Country::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'countries' => Country::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'provinces' => Province::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'provinces' => Province::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'cantons' => Canton::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'cantons' => Canton::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'districts' => District::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
-    ]);
+            'districts' => District::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
+        ]);
 
-}
+    }
 
     /**
      * Mostrar formulario de edición.
      */
-public function edit(Customer $cliente)
-{
-    $this->ensureCustomerBelongsToActiveCompany($cliente);
+    public function edit(Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
 
-    return view('clientes.edit', [
+        return view('clientes.edit', [
 
-        'customer' => $cliente,
+            'customer' => $cliente,
+            'defaultPhoneCountryCode' => null,
 
-        'countries' => Country::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'countries' => Country::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'provinces' => Province::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'provinces' => Province::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'cantons' => Canton::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'cantons' => Canton::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-        'districts' => District::where('is_active', true)
-            ->orderBy('name')
-            ->get(),
+            'districts' => District::where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
-    ]);
-}
+        ]);
+    }
 
     /**
      * Actualizar cliente.
      */
-   public function update(UpdateCustomerRequest $request, Customer $cliente)
-{
-    $this->ensureCustomerBelongsToActiveCompany($cliente);
+    public function update(UpdateCustomerRequest $request, Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
 
-    $data = $request->validated();
+        $data = $request->validated();
 
-    $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
-    $data['is_active'] = $request->boolean('is_active');
+        $data['accepts_email_invoice'] = $request->boolean('accepts_email_invoice');
+        $data['is_active'] = $request->boolean('is_active');
 
-    $cliente->update($data);
+        $cliente->update($data);
 
-    return redirect()
-        ->route('clientes.index')
-        ->with('success', 'Cliente actualizado correctamente.');
-}
+        return redirect()
+            ->route('clientes.index')
+            ->with('success', 'Cliente actualizado correctamente.');
+    }
 
     /**
      * Eliminar cliente.
      */
-public function toggleStatus(Customer $cliente)
-{
-    $this->ensureCustomerBelongsToActiveCompany($cliente);
+    public function toggleStatus(Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
 
-    $cliente->update([
-        'is_active' => !$cliente->is_active
-    ]);
-
-    return redirect()
-        ->route('clientes.index')
-        ->with('success', 'Estado del cliente actualizado correctamente.');
-}
-
-    public function destroy(Customer $cliente)
-{
-    $this->ensureCustomerBelongsToActiveCompany($cliente);
-
-    $cliente->delete();
-
-    return redirect()
-        ->route('clientes.index')
-        ->with('success', 'Cliente eliminado correctamente.');
-}
-    /**
- * Obtener provincias por país.
- */
-public function provinces(Country $country)
-{
-    return Province::where('country_id', $country->id)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get([
-            'id',
-            'name'
+        $cliente->update([
+            'is_active' => ! $cliente->is_active,
         ]);
-}
 
-/**
- * Obtener cantones por provincia.
- */
-public function cantons(Province $province)
-{
-    return Canton::where('province_id', $province->id)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get([
-            'id',
-            'name'
-        ]);
-}
-
-/**
- * Obtener distritos por cantón.
- */
-public function districts(Canton $canton)
-{
-    return District::where('canton_id', $canton->id)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get([
-            'id',
-            'name'
-        ]);
-}
-/**
- * Búsqueda rápida de clientes.
- */
-public function search(Request $request)
-{
-    $search = $request->get('search');
-
-    if (!$search) {
-        return response()->json([]);
+        return redirect()
+            ->route('clientes.index')
+            ->with('success', 'Estado del cliente actualizado correctamente.');
     }
 
-    $customers = Customer::forCompany($this->activeCompanyId())
-        ->where(function ($query) use ($search) {
-            $query->where('name', 'like', "%{$search}%")
-                ->orWhere('identification', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%")
-                ->orWhere('mobile', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%");
-        })
-        ->orderBy('name')
-        ->limit(8)
-        ->get([
-            'id',
-            'name',
-            'identification',
-            'phone',
-            'mobile',
-            'email'
-        ]);
+    public function destroy(Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
 
-    return response()->json($customers);
-}
+        $cliente->delete();
 
-private function activeCompanyId(): int
-{
-    $companyId = session('active_company_id');
+        return redirect()
+            ->route('clientes.index')
+            ->with('success', 'Cliente eliminado correctamente.');
+    }
 
-    abort_unless($companyId, 403, 'No hay una empresa activa.');
+    public function generateOneTimeToken(Request $request, Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $company = Company::query()->findOrFail($this->activeCompanyId());
+        $result = app(CustomerOneTimeTokenService::class)->generate($cliente, $company, 'redeem', 5);
 
-    return (int) $companyId;
-}
+        if ($request->expectsJson()) {
+            return response()->json([
+                'public_code' => $cliente->public_code,
+                'pin' => $result['plain'],
+                'expires_at' => $result['token']->expires_at->toIso8601String(),
+                'qrSvg' => $result['qrSvg'],
+            ]);
+        }
 
-private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
-{
-    abort_unless(
-        (int) $customer->company_id === $this->activeCompanyId(),
-        404
-    );
-}
+        return back()->with('success', 'PIN temporal generado. Vence en 5 minutos y es de un solo uso.')->with('one_time_pin', $result['plain'])->with('one_time_qr', $result['qrSvg'])->with('one_time_expires', $result['token']->expires_at);
+    }
+
+    public function verifyOneTimeToken(Request $request, Customer $cliente)
+    {
+        $this->ensureCustomerBelongsToActiveCompany($cliente);
+        $company = Company::query()->findOrFail($this->activeCompanyId());
+        $data = $request->validate(['pin' => ['required', 'string', 'max:20']]);
+        try {
+            app(CustomerOneTimeTokenService::class)->verify($cliente, $company, $data['pin'], 'redeem');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
+            }
+            return back()->withErrors($e->errors());
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['verified' => true, 'message' => 'PIN verificado.']);
+        }
+
+        return back()->with('success', 'PIN verificado correctamente. Puede proceder con el canje.');
+    }
+
+    /**
+     * Obtener provincias por país.
+     */
+    public function provinces(Country $country)
+    {
+        return Province::where('country_id', $country->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ]);
+    }
+
+    /**
+     * Obtener cantones por provincia.
+     */
+    public function cantons(Province $province)
+    {
+        return Canton::where('province_id', $province->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ]);
+    }
+
+    /**
+     * Obtener distritos por cantón.
+     */
+    public function districts(Canton $canton)
+    {
+        return District::where('canton_id', $canton->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ]);
+    }
+
+    /**
+     * Búsqueda rápida de clientes.
+     */
+    public function search(Request $request)
+    {
+        $search = $request->get('search');
+
+        if (! $search) {
+            return response()->json([]);
+        }
+
+        $customers = Customer::forCompany($this->activeCompanyId())
+            ->where(function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('identification', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('customer_code', 'like', "%{$search}%");
+            })
+            ->orderBy('name')
+            ->limit(8)
+            ->get([
+                'id',
+                'name',
+                'identification',
+                'phone',
+                'mobile',
+                'email',
+                'customer_code',
+            ]);
+
+        return response()->json($customers);
+    }
+
+    private function activeCompanyId(): int
+    {
+        $companyId = session('active_company_id');
+
+        abort_unless($companyId, 403, 'No hay una empresa activa.');
+
+        return (int) $companyId;
+    }
+
+    private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
+    {
+        abort_unless(
+            (int) $customer->company_id === $this->activeCompanyId(),
+            404
+        );
+    }
 }

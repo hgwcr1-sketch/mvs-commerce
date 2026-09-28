@@ -1,64 +1,14 @@
 <?php
-
 namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
-
-class LayawayController extends Controller
-{
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
-    }
+use App\Models\{CashSession,Company,Layaway,PaymentMethod,Product,Customer}; use App\Services\Cash\CashSessionResolver; use App\Services\Sales\LayawayService; use Illuminate\Http\{RedirectResponse,Request}; use Illuminate\View\View;
+class LayawayController extends Controller {
+ public function index(Request $r):View{$q=Layaway::query()->forCompany((int)session('active_company_id'))->forBranch((int)session('active_branch_id'))->with('customer:id,name');if($r->status)$q->where('status',$r->status);return view('layaways.index',['layaways'=>$q->latest()->paginate(20)->withQueryString()]);}
+ public function create(Request $r,CashSessionResolver $resolver):View{$companyId=(int)session('active_company_id');$branchId=(int)session('active_branch_id');return view('layaways.create',['customers'=>Customer::forCompany($companyId)->where('is_active',true)->orderBy('name')->get(['id','name']),'products'=>Product::query()->where('company_id',$companyId)->where('is_active',true)->whereHas('branches',fn($q)=>$q->where('branches.id',$branchId)->where('branch_product.stock','>',0))->with(['branches'=>fn($q)=>$q->where('branches.id',$branchId),'unit:id,allows_decimals'])->orderBy('name')->get(),'methods'=>PaymentMethod::forCompany($companyId)->active()->whereNotIn('type',['credit','loyalty_points'])->ordered()->get(),'sessions'=>$resolver->applicable($r->user(),$companyId,$branchId),'company'=>Company::findOrFail($companyId)]);}
+ public function store(Request $r,LayawayService $service):RedirectResponse{$data=$r->validate(['customer_id'=>['required','integer'],'expires_at'=>['nullable','date','after_or_equal:today'],'notes'=>['nullable','string'],'items'=>['required','array','min:1'],'items.*.product_id'=>['nullable','integer'],'items.*.quantity'=>['nullable','numeric','gt:0'],'initial_amount'=>['required','numeric','gt:0'],'payment_method_id'=>['required','integer'],'cash_session_id'=>['nullable','integer'],'reference'=>['nullable','string','max:150']]);$layaway=$service->create($data,$r->user(),(int)session('active_company_id'),(int)session('active_branch_id'));return redirect()->route('apartados.show',$layaway)->with('success','Apartado creado correctamente.');}
+ public function show(Request $r,Layaway $apartado,CashSessionResolver $resolver):View{$a=$this->scoped($apartado)->load(['customer','items.product.unit','payments.paymentMethod','payments.user','sale']);$companyId=$a->company_id;return view('layaways.show',['layaway'=>$a,'methods'=>PaymentMethod::forCompany($companyId)->active()->whereNotIn('type',['credit','loyalty_points'])->ordered()->get(),'sessions'=>$resolver->applicable($r->user(),$companyId,$a->branch_id)]);}
+ public function payment(Request $r,Layaway $apartado,LayawayService $service):RedirectResponse{$data=$r->validate(['amount'=>['required','numeric','gt:0'],'payment_method_id'=>['required','integer'],'cash_session_id'=>['nullable','integer'],'reference'=>['nullable','string','max:150'],'payment_notes'=>['nullable','string','max:2000']]);$service->pay($this->scoped($apartado),$data,$r->user());return back()->with('success','Abono registrado correctamente.');}
+ public function cancel(Request $r,Layaway $apartado,LayawayService $service):RedirectResponse{$data=$r->validate(['reason'=>['required','string','min:3','max:255']]);$service->cancel($this->scoped($apartado),$r->user(),$data['reason']);return back()->with('success','Apartado cancelado e inventario liberado.');}
+ public function deliver(Request $r,Layaway $apartado,LayawayService $service):RedirectResponse{$sale=$service->deliver($this->scoped($apartado),$r->user());return redirect()->route('ventas.show',$sale)->with('success','Apartado entregado y venta completada.');}
+ public function updateSettings(Request $r):RedirectResponse{$data=$r->validate(['layaway_validity_days'=>['required','integer','min:1','max:365'],'layaway_alert_days'=>['required','integer','in:1,3,5,7,15']]);Company::findOrFail((int)session('active_company_id'))->update($data);return back()->with('success','Configuración de apartados actualizada.');}
+ private function scoped(Layaway $a):Layaway{abort_unless($a->company_id===(int)session('active_company_id')&&$a->branch_id===(int)session('active_branch_id'),404);return$a;}
 }

@@ -1,21 +1,57 @@
-<aside id="sidebar"
-class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300">
+@php
+    $navContext = $context ?? 'shell';
+@endphp
+
+@if($navContext === 'shell')
+<aside id="app-sidebar"
+    x-data="sidebarShell"
+    x-on:focusin="hovered = true"
+    x-on:focusout="if (! $event.relatedTarget || ! $el.contains($event.relatedTarget)) hovered = false"
+    class="hidden w-[68px] shrink-0 flex-col overflow-x-hidden border-r border-slate-800 bg-slate-900 transition-[width] duration-200 ease-out md:flex"
+    x-bind:class="[isExpanded ? 'lg:w-64' : 'lg:w-[68px]', isExpanded ? '' : 'collapsed']">
+@else
+<aside class="flex w-full flex-col bg-slate-900" aria-label="Navegación">
+@endif
 
     {{-- LOGO --}}
-<div class="flex flex-col items-center py-4 border-b border-slate-800 shrink-0">
+<div class="relative flex flex-col items-center py-4 border-b border-slate-800 shrink-0">
 
     <img
     src="{{ asset('images/logo-mvs-corto.png') }}"
     alt="MVS Commerce"
-    class="w-16 h-16 object-contain">
+    class="h-16 w-16 object-contain">
 
-    <h2 class="mt-3 text-lg font-bold text-white">
+    <h2 class="nav-fade mt-3 text-lg font-bold text-white">
         MVS Commerce
     </h2>
 
-    <p class="text-xs text-slate-400">
+    <p class="nav-fade text-xs text-slate-400">
         ERP Profesional
     </p>
+
+    @if($navContext === 'shell')
+    <button
+        type="button"
+        x-on:click="togglePinned()"
+        x-bind:title="isExpanded ? 'Desanclar menú' : 'Fijar menú expandido'"
+        x-bind:aria-pressed="pinned ? 'true' : 'false'"
+        aria-label="Fijar o desanclar el menú expandido"
+        class="absolute right-1 top-1 hidden h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white lg:flex">
+
+        <svg xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+            x-bind:class="pinned ? '' : 'rotate-180'">
+
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+
+        </svg>
+
+    </button>
+    @endif
 
 </div>
 
@@ -30,7 +66,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     $company = \App\Models\Company::find(session('active_company_id'));
 @endphp
 
-@if(auth()->user()->hasPermission('dashboard.admin', $company))
+@if($company && auth()->user()->hasPermission('dashboard.admin', $company))
 
 <x-navigation.item
     route="dashboard"
@@ -38,7 +74,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     label="Dashboard"
     :active="request()->routeIs('dashboard')" />
 
-@elseif(auth()->user()->hasPermission('dashboard.ver', $company))
+@elseif($company && auth()->user()->hasPermission('dashboard.ver', $company))
 
 <x-navigation.item
     route="dashboard"
@@ -48,22 +84,59 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
 @endif
 
-    {{-- USUARIOS --}}
-    @can('usuarios.ver')
+    {{-- VENTAS --}}
+    <div class="nav-desktop-group">
+    @canany(['pos.acceder', 'ventas.ver', 'cotizaciones.ver', 'pedidos.ver', 'cuentas_cobrar.ver', 'cuentas_pagar.ver', 'apartados.ver', 'devoluciones.ver'])
+        <x-navigation.dropdown
+            icon="tag"
+            label="Ventas"
+            :active="request()->routeIs('pos.*', 'ventas.*', 'cotizaciones.*', 'pedidos.*', 'cuentas-por-cobrar.*', 'cuentas-por-pagar.*', 'apartados.*')">
 
-        <x-navigation.item
-            route="usuarios.index"
-            icon="users"
-            label="Usuarios"
-            :active="request()->routeIs('usuarios.*')" />
+            @can('pos.acceder')
+                <x-navigation.submenu route="pos.index" label="POS" />
+            @endcan
 
-    @endcan
+            @can('ventas.ver')
+                <x-navigation.submenu route="ventas.index" label="Ventas" :active="request()->routeIs('ventas.*') && !request()->boolean('with_returns')" />
+            @endcan
 
+            @can('cotizaciones.ver')
+                <x-navigation.submenu route="cotizaciones.index" label="Cotizaciones" />
+            @endcan
 
+            @can('pedidos.ver')
+                <x-navigation.submenu route="pedidos.index" label="Pedidos" />
+            @endcan
+
+            @can('cuentas_cobrar.ver')
+                <x-navigation.submenu route="cuentas-por-cobrar.index" label="Cuentas por cobrar" />
+            @endcan
+
+            @can('cuentas_pagar.ver')
+                <x-navigation.submenu route="cuentas-por-pagar.index" label="Cuentas por pagar" />
+            @endcan
+
+            @can('apartados.ver')
+                <x-navigation.submenu route="apartados.index" label="Apartados" />
+            @endcan
+
+            @can('devoluciones.ver')
+                <x-navigation.submenu route="ventas.index" label="Devoluciones" :parameters="['with_returns' => 1]" :active="request()->routeIs('ventas.index') && request()->boolean('with_returns')" />
+            @endcan
+
+        </x-navigation.dropdown>
+    @endcanany
+    </div>
+
+    @canany(['caja.abrir', 'caja.ver'])
+        <x-navigation.item route="cash.index" icon="tag" label="Caja" :active="request()->routeIs('cash.*')" />
+    @endcanany
 
         {{-- PRODUCTOS --}}
+    <div class="nav-desktop-group">
     @canany([
         'productos.ver',
+        'productos.etiquetas.imprimir',
         'categorias.ver',
         'marcas.ver',
         'unidades.ver'
@@ -77,6 +150,10 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
                 <x-navigation.submenu
                     route="productos.index"
                     label="Listado de Productos" />
+            @endcan
+
+            @can('productos.etiquetas.imprimir')
+                <x-navigation.submenu route="labels.index" label="Centro de Etiquetas" />
             @endcan
 
             @can('categorias.ver')
@@ -100,11 +177,15 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
         </x-navigation.dropdown>
 
     @endcanany
+    </div>
 
 {{-- INVENTARIO --}}
+<div class="nav-desktop-group">
 @canany([
     'inventario.ver',
     'inventario.ajustar',
+    'inventario.conteo.ver',
+    'inventario.conteo.iniciar',
     'inventario.kardex',
     'inventario.transferir'
 ])
@@ -119,16 +200,22 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
                 label="Existencias" />
         @endcan
 
+        @can('inventario.conteo.ver')
+            <x-navigation.submenu
+                route="inventory-counts.index"
+                label="Toma de Inventario" />
+        @endcan
+
         @can('inventario.ajustar')
             <x-navigation.submenu
                 route="ajustes-inventario.create"
                 label="Ajustes de Inventario" />
         @endcan
 
-        @can('inventario.ver')
-    <x-navigation.submenu
-        route="importaciones.inventario"
-        label="Importar Inventario" />
+        @can('inventario.ajustar')
+            <x-navigation.submenu
+                route="importaciones.inventario-migracion"
+                label="Inventario inicial P36" />
         @endcan
 
         @can('inventario.kardex')
@@ -146,6 +233,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     </x-navigation.dropdown>
 
 @endcanany
+</div>
     {{-- CLIENTES --}}
     @can('clientes.ver')
 
@@ -156,6 +244,47 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             :active="request()->routeIs('clientes.*')" />
 
     @endcan
+
+    {{-- FIDELIZACIÓN --}}
+    <div class="nav-desktop-group">
+    @canany(['fidelidad.dashboard', 'fidelidad.oportunidades', 'fidelidad.clientes', 'fidelidad.ver', 'fidelidad.configuracion', 'fidelidad.ajustes', 'fidelidad.multiplicadores', 'fidelidad.premios', 'fidelidad.canjes', 'fidelidad.portal', 'fidelidad.promociones', 'fidelidad.portal.ver', 'fidelidad.portal.configurar', 'fidelidad.portal.contenido', 'fidelidad.portal.enlaces'])
+        <x-navigation.dropdown icon="users" label="Fidelización" :active="request()->routeIs('loyalty.*')">
+            @can('fidelidad.dashboard')
+                <x-navigation.submenu route="loyalty.dashboard" label="Dashboard" />
+            @endcan
+            @can('fidelidad.oportunidades')
+                <x-navigation.submenu route="loyalty.opportunities.index" label="Oportunidades" />
+            @endcan
+            @can('fidelidad.ver')
+                <x-navigation.submenu route="loyalty.kardex.index" label="Kardex" />
+            @endcan
+            @can('fidelidad.configuracion')
+                <x-navigation.submenu route="loyalty.rules.index" label="Centro de reglas" />
+            @endcan
+            @can('fidelidad.multiplicadores')
+                <x-navigation.submenu route="loyalty.multipliers.index" label="Multiplicadores" />
+            @endcan
+            @can('fidelidad.premios')
+                <x-navigation.submenu route="loyalty.rewards.index" label="Premios" />
+            @endcan
+            @can('fidelidad.canjes')
+                <x-navigation.submenu route="loyalty.redemptions.index" label="Canjes de premios" />
+            @endcan
+            @can('fidelidad.ajustes')
+                <x-navigation.submenu route="loyalty.adjustments.index" label="Ajustes de puntos" />
+            @endcan
+            @can('fidelidad.configuracion')
+                <x-navigation.submenu route="importaciones.fidelidad-migracion" label="Migrar fidelización P37" />
+            @endcan
+            @canany(['fidelidad.portal.ver', 'fidelidad.portal.configurar', 'fidelidad.portal.contenido', 'fidelidad.portal.enlaces', 'fidelidad.portal', 'fidelidad.promociones'])
+                <x-navigation.submenu route="loyalty.portal-management.index" label="Portal de Clientes" />
+            @endcanany
+            @can('configuracion.editar')
+                <x-navigation.submenu route="configuracion.index" label="Configuración" />
+            @endcan
+        </x-navigation.dropdown>
+    @endcanany
+    </div>
 
         {{-- PROVEEDORES --}}
     @can('proveedores.ver')
@@ -179,10 +308,23 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     @endcan
 
+    @can('compras.ordenes')
+        <x-navigation.item route="ordenes-compra.index" icon="tag" label="Pedidos a proveedor" :active="request()->routeIs('ordenes-compra.*')" />
+    @endcan
+
+    @canany(['compras.crear', 'clientes.crear', 'productos.crear', 'ventas.crear', 'inventario.ver', 'inventario.ajustar', 'reportes.exportar', 'reportes.ver'])
+        <x-navigation.item
+            route="data-center.index"
+            icon="cube"
+            label="Centro de Datos"
+            :active="request()->routeIs('data-center.*', 'importaciones.*')" />
+    @endcanany
+
 
     {{-- ADMINISTRACIÓN --}}
     @canany(['usuarios.ver', 'roles.ver'])
 
+        <div class="nav-desktop-group">
         <x-navigation.dropdown
             icon="settings"
             label="Administración">
@@ -209,8 +351,29 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
         </x-navigation.dropdown>
 
+        </div>
     @endcanany
 
+    {{-- MÁS (móvil/tablet): abre el sheet con el menú completo --}}
+    <button
+        type="button"
+        class="nav-more-trigger hidden items-center gap-4 rounded-xl px-4 py-3 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+        x-on:click="$dispatch('mvs-open-nav')"
+        aria-label="Abrir menú completo">
+
+        <div class="flex h-6 w-6 items-center justify-center shrink-0">
+
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h.01M12 12h.01M19 12h.01"/>
+            </svg>
+
+        </div>
+
+        <span class="nav-fade text-sm font-medium whitespace-nowrap">
+            Más
+        </span>
+
+    </button>
 
     {{-- PLANILLA --}}
     @can('planilla.empleados.ver')
@@ -237,7 +400,10 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     {{-- FOOTER --}}
 
-    <a href="#" class="mb-2 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
+@canany(['configuracion.ver', 'formas_pago.administrar', 'caja.administrar'])
+<div x-data="{ open: false }" class="mb-2 px-3">
+    <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-xs text-slate-400 transition hover:text-white {{ request()->routeIs('settings.pos.payment-methods.*', 'settings.cash-registers.*') ? 'text-amber-400' : '' }}">
+        <span class="flex items-center gap-2">
 
     <svg xmlns="http://www.w3.org/2000/svg"
         class="h-3.5 w-3.5"
@@ -252,9 +418,28 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     </svg>
 
-    <span>Configuración</span>
-
-</a>
+            <span class="nav-fade">Configuración</span>
+        </span>
+        <span aria-hidden="true" :class="open ? 'rotate-180' : ''" class="nav-fade transition">▼</span>
+    </button>
+    <div x-cloak x-show="open" x-transition class="nav-sub mt-2 space-y-1 pl-5">
+        @can('configuracion.ver')
+            <a href="{{ route('configuracion.index') }}" class="block py-1 text-xs {{ request()->routeIs('configuracion.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración general</a>
+            <a href="{{ route('branches.index') }}" class="block py-1 text-xs {{ request()->routeIs('branches.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Sucursales</a>
+        @endcan
+        @can('caja.administrar')
+            <a href="{{ route('settings.cash.edit') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash.edit', 'settings.cash.update') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Configuración de Caja</a>
+            <a href="{{ route('settings.cash-registers.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.cash-registers.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Cajas</a>
+        @endcan
+        @can('formas_pago.administrar')
+            <a href="{{ route('settings.pos.payment-methods.index') }}" class="block py-1 text-xs {{ request()->routeIs('settings.pos.payment-methods.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Formas de pago</a>
+        @endcan
+        @can('mvs.print.configurar')
+            <a href="{{ route('mvs.print.index') }}" class="block py-1 text-xs {{ request()->routeIs('mvs.print.*') ? 'font-semibold text-amber-400' : 'text-slate-400 hover:text-white' }}">Impresión (MVS Print)</a>
+        @endcan
+    </div>
+</div>
+@endcanany
 <a href="#" class="mb-3 flex items-center gap-2 pl-4 text-xs text-slate-400 hover:text-white transition">
 
     <svg xmlns="http://www.w3.org/2000/svg"
@@ -274,7 +459,7 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
     </svg>
 
-    <span>Ayuda</span>
+            <span class="nav-fade">Ayuda</span>
 
 </a>
 
@@ -298,12 +483,12 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
 
         </svg>
 
-        <span>Cerrar sesión</span>
+        <span class="nav-fade">Cerrar sesión</span>
 
     </button>
 </form>
 
-    <div class="border-t border-slate-800 py-4 text-center">
+    <div class="nav-fade border-t border-slate-800 py-4 text-center">
 
         <div class="text-[10px] text-slate-400">
             Versión 1.0

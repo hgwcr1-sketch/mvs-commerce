@@ -8,12 +8,23 @@ use App\Models\CompanyAllowance;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\TenantOwnerInvitation;
+use App\Services\Modules\ModuleRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CompanyProvisioner
 {
+    public function __construct(
+        private readonly PaymentMethodProvisioner $paymentMethodProvisioner,
+        private readonly CompanyCashSettingsProvisioner $companyCashSettingsProvisioner,
+        private readonly CashDenominationProvisioner $cashDenominationProvisioner,
+        private readonly CompanyLicenseService $companyLicenseService,
+    ) {}
+
     /**
      * Crea la cuenta administradora y su primera empresa en una transacción.
      */
@@ -56,6 +67,8 @@ class CompanyProvisioner
         string $branchName = 'Principal',
         string $branchCode = 'PRINCIPAL',
         int $initialCompanyAllowance = 1,
+        array $additionalBranches = [],
+        ?array $moduleKeys = null,
     ): Company {
         return DB::transaction(function () use (
             $owner,
@@ -63,6 +76,8 @@ class CompanyProvisioner
             $branchName,
             $branchCode,
             $initialCompanyAllowance,
+            $additionalBranches,
+            $moduleKeys,
         ) {
             $permissionIds = Permission::query()
                 ->where('is_active', true)
@@ -92,6 +107,12 @@ class CompanyProvisioner
                 'is_active' => true,
             ]);
 
+            $this->companyLicenseService->ensure($company);
+
+            $this->paymentMethodProvisioner->provision($company);
+            $this->companyCashSettingsProvisioner->provision($company);
+            $this->cashDenominationProvisioner->provision($company);
+
             $administratorRole = Role::create([
                 'company_id' => $company->id,
                 'name' => 'Administrador',
@@ -108,13 +129,123 @@ class CompanyProvisioner
                 'is_active' => true,
             ]);
 
+            $branches = collect([$branch]);
+            foreach ($additionalBranches as $additionalBranch) {
+                $branches->push(Branch::create([
+                    'company_id' => $company->id,
+                    'name' => $additionalBranch['name'],
+                    'code' => $additionalBranch['code'],
+                    'phone' => $additionalBranch['phone'] ?? null,
+                    'address' => $additionalBranch['address'] ?? null,
+                    'is_active' => true,
+                ]));
+            }
+
+            if ($moduleKeys !== null) {
+                foreach (array_keys(ModuleRegistry::MODULES) as $moduleKey) {
+                    $company->modules()->create([
+                        'module_key' => $moduleKey,
+                        'is_enabled' => in_array($moduleKey, $moduleKeys, true),
+                    ]);
+                }
+            }
+
             $company->users()->attach($owner->id, [
                 'role_id' => $administratorRole->id,
             ]);
 
-            $owner->branches()->attach($branch->id);
+            $owner->branches()->attach($branches->pluck('id')->all());
 
             return $company;
+        });
+    }
+
+    public function onboard(array $administratorData, array $companyData, array $branches, array $moduleKeys): Company
+    {
+        return DB::transaction(function () use ($administratorData, $companyData, $branches, $moduleKeys) {
+            $owner = User::create([
+                'name' => $administratorData['name'],
+                'email' => $administratorData['email'],
+                'phone' => $administratorData['phone'] ?? null,
+                'password' => Hash::make($administratorData['password']),
+                'is_active' => true,
+            ]);
+            $primary = array_shift($branches);
+
+            $company = $this->provision(
+                $owner,
+                $companyData,
+                $primary['name'],
+                $primary['code'],
+                1,
+                $branches,
+                $moduleKeys,
+            );
+            $company->branches()->where('code', $primary['code'])->update([
+                'phone' => $primary['phone'] ?? null,
+                'address' => $primary['address'] ?? null,
+            ]);
+
+            return $company;
+        });
+    }
+
+    public function commercialOnboard(array $ownerData, array $contract, array $moduleKeys, User $actor): Company
+    {
+        return DB::transaction(function () use ($ownerData, $contract, $moduleKeys, $actor) {
+            $permissionIds = Permission::query()->where('is_active', true)->pluck('id');
+            if ($permissionIds->isEmpty()) {
+                throw ValidationException::withMessages(['permissions' => 'No hay permisos globales activos para asignar al propietario.']);
+            }
+
+            $owner = User::create([
+                'name' => $ownerData['name'], 'email' => $ownerData['email'], 'phone' => $ownerData['phone'] ?? null,
+                'password' => Hash::make(Str::random(64)), 'is_active' => false, 'is_platform_admin' => false,
+            ]);
+            $company = Company::create([
+                'owner_user_id' => $owner->id, 'trade_name' => $contract['trade_name'],
+                'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true,
+            ]);
+            $role = Role::create([
+                'company_id' => $company->id, 'name' => 'Administrador',
+                'description' => 'Propietario inicial del tenant.', 'is_active' => true,
+            ]);
+            $role->permissions()->sync($permissionIds);
+            $company->users()->attach($owner->id, ['role_id' => $role->id]);
+            CompanyAllowance::create(['user_id' => $owner->id, 'allowed_companies' => 1]);
+            $this->companyLicenseService->updateContract($company, $actor, $contract['status'], $contract['notes'] ?? null, [
+                'license_plan_id' => $contract['license_plan_id'] ?? null,
+                'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'],
+                'user_limit' => $contract['user_limit'] ?? null, 'created_by' => $actor->id,
+            ]);
+            $this->companyLicenseService->updateModules($company, $actor, $moduleKeys);
+            $owner->update(['tenant_invited_at' => now()]);
+            $owner->notify(new TenantOwnerInvitation(Password::broker()->createToken($owner)));
+
+            return $company->fresh();
+        });
+    }
+
+    public function completeTenantOnboarding(User $owner, Company $company, array $companyData, string $branchName, string $branchCode): Company
+    {
+        abort_unless($company->owner_user_id === $owner->id && ! $company->branches()->exists(), 403);
+
+        return DB::transaction(function () use ($owner, $company, $companyData, $branchName, $branchCode) {
+            $company = Company::query()->lockForUpdate()->findOrFail($company->id);
+            if ($company->branches()->exists()) {
+                throw ValidationException::withMessages(['company' => 'El onboarding de esta empresa ya fue completado.']);
+            }
+
+            $company->update($companyData);
+            $this->paymentMethodProvisioner->provision($company);
+            $this->companyCashSettingsProvisioner->provision($company);
+            $this->cashDenominationProvisioner->provision($company);
+            $branch = Branch::create([
+                'company_id' => $company->id, 'name' => $branchName, 'code' => $branchCode, 'is_active' => true,
+            ]);
+            $owner->branches()->attach($branch->id);
+
+            return $company->fresh();
         });
     }
 }

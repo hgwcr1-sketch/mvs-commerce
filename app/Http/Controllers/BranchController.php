@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\Company;
+use App\Services\CompanyLicenseService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -24,9 +26,10 @@ class BranchController extends Controller
         return view('branches.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CompanyLicenseService $licenses)
     {
         $companyId = session('active_company_id');
+        $licenses->assertCapacity(Company::findOrFail($companyId), 'branches');
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -45,7 +48,8 @@ class BranchController extends Controller
         $validated['company_id'] = $companyId;
         $validated['is_active'] = true;
 
-        Branch::create($validated);
+        $branch = Branch::create($validated);
+        $request->user()->branches()->syncWithoutDetaching([$branch->id]);
 
         return redirect()
             ->route('branches.index')
@@ -87,9 +91,12 @@ class BranchController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:500'],
             'is_active' => ['nullable', 'boolean'],
+            'receipt_format' => ['sometimes', Rule::in(['80mm', '58mm', 'letter'])],
+            'receipt_auto_print' => ['nullable', 'boolean'],
         ]);
 
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['receipt_auto_print'] = $request->boolean('receipt_auto_print');
 
         $branch->update($validated);
 

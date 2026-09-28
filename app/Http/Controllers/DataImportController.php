@@ -3,788 +3,463 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\Product;
-use App\Models\InventoryMovement;
+use App\Models\Company;
+use App\Models\LoyaltyMigrationRun;
+use App\Models\CustomerImportRun;
+use App\Services\Imports\CustomerImportRunService;
+use App\Services\Imports\CustomerImportService;
+use App\Services\Imports\HistoricalSaleImportService;
+use App\Services\Imports\InventoryImportService;
+use App\Services\Imports\InventoryMigrationImportService;
+use App\Services\Imports\LoyaltyMigrationImportService;
+use App\Services\Imports\MigrationTemplateService;
+use App\Services\Imports\ProductImportService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use Barryvdh\DomPDF\Facade\Pdf;
-
 
 class DataImportController extends Controller
 {
-
-public function inventory()
-{
-    $companyId = session('active_company_id');
-
-    $branches = Branch::query()
-        ->where('company_id', $companyId)
-        ->where('is_active', true)
-        ->get();
-
-    $branchId = $branches->first()?->id;
-
-    return view(
-        'importaciones.inventario',
-        compact(
-            'branches',
-            'branchId'
-        )
-    );
-}
-
-    public function inventoryPreview(Request $request)
+    public function inventoryMigration(Request $request)
     {
+        $companyId = (int) session('active_company_id');
+        $branches = $this->allowedBranches($request, $companyId);
+        $branchId = $branches->firstWhere('id', (int) session('active_branch_id'))?->id
+            ?? $branches->first()?->id;
 
-        $companyId = session('active_company_id');
+        return view('importaciones.inventario-migracion', compact('branches', 'branchId'));
+    }
 
+    public function inventoryMigrationTemplate(MigrationTemplateService $templates)
+    {
+        return $this->templateDownload($templates->make('inventory', (int) session('active_company_id')), 'plantilla_migracion_inventario_p36.xlsx');
+    }
 
-        $request->validate([
-
-            'branch_id' => [
-                'required',
-                'integer',
-            ],
-
-            'movement_type' => [
-                'required',
-                'in:entry,exit',
-            ],
-
-            'inventory_file' => [
+    public function inventoryMigrationPreview(Request $request, InventoryMigrationImportService $import)
+    {
+        $data = $request->validate([
+            'migration_file' => [
                 'required',
                 'file',
-                'mimes:xlsx,xls,csv',
                 'max:10240',
-            ],
-
-        ]);
-
-
-
-        $branch = Branch::query()
-
-            ->where('id',$request->branch_id)
-
-            ->where('company_id',$companyId)
-
-            ->where('is_active',true)
-
-            ->firstOrFail();
-
-
-
-        $spreadsheet = IOFactory::load(
-
-            $request->file('inventory_file')->getRealPath()
-
-        );
-
-
-        $rows = $spreadsheet
-
-            ->getActiveSheet()
-
-            ->toArray(null,true,true,false);
-
-
-
-        $rows = array_values(
-
-            array_filter($rows,function($row){
-
-                foreach($row as $value){
-
-                    if($value !== null && trim((string)$value) !== ''){
-
-                        return true;
-
+                function (string $attribute, mixed $file, \Closure $fail): void {
+                    $extension = strtolower((string) $file->getClientOriginalExtension());
+                    if (! in_array($extension, ['xlsx', 'xls', 'csv'], true)) {
+                        $fail('El archivo debe tener extensión XLSX, XLS o CSV.');
                     }
-
-                }
-
-                return false;
-
-            })
-
-        );
-
-
-
-        $headers = array_map(
-
-            fn($value)=>
-
-                strtolower(
-
-                    trim(
-
-                        str_replace('*','',(string)$value)
-
-                    )
-
-                ),
-
-            $rows[0]
-
-        );
-
-
-
-        foreach([
-
-            'codigo',
-
-            'cantidad',
-
-            'minimo',
-
-            'maximo',
-
-        ] as $required){
-
-
-            if(!in_array($required,$headers,true)){
-
-
-                return back()
-
-                    ->withErrors([
-
-                        'inventory_file'=>
-
-                        "Falta la columna obligatoria: {$required}"
-
-                    ]);
-
-            }
-
-        }
-
-
-
-        $codeIndex = array_search('codigo',$headers,true);
-
-        $quantityIndex = array_search('cantidad',$headers,true);
-
-        $minimumIndex = array_search('minimo',$headers,true);
-
-        $maximumIndex = array_search('maximo',$headers,true);
-
-
-        $nameIndex = array_search('nombre',$headers,true);
-
-        $barcodeIndex = array_search('codigo_barras',$headers,true);
-
-        $cabysIndex = array_search('cabys',$headers,true);
-
-        $costIndex = array_search('costo',$headers,true);
-
-        $salePriceIndex = array_search('precio_venta',$headers,true);
-
-        $wholesaleIndex = array_search('precio_mayoreo',$headers,true);
-
-        $specialIndex = array_search('precio_especial',$headers,true);
-
-        $taxIndex = array_search('impuesto',$headers,true);
-
-        $descriptionIndex = array_search('descripcion',$headers,true);
-
-
-
-        $previewRows = [];
-
-
-
-        foreach(array_slice($rows,1) as $row){
-
-    if (
-        empty(trim((string)($row[$codeIndex] ?? ''))) &&
-        empty(trim((string)($row[$nameIndex] ?? '')))
-    ) {
-        continue;
-    }
-
-    $code = trim((string)($row[$codeIndex] ?? ''));
-
-
-            $product = Product::query()
-
-                ->where('company_id',$companyId)
-
-                ->where(function($q) use($code){
-
-                    $q->where('internal_code',$code)
-
-                    ->orWhere('barcode',$code);
-
-                })
-
-                ->first();
-
-
-
-            $previewRows[] = [
-
-
-                'code'=>$code,
-
-
-                'product_id'=>$product?->id,
-
-
-                'product_name'=>
-
-                    $product?->name ??
-
-                    ($row[$nameIndex] ?? 'Producto nuevo'),
-
-
-
-                'barcode'=>$row[$barcodeIndex] ?? null,
-
-
-                'cabys'=>$row[$cabysIndex] ?? null,
-
-
-                'cost'=>$row[$costIndex] ?? 0,
-
-
-                'sale_price'=>$row[$salePriceIndex] ?? 0,
-
-
-                'wholesale_price'=>$row[$wholesaleIndex] ?? null,
-
-
-                'special_price'=>$row[$specialIndex] ?? null,
-
-
-                'tax_rate'=>$row[$taxIndex] ?? 0,
-
-
-                'description'=>$row[$descriptionIndex] ?? null,
-
-
-
-                'quantity'=>$row[$quantityIndex] ?? 0,
-
-
-                'minimum'=>$row[$minimumIndex] ?? 0,
-
-
-                'maximum'=>$row[$maximumIndex] ?? 0,
-
-
-                'current_stock'=>0,
-
-
-                'is_new'=>!$product,
-
-
-                'valid'=>true,
-
-
-                'errors'=>[],
-
-
-            ];
-
-        }
-
-
-
-        session([
-
-            'inventory_import_preview'=>[
-
-                'company_id'=>$companyId,
-
-                'branch_id'=>$branch->id,
-
-                'movement_type'=>$request->movement_type,
-
-                'rows'=>$previewRows,
-
-            ]
-
+                },
+            ],
+            'legacy_branch_id' => ['nullable', 'integer'],
+            'legacy_source_key' => ['nullable', 'string', 'max:100'],
+            'legacy_occurred_at' => ['nullable', 'date'],
         ]);
+        $companyId = (int) session('active_company_id');
+        $allowedBranchIds = $this->allowedBranches($request, $companyId)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (! empty($data['legacy_branch_id']) && ! in_array((int) $data['legacy_branch_id'], $allowedBranchIds, true)) {
+            abort(403, 'No tiene acceso a la sucursal seleccionada.');
+        }
+        $rows = $import->preview(
+            $request->file('migration_file')->getRealPath(),
+            $companyId,
+            $allowedBranchIds,
+            [
+                'branch_id' => isset($data['legacy_branch_id']) ? (int) $data['legacy_branch_id'] : null,
+                'source_key' => $data['legacy_source_key'] ?? null,
+                'occurred_at' => $data['legacy_occurred_at'] ?? null,
+            ],
+        );
+        session(['inventory_migration_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
 
-
-
-       return view(
-    'importaciones.inventario-preview',
-    compact(
-        'previewRows',
-        'branch'
-    )
-)->with([
-    'movementType' => $request->movement_type,
-    'rows' => $previewRows,
-]);
-
+        return view('importaciones.inventario-migracion-preview', compact('rows'));
     }
 
-        public function inventoryImport(Request $request)
+    public function inventoryMigrationImport(Request $request, InventoryMigrationImportService $import)
     {
-
-        $companyId = session('active_company_id');
-
-
-        $preview = session('inventory_import_preview');
-
-
-        if(!$preview){
-
-            return redirect()
-
-                ->route('importaciones.inventario')
-
-                ->withErrors([
-
-                    'inventory_file'=>
-
-                    'La vista previa expiró. Cargue nuevamente el archivo.'
-
-                ]);
-
+        $preview = session('inventory_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.inventario-migracion')->withErrors(['migration_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
         }
+        $companyId = (int) session('active_company_id');
+        $allowedBranchIds = $this->allowedBranches($request, $companyId)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $count = $import->confirm($preview, $companyId, (int) $request->user()->id, $allowedBranchIds);
+        session()->forget('inventory_migration_preview');
 
+        return redirect()->route('inventario.index')->with('success', "Se migraron {$count} filas de inventario correctamente.");
+    }
 
+    public function loyaltyMigration()
+    {
+        return view('importaciones.fidelidad-migracion');
+    }
 
-        $branch = Branch::query()
+    public function loyaltyMigrationTemplate(MigrationTemplateService $templates)
+    {
+        return $this->templateDownload($templates->make('loyalty', (int) session('active_company_id')), 'plantilla_migracion_fidelidad_p37.xlsx');
+    }
 
-            ->where('id',$preview['branch_id'])
-
-            ->where('company_id',$companyId)
-
-            ->where('is_active',true)
-
-            ->firstOrFail();
-
-
-
-        $movementType = $preview['movement_type'];
-
-
+    public function loyaltyMigrationPreview(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $request->validate(['migrar_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $preview = $import->preview($request->file('migrar_file')->getRealPath(), $companyId);
+        $preview = $import->reuseManualResolutions(
+            $preview,
+            $companyId,
+            $import->storedManualResolutions($companyId, $preview['source_key']),
+        );
+        session(['loyalty_migration_preview' => $preview]);
         $rows = $preview['rows'];
 
+        return view('importaciones.fidelidad-migracion-preview', compact('rows'));
+    }
 
+    public function loyaltyMigrationImport(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $preview = session('loyalty_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+        $companyId = (int) session('active_company_id');
+        $run = $import->enqueue($preview, $companyId, (int) $request->user()->id);
+        session()->forget('loyalty_migration_preview');
 
-        DB::transaction(function() use (
+        return redirect()->route('importaciones.fidelidad-migracion.status', $run);
+    }
 
-            $rows,
+    public function loyaltyMigrationStatus(LoyaltyMigrationRun $run)
+    {
+        abort_unless((int) $run->company_id === (int) session('active_company_id'), 404);
 
-            $branch,
+        return view('importaciones.fidelidad-migracion-status', compact('run'));
+    }
 
-            $companyId,
+    public function loyaltyMigrationRetry(LoyaltyMigrationRun $run, LoyaltyMigrationImportService $import)
+    {
+        $run = $import->retry($run, (int) session('active_company_id'));
 
-            $movementType
+        return redirect()->route('importaciones.fidelidad-migracion.status', $run);
+    }
 
-        ){
+    public function loyaltyMigrationResolve(Request $request, LoyaltyMigrationImportService $import)
+    {
+        $preview = session('loyalty_migration_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.fidelidad-migracion')->withErrors(['migrar_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
 
+        $validated = $request->validate([
+            'selections' => ['required', 'array'],
+            'selections.*' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $preview = $import->resolveCustomers($preview, (int) session('active_company_id'), $validated['selections']);
+        $import->storeManualResolutions($preview, (int) session('active_company_id'));
+        session(['loyalty_migration_preview' => $preview]);
 
-            foreach($rows as $row){
+        return view('importaciones.fidelidad-migracion-preview', ['rows' => $preview['rows']]);
+    }
 
+    public function loyaltyMigrationErrors()
+    {
+        $preview = session('loyalty_migration_preview');
+        abort_unless((int) ($preview['company_id'] ?? 0) === (int) session('active_company_id'), 404);
+        $rows = collect($preview['rows'] ?? [])->where('valid', false);
+        abort_if($rows->isEmpty(), 404);
 
-
-                $product = null;
-
-
-
-                if(!empty($row['product_id'])){
-
-
-                    $product = Product::query()
-
-                        ->where('id',$row['product_id'])
-
-                        ->where('company_id',$companyId)
-
-                        ->first();
-
-
+        return response()->streamDownload(function () use ($rows): void {
+            $stream = fopen('php://output', 'wb');
+            fwrite($stream, "\xEF\xBB\xBF");
+            fputcsv($stream, ['fila', 'campo', 'error']);
+            foreach ($rows as $row) {
+                foreach ($row['errors'] as $error) {
+                    fputcsv($stream, [$row['row_number'], $error['field'], $error['message']]);
                 }
-
-
-
-                if(!$product){
-
-
-
-                    $product = Product::create([
-
-
-
-                        'company_id'=>$companyId,
-
-
-                        'category_id'=>1,
-
-
-                        'unit_id'=>1,
-
-
-                        'name'=>$row['product_name'],
-
-
-                        'internal_code'=>$row['code'],
-
-
-                        'barcode'=>$row['barcode'],
-
-
-                        'cabys_code'=>$row['cabys'],
-
-
-                        'cost'=>$row['cost'],
-
-
-                        'sale_price'=>$row['sale_price'],
-
-
-                        'wholesale_price'=>$row['wholesale_price'],
-
-
-                        'special_price'=>$row['special_price'],
-
-
-                        'tax_rate'=>$row['tax_rate'],
-
-
-                        'description'=>$row['description'],
-
-
-                        'product_type'=>'product',
-
-
-                        'track_inventory'=>true,
-
-
-                        'minimum_stock'=>$row['minimum'],
-
-
-                        'maximum_stock'=>$row['maximum'],
-
-
-                        'is_active'=>true,
-
-
-                    ]);
-
-                }
-
-
-
-
-                $inventory = DB::table('branch_product')
-
-                    ->where('branch_id',$branch->id)
-
-                    ->where('product_id',$product->id)
-
-                    ->first();
-
-
-
-
-                $previousStock = $inventory
-
-                    ? $inventory->stock
-
-                    : 0;
-
-
-
-                if($movementType === 'entry'){
-
-                    $newStock = $previousStock + $row['quantity'];
-
-                }else{
-
-                    $newStock = $previousStock - $row['quantity'];
-
-                }
-
-
-
-
-
-                DB::table('branch_product')
-
-                    ->updateOrInsert(
-
-                        [
-
-                            'branch_id'=>$branch->id,
-
-                            'product_id'=>$product->id,
-
-                        ],
-
-                        [
-
-                            'stock'=>$newStock,
-
-                            'minimum_stock'=>$row['minimum'],
-
-                            'maximum_stock'=>$row['maximum'],
-
-                            'updated_at'=>now(),
-
-                            'created_at'=>now(),
-
-                        ]
-
-                    );
-
-
-
-
-
-                InventoryMovement::create([
-
-
-
-                    'company_id'=>$companyId,
-
-
-                    'branch_id'=>$branch->id,
-
-
-                    'product_id'=>$product->id,
-
-
-                    'user_id'=>auth()->id(),
-
-
-                    'type'=>$movementType,
-
-
-                    'quantity'=>$row['quantity'],
-
-
-                    'previous_stock'=>$previousStock,
-
-
-                    'new_stock'=>$newStock,
-
-
-                    'reason'=>'Importación de inventario',
-
-
-                    'reference_type'=>'inventory_import',
-
-
-                    'notes'=>'Movimiento generado por importación Excel.',
-
-
-
-                ]);
-
-
-
             }
+            fclose($stream);
+        }, 'errores-migracion-fidelidad.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
 
+    public function historicalSales()
+    {
+        return view('importaciones.ventas-historicas');
+    }
 
-        });
+    public function historicalSaleTemplate(MigrationTemplateService $templates)
+    {
+        return $this->templateDownload($templates->make('sales', (int) session('active_company_id')), 'plantilla_ventas_historicas.xlsx');
+    }
 
+    public function historicalSalePreview(Request $request, HistoricalSaleImportService $import)
+    {
+        $request->validate(['sales_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $rows = $import->preview($request->file('sales_file')->getRealPath(), $companyId);
+        session(['historical_sale_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
 
+        return view('importaciones.ventas-historicas-preview', compact('rows'));
+    }
 
+    public function historicalSaleImport(Request $request, HistoricalSaleImportService $import)
+    {
+        $preview = session('historical_sale_import_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.ventas-historicas')->withErrors(['sales_file' => 'La vista previa expiró. Cargue nuevamente el archivo.']);
+        }
+        $count = $import->confirm($preview, (int) session('active_company_id'), (int) $request->user()->id);
+        session()->forget('historical_sale_import_preview');
 
+        return redirect()->route('ventas.index')->with('success', "Se importaron {$count} ventas históricas correctamente.");
+    }
+
+    public function products()
+    {
+        return view('importaciones.productos');
+    }
+
+    public function productTemplate(MigrationTemplateService $templates)
+    {
+        return $this->templateDownload($templates->make('products', (int) session('active_company_id')), 'plantilla_importacion_productos.xlsx');
+    }
+
+    public function productPreview(Request $request, ProductImportService $import)
+    {
+        $request->validate(['product_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240']]);
+        $companyId = (int) session('active_company_id');
+        $rows = $import->preview($request->file('product_file')->getRealPath(), $companyId);
+        session(['product_import_preview' => ['company_id' => $companyId, 'rows' => $rows]]);
+
+        return view('importaciones.productos-preview', compact('rows'));
+    }
+
+    public function productImport(ProductImportService $import)
+    {
+        $preview = session('product_import_preview');
+        if (! $preview) {
+            return redirect()->route('importaciones.productos')->withErrors([
+                'product_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
+            ]);
+        }
+        $count = $import->confirm($preview, (int) session('active_company_id'));
+        session()->forget('product_import_preview');
+
+        return redirect()->route('productos.index')->with('success', "Se importaron {$count} productos correctamente.");
+    }
+
+    public function customers()
+    {
+        $runs = CustomerImportRun::where('company_id', (int) session('active_company_id'))->latest()->paginate(10);
+
+        return view('importaciones.clientes', compact('runs'));
+    }
+
+    public function customerTemplate(MigrationTemplateService $templates)
+    {
+        return $this->templateDownload($templates->make('customers', (int) session('active_company_id')), 'plantilla_importacion_clientes.xlsx');
+    }
+
+    public function customerPreview(Request $request, CustomerImportRunService $import)
+    {
+        $data = $request->validate([
+            'customer_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+        $companyId = (int) session('active_company_id');
+        $run = $import->upload($request->file('customer_file'), $companyId, (int) $request->user()->id);
+        session(['customer_import_preview' => ['company_id' => $companyId, 'run_id' => $run->id]]);
+
+        return $this->customerStatus($run->id);
+    }
+
+    public function customerImport(Request $request, CustomerImportRunService $import)
+    {
+        $preview = session('customer_import_preview');
+        $runId = $request->integer('run_id') ?: (int) ($preview['run_id'] ?? 0);
+        if (! $runId) {
+            return redirect()->route('importaciones.clientes')->withErrors([
+                'customer_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
+            ]);
+        }
+
+        $run = $import->confirm($runId, (int) session('active_company_id'), (int) $request->user()->id);
+        session()->forget('customer_import_preview');
+
+        return redirect()->route('importaciones.clientes.status', $run->id);
+    }
+
+    public function customerStatus(int $run)
+    {
+        $run = CustomerImportRun::where('company_id', (int) session('active_company_id'))->findOrFail($run);
+        $rows = $run->rows()->orderBy('source_row')->paginate(50);
+
+        return view('importaciones.clientes-preview', compact('run', 'rows'));
+    }
+
+    public function customerRetry(Request $request, int $run, CustomerImportRunService $import)
+    {
+        $import->retry($run, (int) session('active_company_id'), (int) $request->user()->id);
+
+        return redirect()->route('importaciones.clientes.status', $run);
+    }
+
+    public function customerReport(int $run)
+    {
+        $run = CustomerImportRun::where('company_id', (int) session('active_company_id'))->findOrFail($run);
+
+        return response()->streamDownload(function () use ($run) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['fila', 'estado', 'motivo', 'fila_original', 'cliente_creado'], ',', '"', '');
+            foreach ($run->rows()->orderBy('source_row')->cursor() as $row) {
+                $reason = $row->reason ?? ($run->purged_at ? 'Detalle temporal purgado' : '');
+                if (preg_match('/^[=+@\-\t\r]/', $reason)) {
+                    $reason = "'".$reason;
+                }
+                fputcsv($output, [$row->source_row, $row->kind, $reason, $row->duplicate_of_row, $row->created_customer_id], ',', '"', '');
+            }
+            fclose($output);
+        }, 'resultado-clientes-'.$run->id.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function inventory(Request $request)
+    {
+        $companyId = (int) session('active_company_id');
+        $branches = $this->allowedBranches($request, $companyId);
+        $branchId = $branches->firstWhere('id', (int) session('active_branch_id'))?->id
+            ?? $branches->first()?->id;
+
+        return view('importaciones.inventario', compact('branches', 'branchId'));
+    }
+
+    public function inventoryPreview(Request $request, InventoryImportService $import)
+    {
+        $companyId = (int) session('active_company_id');
+        $data = $request->validate([
+            'branch_id' => ['required', 'integer'],
+            'movement_type' => ['required', 'in:entry,exit'],
+            'inventory_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $branch = $this->allowedBranches($request, $companyId)->firstWhere('id', (int) $data['branch_id']);
+        abort_unless($branch, 403, 'No tiene acceso a la sucursal seleccionada.');
+
+        $previewRows = $import->preview(
+            $request->file('inventory_file')->getRealPath(),
+            $companyId,
+            $branch,
+            $data['movement_type'],
+        );
+
+        session(['inventory_import_preview' => [
+            'company_id' => $companyId,
+            'branch_id' => $branch->id,
+            'movement_type' => $data['movement_type'],
+            'rows' => $previewRows,
+        ]]);
+
+        return view('importaciones.inventario-preview', [
+            'previewRows' => $previewRows,
+            'branch' => $branch,
+            'movementType' => $data['movement_type'],
+            'rows' => $previewRows,
+            'canConfirm' => $request->user()->hasPermission(
+                'inventario.ajustar',
+                Company::query()->findOrFail($companyId),
+            ),
+        ]);
+    }
+
+    public function inventoryImport(Request $request, InventoryImportService $import)
+    {
+        $companyId = (int) session('active_company_id');
+        $preview = session('inventory_import_preview');
+
+        if (! $preview) {
+            return redirect()->route('importaciones.inventario')->withErrors([
+                'inventory_file' => 'La vista previa expiró. Cargue nuevamente el archivo.',
+            ]);
+        }
+
+        $branch = $this->allowedBranches($request, $companyId)
+            ->firstWhere('id', (int) ($preview['branch_id'] ?? 0));
+        abort_unless($branch, 403, 'No tiene acceso a la sucursal seleccionada.');
+
+        $import->confirm($preview, $companyId, (int) $request->user()->id);
         session()->forget('inventory_import_preview');
 
-
-
-
-        return redirect()
-
-            ->route('inventario.index')
-
-            ->with('success','Inventario importado correctamente.');
-
+        return redirect()->route('inventario.index')->with('success', 'Inventario importado correctamente.');
     }
 
-        public function inventoryTemplate()
+    public function inventoryTemplate()
     {
-
-        $spreadsheet = new Spreadsheet();
-
-
-        $sheet = $spreadsheet->getActiveSheet();
-
-
-        $sheet->setTitle('Inventario');
-
-
-        $headers = [
-
-            'codigo*',
-
-            'nombre*',
-
-            'cantidad*',
-
-            'categoria',
-
-            'marca',
-
-            'unidad',
-
-            'codigo_barras',
-
-            'cabys',
-
-            'costo',
-
-            'precio_venta',
-
-            'precio_mayoreo',
-
-            'precio_especial',
-
-            'impuesto',
-
-            'minimo',
-
-            'maximo',
-
-            'descripcion',
-
-        ];
-
-
-
-        $sheet->fromArray(
-
-            $headers,
-
-            null,
-
-            'A1'
-
+        return $this->spreadsheetDownload(
+            ['codigo*', 'nombre*', 'cantidad*', 'categoria', 'marca', 'unidad', 'codigo_barras',
+                'cabys', 'costo', 'precio_venta', 'precio_mayoreo', 'precio_especial', 'impuesto',
+                'minimo', 'maximo', 'descripcion'],
+            'plantilla_importacion_inventario.xlsx',
+            true,
         );
-
-
-
-        $fileName = 'plantilla_importacion_inventario.xlsx';
-
-
-
-        $writer = new Xlsx($spreadsheet);
-
-
-
-        return response()->streamDownload(
-
-            function() use($writer){
-
-                $writer->save('php://output');
-
-            },
-
-            $fileName
-
-        );
-
     }
-
-
-
 
     public function inventoryExample()
     {
+        return $this->spreadsheetDownload([
+            'TEST-001', 'Producto ejemplo', 10, 'Categoria', 'Marca', 'Unidad', '750000000',
+            '123456789', 1500, 3000, 2500, 2800, 13, 2, 20, 'Producto de ejemplo',
+        ], 'ejemplo_importacion_inventario.xlsx');
+    }
 
+    public function inventoryInstructions()
+    {
+        return Pdf::loadView('pdf.instrucciones-inventario')
+            ->download('instrucciones_importacion_inventario.pdf');
+    }
 
-        $spreadsheet = new Spreadsheet();
+    private function allowedBranches(Request $request, int $companyId)
+    {
+        $company = Company::query()->findOrFail($companyId);
+        $canSeeOthers = $request->user()->hasPermission('inventario.ver_otras_sucursales', $company);
 
+        return Branch::query()->where('company_id', $companyId)->where('is_active', true)
+            ->when(! $canSeeOthers, fn ($query) => $query->whereKey((int) session('active_branch_id')))
+            ->orderBy('name')->get();
+    }
 
+    private function spreadsheetDownload(array $row, string $fileName, bool $isTemplate = false, string $title = 'Inventario')
+    {
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-
-
-
-        $sheet->fromArray([
-
-
-            [
-
-                'TEST-001',
-
-                'Producto ejemplo',
-
-                10,
-
-                'Categoria',
-
-                'Marca',
-
-                'Unidad',
-
-                '750000000',
-
-                '123456789',
-
-                1500,
-
-                3000,
-
-                2500,
-
-                2800,
-
-                13,
-
-                2,
-
-                20,
-
-                'Producto de ejemplo'
-
-            ]
-
-
-
-        ],null,'A1');
-
-
-
-        $fileName = 'ejemplo_importacion_inventario.xlsx';
-
-
-
+        if ($isTemplate) {
+            $sheet->setTitle($title);
+        }
+        $sheet->fromArray([$row], null, 'A1');
         $writer = new Xlsx($spreadsheet);
 
+        return response()->streamDownload(
+            function () use ($writer, $spreadsheet): void {
+                try {
+                    $writer->save('php://output');
+                } finally {
+                    $spreadsheet->disconnectWorksheets();
+                }
+            },
+            $fileName,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
 
+    private function templateDownload(Spreadsheet $spreadsheet, string $fileName)
+    {
+        $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(
-
-            function() use($writer){
-
-                $writer->save('php://output');
-
+            function () use ($writer, $spreadsheet): void {
+                try {
+                    $writer->save('php://output');
+                } finally {
+                    $spreadsheet->disconnectWorksheets();
+                }
             },
-
-            $fileName
-
+            $fileName,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
         );
-
     }
-
-        public function inventoryInstructions()
-    {
-
-        $pdf = Pdf::loadView(
-            'pdf.instrucciones-inventario'
-        );
-
-
-        return $pdf->download(
-            'instrucciones_importacion_inventario.pdf'
-        );
-
-    }
-
-
 }

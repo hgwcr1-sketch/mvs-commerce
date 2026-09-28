@@ -1,0 +1,188 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Models\Company;
+use App\Models\Sale;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
+
+class StorePosSaleRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        if (! $this->filled('quote_id')) {
+            return true;
+        }
+
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        if ($company === null) {
+            return false;
+        }
+
+        return $this->user()?->hasPermission('cotizaciones.crear', $company) === true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('document_type')) {
+            $this->merge([
+                'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+            ]);
+        }
+    }
+
+    public function rules(): array
+    {
+        $companyId = (int) session('active_company_id');
+
+        $company = $companyId > 0
+            ? Company::query()->find($companyId)
+            : null;
+
+        $user = $this->user();
+
+        $canDiscount = $company !== null
+            && $user !== null
+            && $user->hasPermission('pos.aplicar_descuento', $company);
+
+        $canOverridePrice = $company !== null
+            && $user !== null
+            && $user->hasPermission('pos.cambiar_precio', $company);
+
+        return [
+            'checkout_token' => ['required', 'uuid'],
+            'cash_session_id' => ['nullable', 'integer'],
+            'suspended_sale_id' => ['nullable', 'integer', 'required_with:recovery_token'],
+            'recovery_token' => ['nullable', 'uuid', 'required_with:suspended_sale_id'],
+            'quote_id' => ['nullable', 'integer', Rule::prohibitedIf(fn () => $this->filled('suspended_sale_id'))],
+            'customer_id' => [
+                $this->input('document_type') === Sale::DOCUMENT_ELECTRONIC_INVOICE
+                    ? 'required'
+                    : 'nullable',
+                'integer',
+                'required_with:requested_points',
+            ],
+            'requested_points' => [
+                'nullable',
+                'numeric',
+                'gt:0',
+                'regex:/^\d+(?:\.\d{1,4})?$/',
+            ],
+            'document_type' => [
+                'required',
+                'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+            ],
+
+            'payments' => ['present', 'array', $this->filled('requested_points') ? 'min:0' : 'min:1'],
+            'payments.*.payment_method_id' => ['required', 'integer', 'distinct'],
+            'payments.*.amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d+$/'],
+            'payments.*.received_amount' => ['nullable', 'numeric', 'min:0', function ($attribute, $value, $fail) {
+                $usd = $this->input(str_replace('.received_amount', '.received_amount_usd', $attribute));
+                $pattern = $usd !== null && preg_match('/^\d{1,15}(?:\.\d{1,4})?$/D', (string) $usd) && bccomp((string) $usd, '0', 4) > 0
+                    ? '/^\d{1,15}(?:\.\d{1,4})?$/D' : '/^\d{1,15}$/D';
+                if (! preg_match($pattern, (string) $value)) $fail('El efectivo recibido no tiene un formato válido.');
+            }],
+            'payments.*.reference' => ['nullable', 'string', 'max:150'],
+            'payments.*.received_amount_usd' => ['nullable', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/'],
+            'payments.*.change_currency' => ['nullable', 'in:CRC,USD'],
+            'payments.*.exchange_rate_snapshot' => ['prohibited'],
+            'payments.*.usd_exchange_rate' => ['prohibited'],
+            'payments.*.change_amount_usd' => ['prohibited'],
+            'payments.*.cash_effect_amount_usd' => ['prohibited'],
+            'usd_exchange_rate' => ['prohibited'],
+
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer'],
+            'items.*.quantity' => [
+                'required',
+                'numeric',
+                'gt:0',
+                'regex:/^\d+(?:\.\d{1,4})?$/',
+            ],
+
+            'items.*.discount' => $canDiscount
+                ? [
+                    'nullable',
+                    'numeric',
+                    'min:0',
+                    'regex:/^\d+(?:\.\d{1,4})?$/',
+                ]
+                : ['prohibited'],
+
+            'items.*.discount_type' => $canDiscount
+                ? [
+                    'nullable',
+                    'in:fixed,percentage',
+                ]
+                : ['prohibited'],
+
+            'discount_total' => $canDiscount
+                ? [
+                    'nullable',
+                    'numeric',
+                    'min:0',
+                    'regex:/^\d+(?:\.\d{1,4})?$/',
+                ]
+                : ['prohibited'],
+
+            'discount_total_type' => $canDiscount
+                ? [
+                    'nullable',
+                    'in:fixed,percentage',
+                ]
+                : ['prohibited'],
+
+            'items.*.unit_price' => $canOverridePrice
+                ? [
+                    'nullable',
+                    'numeric',
+                    'gt:0',
+                    'regex:/^\d+(?:\.\d{1,4})?$/',
+                ]
+                : ['prohibited'],
+
+            'company_id' => ['prohibited'],
+            'branch_id' => ['prohibited'],
+            'user_id' => ['prohibited'],
+            'price' => ['prohibited'],
+            'cost' => ['prohibited'],
+            'tax' => ['prohibited'],
+            'discount' => ['prohibited'],
+            'totals' => ['prohibited'],
+            'stock' => ['prohibited'],
+            'change_amount' => ['prohibited'],
+            'payments.*.change_amount' => ['prohibited'],
+            'payment_method_id' => ['prohibited'],
+            'received_amount' => ['prohibited'],
+            'sale_number' => ['prohibited'],
+            'status' => ['prohibited'],
+            'affects_cash_snapshot' => ['prohibited'],
+            'cash_effect_amount' => ['prohibited'],
+            'payments.*.affects_cash_snapshot' => ['prohibited'],
+            'payments.*.cash_effect_amount' => ['prohibited'],
+            'redeemed_amount' => ['prohibited'],
+            'point_value' => ['prohibited'],
+
+            'items.*.price' => ['prohibited'],
+            'items.*.sale_price' => ['prohibited'],
+            'items.*.cost' => ['prohibited'],
+            'items.*.tax' => ['prohibited'],
+            'items.*.tax_rate' => ['prohibited'],
+            'items.*.subtotal' => ['prohibited'],
+            'items.*.total' => ['prohibited'],
+            'items.*.stock' => ['prohibited'],
+        ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => $validator->errors()->first(),
+            'errors' => $validator->errors(),
+        ], 422));
+    }
+}

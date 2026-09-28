@@ -14,6 +14,7 @@ use App\Models\ProductCategory;
 use App\Models\Brand;
 use App\Models\Unit;
 use App\Services\Purchases\PurchaseProcessor;
+use App\Services\Purchases\PurchaseAccountPayableService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +48,7 @@ class PurchaseController extends Controller
     /**
      * Formulario para registrar una nueva compra.
      */
-    public function create()
+    public function create(Request $request)
 {
     $companyId = session('active_company_id');
 
@@ -66,10 +67,19 @@ class PurchaseController extends Controller
         ->orderBy('name')
         ->get();
 
+    $prefill = null;
+    if ($prefillJson = $request->query('prefill')) {
+        $decoded = is_string($prefillJson) ? json_decode($prefillJson, true) : $prefillJson;
+        if (is_array($decoded)) {
+            $prefill = $decoded;
+        }
+    }
+
     return view('compras.create', compact(
         'categories',
         'brands',
-        'units'
+        'units',
+        'prefill'
     ));
 }
 
@@ -87,26 +97,28 @@ class PurchaseController extends Controller
             return response()->json([]);
         }
 
+        $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
         $products = Product::query()
             ->where('products.company_id', $companyId)
             ->where('products.is_active', true)
-            ->where(function ($query) use ($search) {
-                $query->where('products.name', 'like', "%{$search}%")
-                    ->orWhere('products.internal_code', 'like', "%{$search}%")
-                    ->orWhere('products.barcode', 'like', "%{$search}%")
-                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($search) {
+            ->where(function ($query) use ($search, $likeOperator) {
+                $query->where('products.name', $likeOperator, "%{$search}%")
+                    ->orWhere('products.internal_code', $likeOperator, "%{$search}%")
+                    ->orWhere('products.barcode', $likeOperator, "%{$search}%")
+                    ->orWhereHas('barcodes', function ($barcodeQuery) use ($search, $likeOperator) {
                         $barcodeQuery
                             ->where('is_active', true)
-                            ->where('barcode', 'like', "%{$search}%");
+                            ->where('barcode', $likeOperator, "%{$search}%");
                     })
-                    ->orWhereHas('brand', function ($brandQuery) use ($search) {
-                        $brandQuery->where('name', 'like', "%{$search}%");
+                    ->orWhereHas('brand', function ($brandQuery) use ($search, $likeOperator) {
+                        $brandQuery->where('name', $likeOperator, "%{$search}%");
                     });
             })
             ->with([
                 'brand:id,name',
                 'category:id,name',
-                'unit:id,name',
+                'unit:id,name,allows_decimals',
                 'barcodes' => function ($query) {
                     $query
                         ->where('is_active', true)
@@ -159,6 +171,7 @@ class PurchaseController extends Controller
                 'brand' => $product->brand?->name,
                 'category' => $product->category?->name,
                 'unit' => $product->unit?->name,
+                'allows_decimals' => (bool) $product->unit?->allows_decimals,
                 'cost' => (float) $product->cost,
                 'sale_price' => (float) $product->sale_price,
                 'tax_rate' => (float) $product->tax_rate,
@@ -272,7 +285,8 @@ class PurchaseController extends Controller
         'supplier',
         'branch',
         'user',
-        'items.product',
+            'items.product.unit',
+            'verification.assignee:id,name',
     ])
     ->where('company_id', $companyId)
     ->where('branch_id', $branchId)
@@ -800,7 +814,7 @@ public function update(Request $request, string $id)
             /**
      * Anular compra.
      */
-    public function destroy(string $id)
+    public function destroy(string $id, PurchaseAccountPayableService $accountPayableService)
 {
     $companyId = session('active_company_id');
     $branchId = session('active_branch_id');
@@ -810,7 +824,8 @@ public function update(Request $request, string $id)
         DB::transaction(function () use (
             $id,
             $companyId,
-            $branchId
+            $branchId,
+            $accountPayableService
         ) {
 
             $purchase = Purchase::with('items.product')
@@ -904,6 +919,12 @@ public function update(Request $request, string $id)
                     'Anulación manual',
 
             ]);
+
+            $accountPayableService->cancelFor(
+                $purchase,
+                Auth::user(),
+                'Anulación manual'
+            );
 
         });
 

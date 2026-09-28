@@ -1,177 +1,79 @@
 @extends('layouts.app')
 
-@section('title', 'Transferencias')
-
 @section('content')
-
-<div class="space-y-6">
-
-    <div class="flex items-center justify-between">
-
+<div class="min-w-0 space-y-6">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-slate-800">
-                Transferencias de Inventario
-            </h1>
-
-            <p class="mt-1 text-sm text-slate-500">
-                Movimientos de inventario entre sucursales.
-            </p>
+            <h1 class="text-xl font-bold text-slate-800 sm:text-2xl">Traslados de Inventario</h1>
+            <p class="mt-1 text-sm text-slate-500">Productos en movimiento entre sucursales.</p>
         </div>
-
-        <a
-            href="{{ route('transferencias.create') }}"
-            class="rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600">
-
-            + Nueva Transferencia
-
-        </a>
-
-    </div>
-
-    @if(session('success'))
-
-        <div class="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-green-700">
-            {{ session('success') }}
+        <a href="{{ route('transferencias.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-600">Nuevo traslado</a>
+    </header>
+    @include('transferencias._messages')
+    <form method="GET" action="{{ route('transferencias.index') }}" class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:p-5">
+        <div class="min-w-0 flex-1">
+            <label for="status" class="mb-2 block text-sm font-semibold text-slate-700">Estado</label>
+            <select name="status" id="status" class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm">
+                <option value="">Todos los estados</option>
+                @foreach($statusLabels as $value => $label)
+                    <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
         </div>
-
-    @endif
-
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-        <div class="overflow-x-auto">
-
-            <table class="min-w-full">
-
-                <thead class="bg-slate-50">
-
-                    <tr>
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Número
-                        </th>
-
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Fecha
-                        </th>
-
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Origen
-                        </th>
-
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Destino
-                        </th>
-
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Productos
-                        </th>
-
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-slate-600">
-                            Usuario
-                        </th>
-
-                        <th class="px-5 py-4 text-center text-sm font-semibold text-slate-600">
-                            Estado
-                        </th>
-                    </tr>
-
-                </thead>
-
-                <tbody class="divide-y divide-slate-200">
-
-                    @forelse($transfers as $transfer)
-
-                        <tr class="hover:bg-slate-50">
-
-                            <td class="whitespace-nowrap px-5 py-4 font-semibold text-slate-800">
-                                {{ $transfer->transfer_number }}
-                            </td>
-
-                            <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-
-                                {{ $transfer->transferred_at
-                                    ? $transfer->transferred_at->format('d/m/Y H:i')
-                                    : '-' }}
-
-                            </td>
-
-                            <td class="px-5 py-4 text-slate-700">
-                                {{ $transfer->fromBranch->name ?? '-' }}
-                            </td>
-
-                            <td class="px-5 py-4 text-slate-700">
-                                {{ $transfer->toBranch->name ?? '-' }}
-                            </td>
-
-                            <td class="px-5 py-4">
-
-                                @foreach($transfer->items as $item)
-
-                                    <div class="mb-1 text-sm">
-
-                                        <span class="font-semibold text-slate-800">
-                                            {{ $item->product->name ?? 'Producto eliminado' }}
-                                        </span>
-
-                                        <span class="text-slate-500">
-                                            × {{ number_format($item->quantity, 2) }}
-                                        </span>
-
-                                    </div>
-
-                                @endforeach
-
-                            </td>
-
-                            <td class="px-5 py-4 text-sm text-slate-600">
-                                {{ $transfer->user->name ?? 'Sistema' }}
-                            </td>
-
-                            <td class="px-5 py-4 text-center">
-
-                                @if($transfer->status === 'completed')
-
-                                    <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                        Completada
-                                    </span>
-
-                                @else
-
-                                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                        {{ ucfirst($transfer->status) }}
-                                    </span>
-
-                                @endif
-
-                            </td>
-
-                        </tr>
-
-                    @empty
-
+        <button type="submit" class="min-h-11 rounded-xl bg-slate-800 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700">Filtrar</button>
+        @if(request('status'))
+            <a href="{{ route('transferencias.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700">Limpiar</a>
+        @endif
+    </form>
+    @if($transfers->isEmpty())
+        <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-slate-500">
+            No hay traslados para mostrar{{ request('status') ? ' con este estado' : '' }}.
+        </div>
+    @else
+        <div class="space-y-3 md:hidden">
+            @foreach($transfers as $transfer)
+                <article class="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h2 class="break-all text-sm font-bold text-slate-800">{{ $transfer->transfer_number }}</h2>
+                        @include('transferencias._status')
+                    </div>
+                    <dl class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="min-w-0"><dt class="text-slate-500">Origen</dt><dd class="break-words font-medium text-slate-800">{{ $transfer->fromBranch?->name ?? '—' }}</dd></div>
+                        <div class="min-w-0"><dt class="text-slate-500">Destino</dt><dd class="break-words font-medium text-slate-800">{{ $transfer->toBranch?->name ?? '—' }}</dd></div>
+                        <div><dt class="text-slate-500">Productos</dt><dd>{{ $transfer->items->count() }}</dd></div>
+                        <div><dt class="text-slate-500">Creado</dt><dd>{{ $transfer->created_at?->format('d/m/Y H:i') }}</dd></div>
+                    </dl>
+                    <p class="break-words text-xs text-slate-500">Creado por {{ $transfer->user?->name ?? 'Usuario no disponible' }}</p>
+                    @include('transferencias._actions', ['detail' => false])
+                </article>
+            @endforeach
+        </div>
+        <div class="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-600">
                         <tr>
-
-                            <td
-                                colspan="7"
-                                class="px-6 py-12 text-center text-slate-400">
-
-                                No existen transferencias registradas.
-
-                            </td>
-
+                            @foreach(['Traslado', 'Origen / destino', 'Estado', 'Productos', 'Creado por / fecha', 'Acciones'] as $heading)
+                                <th scope="col" class="px-5 py-4 font-semibold">{{ $heading }}</th>
+                            @endforeach
                         </tr>
-
-                    @endforelse
-
-                </tbody>
-
-            </table>
-
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        @foreach($transfers as $transfer)
+                            <tr class="hover:bg-slate-50">
+                                <td class="whitespace-nowrap px-5 py-4 font-semibold text-slate-800">{{ $transfer->transfer_number }}</td>
+                                <td class="px-5 py-4"><div>{{ $transfer->fromBranch?->name ?? '—' }}</div><div class="mt-1 text-slate-500">→ {{ $transfer->toBranch?->name ?? '—' }}</div></td>
+                                <td class="px-5 py-4">@include('transferencias._status')</td>
+                                <td class="px-5 py-4 tabular-nums">{{ $transfer->items->count() }}</td>
+                                <td class="px-5 py-4"><div>{{ $transfer->user?->name ?? 'Usuario no disponible' }}</div><div class="mt-1 whitespace-nowrap text-xs text-slate-500">{{ $transfer->created_at?->format('d/m/Y H:i') }}</div></td>
+                                <td class="px-5 py-4">@include('transferencias._actions', ['detail' => false])</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
-
-    </div>
-
+    @endif
     {{ $transfers->links() }}
-
 </div>
-
 @endsection

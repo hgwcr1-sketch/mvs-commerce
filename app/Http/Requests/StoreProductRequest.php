@@ -42,6 +42,24 @@ class StoreProductRequest extends FormRequest
                     ->where('company_id', $companyId),
             ],
 
+            'style_id' => [
+                'nullable',
+                Rule::exists('styles', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
+            'size_id' => [
+                'nullable',
+                Rule::exists('sizes', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
+            'color_id' => [
+                'nullable',
+                Rule::exists('colors', 'id')
+                    ->where('company_id', $companyId),
+            ],
+
             'name' => [
                 'required',
                 'string',
@@ -109,10 +127,28 @@ class StoreProductRequest extends FormRequest
             ],
 
             'special_price' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
+    'nullable',
+    'numeric',
+    'min:0',
+],
+
+            'price_a' => [
+    'nullable',
+    'numeric',
+    'min:0',
+],
+
+'price_b' => [
+    'nullable',
+    'numeric',
+    'min:0',
+],
+
+'price_c' => [
+    'nullable',
+    'numeric',
+    'min:0',
+],
 
             'stock' => [
                 'nullable',
@@ -152,7 +188,7 @@ class StoreProductRequest extends FormRequest
                 'nullable',
                 'image',
                 'mimes:jpg,jpeg,png,webp',
-                'max:2048',
+                'max:5120',
             ],
 
             'is_active' => [
@@ -197,6 +233,15 @@ class StoreProductRequest extends FormRequest
             'unit_id.exists' =>
                 'La unidad seleccionada no pertenece a la empresa activa.',
 
+            'style_id.exists' =>
+                'El estilo seleccionado no pertenece a la empresa activa.',
+
+            'size_id.exists' =>
+                'La talla seleccionada no pertenece a la empresa activa.',
+
+            'color_id.exists' =>
+                'El color seleccionado no pertenece a la empresa activa.',
+
             'cost.required' =>
                 'Debe ingresar el costo.',
 
@@ -213,7 +258,7 @@ class StoreProductRequest extends FormRequest
                 'La imagen debe ser JPG, JPEG, PNG o WEBP.',
 
             'image.max' =>
-                'La imagen no puede superar los 2 MB.',
+                'La imagen no puede superar los 5 MB.',
 
         ];
     }

@@ -1,0 +1,3 @@
+<?php
+namespace App\Models; use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class LayawayPayment extends Model {protected $fillable=['layaway_id','company_id','branch_id','user_id','cash_session_id','payment_method_id','amount','affects_cash_snapshot','cash_effect_amount','reference','notes','paid_at']; protected function casts():array{return['amount'=>'decimal:4','cash_effect_amount'=>'decimal:4','affects_cash_snapshot'=>'boolean','paid_at'=>'datetime'];} public function paymentMethod():BelongsTo{return $this->belongsTo(PaymentMethod::class);} public function user():BelongsTo{return $this->belongsTo(User::class);} public function cashSession():BelongsTo{return $this->belongsTo(CashSession::class);}}

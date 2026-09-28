@@ -15,7 +15,7 @@ return new class extends Migration
 
             $table->id();
 
-            $table->string('name',150)->unique();
+            $table->string('name', 150)->unique();
 
             $table->text('description')->nullable();
 
@@ -26,6 +26,13 @@ return new class extends Migration
             $table->timestamps();
 
         });
+
+        Schema::table('products', function (Blueprint $table) {
+            $table->foreign('brand_id')
+                ->references('id')
+                ->on('brands')
+                ->nullOnDelete();
+        });
     }
 
     /**
@@ -33,6 +40,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('products', function (Blueprint $table) {
+            $table->dropForeign(['brand_id']);
+        });
+
         Schema::dropIfExists('brands');
     }
 };

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Supplier extends Model
 {
@@ -67,5 +69,27 @@ class Supplier extends Model
     public function district()
     {
         return $this->belongsTo(District::class);
+    }
+
+    public function accountsPayable(): HasMany
+    {
+        return $this->hasMany(AccountPayable::class);
+    }
+
+    public function productSuppliers(): HasMany
+    {
+        return $this->hasMany(ProductSupplier::class);
+    }
+
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'product_suppliers')
+            ->withPivot(['company_id', 'supplier_product_code', 'current_cost', 'is_primary', 'is_active', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
     }
 }

@@ -1,5 +1,12 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
+use App\Http\Middleware\EnsureActiveBranch;
+use App\Http\Middleware\EnsureActiveCompany;
+use App\Http\Middleware\EnsureCompanyLicense;
+use App\Http\Middleware\EnsurePlatformAdmin;
+use App\Http\Middleware\EnsurePosCashSession;
+use App\Http\Middleware\PermissionMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,19 +20,30 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
+        $middleware->trustProxies(at: '*');
+        $middleware->append(AddSecurityHeaders::class);
+
         $middleware->alias([
-            'active.company' => \App\Http\Middleware\EnsureActiveCompany::class,
+            'active.company' => EnsureActiveCompany::class,
+            'company.licensed' => EnsureCompanyLicense::class,
 
-            'active.branch' => \App\Http\Middleware\EnsureActiveBranch::class,
+            'active.branch' => EnsureActiveBranch::class,
 
-            'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+            'permission' => PermissionMiddleware::class,
+
+            'platform.admin' => EnsurePlatformAdmin::class,
+            'pos.cash-session' => EnsurePosCashSession::class,
         ]);
 
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*')
+                || ($request->is('cotizaciones') && $request->isMethod('post') && $request->expectsJson())
+                || ($request->is('tomas-inventario/*') && ($request->expectsJson() || $request->ajax()))
+                || (($request->is('pos') || $request->is('pos/*'))
+                    && ($request->expectsJson() || $request->ajax())),
         );
 
     })->create();

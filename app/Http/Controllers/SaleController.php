@@ -2,63 +2,116 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Sales\SaleVoidService;
+use App\Models\Sale;
 use Illuminate\Http\Request;
 
 class SaleController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $companyId = (int) session('active_company_id');
+        $branchId = (int) session('active_branch_id');
+
+        $query = Sale::query()
+            ->forCompany($companyId)
+            ->forBranch($branchId)
+            ->with([
+                'customer:id,name',
+                'user:id,name',
+            ]);
+
+        if ($search = trim((string) $request->query('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('sale_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if ($documentType = $request->query('document_type')) {
+            $query->where('document_type', $documentType);
+        }
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($request->boolean('with_returns')) {
+            $query->whereHas('returns');
+        }
+
+        if ($dateFrom = $request->query('date_from')) {
+            $query->whereDate('completed_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo = $request->query('date_to')) {
+            $query->whereDate('completed_at', '<=', $dateTo);
+        }
+
+        $sales = $query
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('ventas.index', compact('sales'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+    public function show(Sale $venta)
+{
+    $companyId = (int) session('active_company_id');
+    $branchId = (int) session('active_branch_id');
+
+    if (
+        (int) $venta->company_id !== $companyId
+        || (int) $venta->branch_id !== $branchId
+    ) {
+        abort(404);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+    $venta->load([
+        'branch',
+        'user',
+        'customer.accountsReceivable',
+        'items',
+        'payments.paymentMethod',
+        'accountReceivable',
+        'cashSession.cashRegister',
+        'returns.user',
+        'returns.items.product',
+    ]);
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
+    return view('ventas.show', [
+        'sale' => $venta,
+    ]);
+}
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
+public function void(
+    Request $request,
+    Sale $venta,
+    SaleVoidService $service,
+)
+{
+    $data = $request->validate([
+        'reason' => [
+            'required',
+            'string',
+            'min:3',
+            'max:255',
+        ],
+    ]);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
+    $service->void(
+        $venta,
+        $request->user(),
+        $data['reason'],
+    );
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
-    }
+    return redirect()
+        ->route('ventas.show', $venta)
+        ->with('success', 'Venta anulada correctamente.');
+}
+
 }

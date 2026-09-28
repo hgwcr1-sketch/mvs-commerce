@@ -1,0 +1,74 @@
+<?php
+
+namespace App\Services\Cash;
+
+use App\Models\CashMovement;
+use App\Models\CashSession;
+use App\Models\Sale;
+use App\Models\SalePayment;
+use Illuminate\Support\Facades\DB;
+
+class CashExpectedAmountService
+{
+    public function calculate(CashSession $session): float
+    {
+        return (float) $this->calculateDecimal($session);
+    }
+
+    public function calculateDecimal(CashSession $session): string
+    {
+        $cashSales = DB::table('sale_payments as payments')
+            ->join('sales', 'sales.id', '=', 'payments.sale_id')
+            ->where('payments.cash_session_id', $session->id)
+            ->where('payments.status', SalePayment::STATUS_COMPLETED)
+            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->where('payments.affects_cash_snapshot', true)
+            ->whereNotNull('payments.cash_effect_amount')
+            ->sum('payments.cash_effect_amount');
+
+        $receivablePayments = DB::table('accounts_receivable_payments')
+            ->where('cash_session_id', $session->id)
+            ->where('affects_cash_snapshot', true)
+            ->sum('cash_effect_amount');
+        $layawayPayments = DB::table('layaway_payments')->where('cash_session_id', $session->id)->where('affects_cash_snapshot', true)->sum('cash_effect_amount');
+        $payablePayments = DB::table('accounts_payable_payments')->where('cash_session_id', $session->id)->where('affects_cash_snapshot', true)->sum('cash_effect_amount');
+
+        $entries = CashMovement::forSession($session->id)
+            ->where('direction', CashMovement::DIRECTION_IN)
+            ->sum('amount');
+
+        $outputs = CashMovement::forSession($session->id)
+            ->where('direction', CashMovement::DIRECTION_OUT)
+            ->sum('amount');
+
+        $total = $session->opening_amount;
+        foreach ([$cashSales, $receivablePayments, $layawayPayments, $entries] as $amount) {
+            $total = bcadd($total, (string) $amount, 4);
+        }
+        foreach ([$payablePayments, $outputs] as $amount) {
+            $total = bcsub($total, (string) $amount, 4);
+        }
+
+        return $total;
+    }
+
+    public function calculateUsdDecimal(CashSession $session): string
+    {
+        $total = bcadd((string) $session->opening_amount_usd, '0', 4);
+        $amounts = DB::table('sale_payments as payments')
+            ->join('sales', 'sales.id', '=', 'payments.sale_id')
+            ->where('payments.cash_session_id', $session->id)
+            ->where('sales.company_id', $session->company_id)
+            ->where('sales.branch_id', $session->branch_id)
+            ->where('payments.status', SalePayment::STATUS_COMPLETED)
+            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->where('payments.affects_cash_snapshot', true)
+            ->whereNotNull('payments.cash_effect_amount_usd')
+            ->pluck('payments.cash_effect_amount_usd');
+        foreach ($amounts as $amount) {
+            $total = bcadd($total, (string) $amount, 4);
+        }
+
+        return $total;
+    }
+}

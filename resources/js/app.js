@@ -1,10 +1,17 @@
 import '../css/app.css';
 
 import Alpine from 'alpinejs';
+import qz from 'qz-tray';
 
 import './modules/clientes';
 import './modules/compras';
+import './mvs-print/qz';
+import './navigation';
+import './scanner';
+import './tabs';
+import './transfers';
 
 window.Alpine = Alpine;
+window.qz = qz;
 
 Alpine.start();

@@ -1,0 +1,3 @@
+<?php
+namespace App\Models; use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class LayawayItem extends Model {protected $fillable=['layaway_id','product_id','description','quantity','unit_price','tax_rate','subtotal','tax_total','total']; protected function casts():array{return['quantity'=>'decimal:4','unit_price'=>'decimal:4','tax_rate'=>'decimal:4','subtotal'=>'decimal:4','tax_total'=>'decimal:4','total'=>'decimal:4'];} public function layaway():BelongsTo{return $this->belongsTo(Layaway::class);} public function product():BelongsTo{return $this->belongsTo(Product::class);}}

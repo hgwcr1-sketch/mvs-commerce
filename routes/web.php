@@ -1,61 +1,95 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\InventoryCountController;
 
+use App\Http\Controllers\AccountsPayableController;
 /*
 |--------------------------------------------------------------------------
 | Controladores
 |--------------------------------------------------------------------------
 */
 
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\ActiveBranchController;
-use App\Http\Controllers\Auth\ForgotPasswordController;
-use App\Http\Controllers\Auth\ResetPasswordController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\BranchController;
-
-// Catálogos
-use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ProductCategoryController;
-use App\Http\Controllers\BrandController;
-use App\Http\Controllers\UnitController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\CustomerContactController;
-use App\Http\Controllers\CustomerAddressController;
-use App\Http\Controllers\SupplierController;
-
-// Inventario
-use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\InventoryAdjustmentController;
-use App\Http\Controllers\KardexController;
-use App\Http\Controllers\TransferController;
-
-// Compras
-use App\Http\Controllers\PurchaseXmlImportController;
-use App\Http\Controllers\PurchaseImportController;
-use App\Http\Controllers\PurchaseController;
-use App\Http\Controllers\PurchaseOrderController;
-
-// Ventas
-use App\Http\Controllers\SaleController;
-use App\Http\Controllers\QuoteController;
-use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\LayawayController;
-use App\Http\Controllers\ReturnController;
-
-// Finanzas
 use App\Http\Controllers\AccountsReceivableController;
-use App\Http\Controllers\AccountsPayableController;
-
-// Administración
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\CompanyController;
-use App\Http\Controllers\SettingController;
+use App\Http\Controllers\ActiveBranchController;
 use App\Http\Controllers\AgendaController;
-use App\Http\Controllers\ReportController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\BranchController;
+// Catálogos
+use App\Http\Controllers\BrandController;
+use App\Http\Controllers\CashClosingController;
+use App\Http\Controllers\CashDrawerController;
+use App\Http\Controllers\CashMovementController;
+use App\Http\Controllers\CashRegisterController;
+use App\Http\Controllers\CashSessionController;
+use App\Http\Controllers\CashSessionHistoryController;
+use App\Http\Controllers\CompanyCashSettingController;
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyLicenseController;
+use App\Http\Controllers\ControlCenterController;
+use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
+use App\Http\Controllers\CustomerAddressController;
+// Inventario
+use App\Http\Controllers\CustomerContactController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DataCenterController;
+use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
+// Compras
+use App\Http\Controllers\InventoryAdjustmentController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\KardexController;
+// Ventas
+use App\Http\Controllers\LabelCenterController;
+use App\Http\Controllers\LayawayController;
+use App\Http\Controllers\LoyaltyAdjustmentController;
+use App\Http\Controllers\LoyaltyCustomerPortalController;
+use App\Http\Controllers\LoyaltyDashboardController;
+use App\Http\Controllers\LoyaltyMovementController;
+use App\Http\Controllers\LoyaltyMultiplierController;
+use App\Http\Controllers\LoyaltyOpportunityController;
+use App\Http\Controllers\LoyaltyPortalAccessController;
+use App\Http\Controllers\LoyaltyPortalManagementController;
+use App\Http\Controllers\LoyaltyPortalSessionController;
+use App\Http\Controllers\LoyaltyPortalPasskeyController;
+use App\Http\Controllers\LoyaltyPromotionController;
+use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
+use App\Http\Controllers\LoyaltyRewardController;
+use App\Http\Controllers\LoyaltyRewardRedemptionController;
+use App\Http\Controllers\LoyaltyRuleCenterController;
+use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
+// MVS Print
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PaymentMethodController;
+// Finanzas
+use App\Http\Controllers\PlatformAdminController;
+use App\Http\Controllers\PosController;
+// Administración
+use App\Http\Controllers\ProductCategoryController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductSupplierController;
+use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\PurchaseImportController;
+use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\PurchaseVerificationController;
+use App\Http\Controllers\PurchaseXmlImportController;
+use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\ReportCenterController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SaleReceiptMailController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TransferController;
+use App\Http\Controllers\UnitController;
+use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
+
 /*
 |--------------------------------------------------------------------------
 | Autenticación
@@ -68,19 +102,22 @@ Route::middleware('guest')->group(function () {
         ->name('login');
 
     Route::post('/login', [LoginController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('login.store');
 
     Route::get('/forgot-password', [ForgotPasswordController::class, 'create'])
         ->name('password.request');
 
-        Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])
-    ->name('password.email');
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('password.email');
 
     Route::get('/reset-password/{token}', [ResetPasswordController::class, 'create'])
-    ->name('password.reset');
+        ->name('password.reset');
 
     Route::post('/reset-password', [ResetPasswordController::class, 'store'])
-    ->name('password.update');
+        ->middleware('throttle:6,1')
+        ->name('password.update');
 
 });
 
@@ -88,363 +125,711 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
-    Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
+Route::middleware('auth')->group(function () {
+    Route::get('/empresa/create', [CompanyController::class, 'create'])->name('empresa.create');
+    Route::post('/empresa', [CompanyController::class, 'store'])->name('empresa.store');
+    Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])->name('ubicaciones.provincias');
+    Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])->name('ubicaciones.cantones');
+    Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])->name('ubicaciones.distritos');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Portal del cliente de Fidelización (F33/F34)
+|--------------------------------------------------------------------------
+|
+| Acceso público mediante token seguro asociado a empresa y cliente.
+| El token se almacena solo como hash; la URL no contiene IDs internos
+| ni datos personales. Limitada por tasa para frenar fuerza bruta.
+*/
+
+Route::get('/fidelidad/portal/acceso/{token}', [LoyaltyPortalAccessController::class, 'access'])
+    ->middleware('throttle:30,1')
+    ->name('loyalty.portal.access');
+
+Route::prefix('portal-clientes/{company}')->name('loyalty.customer.')->middleware('throttle:30,1')->group(function () {
+    Route::get('/ingresar', [LoyaltyPortalSessionController::class, 'loginForm'])->name('login');
+    Route::post('/ingresar', [LoyaltyPortalSessionController::class, 'login'])->name('login.store');
+    Route::get('/registro', [LoyaltyPortalSessionController::class, 'registerForm'])->name('register');
+    Route::post('/registro', [LoyaltyPortalSessionController::class, 'register'])->middleware('throttle:10,1')->name('register.store');
+    Route::get('/', [LoyaltyPortalSessionController::class, 'home'])->name('home');
+    Route::post('/salir', [LoyaltyPortalSessionController::class, 'logout'])->name('logout');
+    Route::patch('/perfil', [LoyaltyPortalSessionController::class, 'profile'])->name('profile');
+    Route::get('/compras/{sale}/comprobante.pdf', [LoyaltyPortalSessionController::class, 'receiptPdf'])->name('receipt.pdf');
+    Route::post('/compras/{sale}/comprobante/correo', [LoyaltyPortalSessionController::class, 'sendReceipt'])->name('receipt.mail');
+    Route::get('/recuperar', [LoyaltyPortalSessionController::class, 'forgotForm'])->name('password.request');
+    Route::post('/recuperar', [LoyaltyPortalSessionController::class, 'forgot'])->name('password.email');
+    Route::get('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'resetForm'])->name('password.reset');
+    Route::post('/restablecer/{token}', [LoyaltyPortalSessionController::class, 'reset'])->name('password.update');
+    Route::get('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChangeForm'])->name('password.force');
+    Route::post('/cambiar-clave', [LoyaltyPortalSessionController::class, 'forceChange'])->name('password.force.store');
+    Route::get('/passkeys', [LoyaltyPortalPasskeyController::class, 'manage'])->name('passkeys.manage');
+    Route::delete('/passkeys/{passkey}', [LoyaltyPortalPasskeyController::class, 'revoke'])->whereNumber('passkey')->name('passkeys.revoke');
+    Route::patch('/passkeys/{passkey}', [LoyaltyPortalPasskeyController::class, 'rename'])->whereNumber('passkey')->name('passkeys.rename');
+});
+Route::middleware('throttle:20,1')->group(function () {
+    Route::post('/portal-clientes/{company}/passkeys/iniciar-registro', [LoyaltyPortalPasskeyController::class, 'startRegistration'])
+        ->name('loyalty.customer.passkeys.start');
+    Route::post('/portal-clientes/{company}/passkeys/finalizar-registro', [LoyaltyPortalPasskeyController::class, 'finishRegistration'])
+        ->name('loyalty.customer.passkeys.finish');
+    Route::post('/portal-clientes/{company}/passkeys/iniciar-autenticacion', [LoyaltyPortalPasskeyController::class, 'startAuthentication'])
+        ->name('loyalty.customer.passkeys.auth.start');
+    Route::post('/portal-clientes/{company}/passkeys/finalizar-autenticacion', [LoyaltyPortalPasskeyController::class, 'finishAuthentication'])
+        ->name('loyalty.customer.passkeys.auth.finish');
+});
+Route::post('/portal-clientes/activar', [LoyaltyPortalSessionController::class, 'activate'])->middleware('throttle:10,1')->name('loyalty.customer.activate');
+
+Route::post('/sucursal-activa', [ActiveBranchController::class, 'update'])
     ->middleware('auth')
     ->name('branch.active.update');
 
-    Route::middleware(['auth', 'active.company'])->group(function () {
-        
+Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform.admin'])->group(function () {
+    Route::get('/', [PlatformAdminController::class, 'index'])->name('index');
+    Route::get('/empresas-nueva', [PlatformAdminController::class, 'createCompany'])->name('companies.create');
+    Route::post('/empresas', [PlatformAdminController::class, 'storeCompany'])->name('companies.store');
+    Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
+    Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
+    Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
+    Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
+});
 
-/*
-|--------------------------------------------------------------------------
-| Dashboard
-|--------------------------------------------------------------------------
-*/
+Route::middleware(['auth', 'active.company'])->group(function () {
+    Route::get('/licencia', [CompanyLicenseController::class, 'show'])->name('license.status');
+});
 
-Route::redirect('/', '/dashboard');
+Route::middleware(['auth', 'active.company', 'company.licensed'])->group(function () {
 
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->name('dashboard');
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard
+    |--------------------------------------------------------------------------
+    */
 
-/*
-|--------------------------------------------------------------------------
-| Catálogos
-|--------------------------------------------------------------------------
-*/
+    Route::redirect('/', '/dashboard');
 
-/*
-|--------------------------------------------------------------------------
-| Productos
-|--------------------------------------------------------------------------
-*/
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
 
-Route::get('/productos-buscar', [ProductController::class, 'search'])
-    ->middleware(['active.branch', 'permission:productos.ver'])
-    ->name('productos.search');
+    Route::get('/centro-de-control', [ControlCenterController::class, 'index'])
+        ->middleware(['active.branch', 'permission:dashboard.admin'])
+        ->name('control-center.index');
 
-Route::resource('productos', ProductController::class)
-    ->only(['index', 'show'])
-    ->middleware(['active.branch', 'permission:productos.ver']);
+    Route::middleware(['active.branch', 'permission:pos.acceder'])->group(function () {
+        Route::get('/pos', [PosController::class, 'index'])->middleware('pos.cash-session')->name('pos.index');
+        Route::get('/pos/productos/buscar', [PosController::class, 'searchProducts'])
+            ->name('pos.products.search');
+        Route::get('/pos/clientes/buscar', [PosController::class, 'searchCustomers'])
+            ->name('pos.customers.search');
+        Route::post('/pos/clientes/rapido', [PosController::class, 'storeQuickCustomer'])
+            ->middleware('permission:clientes.crear')
+            ->name('pos.customers.quick-store');
+        Route::get('/pos/fidelidad/consulta', [PosController::class, 'loyaltySummary'])
+            ->name('pos.loyalty.summary');
+        Route::post('/pos/cobrar', [PosController::class, 'checkout'])
+            ->middleware(['permission:ventas.crear', 'pos.cash-session'])
+            ->name('pos.checkout');
+        Route::middleware('permission:ventas.crear')->group(function () {
+            Route::post('/pos/suspender', [PosController::class, 'storeSuspended'])->name('pos.suspended.store');
+            Route::get('/pos/suspendidas', [PosController::class, 'suspendedIndex'])->name('pos.suspended.index');
+            Route::post('/pos/suspendidas/{suspendedSale}/recuperar', [PosController::class, 'recoverSuspended'])->name('pos.suspended.recover');
+            Route::post('/pos/suspendidas/{suspendedSale}/liberar', [PosController::class, 'releaseSuspended'])->name('pos.suspended.release');
+            Route::post('/pos/suspendidas/{suspendedSale}/volver-a-suspender', [PosController::class, 'resuspendSale'])->name('pos.suspended.resuspend');
+            Route::post('/pos/suspendidas/{suspendedSale}/cancelar', [PosController::class, 'cancelSuspended'])->middleware('permission:ventas.anular')->name('pos.suspended.cancel');
+        });
+    });
 
-Route::resource('productos', ProductController::class)
-    ->only(['create', 'store'])
-    ->middleware(['active.branch', 'permission:productos.crear']);
+    Route::middleware('active.branch')->group(function () {
+        Route::get('/pos/ventas/{sale}/comprobante', [PosController::class, 'receipt'])->name('pos.receipt');
+        Route::get('/pos/ventas/{sale}/comprobante.pdf', [PosController::class, 'receiptPdf'])->name('pos.receipt.pdf');
+        Route::post('/pos/ventas/{sale}/comprobante/correo', SaleReceiptMailController::class)->name('pos.receipt.mail');
+    });
 
-Route::resource('productos', ProductController::class)
-    ->only(['edit', 'update'])
-    ->middleware(['active.branch', 'permission:productos.editar']);
+    Route::middleware('active.branch')->group(function () {
+        Route::get('/caja/requerida', [CashSessionController::class, 'required'])->name('cash.required');
+        Route::get('/caja', [CashSessionController::class, 'index'])
+            ->name('cash.index');
+        Route::get('/caja/abrir', [CashSessionController::class, 'create'])
+            ->middleware('permission:caja.abrir')
+            ->name('cash.open.create');
+        Route::post('/caja/abrir', [CashSessionController::class, 'store'])
+            ->middleware('permission:caja.abrir')
+            ->name('cash.open.store');
+        Route::get('/caja/receipt/{type}', [CashDrawerController::class, 'receipt'])
+            ->name('cash.drawer-receipt');
+        Route::get('/caja/historial', [CashSessionHistoryController::class, 'index'])
+            ->middleware('permission:caja.ver')
+            ->name('cash.history.index');
+        Route::get('/caja/historial/{cashSession}', [CashSessionHistoryController::class, 'show'])
+            ->middleware('permission:caja.ver')
+            ->name('cash.history.show');
+        Route::post('/caja/historial/{cashSession}/correos/{notification}/reintentar', [CashSessionHistoryController::class, 'retry'])
+            ->middleware('permission:caja.administrar')
+            ->name('cash.history.mail.retry');
+        Route::get('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'index'])
+            ->middleware('permission:caja.ver')
+            ->name('cash.movements.index');
+        Route::get('/caja/sesiones/{cashSession}/movimientos/crear', [CashMovementController::class, 'create'])
+            ->middleware('permission:caja.movimientos')
+            ->name('cash.movements.create');
+        Route::post('/caja/sesiones/{cashSession}/movimientos', [CashMovementController::class, 'store'])
+            ->middleware('permission:caja.movimientos')
+            ->name('cash.movements.store');
+        Route::post('/caja/sesiones/{cashSession}/cierre/iniciar', [CashClosingController::class, 'start'])->middleware('permission:caja.cerrar')->name('cash.closing.start');
+        Route::get('/caja/sesiones/{cashSession}/cierre', [CashClosingController::class, 'create'])->middleware('permission:caja.cerrar')->name('cash.closing.create');
+        Route::post('/caja/sesiones/{cashSession}/cierre', [CashClosingController::class, 'submit'])->middleware('permission:caja.cerrar')->name('cash.closing.submit');
+        Route::post('/caja/sesiones/{cashSession}/cierre/cancelar', [CashClosingController::class, 'cancel'])->middleware('permission:caja.cerrar')->name('cash.closing.cancel');
+        Route::get('/caja/sesiones/{cashSession}/cierre/resultado', [CashClosingController::class, 'show'])->name('cash.closing.show');
+        Route::get('/caja/sesiones/{cashSession}/cierre/autorizar', [CashClosingController::class, 'authorizeForm'])->middleware('permission:caja.autorizar_diferencia')->name('cash.closing.authorize.form');
+        Route::post('/caja/sesiones/{cashSession}/cierre/autorizar', [CashClosingController::class, 'authorize'])->middleware('permission:caja.autorizar_diferencia')->name('cash.closing.authorize');
+    });
 
-Route::resource('productos', ProductController::class)
-    ->only(['destroy'])
-    ->middleware(['active.branch', 'permission:productos.eliminar']);
+    /*
+    |--------------------------------------------------------------------------
+    | Catálogos
+    |--------------------------------------------------------------------------
+    */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Productos
+    |--------------------------------------------------------------------------
+    */
 
-/*
-|--------------------------------------------------------------------------
-| Categorías
-|--------------------------------------------------------------------------
-*/
+    Route::middleware(['active.branch', 'permission:productos.etiquetas.imprimir'])->prefix('productos/etiquetas')->name('labels.')->group(function () {
+        Route::get('/', [LabelCenterController::class, 'index'])->name('index');
+        Route::post('/vista-previa', [LabelCenterController::class, 'preview'])->name('preview');
+        Route::patch('/productos/{product}', [LabelCenterController::class, 'updateProduct'])->name('products.update');
+        Route::put('/configuracion', [LabelCenterController::class, 'updateSettings'])
+            ->middleware('permission:productos.etiquetas.configurar')->name('settings.update');
+    });
 
-Route::resource('categorias', ProductCategoryController::class)
-    ->only(['index'])
-    ->middleware('permission:categorias.ver');
+    Route::get('/productos-buscar', [ProductController::class, 'search'])
+        ->middleware(['active.branch', 'permission:productos.ver'])
+        ->name('productos.search');
 
-Route::resource('categorias', ProductCategoryController::class)
-    ->only(['create', 'store'])
-    ->middleware('permission:categorias.crear');
+    Route::resource('productos', ProductController::class)
+        ->only(['create', 'store'])
+        ->middleware(['active.branch', 'permission:productos.crear']);
 
-Route::resource('categorias', ProductCategoryController::class)
-    ->only(['edit', 'update'])
-    ->middleware('permission:categorias.editar');
+    Route::resource('productos', ProductController::class)
+        ->only(['index', 'show'])
+        ->middleware(['active.branch', 'permission:productos.ver']);
 
-Route::resource('categorias', ProductCategoryController::class)
-    ->only(['destroy'])
-    ->middleware('permission:categorias.eliminar');
+    Route::resource('productos', ProductController::class)
+        ->only(['edit', 'update'])
+        ->middleware(['active.branch', 'permission:productos.editar']);
 
+    Route::resource('productos', ProductController::class)
+        ->only(['destroy'])
+        ->middleware(['active.branch', 'permission:productos.eliminar']);
 
-/*
-|--------------------------------------------------------------------------
-| Marcas
-|--------------------------------------------------------------------------
-*/
+    Route::get('/productos/{producto}/proveedores', [ProductSupplierController::class, 'index'])
+        ->middleware(['active.branch', 'permission:productos.ver'])
+        ->name('productos.proveedores.index');
 
-Route::resource('marcas', BrandController::class)
-    ->only(['index'])
-    ->middleware('permission:marcas.ver');
+    Route::post('/productos/{producto}/proveedores', [ProductSupplierController::class, 'store'])
+        ->middleware(['active.branch', 'permission:productos.editar'])
+        ->name('productos.proveedores.store');
 
-Route::resource('marcas', BrandController::class)
-    ->only(['create', 'store'])
-    ->middleware('permission:marcas.crear');
+    Route::put('/productos/{producto}/proveedores/{productSupplier}', [ProductSupplierController::class, 'update'])
+        ->middleware(['active.branch', 'permission:productos.editar'])
+        ->name('productos.proveedores.update');
 
-Route::resource('marcas', BrandController::class)
-    ->only(['edit', 'update'])
-    ->middleware('permission:marcas.editar');
+    Route::delete('/productos/{producto}/proveedores/{productSupplier}', [ProductSupplierController::class, 'destroy'])
+        ->middleware(['active.branch', 'permission:productos.editar'])
+        ->name('productos.proveedores.destroy');
 
-Route::resource('marcas', BrandController::class)
-    ->only(['destroy'])
-    ->middleware('permission:marcas.eliminar');
+    /*
+    |--------------------------------------------------------------------------
+    | Categorías
+    |--------------------------------------------------------------------------
+    */
 
+    Route::resource('categorias', ProductCategoryController::class)
+        ->only(['index'])
+        ->middleware('permission:categorias.ver');
 
-/*
-|--------------------------------------------------------------------------
-| Unidades de Medida
-|--------------------------------------------------------------------------
-*/
+    Route::resource('categorias', ProductCategoryController::class)
+        ->only(['create', 'store'])
+        ->middleware('permission:categorias.crear');
 
-Route::resource('unidades', UnitController::class)
-    ->only(['index'])
-    ->middleware('permission:unidades.ver');
+    Route::resource('categorias', ProductCategoryController::class)
+        ->only(['edit', 'update'])
+        ->middleware('permission:categorias.editar');
 
-Route::resource('unidades', UnitController::class)
-    ->only(['create', 'store'])
-    ->middleware('permission:unidades.crear');
+    Route::resource('categorias', ProductCategoryController::class)
+        ->only(['destroy'])
+        ->middleware('permission:categorias.eliminar');
 
-Route::resource('unidades', UnitController::class)
-    ->only(['edit', 'update'])
-    ->middleware('permission:unidades.editar');
+    /*
+    |--------------------------------------------------------------------------
+    | Marcas
+    |--------------------------------------------------------------------------
+    */
 
-Route::resource('unidades', UnitController::class)
-    ->only(['destroy'])
-    ->middleware('permission:unidades.eliminar');
+    Route::resource('marcas', BrandController::class)
+        ->only(['index'])
+        ->middleware('permission:marcas.ver');
 
-Route::get('/clientes-buscar', [CustomerController::class, 'search'])
-    ->name('clientes.search');
+    Route::resource('marcas', BrandController::class)
+        ->only(['create', 'store'])
+        ->middleware('permission:marcas.crear');
+
+    Route::resource('marcas', BrandController::class)
+        ->only(['edit', 'update'])
+        ->middleware('permission:marcas.editar');
+
+    Route::resource('marcas', BrandController::class)
+        ->only(['destroy'])
+        ->middleware('permission:marcas.eliminar');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Unidades de Medida
+    |--------------------------------------------------------------------------
+    */
+
+    Route::resource('unidades', UnitController::class)
+        ->only(['index'])
+        ->middleware('permission:unidades.ver');
+
+    Route::resource('unidades', UnitController::class)
+        ->only(['create', 'store'])
+        ->middleware('permission:unidades.crear');
+
+    Route::resource('unidades', UnitController::class)
+        ->only(['edit', 'update'])
+        ->middleware('permission:unidades.editar');
+
+    Route::resource('unidades', UnitController::class)
+        ->only(['destroy'])
+        ->middleware('permission:unidades.eliminar');
+
+    Route::get('/clientes-buscar', [CustomerController::class, 'search'])
+        ->name('clientes.search');
 
     Route::patch('/clientes/{cliente}/estado', [CustomerController::class, 'toggleStatus'])
-    ->name('clientes.toggle-status');
+        ->name('clientes.toggle-status');
 
     Route::post('/clientes/{cliente}/contactos', [CustomerContactController::class, 'store'])
-    ->name('clientes.contactos.store');
+        ->name('clientes.contactos.store');
 
     Route::post('/clientes/{cliente}/direcciones', [CustomerAddressController::class, 'store'])
-    ->name('clientes.direcciones.store');
+        ->name('clientes.direcciones.store');
 
-Route::patch('/clientes/{cliente}/direcciones/{direccion}/principal', [CustomerAddressController::class, 'setPrimary'])
-    ->name('clientes.direcciones.principal');
+    Route::patch('/clientes/{cliente}/direcciones/{direccion}/principal', [CustomerAddressController::class, 'setPrimary'])
+        ->name('clientes.direcciones.principal');
 
-Route::delete('/clientes/{cliente}/direcciones/{direccion}', [CustomerAddressController::class, 'destroy'])
-    ->name('clientes.direcciones.destroy');
+    Route::delete('/clientes/{cliente}/direcciones/{direccion}', [CustomerAddressController::class, 'destroy'])
+        ->name('clientes.direcciones.destroy');
 
     Route::patch('/clientes/{cliente}/contactos/{contacto}/principal', [CustomerContactController::class, 'setPrimary'])
-    ->name('clientes.contactos.principal');
+        ->name('clientes.contactos.principal');
 
-Route::delete('/clientes/{cliente}/contactos/{contacto}', [CustomerContactController::class, 'destroy'])
-    ->name('clientes.contactos.destroy');
+    Route::delete('/clientes/{cliente}/contactos/{contacto}', [CustomerContactController::class, 'destroy'])
+        ->name('clientes.contactos.destroy');
 
-Route::resource('clientes', CustomerController::class);
-Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])
-    ->name('ubicaciones.provincias');
+    Route::post('/clientes/{cliente}/pin', [CustomerController::class, 'generateOneTimeToken'])->name('clientes.pin.generate');
+    Route::post('/clientes/{cliente}/pin/verificar', [CustomerController::class, 'verifyOneTimeToken'])->name('clientes.pin.verify');
+    Route::resource('clientes', CustomerController::class);
+    Route::get('/clientes/provincias/{country}', [CustomerController::class, 'provinces'])
+        ->name('clientes.provincias');
 
-Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])
-    ->name('ubicaciones.cantones');
+    Route::get('/clientes/cantones/{province}', [CustomerController::class, 'cantons'])
+        ->name('clientes.cantones');
 
-Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])
-    ->name('ubicaciones.distritos');
-Route::get('/clientes/provincias/{country}', [CustomerController::class, 'provinces'])
-    ->name('clientes.provincias');
+    Route::get('/clientes/distritos/{canton}', [CustomerController::class, 'districts'])
+        ->name('clientes.distritos');
 
-Route::get('/clientes/cantones/{province}', [CustomerController::class, 'cantons'])
-    ->name('clientes.cantones');
+    Route::get('/proveedores-buscar', [SupplierController::class, 'search'])
+        ->name('proveedores.search')
+        ->middleware('permission:proveedores.ver');
 
-Route::get('/clientes/distritos/{canton}', [CustomerController::class, 'districts'])
-    ->name('clientes.distritos');
+    Route::patch('/proveedores/{proveedore}/toggle-status', [SupplierController::class, 'toggleStatus'])
+        ->name('proveedores.toggle-status')
+        ->middleware('permission:proveedores.editar');
 
-   Route::get('/proveedores-buscar', [SupplierController::class, 'search'])
-    ->name('proveedores.search')
-    ->middleware('permission:proveedores.ver');
+    Route::resource('proveedores', SupplierController::class)
+        ->middlewareFor(['index', 'show'], 'permission:proveedores.ver')
+        ->middlewareFor(['create', 'store'], 'permission:proveedores.crear')
+        ->middlewareFor(['edit', 'update'], 'permission:proveedores.editar')
+        ->middlewareFor(['destroy'], 'permission:proveedores.eliminar');
+    /*
+    |--------------------------------------------------------------------------
+    | Inventario
+    |--------------------------------------------------------------------------
+    */
 
-Route::patch('/proveedores/{proveedore}/toggle-status', [SupplierController::class, 'toggleStatus'])
-    ->name('proveedores.toggle-status')
-    ->middleware('permission:proveedores.editar');
+    Route::resource('inventario', InventoryController::class)
+        ->only(['index'])
+        ->middleware('permission:inventario.ver');
 
-Route::resource('proveedores', SupplierController::class)
-    ->middlewareFor(['index', 'show'], 'permission:proveedores.ver')
-    ->middlewareFor(['create', 'store'], 'permission:proveedores.crear')
-    ->middlewareFor(['edit', 'update'], 'permission:proveedores.editar')
-    ->middlewareFor(['destroy'], 'permission:proveedores.eliminar');
-/*
-|--------------------------------------------------------------------------
-| Inventario
-|--------------------------------------------------------------------------
-*/
+    Route::resource('ajustes-inventario', InventoryAdjustmentController::class)
+        ->only(['create', 'store'])
+        ->middleware('permission:inventario.ajustar');
 
-Route::resource('inventario', InventoryController::class)
-    ->only(['index'])
-    ->middleware('permission:inventario.ver');
+    Route::resource('kardex', KardexController::class)
+        ->only(['index'])
+        ->middleware('permission:inventario.kardex');
 
-Route::resource('ajustes-inventario', InventoryAdjustmentController::class)
-    ->only(['create', 'store'])
-    ->middleware('permission:inventario.ajustar');
+    Route::middleware(['active.branch'])->prefix('tomas-inventario')->name('inventory-counts.')->group(function () {
+        Route::get('/', [InventoryCountController::class, 'index'])->middleware('permission:inventario.conteo.ver')->name('index');
+        Route::get('/crear', [InventoryCountController::class, 'create'])->middleware('permission:inventario.conteo.iniciar')->name('create');
+        Route::post('/', [InventoryCountController::class, 'store'])->middleware('permission:inventario.conteo.iniciar')->name('store');
+        Route::get('/{inventoryCount}', [InventoryCountController::class, 'show'])->middleware('permission:inventario.conteo.ver')->name('show');
+        Route::get('/{inventoryCount}/editar', [InventoryCountController::class, 'edit'])->middleware('permission:inventario.conteo.contar')->name('edit');
+        Route::put('/{inventoryCount}', [InventoryCountController::class, 'update'])->middleware('permission:inventario.conteo.contar')->name('update');
+        Route::delete('/{inventoryCount}', [InventoryCountController::class, 'destroy'])->middleware('permission:inventario.conteo.cancelar')->name('destroy');
 
-Route::resource('kardex', KardexController::class)
-    ->only(['index'])
-    ->middleware('permission:inventario.kardex');
+        Route::post('/{inventoryCount}/productos', [InventoryCountController::class, 'addItem'])->middleware('permission:inventario.conteo.contar')->name('add-item');
+        Route::put('/{inventoryCount}/items/{item}/cantidad', [InventoryCountController::class, 'updateCountedQuantity'])->middleware('permission:inventario.conteo.contar')->name('update-quantity');
+        Route::put('/{inventoryCount}/items/{item}/reconteo', [InventoryCountController::class, 'recount'])->middleware('permission:inventario.conteo.contar')->name('recount');
+        Route::put('/{inventoryCount}/items/{item}/notas', [InventoryCountController::class, 'updateNotes'])->middleware('permission:inventario.conteo.contar')->name('update-notes');
+        Route::delete('/{inventoryCount}/items/{item}', [InventoryCountController::class, 'removeItem'])->middleware('permission:inventario.conteo.contar')->name('remove-item');
+
+        Route::post('/{inventoryCount}/revisar', [InventoryCountController::class, 'startReview'])->middleware('permission:inventario.conteo.revisar')->name('review');
+        Route::post('/{inventoryCount}/recontar', [InventoryCountController::class, 'backToCounting'])->middleware('permission:inventario.conteo.revisar')->name('back-to-counting');
+        Route::post('/{inventoryCount}/confirmar', [InventoryCountController::class, 'confirm'])->middleware('permission:inventario.conteo.confirmar')->name('confirm');
+        Route::post('/{inventoryCount}/cancelar', [InventoryCountController::class, 'cancel'])->middleware('permission:inventario.conteo.cancelar')->name('cancel');
+    });
+
+    Route::prefix('fidelidad/kardex')
+        ->name('loyalty.kardex.')
+        ->middleware('permission:fidelidad.ver')
+        ->group(function () {
+            Route::get('/', [LoyaltyMovementController::class, 'index'])->name('index');
+            Route::get('/{movement}', [LoyaltyMovementController::class, 'show'])->name('show');
+        });
+
+    Route::prefix('fidelidad')->name('loyalty.')->group(function () {
+        Route::get('/', LoyaltyDashboardController::class)->middleware('permission:fidelidad.dashboard')->name('dashboard');
+        Route::get('/portal/{cliente}', [LoyaltyCustomerPortalController::class, 'show'])
+            ->middleware('permission:fidelidad.ver')
+            ->name('portal.show');
+        Route::prefix('portal-clientes')->name('portal-management.')->group(function () {
+            Route::get('/', [LoyaltyPortalManagementController::class, 'index'])->name('index');
+            Route::get('/vista-previa/{customer}', [LoyaltyPortalManagementController::class, 'preview'])->middleware('permission:fidelidad.portal.ver')->name('preview');
+            Route::put('/configuracion', [LoyaltyPortalManagementController::class, 'updateSetting'])->middleware('permission:fidelidad.portal.configurar')->name('settings.update');
+            Route::post('/publicaciones', [LoyaltyPortalManagementController::class, 'storePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.store');
+            Route::put('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'updatePost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.update');
+            Route::delete('/publicaciones/{post}', [LoyaltyPortalManagementController::class, 'destroyPost'])->middleware('permission:fidelidad.portal.contenido')->name('posts.destroy');
+            Route::post('/publicaciones/{post}/imagenes', [LoyaltyPortalManagementController::class, 'addPostImage'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.add');
+            Route::delete('/publicaciones/{post}/imagenes/{image}', [LoyaltyPortalManagementController::class, 'deletePostImage'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.delete');
+            Route::put('/publicaciones/{post}/imagenes/orden', [LoyaltyPortalManagementController::class, 'reorderPostImages'])->middleware('permission:fidelidad.portal.contenido')->name('posts.images.reorder');
+            Route::post('/enlaces', [LoyaltyPortalManagementController::class, 'storeLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.store');
+            Route::put('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'updateLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.update');
+            Route::delete('/enlaces/{link}', [LoyaltyPortalManagementController::class, 'destroyLink'])->middleware('permission:fidelidad.portal.enlaces')->name('links.destroy');
+        });
+        Route::get('/oportunidades', [LoyaltyOpportunityController::class, 'index'])->middleware('permission:fidelidad.oportunidades')->name('opportunities.index');
+        Route::post('/oportunidades/{customer}/contactar', [LoyaltyOpportunityController::class, 'contact'])->middleware('permission:fidelidad.contactar')->name('opportunities.contact');
+        Route::get('/configuracion', [SettingController::class, 'loyaltySettings'])->middleware('permission:fidelidad.configuracion')->name('settings');
+        Route::get('/reglas', [LoyaltyRuleCenterController::class, 'index'])->middleware('permission:fidelidad.configuracion')->name('rules.index');
+        Route::put('/reglas', [LoyaltyRuleCenterController::class, 'update'])->middleware('permission:fidelidad.configuracion')->name('rules.update');
+        Route::put('/incentivo-registro', [LoyaltyRegistrationIncentiveController::class, 'update'])->middleware('permission:fidelidad.configuracion')->name('registration-incentive.update');
+        Route::middleware('permission:fidelidad.ajustes')->prefix('ajustes')->name('adjustments.')->group(function () {
+            Route::get('/', [LoyaltyAdjustmentController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyAdjustmentController::class, 'store'])->name('store');
+        });
+        Route::middleware('permission:fidelidad.portal')->prefix('accesos')->name('accesses.')->group(function () {
+            Route::get('/', [LoyaltyPortalAccessController::class, 'index'])->name('index');
+            Route::get('/clientes/buscar', [LoyaltyPortalAccessController::class, 'searchCustomers'])->name('customers.search');
+            Route::post('/', [LoyaltyPortalAccessController::class, 'store'])->name('store');
+            Route::patch('/{cliente}/revocar', [LoyaltyPortalAccessController::class, 'revoke'])->name('revoke');
+        });
+        Route::middleware('permission:fidelidad.multiplicadores')->prefix('multiplicadores')->name('multipliers.')->group(function () {
+            Route::get('/', [LoyaltyMultiplierController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyMultiplierController::class, 'store'])->name('store');
+            Route::put('/{multiplier}', [LoyaltyMultiplierController::class, 'update'])->name('update');
+            Route::patch('/{multiplier}/estado', [LoyaltyMultiplierController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.premios')->prefix('premios')->name('rewards.')->group(function () {
+            Route::get('/', [LoyaltyRewardController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyRewardController::class, 'store'])->name('store');
+            Route::put('/{reward}', [LoyaltyRewardController::class, 'update'])->name('update');
+            Route::patch('/{reward}/estado', [LoyaltyRewardController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.promociones')->prefix('promociones')->name('promotions.')->group(function () {
+            Route::get('/', [LoyaltyPromotionController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyPromotionController::class, 'store'])->name('store');
+            Route::put('/{promotion}', [LoyaltyPromotionController::class, 'update'])->name('update');
+            Route::patch('/{promotion}/estado', [LoyaltyPromotionController::class, 'toggle'])->name('toggle');
+        });
+        Route::middleware('permission:fidelidad.canjes')->prefix('canjes')->name('redemptions.')->group(function () {
+            Route::get('/', [LoyaltyRewardRedemptionController::class, 'index'])->name('index');
+            Route::post('/', [LoyaltyRewardRedemptionController::class, 'store'])->name('store');
+        });
+    });
+
+Route::get('/transferencias/productos/buscar', [TransferController::class, 'searchProducts'])
+    ->middleware(['active.branch', 'permission:inventario.transferir'])
+    ->name('transferencias.products.search');
 
 Route::resource('transferencias', TransferController::class)
     ->only(['index', 'create', 'store'])
-    ->middleware('permission:inventario.transferir');
+    ->middleware(['active.branch', 'permission:inventario.transferir']);
 
-/*
-|--------------------------------------------------------------------------
-| Compras
-|--------------------------------------------------------------------------
-*/
+    Route::post('/transferencias/{transfer}/prepare', [TransferController::class, 'prepare'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.prepare');
+    Route::post('/transferencias/{transfer}/dispatch', [TransferController::class, 'dispatch'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.dispatch');
+    Route::post('/transferencias/{transfer}/review', [TransferController::class, 'review'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.review');
+    Route::post('/transferencias/{transfer}/receive', [TransferController::class, 'receive'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.receive');
+    Route::post('/transferencias/{transfer}/cancel', [TransferController::class, 'cancel'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.cancel');
+    Route::get('/transferencias/{transfer}/show', [TransferController::class, 'show'])
+        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->name('transferencias.show');
 
-Route::middleware(['active.branch', 'permission:compras.crear'])->group(function () {
+    /*
+    |--------------------------------------------------------------------------
+    | Compras
+    |--------------------------------------------------------------------------
+    */
 
-    Route::get(
-        '/compras/importacion/producto-nuevo',
-        [PurchaseImportController::class, 'createProduct']
-    )->name('compras.import.product.create');
+    Route::middleware(['active.branch', 'permission:compras.crear'])->group(function () {
 
-    Route::post(
-    '/compras/importacion/producto-nuevo',
-    [PurchaseImportController::class, 'storeProduct']
-)->name('compras.import.product.store');
+        Route::get(
+            '/compras/importacion/producto-nuevo',
+            [PurchaseImportController::class, 'createProduct']
+        )->name('compras.import.product.create');
 
-    Route::post(
-        '/compras/importacion/confirmar',
-        [PurchaseImportController::class, 'confirm']
-    )->name('compras.import.confirm');
+        Route::post(
+            '/compras/importacion/producto-nuevo',
+            [PurchaseImportController::class, 'storeProduct']
+        )->name('compras.import.product.store');
 
-    Route::post(
-        '/compras/importacion/proveedor-creado',
-        [PurchaseImportController::class, 'supplierCreated']
-    )->name('compras.import.supplier.created');
+        Route::post(
+            '/compras/importacion/confirmar',
+            [PurchaseImportController::class, 'confirm']
+        )->name('compras.import.confirm');
 
-    Route::get('/compras/importacion/revision',
-        [PurchaseImportController::class, 'review']
-    )->name('compras.import.review');
+        Route::post(
+            '/compras/importacion/proveedor-creado',
+            [PurchaseImportController::class, 'supplierCreated']
+        )->name('compras.import.supplier.created');
 
-    Route::post('/compras/importar-excel',
-        [PurchaseImportController::class, 'store']
-    )->name('compras.import.excel');
+        Route::get('/compras/importacion/revision',
+            [PurchaseImportController::class, 'review']
+        )->name('compras.import.review');
 
-    Route::get('/compras/importar-excel/plantilla',
-        [PurchaseImportController::class, 'downloadTemplate']
-    )->name('compras.import.template');
-});
+        Route::post('/compras/importar-excel',
+            [PurchaseImportController::class, 'store']
+        )->name('compras.import.excel');
 
-Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
-    ->middleware(['active.branch', 'permission:compras.ver'])
-    ->name('compras.search-products');
+        Route::get('/compras/importar-excel/plantilla',
+            [PurchaseImportController::class, 'downloadTemplate']
+        )->name('compras.import.template');
+    });
 
-Route::get('/compras/importar-xml',
-    [PurchaseXmlImportController::class, 'create'])
-    ->middleware(['active.branch', 'permission:compras.crear'])
-    ->name('compras.import.xml.create');
+    Route::get('/compras-buscar-productos', [PurchaseController::class, 'searchProducts'])
+        ->middleware(['active.branch', 'permission:compras.ver'])
+        ->name('compras.search-products');
 
-Route::post('/compras/importar-xml',
-    [PurchaseXmlImportController::class, 'store']
-)->name('compras.import.xml');
+    Route::middleware('active.branch')->prefix('compras/verificaciones')->name('purchase-verifications.')->group(function () {
+        Route::get('/', [PurchaseVerificationController::class, 'index'])->name('index');
+        Route::get('/{purchaseVerification}', [PurchaseVerificationController::class, 'show'])->name('show');
+        Route::post('/{purchaseVerification}/iniciar', [PurchaseVerificationController::class, 'start'])->middleware('permission:compras.recepcion.verificar')->name('start');
+        Route::put('/{purchaseVerification}/verificar', [PurchaseVerificationController::class, 'verify'])->middleware('permission:compras.recepcion.verificar')->name('verify');
+        Route::post('/{purchaseVerification}/cerrar', [PurchaseVerificationController::class, 'close'])->middleware('permission:compras.recepcion.resolver')->name('close');
+        Route::post('/{purchaseVerification}/etiquetas', [LabelCenterController::class, 'fromVerification'])->middleware('permission:productos.etiquetas.imprimir')->name('labels');
+    });
 
-Route::resource('compras', PurchaseController::class)
-    ->middleware('active.branch')
-    ->middlewareFor(['index', 'show'], 'permission:compras.ver')
-    ->middlewareFor(['create', 'store'], 'permission:compras.crear')
-    ->middlewareFor(['edit', 'update'], 'permission:compras.editar')
-    ->middlewareFor(['destroy'], 'permission:compras.anular');
+    Route::get('/compras/{purchase}/verificacion/responsables', [PurchaseVerificationController::class, 'assignable'])
+        ->middleware(['active.branch', 'permission:compras.recepcion.asignar'])->name('purchase-verifications.assignable');
+    Route::post('/compras/{purchase}/verificacion', [PurchaseVerificationController::class, 'store'])
+        ->middleware(['active.branch', 'permission:compras.recepcion.asignar'])->name('purchase-verifications.store');
 
+    Route::get('/compras/importar-xml',
+        [PurchaseXmlImportController::class, 'create'])
+        ->middleware(['active.branch', 'permission:compras.crear'])
+        ->name('compras.import.xml.create');
 
-Route::get('compras/{compra}/pdf', [PurchaseController::class, 'pdf'])
-    ->middleware(['active.branch', 'permission:compras.ver'])
-    ->name('compras.pdf');
+    Route::post('/compras/importar-xml',
+        [PurchaseXmlImportController::class, 'store']
+    )->middleware(['active.branch', 'permission:compras.crear'])
+        ->name('compras.import.xml');
+
+    Route::resource('compras', PurchaseController::class)
+        ->middleware('active.branch')
+        ->middlewareFor(['index', 'show'], 'permission:compras.ver')
+        ->middlewareFor(['create', 'store'], 'permission:compras.crear')
+        ->middlewareFor(['edit', 'update'], 'permission:compras.editar')
+        ->middlewareFor(['destroy'], 'permission:compras.anular');
+
+    Route::get('compras/{compra}/pdf', [PurchaseController::class, 'pdf'])
+        ->middleware(['active.branch', 'permission:compras.ver'])
+        ->name('compras.pdf');
 
     Route::get('compras/{compra}/print', [PurchaseController::class, 'print'])
-    ->middleware(['active.branch', 'permission:compras.ver'])
-    ->name('compras.print');
+        ->middleware(['active.branch', 'permission:compras.ver'])
+        ->name('compras.print');
 
+    Route::get('/pedidos/preparar-compra', [PurchaseOrderController::class, 'prepare'])->middleware(['active.branch', 'permission:pedidos.preparar_compra'])->name('pedidos.preparar-compra');
+    Route::post('/pedidos/preparar-compra', [PurchaseOrderController::class, 'store'])->middleware(['active.branch', 'permission:pedidos.preparar_compra'])->name('pedidos.preparar-compra.store');
+    Route::get('/ordenes-compra', [PurchaseOrderController::class, 'index'])->middleware(['active.branch', 'permission:compras.ordenes'])->name('ordenes-compra.index');
+    Route::get('/ordenes-compra/{purchaseOrder}/convertir', [PurchaseOrderController::class, 'convertForm'])->middleware(['active.branch', 'permission:compras.ordenes', 'permission:compras.crear'])->name('ordenes-compra.convertir');
+    Route::post('/ordenes-compra/{purchaseOrder}/convertir', [PurchaseOrderController::class, 'convert'])->middleware(['active.branch', 'permission:compras.ordenes', 'permission:compras.crear'])->name('ordenes-compra.convertir.store');
+    Route::get('/ordenes-compra/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware(['active.branch', 'permission:compras.ordenes'])->name('ordenes-compra.show');
 
-Route::resource('ordenes-compra', PurchaseOrderController::class);
+    /*
+    |--------------------------------------------------------------------------
+    | Ventas
+    |--------------------------------------------------------------------------
+    */
 
-/*
-|--------------------------------------------------------------------------
-| Ventas
-|--------------------------------------------------------------------------
-*/
+    Route::resource('ventas', SaleController::class)
+        ->only(['index', 'show'])
+        ->middleware(['active.branch', 'permission:ventas.ver']);
 
-Route::resource('ventas', SaleController::class);
+    Route::post('/ventas/{venta}/anular', [SaleController::class, 'void'])
+        ->middleware(['active.branch', 'permission:ventas.anular'])
+        ->name('ventas.void');
 
-Route::resource('cotizaciones', QuoteController::class);
+    Route::middleware('active.branch')->group(function () {
+        Route::get('/pedidos', [OrderController::class, 'index'])->middleware('permission:pedidos.ver')->name('pedidos.index');
+        Route::post('/pedidos', [OrderController::class, 'store'])->middleware('permission:pedidos.crear')->name('pedidos.store');
+        Route::get('/pedidos/{order}', [OrderController::class, 'show'])->middleware('permission:pedidos.ver')->name('pedidos.show');
+        Route::post('/pedidos/{order}/lineas/{item}/asociar-proveedor', [ProductSupplierController::class, 'storeFromOrder'])->middleware('permission:productos.editar')->name('pedidos.items.suppliers.store');
+        Route::patch('/pedidos/{order}/lineas/{item}/revision', [OrderController::class, 'reviewItem'])->name('pedidos.items.review');
 
-Route::resource('facturas', InvoiceController::class);
+        Route::get('/cotizaciones', [QuoteController::class, 'index'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.index');
+        Route::post('/cotizaciones', [QuoteController::class, 'store'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.store');
+        Route::get('/cotizaciones/{cotizacione}', [QuoteController::class, 'show'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.show');
+        Route::put('/cotizaciones/{cotizacione}', [QuoteController::class, 'update'])->middleware('active.branch')->name('cotizaciones.actualizar');
+        Route::get('/cotizaciones/{quote}/imprimir', [QuoteController::class, 'print'])->middleware('permission:cotizaciones.ver')->name('cotizaciones.print');
+        Route::get('/cotizaciones/{quote}/cargar', [QuoteController::class, 'load'])->middleware('permission:cotizaciones.crear')->name('cotizaciones.load');
+        Route::post('/cotizaciones/{quote}/cancelar', [QuoteController::class, 'cancel'])->middleware('permission:cotizaciones.editar')->name('cotizaciones.cancel');
+    });
 
-Route::resource('apartados', LayawayController::class);
+    Route::resource('facturas', InvoiceController::class);
 
-Route::resource('devoluciones', ReturnController::class);
+    Route::middleware('active.branch')->group(function () {
+        Route::get('cuentas-por-pagar', [AccountsPayableController::class, 'index'])->middleware('permission:cuentas_pagar.ver')->name('cuentas-por-pagar.index');
+        Route::get('cuentas-por-pagar/{accountPayable}', [AccountsPayableController::class, 'show'])->middleware('permission:cuentas_pagar.ver')->name('cuentas-por-pagar.show');
+        Route::post('cuentas-por-pagar/{accountPayable}/abonos', [AccountsPayableController::class, 'payment'])->middleware('permission:cuentas_pagar.pagar')->name('cuentas-por-pagar.payments.store');
+        Route::put('cuentas-por-pagar-configuracion', [AccountsPayableController::class, 'updateAlertDays'])->middleware('permission:cuentas_pagar.editar')->name('cuentas-por-pagar.alert-days.update');
 
-/*
-|--------------------------------------------------------------------------
-| Finanzas
-|--------------------------------------------------------------------------
-*/
+        Route::get('apartados', [LayawayController::class, 'index'])->middleware('permission:apartados.ver')->name('apartados.index');
+        Route::get('apartados/crear', [LayawayController::class, 'create'])->middleware('permission:apartados.crear')->name('apartados.create');
+        Route::post('apartados', [LayawayController::class, 'store'])->middleware('permission:apartados.crear')->name('apartados.store');
+        Route::get('apartados/{apartado}', [LayawayController::class, 'show'])->middleware('permission:apartados.ver')->name('apartados.show');
+        Route::post('apartados/{apartado}/abonos', [LayawayController::class, 'payment'])->middleware('permission:apartados.abonar')->name('apartados.payments.store');
+        Route::post('apartados/{apartado}/cancelar', [LayawayController::class, 'cancel'])->middleware('permission:apartados.cancelar')->name('apartados.cancel');
+        Route::post('apartados/{apartado}/entregar', [LayawayController::class, 'deliver'])->middleware('permission:apartados.entregar')->name('apartados.deliver');
+        Route::put('apartados-configuracion', [LayawayController::class, 'updateSettings'])->middleware('permission:empresa.editar')->name('apartados.settings.update');
+    });
 
-Route::resource('cuentas-por-cobrar', AccountsReceivableController::class);
+    Route::get('/ventas/{venta}/devolucion', [ReturnController::class, 'create'])
+        ->middleware(['active.branch', 'permission:devoluciones.crear'])
+        ->name('ventas.return.create');
 
-Route::resource('cuentas-por-pagar', AccountsPayableController::class);
+    Route::post('/ventas/{venta}/devolucion', [ReturnController::class, 'store'])
+        ->middleware(['active.branch', 'permission:devoluciones.crear'])
+        ->name('ventas.return.store');
+    /*
+    |--------------------------------------------------------------------------
+    | Finanzas
+    |--------------------------------------------------------------------------
+    */
 
-/*
-|--------------------------------------------------------------------------
-| Administración
-|--------------------------------------------------------------------------
-*/
+    Route::middleware(['active.branch', 'permission:cuentas_cobrar.ver'])->group(function () {
+        Route::get('cuentas-por-cobrar', [AccountsReceivableController::class, 'index'])->name('cuentas-por-cobrar.index');
+        Route::get('cuentas-por-cobrar/{accountReceivable}', [AccountsReceivableController::class, 'show'])->name('cuentas-por-cobrar.show');
+        Route::post('cuentas-por-cobrar/{accountReceivable}/abonos', [AccountsReceivableController::class, 'payment'])->middleware('permission:cuentas_cobrar.abonar')->name('cuentas-por-cobrar.payments.store');
+        Route::put('cuentas-por-cobrar-configuracion', [AccountsReceivableController::class, 'updateAlertDays'])->middleware('permission:cuentas_cobrar.editar')->name('cuentas-por-cobrar.alert-days.update');
+    });
 
-Route::resource('usuarios', UserController::class)
-    ->middlewareFor(['index', 'show'], 'permission:usuarios.ver')
-    ->middlewareFor(['create', 'store'], 'permission:usuarios.crear')
-    ->middlewareFor(['edit', 'update'], 'permission:usuarios.editar')
-    ->middlewareFor(['destroy'], 'permission:usuarios.eliminar');
+    /*
+    |--------------------------------------------------------------------------
+    | Administración
+    |--------------------------------------------------------------------------
+    */
 
-Route::resource('roles', RoleController::class)
-    ->middlewareFor(['index', 'show'], 'permission:roles.ver')
-    ->middlewareFor(['create'], 'permission:roles.crear')
-    ->middlewareFor(['store'], [
-        'permission:roles.crear',
-        'permission:roles.permisos',
-    ])
-    ->middlewareFor(['edit'], 'permission:roles.editar')
-    ->middlewareFor(['update'], [
-        'permission:roles.editar',
-        'permission:roles.permisos',
-    ])
-    ->middlewareFor(['destroy'], 'permission:roles.eliminar');
+    Route::resource('usuarios', UserController::class)
+        ->middlewareFor(['index', 'show'], 'permission:usuarios.ver')
+        ->middlewareFor(['create', 'store'], 'permission:usuarios.crear')
+        ->middlewareFor(['edit', 'update'], 'permission:usuarios.editar')
+        ->middlewareFor(['destroy'], 'permission:usuarios.eliminar');
 
-Route::resource('sucursales', BranchController::class)
-    ->parameters(['sucursales' => 'branch'])
-    ->names('branches');
+    Route::resource('roles', RoleController::class)
+        ->middlewareFor(['index', 'show'], 'permission:roles.ver')
+        ->middlewareFor(['create'], 'permission:roles.crear')
+        ->middlewareFor(['store'], [
+            'permission:roles.crear',
+            'permission:roles.permisos',
+        ])
+        ->middlewareFor(['edit'], 'permission:roles.editar')
+        ->middlewareFor(['update'], [
+            'permission:roles.editar',
+            'permission:roles.permisos',
+        ])
+        ->middlewareFor(['destroy'], 'permission:roles.eliminar');
 
-Route::resource('empresa', CompanyController::class);
+    Route::resource('sucursales', BranchController::class)
+        ->parameters(['sucursales' => 'branch'])
+        ->names('branches')
+        ->middlewareFor(['index', 'show'], 'permission:configuracion.ver')
+        ->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:configuracion.editar');
 
-Route::resource('configuracion', SettingController::class);
+    Route::resource('empresa', CompanyController::class)
+        ->except(['create', 'store']);
 
-Route::resource('agenda', AgendaController::class);
+    Route::prefix('configuracion/caja')
+        ->name('settings.cash.')
+        ->middleware('permission:caja.administrar')
+        ->group(function () {
+            Route::get('/', [CompanyCashSettingController::class, 'edit'])->name('edit');
+            Route::match(['put', 'patch'], '/', [CompanyCashSettingController::class, 'update'])->name('update');
+        });
 
-Route::get('/importar-datos', [DataImportController::class, 'index'])
-    ->name('importaciones.index');
+    Route::resource('configuracion', SettingController::class)
+        ->only(['index'])
+        ->middleware('permission:configuracion.ver');
 
-Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario');
+    Route::put('configuracion/whatsapp', [SettingController::class, 'updateWhatsApp'])
+        ->middleware('permission:configuracion.editar')
+        ->name('configuracion.whatsapp.update');
 
-Route::get('/importar-datos/inventario/plantilla', [DataImportController::class, 'inventoryTemplate'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario.template');
+    Route::put('configuracion/fidelidad/plantillas', [SettingController::class, 'updateLoyaltyTemplates'])
+        ->middleware('permission:fidelidad.configuracion')
+        ->name('configuracion.loyalty-templates.update');
 
-Route::get('/importar-datos/inventario/ejemplo', [DataImportController::class, 'inventoryExample'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario.example');
+    Route::resource('configuracion', SettingController::class)
+        ->only(['update'])
+        ->middleware('permission:configuracion.editar');
 
-Route::get('/importar-datos/inventario/instrucciones', [DataImportController::class, 'inventoryInstructions'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario.instructions');
+    Route::prefix('configuracion/pos/formas-pago')
+        ->name('settings.pos.payment-methods.')
+        ->middleware('permission:formas_pago.administrar')
+        ->group(function () {
+            Route::get('/', [PaymentMethodController::class, 'index'])->name('index');
+            Route::get('/crear', [PaymentMethodController::class, 'create'])->name('create');
+            Route::post('/', [PaymentMethodController::class, 'store'])->name('store');
+            Route::get('/{payment_method}/editar', [PaymentMethodController::class, 'edit'])->name('edit');
+            Route::put('/{payment_method}', [PaymentMethodController::class, 'update'])->name('update');
+            Route::patch('/{payment_method}/estado', [PaymentMethodController::class, 'toggleStatus'])->name('toggle-status');
+            Route::delete('/{payment_method}', [PaymentMethodController::class, 'destroy'])->name('destroy');
+        });
 
-Route::post('/importar-datos/inventario/revisar', [DataImportController::class, 'inventoryPreview'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario.preview');
+    Route::prefix('configuracion/caja/cajas')
+        ->name('settings.cash-registers.')
+        ->middleware('permission:caja.administrar')
+        ->group(function () {
+            Route::get('/', [CashRegisterController::class, 'index'])->name('index');
+            Route::get('/crear', [CashRegisterController::class, 'create'])->name('create');
+            Route::post('/', [CashRegisterController::class, 'store'])->name('store');
+            Route::get('/{cashRegister}/editar', [CashRegisterController::class, 'edit'])->name('edit');
+            Route::match(['put', 'patch'], '/{cashRegister}', [CashRegisterController::class, 'update'])->name('update');
+            Route::patch('/{cashRegister}/estado', [CashRegisterController::class, 'toggleStatus'])->name('toggle-status');
+        });
 
-Route::post('/importar-datos/inventario/confirmar', [DataImportController::class, 'inventoryImport'])
-    ->middleware('permission:inventario.ver')
-    ->name('importaciones.inventario.import');  
 Route::get('/planilla/empleados', [\App\Http\Controllers\PayrollEmployeeController::class, 'index'])
     ->middleware(['active.branch', 'permission:planilla.empleados.ver'])
     ->name('planilla.empleados.index');
@@ -469,6 +854,166 @@ Route::post('/planilla/planillas', [\App\Http\Controllers\PayrollController::cla
     ->middleware(['active.branch', 'permission:planilla.planillas.crear'])
     ->name('planilla.planillas.store');
 
-Route::resource('reportes', ReportController::class);
+    Route::resource('agenda', AgendaController::class);
+
+    Route::prefix('centro-de-datos')->name('data-center.')->group(function () {
+        Route::get('/', [DataCenterController::class, 'index'])->name('index');
+        Route::get('/importar', [DataCenterController::class, 'imports'])->name('imports');
+        Route::get('/exportar', [DataCenterController::class, 'exports'])->name('exports');
+        Route::get('/reportes', [DataCenterController::class, 'reports'])->name('reports');
+        Route::get('/reportes/{category}', [ReportCenterController::class, 'show'])
+            ->middleware('permission:reportes.ver')
+            ->name('reports.show');
+        Route::get('/exportar/{dataset}/{format}', [DataExportController::class, 'download'])
+            ->middleware('permission:reportes.exportar')
+            ->whereIn('format', ['xlsx', 'csv'])
+            ->name('exports.download');
+        Route::get('/paquete-migracion', [DataExportController::class, 'migrationPackage'])
+            ->middleware('permission:reportes.exportar')
+            ->name('exports.migration-package');
+    });
+
+    Route::redirect('/importar-datos', '/centro-de-datos/importar')
+        ->name('importaciones.index');
+
+    Route::get('/importar-datos/clientes', [DataImportController::class, 'customers'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes');
+    Route::get('/importar-datos/clientes/plantilla', [DataImportController::class, 'customerTemplate'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.template');
+    Route::post('/importar-datos/clientes/revisar', [DataImportController::class, 'customerPreview'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.preview');
+    Route::post('/importar-datos/clientes/confirmar', [DataImportController::class, 'customerImport'])
+        ->middleware('permission:clientes.crear')
+        ->name('importaciones.clientes.import');
+    Route::get('/importar-datos/clientes/ejecuciones/{run}', [DataImportController::class, 'customerStatus'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.status');
+    Route::post('/importar-datos/clientes/ejecuciones/{run}/reanudar', [DataImportController::class, 'customerRetry'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.retry');
+    Route::get('/importar-datos/clientes/ejecuciones/{run}/reporte', [DataImportController::class, 'customerReport'])
+        ->middleware('permission:clientes.crear')->name('importaciones.clientes.report');
+
+    Route::get('/importar-datos/productos', [DataImportController::class, 'products'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos');
+    Route::get('/importar-datos/productos/plantilla', [DataImportController::class, 'productTemplate'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.template');
+    Route::post('/importar-datos/productos/revisar', [DataImportController::class, 'productPreview'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.preview');
+    Route::post('/importar-datos/productos/confirmar', [DataImportController::class, 'productImport'])
+        ->middleware('permission:productos.crear')
+        ->name('importaciones.productos.import');
+
+    Route::get('/importar-datos/ventas-historicas', [DataImportController::class, 'historicalSales'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas');
+    Route::get('/importar-datos/ventas-historicas/plantilla', [DataImportController::class, 'historicalSaleTemplate'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.template');
+    Route::post('/importar-datos/ventas-historicas/revisar', [DataImportController::class, 'historicalSalePreview'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.preview');
+    Route::post('/importar-datos/ventas-historicas/confirmar', [DataImportController::class, 'historicalSaleImport'])
+        ->middleware('permission:ventas.crear')->name('importaciones.ventas-historicas.import');
+
+    Route::get('/importar-datos/inventario', [DataImportController::class, 'inventory'])
+        ->middleware('permission:inventario.ver')
+        ->name('importaciones.inventario');
+
+    Route::get('/importar-datos/inventario-migracion', [DataImportController::class, 'inventoryMigration'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion');
+    Route::get('/importar-datos/inventario-migracion/plantilla', [DataImportController::class, 'inventoryMigrationTemplate'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.template');
+    Route::post('/importar-datos/inventario-migracion/revisar', [DataImportController::class, 'inventoryMigrationPreview'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.preview');
+    Route::post('/importar-datos/inventario-migracion/confirmar', [DataImportController::class, 'inventoryMigrationImport'])
+        ->middleware('permission:inventario.ajustar')->name('importaciones.inventario-migracion.import');
+
+    Route::get('/importar-datos/fidelidad-migracion', [DataImportController::class, 'loyaltyMigration'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion');
+    Route::get('/importar-datos/fidelidad-migracion/plantilla', [DataImportController::class, 'loyaltyMigrationTemplate'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.template');
+    Route::post('/importar-datos/fidelidad-migracion/revisar', [DataImportController::class, 'loyaltyMigrationPreview'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.preview');
+    Route::post('/importar-datos/fidelidad-migracion/resolver-clientes', [DataImportController::class, 'loyaltyMigrationResolve'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.resolve');
+    Route::post('/importar-datos/fidelidad-migracion/confirmar', [DataImportController::class, 'loyaltyMigrationImport'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.import');
+    Route::get('/importar-datos/fidelidad-migracion/estado/{run}', [DataImportController::class, 'loyaltyMigrationStatus'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.status');
+    Route::post('/importar-datos/fidelidad-migracion/estado/{run}/reintentar', [DataImportController::class, 'loyaltyMigrationRetry'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.retry');
+    Route::get('/importar-datos/fidelidad-migracion/errores', [DataImportController::class, 'loyaltyMigrationErrors'])
+        ->middleware('permission:fidelidad.configuracion')->name('importaciones.fidelidad-migracion.errors');
+
+    Route::get('/importar-datos/inventario/plantilla', [DataImportController::class, 'inventoryTemplate'])
+        ->middleware('permission:inventario.ver')
+        ->name('importaciones.inventario.template');
+
+    Route::get('/importar-datos/inventario/ejemplo', [DataImportController::class, 'inventoryExample'])
+        ->middleware('permission:inventario.ver')
+        ->name('importaciones.inventario.example');
+
+    Route::get('/importar-datos/inventario/instrucciones', [DataImportController::class, 'inventoryInstructions'])
+        ->middleware('permission:inventario.ver')
+        ->name('importaciones.inventario.instructions');
+
+    Route::post('/importar-datos/inventario/revisar', [DataImportController::class, 'inventoryPreview'])
+        ->middleware('permission:inventario.ver')
+        ->name('importaciones.inventario.preview');
+
+    Route::post('/importar-datos/inventario/confirmar', [DataImportController::class, 'inventoryImport'])
+        ->middleware('permission:inventario.ajustar')
+        ->name('importaciones.inventario.import');
+    Route::resource('reportes', ReportController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | MVS Print — Impresión local por terminal (QZ Tray)
+    |--------------------------------------------------------------------------
+    |
+    | Infraestructura aislada de configuración de terminales de impresión.
+    | El backend solo valida, guarda configuración y firma peticiones QZ;
+    | la impresión física la ejecuta el navegador mediante QZ Tray local.
+    | Aún no conectada al checkout del POS (fase posterior).
+    */
+    Route::middleware(['active.branch', 'permission:mvs.print.configurar'])
+        ->prefix('mvs/print')
+        ->name('mvs.print.')
+        ->group(function () {
+            Route::get('/', [MvsPrintTerminalsController::class, 'index'])->name('index');
+            Route::post('/terminals', [MvsPrintTerminalsController::class, 'store'])->name('terminals.store');
+            Route::patch('/terminals/{terminal}', [MvsPrintTerminalsController::class, 'update'])->name('terminals.update');
+            Route::patch('/terminals/{terminal}/toggle', [MvsPrintTerminalsController::class, 'toggleStatus'])->name('terminals.toggle');
+            Route::delete('/terminals/{terminal}', [MvsPrintTerminalsController::class, 'destroy'])->name('terminals.destroy');
+            Route::get('/terminals/{terminal}/test-print', [MvsPrintTerminalsController::class, 'testPrintPayload'])->name('terminals.test-print');
+            Route::get('/terminals/{terminal}/open-drawer', [MvsPrintTerminalsController::class, 'openDrawerPayload'])->name('terminals.open-drawer');
+            Route::post('/terminals/{terminal}/heartbeat', [MvsPrintTerminalsController::class, 'heartbeat'])->name('terminals.heartbeat');
+            Route::get('/descargar', MvsPrintDownloadController::class)->name('download');
+        });
+
+    /*
+    |--------------------------------------------------------------------------
+    | MVS Print — Ticket + Config para auto_print desde el POS
+    |--------------------------------------------------------------------------
+    |
+    | Endpoints read-only accesibles desde el POS (solo active.branch).
+    | El endpoint de ticket retorna payload ESC/POS de una venta existente.
+    | El endpoint de config retorna la configuración de la terminal para
+    | que el frontend resuelva auto_print, auto_cut, open_drawer y paper_width.
+    */
+    Route::middleware(['active.branch'])
+        ->prefix('mvs/print')
+        ->name('mvs.print.')
+        ->group(function () {
+            Route::get('/ticket/{sale}', \App\Http\Controllers\MvsPrint\MvsPrintTicketController::class)
+                ->name('ticket');
+            Route::get('/config', [\App\Http\Controllers\MvsPrint\MvsPrintConfigController::class, 'show'])
+                ->name('config');
+            // QZ security - accesible desde POS (pos.acceder) sin requerir mvs.print.configurar
+            Route::post('/signature', [MvsPrintTerminalsController::class, 'signature'])->name('signature');
+            Route::get('/certificate', [MvsPrintTerminalsController::class, 'certificate'])->name('certificate');
+        });
 
 });

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
@@ -16,6 +17,7 @@ class InventoryController extends Controller
     $branchId = session('active_branch_id');
 
     $search = request('search');
+    $likeOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
     $products = Product::where('company_id', $companyId)
         ->with([
@@ -26,13 +28,13 @@ class InventoryController extends Controller
                 $query->where('branches.id', $branchId);
             },
         ])
-                    ->when($search, function ($query) use ($search) {
+                    ->when($search, function ($query) use ($search, $likeOperator) {
 
-                $query->where(function ($query) use ($search) {
+                $query->where(function ($query) use ($search, $likeOperator) {
 
-                    $query->where('name', 'like', "%{$search}%")
-                        ->orWhere('internal_code', 'like', "%{$search}%")
-                        ->orWhere('barcode', 'like', "%{$search}%");
+                    $query->where('name', $likeOperator, "%{$search}%")
+                        ->orWhere('internal_code', $likeOperator, "%{$search}%")
+                        ->orWhere('barcode', $likeOperator, "%{$search}%");
 
                 });
 

@@ -267,7 +267,7 @@
         <input
             type="number"
             min="0"
-            step="0.01"
+            step="1"
             name="credit_limit"
             value="{{ old('credit_limit', $supplier->credit_limit ?? 0) }}"
             class="w-full rounded-xl border border-slate-300 px-4 py-3">

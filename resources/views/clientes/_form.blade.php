@@ -75,6 +75,12 @@
         </x-select>
 
         <x-input
+    name="customer_code"
+    label="Código Comercial"
+    :value="old('customer_code', $customer->customer_code ?? '')"
+    placeholder="000001 (se genera automático si vacío)" />
+
+        <x-input
     name="identification"
     label="Número de Identificación"
     :value="old('identification', $customer->identification ?? '')" />
@@ -95,10 +101,20 @@
             label="Nombre para Facturación"
             :value="old('taxpayer_name', $customer->taxpayer_name ?? '')" />
 
-        <x-input
-            name="phone"
-            label="Teléfono"
-            :value="old('phone', $customer->phone ?? '')" />
+        <div>
+            <label class="form-label">Teléfono</label>
+            <div class="grid grid-cols-[7rem_1fr] gap-2">
+                <div>
+                    <input name="phone_country_code" type="text" inputmode="tel" maxlength="5" placeholder="+506" aria-label="Código de país" value="{{ old('phone_country_code', $customer->phone_country_code ?? $defaultPhoneCountryCode ?? '') }}" class="form-input">
+                    @error('phone_country_code')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <input name="phone" type="text" inputmode="tel" maxlength="30" placeholder="83526142" aria-label="Número de teléfono" value="{{ old('phone', $customer->phone ?? '') }}" class="form-input">
+                    @error('phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Código país | Número</p>
+        </div>
 
         <x-input
             name="mobile"
@@ -242,10 +258,41 @@
 
         <x-input
     type="number"
-    step="0.01"
+    step="1"
     name="credit_limit"
     label="Límite de Crédito"
     :value="old('credit_limit', $customer->credit_limit ?? 0)"/>
+
+    <x-select
+    name="price_level"
+    label="Nivel de Precio">
+
+    <option value="normal"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'normal')>
+        Normal
+    </option>
+
+    <option value="wholesale"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'wholesale')>
+        Mayorista
+    </option>
+
+    <option value="a"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'a')>
+        Precio A
+    </option>
+
+    <option value="b"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'b')>
+        Precio B
+    </option>
+
+    <option value="c"
+        @selected(old('price_level', $customer->price_level ?? 'normal') === 'c')>
+        Precio C
+    </option>
+
+</x-select>
 
         <x-input
             type="number"
@@ -297,6 +344,25 @@
             label="Cliente Activo"
             :checked="old('is_active', $customer->is_active ?? true)" />
 
+    </div>
+
+</x-card>
+
+<x-card class="mt-6">
+
+    <x-slot:header>
+        <h3 class="text-lg font-semibold">
+            Acceso al Portal de Cliente
+        </h3>
+    </x-slot:header>
+
+    <div>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" name="create_portal_access" value="1" {{ old('create_portal_access') ? 'checked' : '' }} class="rounded border-slate-300">
+            <span class="text-sm font-semibold">Crear acceso al Portal de Cliente</span>
+        </label>
+        <p class="mt-1 text-xs text-slate-500">Se usará teléfono normalizado o email como usuario. Si no hay teléfono ni email válido, no se creará acceso.</p>
+        @error('create_portal_access')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
     </div>
 
 </x-card>

@@ -20,6 +20,7 @@ class PurchaseProcessor
         private readonly CompanyPurchaseSettingsResolver $settingsResolver,
         private readonly ProductResolver $productResolver,
         private readonly InventoryPostingService $inventoryPostingService,
+        private readonly PurchaseAccountPayableService $accountPayableService,
     ) {
     }
 
@@ -93,6 +94,8 @@ class PurchaseProcessor
                     $line,
                 );
             }
+
+            $this->accountPayableService->createFor($purchase);
 
             return $purchase;
         });
@@ -196,6 +199,12 @@ class PurchaseProcessor
             $this->validateLine($line);
 
             $product = $this->productResolver->resolve($company, $line);
+
+            if (! $product->unit?->allows_decimals && floor((float) $line->quantity) !== (float) $line->quantity) {
+                throw ValidationException::withMessages([
+                    'items' => "{$product->name} solo admite cantidades enteras.",
+                ]);
+            }
 
             if (isset($resolvedProductIds[$product->id])) {
                 throw ValidationException::withMessages([
