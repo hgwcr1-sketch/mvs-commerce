@@ -120,7 +120,8 @@ class PayrollMigrationTest extends TestCase
 
         Schema::dropIfExists('payroll_details');
 
-        $this->artisan('migrate:rollback --path=database/migrations/2026_09_28_221914_create_payrolls_table.php');
+        $migration = require database_path('migrations/2026_09_28_221914_create_payrolls_table.php');
+        $migration->down();
 
         $this->assertFalse(Schema::hasTable('payrolls'));
     }

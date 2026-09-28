@@ -52,6 +52,7 @@ jobs:
           DB_PASSWORD: mvstest
 
       - name: Run targeted migration tests
+        timeout-minutes: 2
         run: php artisan test tests/Unit/EmployeeMigrationTest.php tests/Unit/PayrollMigrationTest.php tests/Unit/PayrollDetailMigrationTest.php --compact
         env:
           DB_CONNECTION: pgsql
