@@ -10,6 +10,15 @@
 
     <div class="flex justify-between items-center">
         <h1 class="text-2xl font-bold text-slate-800">Empleados</h1>
+
+        @can('planilla.empleados.crear')
+            <a href="{{ route('planilla.empleados.create') }}">
+                <x-button>
+                    + Nuevo empleado
+                </x-button>
+            </a>
+        @endcan
+
     </div>
 
     {{-- Tabla --}}

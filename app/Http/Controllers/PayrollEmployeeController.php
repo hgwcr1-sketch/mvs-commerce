@@ -21,6 +21,11 @@ class PayrollEmployeeController extends Controller
         return view('planilla.empleados.index', compact('employees'));
     }
 
+    public function create(): View
+    {
+        return view('planilla.empleados.create');
+    }
+
     public function store(Request $request): RedirectResponse
     {
         try {
