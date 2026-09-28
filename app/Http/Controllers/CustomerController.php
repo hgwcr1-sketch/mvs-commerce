@@ -8,19 +8,19 @@ use App\Models\Canton;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Customer;
-use App\Models\CustomerOneTimeToken;
 use App\Models\District;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\Province;
 use App\Services\CustomerOneTimeTokenService;
 use App\Services\CustomerPublicCodeService;
+use App\Services\CustomerTaxpayerActivityService;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
-use App\Services\PhoneNumberService;
+use App\Services\Loyalty\LoyaltyPortalUsernameResolver;
 use App\Services\RouteosAuditService;
 use App\Services\TaxpayerLookupService;
 use App\Support\IdentificationRules;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CustomerController extends Controller
 {
@@ -133,12 +133,22 @@ class CustomerController extends Controller
         $createPortalAccess = $request->boolean('create_portal_access');
         unset($data['create_portal_access']);
 
+        $taxpayerActivities = $data['taxpayer_activities'] ?? null;
+        unset($data['taxpayer_activities']);
+
         // R01 RouteOS: coordenadas capturadas al crear quedan validadas por quien las envió.
         $geoCoordinatesProvided = array_key_exists('latitude', $data)
             && $data['latitude'] !== null
             && $data['longitude'] !== null;
 
         $customer = Customer::create($data);
+
+        // Solo se persisten las actividades que el usuario aplicó explícitamente
+        // desde la propuesta de Hacienda; una consulta nunca escribe sola.
+        if (is_array($taxpayerActivities)) {
+            app(CustomerTaxpayerActivityService::class)
+                ->syncForCustomer($customer, $taxpayerActivities);
+        }
 
         if ($geoCoordinatesProvided) {
             // location_validated_at/by no son fillable por diseño: se sellan explícitamente.
@@ -162,9 +172,10 @@ class CustomerController extends Controller
                     $portalResult['password']
                 );
                 $portalResult = array_merge($portalResult, $delivery);
+
                 return redirect()
                     ->route('clientes.index')
-                    ->with('success', 'Cliente registrado correctamente. Acceso al Portal creado: usuario ' . $portalResult['username'] . ' / contraseña temporal ' . $portalResult['password'])
+                    ->with('success', 'Cliente registrado correctamente. Acceso al Portal creado: usuario '.$portalResult['username'].' / contraseña temporal '.$portalResult['password'])
                     ->with('portal_access', $portalResult);
             }
             if ($portalResult['error']) {
@@ -188,7 +199,7 @@ class CustomerController extends Controller
             return ['created' => false, 'error' => 'Este cliente ya tiene acceso al Portal.'];
         }
 
-        $resolver = app(\App\Services\Loyalty\LoyaltyPortalUsernameResolver::class);
+        $resolver = app(LoyaltyPortalUsernameResolver::class);
         $resolved = $resolver->resolve($customer, Company::query()->findOrFail($companyId));
         $username = $resolved['username'];
         $emailNormalized = $resolved['emailNormalized'];
@@ -207,7 +218,7 @@ class CustomerController extends Controller
         if ($exists) {
             return ['created' => false, 'error' => 'El usuario o correo ya está registrado en esta empresa.'];
         }
-        if (!$username) {
+        if (! $username) {
             return ['created' => false, 'error' => 'No se pudo crear acceso al Portal: el cliente no tiene teléfono ni correo válido.'];
         }
 
@@ -217,7 +228,7 @@ class CustomerController extends Controller
             'company_id' => $companyId,
             'customer_id' => $customer->id,
             'username' => $username,
-            'email' => $emailNormalized ?? $username . '@portal.local',
+            'email' => $emailNormalized ?? $username.'@portal.local',
             'password' => $plainPassword,
             'is_active' => true,
             'must_change_password' => true,
@@ -239,13 +250,14 @@ class CustomerController extends Controller
             'canton',
             'district',
             'contacts',
+            'taxpayerActivities',
             'addresses.country',
             'addresses.province',
             'addresses.canton',
             'addresses.district',
         ]);
 
-        $publicCodeService = app(\App\Services\CustomerPublicCodeService::class);
+        $publicCodeService = app(CustomerPublicCodeService::class);
         $publicCodeService->ensure($cliente);
         $cliente->refresh();
         $qrSvg = null;
@@ -292,6 +304,8 @@ class CustomerController extends Controller
     {
         $this->ensureCustomerBelongsToActiveCompany($cliente);
 
+        $cliente->load('taxpayerActivities');
+
         return view('clientes.edit', [
 
             'customer' => $cliente,
@@ -330,7 +344,18 @@ class CustomerController extends Controller
 
         $routeosBefore = $this->routeosSnapshot($cliente);
 
+        $hasTaxpayerActivities = array_key_exists('taxpayer_activities', $data);
+        $taxpayerActivities = $data['taxpayer_activities'] ?? null;
+        unset($data['taxpayer_activities']);
+
         $cliente->update($data);
+
+        // Reemplazo explícito del set de actividades aplicado por el usuario.
+        // Sin `taxpayer_activities` en el payload no se toca lo persistido.
+        if ($hasTaxpayerActivities) {
+            app(CustomerTaxpayerActivityService::class)
+                ->syncForCustomer($cliente, $taxpayerActivities ?? []);
+        }
 
         // R01 RouteOS: si se envían coordenadas y cambian respecto a las previas,
         // la ubicación queda validada por el usuario que la capturó.
@@ -504,10 +529,11 @@ class CustomerController extends Controller
         $data = $request->validate(['pin' => ['required', 'string', 'max:20']]);
         try {
             app(CustomerOneTimeTokenService::class)->verify($cliente, $company, $data['pin'], 'redeem');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], 422);
             }
+
             return back()->withErrors($e->errors());
         }
 

@@ -72,8 +72,8 @@ class Customer extends Model
                 }
             }
 
-            if (empty($customer->customer_code) && !empty($customer->company_id)) {
-                $customer->customer_code = \App\Models\CompanySequence::nextCustomerCode($customer->company_id);
+            if (empty($customer->customer_code) && ! empty($customer->company_id)) {
+                $customer->customer_code = CompanySequence::nextCustomerCode($customer->company_id);
             }
         });
     }
@@ -127,6 +127,14 @@ class Customer extends Model
     public function addresses()
     {
         return $this->hasMany(CustomerAddress::class);
+    }
+
+    /**
+     * Actividades económicas oficiales registradas desde Hacienda.
+     */
+    public function taxpayerActivities(): HasMany
+    {
+        return $this->hasMany(CustomerTaxpayerActivity::class)->orderBy('code');
     }
 
     public function accountsReceivable(): HasMany
@@ -200,4 +208,3 @@ class Customer extends Model
             .$this->latitude.','.$this->longitude.'&navigate=yes';
     }
 }
-

@@ -99,6 +99,22 @@
     <p>{{ $customer->taxpayer_name ?: '-' }}</p>
 </div>
 
+<div class="md:col-span-2 lg:col-span-3">
+    <label class="text-sm text-slate-500">Actividades económicas (Hacienda)</label>
+
+    @if(($customer->taxpayerActivities ?? collect())->isNotEmpty())
+        <ul class="mt-1 flex flex-wrap gap-2">
+            @foreach($customer->taxpayerActivities as $activity)
+                <li class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                    {{ $activity->code }}{{ $activity->description ? ' — '.$activity->description : '' }}
+                </li>
+            @endforeach
+        </ul>
+    @else
+        <p class="mt-1 text-slate-500">Sin actividades registradas.</p>
+    @endif
+</div>
+
 <div>
     <label class="text-sm text-slate-500">Recibir Facturas por Correo</label>
 

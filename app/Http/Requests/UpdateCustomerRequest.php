@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\CanAdministerCustomerCredit;
 use App\Rules\ValidIdentification;
 use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -128,14 +129,14 @@ class UpdateCustomerRequest extends FormRequest
                 'required',
                 'numeric',
                 'min:0',
-                new \App\Rules\CanAdministerCustomerCredit($this->route('cliente')),
+                new CanAdministerCustomerCredit($this->route('cliente')),
             ],
 
             'credit_days' => [
                 'nullable',
                 'integer',
                 'min:0',
-                new \App\Rules\CanAdministerCustomerCredit($this->route('cliente')),
+                new CanAdministerCustomerCredit($this->route('cliente')),
             ],
 
             'price_level' => [
@@ -153,6 +154,16 @@ class UpdateCustomerRequest extends FormRequest
             'birth_date' => 'nullable|date',
 
             'is_active' => 'nullable|boolean',
+
+            /**
+             * Actividades económicas aplicadas desde la propuesta de Hacienda.
+             * Ausente = no tocar lo persistido; presente = reemplazo completo.
+             */
+            'taxpayer_activities' => ['nullable', 'array', 'max:50'],
+
+            'taxpayer_activities.*.code' => ['required_with:taxpayer_activities', 'string', 'max:20', 'regex:/^\d{1,20}$/'],
+
+            'taxpayer_activities.*.description' => ['nullable', 'string', 'max:255'],
 
         ];
     }

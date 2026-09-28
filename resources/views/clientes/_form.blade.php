@@ -103,6 +103,75 @@
             label="Nombre para Facturación"
             :value="old('taxpayer_name', $customer->taxpayer_name ?? '')" />
 
+        {{-- Propuesta oficial de Hacienda: régimen, situación y actividades
+             económicas. Es SOLO propuesta: nada se guarda sin que el usuario
+             lo confirme con los checkboxes. --}}
+        <div class="md:col-span-2" id="taxpayer_proposal" hidden>
+
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+                <p class="text-sm font-semibold text-slate-700">
+                    Datos oficiales de Hacienda
+                </p>
+
+                <p id="taxpayer_meta" class="mt-1 text-xs text-slate-600"></p>
+
+                <div id="taxpayer_activities_box" class="mt-3" hidden>
+
+                    <p class="text-xs font-semibold uppercase text-slate-500">
+                        Actividades económicas
+                    </p>
+
+                    <ul id="taxpayer_activities_list" class="mt-2 space-y-1.5"></ul>
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" id="taxpayer_apply_all"
+                            class="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                            Aplicar todas
+                        </button>
+                        <button type="button" id="taxpayer_clear"
+                            class="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                            Limpiar selección
+                        </button>
+                    </div>
+
+                </div>
+
+                {{-- Inputs enviados al guardar: solo las casillas marcadas. --}}
+                <div id="taxpayer_activities_inputs" class="hidden"></div>
+
+            </div>
+
+        </div>
+
+        <script type="application/json" id="taxpayer_proposal_seed">{{ json_encode(old('taxpayer_activities', []), JSON_HEX_TAG | JSON_HEX_AMP) }}</script>
+
+        @php($persistedActivities = $customer->exists ? $customer->taxpayerActivities : collect())
+
+        @if(($persistedActivities ?? collect())->isNotEmpty())
+
+            <div class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+
+                <p class="text-sm font-semibold text-emerald-900">
+                    Actividades económicas registradas
+                </p>
+
+                <ul class="mt-2 flex flex-wrap gap-2">
+                    @foreach($persistedActivities as $activity)
+                        <li class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                            {{ $activity->code }}{{ $activity->description ? ' — '.$activity->description : '' }}
+                        </li>
+                    @endforeach
+                </ul>
+
+                <p class="mt-2 text-xs text-emerald-700">
+                    Se reemplazan solo si aplica nuevas actividades desde la consulta de Hacienda.
+                </p>
+
+            </div>
+
+        @endif
+
         <div>
             <label class="form-label">Teléfono</label>
             <div class="grid grid-cols-[7rem_1fr] gap-2">

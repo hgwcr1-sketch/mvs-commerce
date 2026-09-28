@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Company;
+use App\Rules\CanAdministerCustomerCredit;
 use App\Rules\ValidIdentification;
 use App\Services\PhoneNumberService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -121,14 +122,14 @@ class StoreCustomerRequest extends FormRequest
                 'required',
                 'numeric',
                 'min:0',
-                new \App\Rules\CanAdministerCustomerCredit(null),
+                new CanAdministerCustomerCredit(null),
             ],
 
             'credit_days' => [
                 'nullable',
                 'integer',
                 'min:0',
-                new \App\Rules\CanAdministerCustomerCredit(null),
+                new CanAdministerCustomerCredit(null),
             ],
 
             'price_level' => [
@@ -149,6 +150,17 @@ class StoreCustomerRequest extends FormRequest
             'is_active' => 'nullable|boolean',
 
             'create_portal_access' => 'nullable|boolean',
+
+            /**
+             * Actividades económicas propuestas por Hacienda y APLICADAS por el
+             * usuario. Solo códigos numéricos declarados por la fuente: nada se
+             * infiere y nada se guarda sin que el usuario lo haya elegido.
+             */
+            'taxpayer_activities' => ['nullable', 'array', 'max:50'],
+
+            'taxpayer_activities.*.code' => ['required_with:taxpayer_activities', 'string', 'max:20', 'regex:/^\d{1,20}$/'],
+
+            'taxpayer_activities.*.description' => ['nullable', 'string', 'max:255'],
 
         ];
     }

@@ -173,6 +173,159 @@ function autofill(input, name) {
     if (input && !input.value.trim()) input.value = name;
 }
 
+/**
+ * Propuesta oficial de Hacienda (régimen, situación y actividades).
+ *
+ * Es SOLO propuesta: las actividades se envían al guardar únicamente cuando
+ * el usuario las deja marcadas. Aplicarlas es una decisión del usuario, no
+ * un efecto automático de la consulta.
+ */
+function activityLabel(activity) {
+    const code = String(activity.code || '');
+    const description = String(activity.description || '');
+    return description && description !== code ? code + ' — ' + description : code;
+}
+
+function renderTaxpayerProposal(data) {
+    const box = document.getElementById('taxpayer_proposal');
+    if (!box) return;
+
+    box.hidden = false;
+
+    const meta = document.getElementById('taxpayer_meta');
+    if (meta) {
+        const parts = [];
+        if (data.regime) parts.push('Régimen: ' + data.regime);
+        if (data.situation) parts.push('Situación: ' + data.situation);
+        meta.textContent = parts.length ? parts.join(' · ') : 'Hacienda no informó régimen ni situación.';
+    }
+
+    renderActivities(Array.isArray(data.activities) ? data.activities : []);
+}
+
+function renderActivities(activities) {
+    const box = document.getElementById('taxpayer_activities_box');
+    const list = document.getElementById('taxpayer_activities_list');
+    if (!box || !list) return;
+
+    box.hidden = activities.length === 0;
+    list.innerHTML = '';
+
+    activities.forEach((activity, index) => {
+        if (!activity || !activity.code) return;
+
+        const item = document.createElement('li');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'h-4 w-4 rounded border-slate-300 text-primary accent-primary';
+        checkbox.name = 'taxpayer_activity_candidate';
+        checkbox.checked = true;
+        checkbox.dataset.code = String(activity.code);
+        checkbox.dataset.description = activity.description ? String(activity.description) : '';
+        checkbox.id = 'taxpayer_activity_' + index;
+        checkbox.addEventListener('change', syncTaxpayerActivityInputs);
+
+        const label = document.createElement('label');
+        label.setAttribute('for', checkbox.id);
+        label.className = 'ml-2 text-sm text-slate-700';
+        label.textContent = activityLabel(activity);
+
+        item.className = 'flex items-start gap-2';
+        item.appendChild(checkbox);
+        item.appendChild(label);
+        list.appendChild(item);
+    });
+
+    syncTaxpayerActivityInputs();
+}
+
+function syncTaxpayerActivityInputs() {
+    const container = document.getElementById('taxpayer_activities_inputs');
+    if (!container) return;
+
+    const list = document.getElementById('taxpayer_activities_list');
+    container.innerHTML = '';
+
+    if (!list) return;
+
+    list.querySelectorAll('input[type="checkbox"]:checked').forEach((checkbox) => {
+        const code = document.createElement('input');
+        code.type = 'hidden';
+        code.name = 'taxpayer_activities[][code]';
+        code.value = checkbox.dataset.code || '';
+        container.appendChild(code);
+
+        const description = document.createElement('input');
+        description.type = 'hidden';
+        description.name = 'taxpayer_activities[][description]';
+        description.value = checkbox.dataset.description || '';
+        container.appendChild(description);
+    });
+}
+
+function hideTaxpayerProposal() {
+    const box = document.getElementById('taxpayer_proposal');
+    if (!box) return;
+
+    box.hidden = true;
+
+    const meta = document.getElementById('taxpayer_meta');
+    if (meta) meta.textContent = '';
+
+    const list = document.getElementById('taxpayer_activities_list');
+    if (list) list.innerHTML = '';
+
+    const inputs = document.getElementById('taxpayer_activities_inputs');
+    if (inputs) inputs.innerHTML = '';
+}
+
+function seedTaxpayerProposal() {
+    const seed = document.getElementById('taxpayer_proposal_seed');
+    if (!seed) return;
+
+    let applied = [];
+
+    try {
+        applied = JSON.parse(seed.textContent || '[]');
+    } catch (error) {
+        applied = [];
+    }
+
+    if (!Array.isArray(applied) || applied.length === 0) return;
+
+    const box = document.getElementById('taxpayer_proposal');
+    if (box) box.hidden = false;
+
+    const meta = document.getElementById('taxpayer_meta');
+    if (meta) meta.textContent = 'Aplicación restaurada del intento anterior.';
+
+    renderActivities(applied);
+    syncTaxpayerActivityInputs();
+}
+
+function bindTaxpayerProposalActions() {
+    const applyAll = document.getElementById('taxpayer_apply_all');
+    const clear = document.getElementById('taxpayer_clear');
+
+    if (applyAll) {
+        applyAll.addEventListener('click', () => {
+            document.querySelectorAll('#taxpayer_activities_list input[type="checkbox"]').forEach((box) => {
+                box.checked = true;
+            });
+            syncTaxpayerActivityInputs();
+        });
+    }
+
+    if (clear) {
+        clear.addEventListener('click', () => {
+            document.querySelectorAll('#taxpayer_activities_list input[type="checkbox"]').forEach((box) => {
+                box.checked = false;
+            });
+            syncTaxpayerActivityInputs();
+        });
+    }
+}
+
 function initCustomerForm() {
     const typeInput = document.getElementById('identification_type');
     const numberInput = document.getElementById('identification');
@@ -218,12 +371,17 @@ function initCustomerForm() {
                 render('found', data.name);
                 autofill(nameInput, data.name);
                 autofill(taxpayerInput, data.name);
+                renderTaxpayerProposal(data);
                 return;
             }
 
+            hideTaxpayerProposal();
             render(data.status === 'not_found' ? 'not_found' : 'error');
         } catch (error) {
-            if (current === token) render('error');
+            if (current === token) {
+                hideTaxpayerProposal();
+                render('error');
+            }
         }
     };
 
@@ -235,6 +393,7 @@ function initCustomerForm() {
 
         if (!canLookup(type) || !complete(type, value)) {
             token += 1;
+            hideTaxpayerProposal();
             render('');
             return;
         }
@@ -267,6 +426,9 @@ function initCustomerForm() {
     });
 
     applyMeta();
+
+    bindTaxpayerProposalActions();
+    seedTaxpayerProposal();
 
     if (!legacy && numberInput.value !== '') {
         numberInput.value = format(typeInput.value, numberInput.value);
