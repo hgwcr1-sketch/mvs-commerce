@@ -35,6 +35,8 @@ class CompanyFiscalConfig extends Model
         return [
             'provider_api_key' => 'encrypted',
             'provider_api_secret' => 'encrypted',
+            'pending_api_key' => 'encrypted',
+            'pending_api_secret' => 'encrypted',
             'auto_emit_enabled' => 'boolean',
             'notify_receptor_email' => 'boolean',
             'last_verified_at' => 'datetime',
@@ -50,6 +52,14 @@ class CompanyFiscalConfig extends Model
     {
         return trim((string) $this->provider_api_key) !== ''
             && trim((string) $this->provider_api_secret) !== '';
+    }
+
+    public function hasPending(): bool
+    {
+        return trim((string) ($this->pending_api_key ?? '')) !== ''
+            || trim((string) ($this->pending_api_secret ?? '')) !== ''
+            || ($this->pending_environment !== null && $this->pending_environment !== $this->environment)
+            || ($this->pending_provider !== null && $this->pending_provider !== $this->provider);
     }
 
     public function isProduction(): bool
