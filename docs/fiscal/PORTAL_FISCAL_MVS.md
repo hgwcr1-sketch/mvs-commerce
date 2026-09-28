@@ -56,6 +56,26 @@ Permisos `fiscal.ver` / `fiscal.editar`, CSRF, aislamiento por empresa
 activa, secretos cifrados y enmascarados, verificación sin emisión y
 producción/sandbox diferenciados.
 
+## Marca MVS: el proveedor no se expone (2026-09-27)
+
+Regla de producto: ninguna vista normal del tenant muestra el proveedor
+técnico (ni nombre, ni código, ni endpoints). El portal habla de
+"Facturación Electrónica", "Conexión fiscal", "Conectado con Hacienda",
+"Estado de Hacienda" y "Credenciales de conexión". La arquitectura
+(`provider`, adapters, históricos, auditoría) conserva el proveedor
+internamente para FiscalManager, migración futura y soporte autorizado.
+
+## Rotación segura (2026-09-27)
+
+Editar la conexión NO destruye la vigente: lo nuevo queda pendiente,
+se verifica y solo se activa con éxito
+(Nueva configuración → Verificar → Confirmar → Activar). Si falla, la
+activa sigue facturando, se muestra el error sanitizado y lo pendiente
+puede corregirse o cancelarse. Producción exige confirmación explícita.
+Desconectar es acción independiente con confirmación y auditoría, sin
+borrar historial. Auditoría (`fiscal_config_audits`): usuario, fecha,
+empresa, ambiente, tipo de cambio y resultado; jamás secretos.
+
 ## Fase 2 — Master (2026-09-27)
 
 - Onboarding completo: actividad económica + sucursal/terminal fiscales

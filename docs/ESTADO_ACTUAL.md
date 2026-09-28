@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Master Fiscal MVS fase 2 (2026-09-27, rama feature/factura-electronica)
+## Master fiscal marca MVS + rotación segura (2026-09-27, rama feature/factura-electronica)
 
-Portal convertido en centro de control: banner de ambiente (PRUEBAS sin valor fiscal / PRODUCCIÓN), emisor, actividad, sucursal/terminal, conteos, series, diagnóstico extendido y detalle por documento con custodia. Onboarding con actividad + códigos 3/5; series provider-neutrales (observan, importan sin retroceder, sin resets, claim con lock); gate de cambio de proveedor (sin MvsFiscal real); webhooks con contrato neutral pero receptor NO implementado (docs oficiales sin espec de firma — bloqueador documentado, polling vigente); custodia payload-inmutable + respuesta. Evidencia: `FiscalMasterTest` 15/15, portal 15/15, core 49/49, CERO HTTP real. Docs: `PORTAL_FISCAL_MVS.md`, `MIGRACION_PROVEEDOR_FISCAL.md`.
+Master "Centro de Facturación Electrónica" con accesos Completar/Administrar/Actualizar + Configuración fiscal; wizard crear/editar de 9 bloques (ubicación con catálogo real); rotación por etapas (pendiente→verificar→activar, anterior intacta si falla, auditoría sin secretos, producción con confirmación, desconexión independiente sin borrar historial); proveedor oculto en las 5 vistas tenant (marca MVS, arquitectura intacta); diagnóstico neutro. Evidencia: portal+master+ajustes 71/71, core 47/47, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master Fiscal MVS fase 2 (2026-09-27, histórico, previo a marca/rotación)
+
+Portal convertido en centro de control: banner de ambiente (PRUEBAS sin valor fiscal / PRODUCCIÓN), emisor, actividad, sucursal/terminal, conteos, series, diagnóstico extendido y detalle por documento con custodia. Onboarding con actividad + códigos 3/5; series provider-neutrales (observan, importan sin retroceder, sin resets, claim con lock); gate de cambio de proveedor (sin MvsFiscal real); webhooks con contrato neutral pero receptor NO implementado (docs oficiales sin espec de firma — bloqueador documentado, polling vigente); custodia payload-inmutable + respuesta. Evidencia entonces: `FiscalMasterTest` 15/15, portal 15/15, core 49/49, CERO HTTP real. Docs: `PORTAL_FISCAL_MVS.md`, `MIGRACION_PROVEEDOR_FISCAL.md`.
 
 ## Portal Fiscal MVS por empresa (2026-09-27, histórico, previo a fase 2)
 
