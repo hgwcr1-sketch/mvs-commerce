@@ -132,6 +132,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'agenda.editar', 'label' => 'Editar citas', 'module' => 'Agenda'],
             ['name' => 'agenda.eliminar', 'label' => 'Eliminar citas', 'module' => 'Agenda'],
 
+            // Planilla
+            ['name' => 'planilla.empleados.ver', 'label' => 'Ver empleados de planilla', 'module' => 'Planilla'],
+
             // Reportes
             ['name' => 'reportes.ver', 'label' => 'Ver reportes', 'module' => 'Reportes'],
             ['name' => 'reportes.exportar', 'label' => 'Exportar reportes', 'module' => 'Reportes'],
@@ -152,6 +155,7 @@ class PermissionSeeder extends Seeder
 
         $administratorPermissionIds = Permission::query()
             ->where('is_active', true)
+            ->where('name', '!=', 'planilla.empleados.ver')
             ->pluck('id')
             ->all();
 

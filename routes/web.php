@@ -445,6 +445,10 @@ Route::post('/importar-datos/inventario/revisar', [DataImportController::class, 
 Route::post('/importar-datos/inventario/confirmar', [DataImportController::class, 'inventoryImport'])
     ->middleware('permission:inventario.ver')
     ->name('importaciones.inventario.import');  
+Route::get('/planilla/empleados', [\App\Http\Controllers\PayrollEmployeeController::class, 'index'])
+    ->middleware(['active.branch', 'permission:planilla.empleados.ver'])
+    ->name('planilla.empleados.index');
+
 Route::resource('reportes', ReportController::class);
 
 });
