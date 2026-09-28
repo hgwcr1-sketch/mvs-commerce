@@ -32,13 +32,13 @@
                 <div class="flex flex-col gap-2 md:items-end">
                     @if($status === 'ready')
                         <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95 md:w-auto">
+                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:w-auto">
                             Administrar configuración
                         </a>
                         <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800 md:w-auto">Actualizar conexión</a>
                     @elseif($status !== 'disabled')
                         <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95 md:w-auto">
+                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black md:w-auto">
                             Completar configuración
                         </a>
                     @endif
@@ -96,11 +96,6 @@
                 @endif
             </div>
 
-            @can('fiscal.editar')
-                <div class="mt-4 flex flex-wrap gap-2 text-sm">
-                    <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
-                </div>
-            @endcan
         @endif
     </section>
 

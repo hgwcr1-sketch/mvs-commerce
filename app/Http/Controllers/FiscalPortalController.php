@@ -145,6 +145,9 @@ class FiscalPortalController extends Controller
             'step' => $step,
             'status' => $status,
             'statusLabel' => $this->statusLabel($status),
+            'wizardTitle' => in_array($status, ['ready', 'attention'], true)
+                ? 'Configuración de Facturación Electrónica'
+                : 'Conectar facturación',
             'providers' => $this->providerOptions(),
             'provinces' => \App\Models\Province::orderBy('id')->get(),
             'cantons' => \App\Models\Canton::orderBy('province_id')->orderBy('id')->get(),
@@ -167,8 +170,14 @@ class FiscalPortalController extends Controller
             return redirect()->route('fiscal.index')->with('status', 'Preferencias guardadas.');
         }
 
-        return redirect()->route('fiscal.setup', ['step' => $this->nextStep($step)])
-            ->with('status', 'Cambios guardados.');
+        $next = $this->nextStep($step);
+        $saved = match ($step) {
+            'datos' => 'Datos guardados. Continúe en el Paso 2.',
+            'conexion' => 'Conexión guardada. Verifíquela en el Paso 3.',
+            default => 'Cambios guardados.',
+        };
+
+        return redirect()->route('fiscal.setup', ['step' => $next])->with('status', $saved);
     }
 
     public function verify(): RedirectResponse

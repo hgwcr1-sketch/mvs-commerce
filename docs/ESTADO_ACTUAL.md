@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Limpieza tenant master fiscal (2026-09-27, rama feature/factura-electronica)
+## Fix visual wizard fiscal (2026-09-27, rama feature/factura-electronica)
 
-Sin botón Proveedor ni acceso tenant a cambio de provider (403; pantalla solo en Panel Maestro). Series en Configuración avanzada con estado neutral sin alerta falsa. Master sin máscara de credencial (solo "Conexión fiscal": Verificada/Pendiente/Requiere atención). Arquitectura multi-provider intacta. Evidencia: portal+master 43/43, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+Causa botón fantasma: `bg-[#D4AF37]` no estaba en el CSS compilado (build desactualizado); rebuild `npm run build` + affordance (sombra/focus) en CTAs. Título del wizard por estado (Conectar vs Configuración de Facturación Electrónica). Navegación 1→5 con mensajes por paso + enlaces Anterior (datos persisten en servidor, PUTs idempotentes). Series solo en Configuración avanzada. Evidencia: portal+master 47/47, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Limpieza tenant master fiscal (2026-09-27, histórico, previo a fix visual)
+
+Sin botón Proveedor ni acceso tenant a cambio de provider (403; pantalla solo en Panel Maestro). Series en Configuración avanzada con estado neutral sin alerta falsa. Master sin máscara de credencial (solo "Conexión fiscal": Verificada/Pendiente/Requiere atención). Arquitectura multi-provider intacta. Evidencia entonces: portal+master 43/43, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
 
 ## Master visual MVS + CTA (2026-09-27, histórico, previo a limpieza tenant)
 

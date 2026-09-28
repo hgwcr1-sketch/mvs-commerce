@@ -674,4 +674,98 @@ class FiscalPortalTest extends TestCase
         $response->assertSee('Aceptado');
         $response->assertSee('Ver historial');
     }
+
+    public function test_wizard_title_follows_configuration_state(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->get(route('fiscal.setup', ['step' => 'datos']))
+            ->assertOk()
+            ->assertSee('Conectar facturación')
+            ->assertDontSee('Configuración de Facturación Electrónica');
+
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $this->get(route('fiscal.setup', ['step' => 'datos']))
+            ->assertOk()
+            ->assertSee('Configuración de Facturación Electrónica')
+            ->assertDontSee('Conectar facturación');
+    }
+
+    public function test_step_one_valid_goes_to_step_two_and_invalid_stays(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '3101000000',
+            'legal_name' => 'Demo S.A.',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'conexion']));
+
+        $this->assertSame('3101000000', $company->fresh()->identification_number);
+        $this->assertStringContainsString(
+            'Paso 2',
+            $this->get(route('fiscal.setup', ['step' => 'conexion']))->getContent()
+        );
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '',
+            'legal_name' => '',
+        ])->assertSessionHasErrors(['identification_number', 'legal_name']);
+
+        $this->assertSame('3101000000', $company->fresh()->identification_number);
+    }
+
+    public function test_wizard_chain_and_back_links(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '3101000000',
+            'legal_name' => 'Demo S.A.',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'conexion']));
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+            'api_key' => 'efk_K',
+            'api_secret' => 'efs_S',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'))->assertRedirect(route('fiscal.setup', ['step' => 'preferencias']));
+
+        $this->put(route('fiscal.setup.store', ['step' => 'preferencias']), [
+            'default_document' => '04',
+        ])->assertRedirect(route('fiscal.index'));
+
+        $this->assertSame('04', \App\Models\CompanyFiscalConfig::where('company_id', $company->id)->first()->default_document);
+
+        foreach (['conexion', 'verificar', 'preferencias', 'confirmacion'] as $step) {
+            $this->get(route('fiscal.setup', ['step' => $step]))->assertSee('Anterior');
+        }
+    }
+
+    public function test_master_has_single_series_access(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $html = $this->get(route('fiscal.index'))->getContent();
+        $this->assertSame(1, substr_count($html, route('fiscal.series')));
+        $this->assertStringNotContainsString('>Series<', $html);
+        $this->assertStringContainsString('Series fiscales / Migración', $html);
+    }
 }

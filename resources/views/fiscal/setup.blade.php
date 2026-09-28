@@ -2,7 +2,7 @@
 @section('content')
 <div class="mx-auto max-w-2xl space-y-5 pb-24 md:pb-8">
     <section class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-7">
-        <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Conectar facturación</p>
+        <p class="text-sm font-bold uppercase tracking-wide text-amber-700">{{ $wizardTitle }}</p>
         <h1 class="mt-2 text-2xl font-bold text-slate-950">
             @switch($step)
                 @case('datos') Paso 1 de 5 · Datos fiscales @break
@@ -106,7 +106,8 @@
                         <input id="fiscal_terminal_code" name="fiscal_terminal_code" inputmode="numeric" value="{{ old('fiscal_terminal_code', $config->fiscal_terminal_code) }}" placeholder="00001" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                     </div>
                 </div>
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y continuar</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y continuar</button>
+                <a href="{{ route('fiscal.index') }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Volver al portal</a>
             </form>
         @elseif($step === 'conexion')
             @if($config->hasPending())
@@ -120,11 +121,7 @@
             @endif
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'conexion']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
-                @if(count($providers) > 1)
                 <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). La conexión la administra MVS; aquí solo registra sus credenciales.</p>
-                @else
-                    <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). Sin opciones adicionales por ahora.</p>
-                @endif
                 <div>
                     <span class="text-sm font-bold">Ambiente</span>
                     <div class="mt-2 space-y-2">
@@ -148,7 +145,8 @@
                     <label class="text-sm font-bold" for="api_secret">Secreto de conexión {{ $config->maskedSecret() ? '(registrado)' : '' }}</label>
                     <input id="api_secret" type="password" name="api_secret" autocomplete="off" placeholder="Vacío = conservar el actual" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y verificar</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y verificar</button>
+                <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
             </form>
             @if($config->hasCredentials())
                 <form method="POST" action="{{ route('fiscal.disconnect') }}" class="mt-6 border-t border-slate-200 pt-4" onsubmit="return confirm('¿Retirar la conexión fiscal? El historial se conserva.');">
@@ -166,7 +164,8 @@
             <p class="mt-4 text-sm text-slate-600">Comprobamos la conexión con Hacienda <strong>sin emitir ningún documento</strong> y sin consumir cuota.</p>
             <form method="POST" action="{{ route('fiscal.verify') }}" class="mt-4">
                 @csrf
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Verificar conexión</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Verificar conexión</button>
+                <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
                 <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Omitir por ahora</a>
             </form>
             @if($config->last_verified_at)
@@ -189,7 +188,8 @@
                     <input type="checkbox" name="notify_receptor_email" value="1" @checked(old('notify_receptor_email', $config->notify_receptor_email)) class="h-5 w-5"> Avisar por correo al receptor cuando esté disponible
                 </label>
                 <p class="text-xs text-slate-500">El tiquete interno nunca sale a Hacienda ni consume cuota.</p>
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y terminar</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y terminar</button>
+                <a href="{{ route('fiscal.setup', ['step' => 'verificar']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
             </form>
         @else
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
@@ -198,7 +198,8 @@
                 <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $statusLabel }}</dd></div>
             </dl>
-            <a href="{{ route('fiscal.index') }}" class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Ir al portal fiscal</a>
+            <a href="{{ route('fiscal.index') }}" class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Ir al portal fiscal</a>
+            <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
         @endif
     </section>
 </div>

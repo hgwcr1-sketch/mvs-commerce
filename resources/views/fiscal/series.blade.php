@@ -83,7 +83,7 @@
                 <label class="text-sm font-bold" for="last_consecutivo">Último consecutivo (20 dígitos)</label>
                 <input id="last_consecutivo" name="last_consecutivo" inputmode="numeric" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px] font-mono">
             </div>
-            <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Registrar serie</button>
+            <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Registrar serie</button>
         </form>
     </section>
 </div>
