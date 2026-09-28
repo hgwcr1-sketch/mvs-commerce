@@ -96,7 +96,7 @@ class CustomerController extends Controller
             ->whereKey($this->activeCompanyId())
             ->value('default_phone_country_code');
 
-        return view('clientes.create', [
+        return view('clientes.create', array_merge([
 
             'customer' => new Customer,
             'defaultPhoneCountryCode' => $defaultPhoneCountryCode,
@@ -117,7 +117,7 @@ class CustomerController extends Controller
                 ->orderBy('name')
                 ->get(),
 
-        ]);
+        ], $this->formViewData(new Customer)));
     }
 
     /**
@@ -306,7 +306,7 @@ class CustomerController extends Controller
 
         $cliente->load('taxpayerActivities');
 
-        return view('clientes.edit', [
+        return view('clientes.edit', array_merge([
 
             'customer' => $cliente,
             'defaultPhoneCountryCode' => null,
@@ -327,7 +327,7 @@ class CustomerController extends Controller
                 ->orderBy('name')
                 ->get(),
 
-        ]);
+        ], $this->formViewData($cliente)));
     }
 
     /**
@@ -650,6 +650,47 @@ class CustomerController extends Controller
         abort_unless($companyId, 403, 'No hay una empresa activa.');
 
         return (int) $companyId;
+    }
+
+    /**
+     * Datos que la vista compartida de Clientes ya no calcula con `@php`.
+     *
+     * Los bloques `@php` dentro de `_form.blade.php` quedaban sin compilar y
+     * dejaban estas variables indefinidas, provocando HTTP 500 al abrir
+     * /clientes/nuevo y /clientes/{id}/edit. La decisión se toma aquí.
+     */
+    private function formViewData(Customer $customer): array
+    {
+        return [
+            'canManageCredit' => $this->canManageCredit(),
+            'persistedActivities' => $customer->exists
+                ? $customer->taxpayerActivities()->get()
+                : collect(),
+            'routeosHasLocation' => $customer->exists && $customer->hasLocation(),
+            'routeosMapsUrl' => $customer->exists ? $customer->google_maps_url : null,
+            'routeosWazeUrl' => $customer->exists ? $customer->waze_url : null,
+        ];
+    }
+
+    /**
+     * R01 RouteOS: el crédito solo lo administra `routeos.credito.administrar`.
+     *
+     * Se resuelve AQUÍ y no en la vista: el `@php` que hacía esta asignación
+     * dentro de `_form.blade.php` no compilaba, `$canManageCredit` quedaba
+     * sin definir y /clientes/nuevo respondía HTTP 500.
+     */
+    private function canManageCredit(): bool
+    {
+        $user = auth()->user();
+        $company = Company::query()->find($this->activeCompanyId());
+
+        // `hasPermission()` exige una Company: sin empresa activa no hay
+        // contexto empresarial y el crédito queda solo lectura.
+        if (! $user || ! $company) {
+            return false;
+        }
+
+        return (bool) $user->hasPermission('routeos.credito.administrar', $company);
     }
 
     private function ensureCustomerBelongsToActiveCompany(Customer $customer): void
