@@ -146,9 +146,12 @@
 
         <script type="application/json" id="taxpayer_proposal_seed">{{ json_encode(old('taxpayer_activities', []), JSON_HEX_TAG | JSON_HEX_AMP) }}</script>
 
-        @php($persistedActivities = $customer->exists ? $customer->taxpayerActivities : collect())
-
-        @if(($persistedActivities ?? collect())->isNotEmpty())
+        {{-- Las actividades persistidas las entrega el controlador como
+             `persistedActivities`. Antes se armaban con `@php(...)` dentro de
+             la vista: esa directiva desbalanceaba el resto del archivo y
+             dejaba sin definir otras variables, provocando HTTP 500 en
+             /clientes/nuevo y /clientes/{id}/edit. --}}
+        @if (($persistedActivities ?? collect())->isNotEmpty())
 
             <div class="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
 
@@ -325,12 +328,14 @@
         </h3>
     </x-slot:header>
 
-    @php
-        // R01 RouteOS: el crédito solo lo administra routeos.credito.administrar.
-        $routeosCompany = \App\Models\Company::find(session('active_company_id'));
-        $canManageCredit = auth()->user()?->hasPermission('routeos.credito.administrar', $routeosCompany);
-    @endphp
-
+    {{--
+        R01 RouteOS: el crédito solo lo administra `routeos.credito.administrar`.
+        La decisión se resuelve en el CONTROLADOR (canManageCredit) y aquí solo
+        se consume. Antes se resolvía con un `@php` en medio de la vista y el
+        bloque no compilaba, dejando $canManageCredit sin definir y devolviendo
+        HTTP 500 en /clientes/nuevo y /clientes/{id}/edit. El `?? false` mantiene
+        la vista renderizable aun si el dato no llega.
+    --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <div>
@@ -345,10 +350,10 @@
                 name="credit_limit"
                 value="{{ old('credit_limit', $customer->credit_limit ?? 0) }}"
                 inputmode="decimal"
-                @unless($canManageCredit) readonly @endunless
-                class="form-input @unless($canManageCredit) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
+                @unless($canManageCredit ?? false) readonly @endunless
+                class="form-input @unless($canManageCredit ?? false) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
 
-            @unless($canManageCredit)
+            @unless($canManageCredit ?? false)
                 <p class="mt-1 text-xs text-slate-500">
                     El límite de crédito solo puede ser modificado por un usuario con permiso de crédito.
                 </p>
@@ -399,10 +404,10 @@
                 name="credit_days"
                 value="{{ old('credit_days', $customer->credit_days ?? 0) }}"
                 inputmode="numeric"
-                @unless($canManageCredit) readonly @endunless
-                class="form-input @unless($canManageCredit) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
+                @unless($canManageCredit ?? false) readonly @endunless
+                class="form-input @unless($canManageCredit ?? false) bg-slate-100 text-slate-600 cursor-not-allowed @endunless" />
 
-            @unless($canManageCredit)
+            @unless($canManageCredit ?? false)
                 <p class="mt-1 text-xs text-slate-500">
                     El plazo de crédito solo puede ser modificado por un usuario con permiso de crédito.
                 </p>
@@ -443,12 +448,9 @@
         </h3>
     </x-slot:header>
 
-    @php
-        $routeosHasLocation = $customer->exists && $customer->hasLocation();
-        $routeosMapsUrl = $customer->exists ? $customer->google_maps_url : null;
-        $routeosWazeUrl = $customer->exists ? $customer->waze_url : null;
-    @endphp
-
+    {{-- RouteOS: la ubicación la resuelve el controlador (`routeosHasLocation`,
+         `routeosMapsUrl`, `routeosWazeUrl`). Antes se armaba con `@php` dentro
+         de la vista, lo que dejaba esas variables sin definir. --}}
     <p class="mb-4 text-sm text-slate-500">
         Coordenadas de visita para RouteOS. Use el botón para capturar su ubicación actual desde el dispositivo, o escríbalas manualmente.
     </p>
@@ -518,15 +520,15 @@
 
         <p id="geo-status" class="hidden rounded-lg px-3 py-2 text-xs sm:text-sm"></p>
 
-        @if ($routeosHasLocation)
+        @if ($routeosHasLocation ?? false)
             <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-                @if ($routeosMapsUrl)
+                @if ($routeosMapsUrl ?? null)
                     <a href="{{ $routeosMapsUrl }}" target="_blank" rel="noopener"
                         class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
                         Google Maps
                     </a>
                 @endif
-                @if ($routeosWazeUrl)
+                @if ($routeosWazeUrl ?? null)
                     <a href="{{ $routeosWazeUrl }}" target="_blank" rel="noopener"
                         class="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50">
                         Waze
@@ -537,7 +539,7 @@
 
     </div>
 
-    @if ($routeosHasLocation && $customer->isLocationValidated())
+    @if (($routeosHasLocation ?? false) && $customer->isLocationValidated())
         <p class="mt-3 text-xs text-slate-500">
             Ubicación validada
             {{ $customer->location_validated_at?->format('d/m/Y H:i') }}
