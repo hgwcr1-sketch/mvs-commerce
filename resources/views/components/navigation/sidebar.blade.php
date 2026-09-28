@@ -212,6 +212,17 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
     @endcanany
 
 
+    {{-- PLANILLA --}}
+    @can('planilla.empleados.ver')
+
+        <x-navigation.item
+            route="planilla.empleados.index"
+            icon="users"
+            label="Planilla"
+            :active="request()->routeIs('planilla.*')" />
+
+    @endcan
+
 </nav>
 
     {{-- FOOTER --}}
