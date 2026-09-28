@@ -830,6 +830,30 @@ Route::resource('transferencias', TransferController::class)
             Route::patch('/{cashRegister}/estado', [CashRegisterController::class, 'toggleStatus'])->name('toggle-status');
         });
 
+Route::get('/planilla/empleados', [\App\Http\Controllers\PayrollEmployeeController::class, 'index'])
+    ->middleware(['active.branch', 'permission:planilla.empleados.ver'])
+    ->name('planilla.empleados.index');
+
+Route::get('/planilla/empleados/crear', [\App\Http\Controllers\PayrollEmployeeController::class, 'create'])
+    ->middleware(['active.branch', 'permission:planilla.empleados.crear'])
+    ->name('planilla.empleados.create');
+
+Route::post('/planilla/empleados', [\App\Http\Controllers\PayrollEmployeeController::class, 'store'])
+    ->middleware(['active.branch', 'permission:planilla.empleados.crear'])
+    ->name('planilla.empleados.store');
+
+Route::get('/planilla/planillas', [\App\Http\Controllers\PayrollController::class, 'index'])
+    ->middleware(['active.branch', 'permission:planilla.planillas.ver'])
+    ->name('planilla.planillas.index');
+
+Route::get('/planilla/planillas/crear', [\App\Http\Controllers\PayrollController::class, 'create'])
+    ->middleware(['active.branch', 'permission:planilla.planillas.crear'])
+    ->name('planilla.planillas.create');
+
+Route::post('/planilla/planillas', [\App\Http\Controllers\PayrollController::class, 'store'])
+    ->middleware(['active.branch', 'permission:planilla.planillas.crear'])
+    ->name('planilla.planillas.store');
+
     Route::resource('agenda', AgendaController::class);
 
     Route::prefix('centro-de-datos')->name('data-center.')->group(function () {

@@ -1,0 +1,74 @@
+name: Payroll PostgreSQL Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mvstest
+          POSTGRES_USER: mvstest
+          POSTGRES_PASSWORD: mvstest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U mvstest -d mvstest"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql, gd
+          ini-values: post_max_size=256M, memory_limit=512M
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Generate application key
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run migrations
+        run: php artisan migrate --force
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: mvstest
+          DB_USERNAME: mvstest
+          DB_PASSWORD: mvstest
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build Vite assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run targeted payroll tests
+        timeout-minutes: 5
+        run: php artisan test tests/Unit/PayrollTenantContextTest.php tests/Unit/EmployeeMigrationTest.php tests/Unit/PayrollMigrationTest.php tests/Unit/PayrollDetailMigrationTest.php tests/Unit/PayrollEmployeeServiceTest.php tests/Unit/PayrollServiceTest.php tests/Feature/PayrollEmpleadosRouteTest.php tests/Feature/PayrollEmpleadosStoreRouteTest.php tests/Feature/PayrollEmpleadosCreateRouteTest.php tests/Feature/PayrollPlanillasRouteTest.php tests/Feature/PayrollPlanillasStoreRouteTest.php tests/Feature/PayrollPlanillasCreateRouteTest.php --compact
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: mvstest
+          DB_USERNAME: mvstest
+          DB_PASSWORD: mvstest

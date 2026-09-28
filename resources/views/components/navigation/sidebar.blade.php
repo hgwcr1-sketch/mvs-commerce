@@ -375,6 +375,27 @@
 
     </button>
 
+    {{-- PLANILLA --}}
+    @can('planilla.empleados.ver')
+
+        <x-navigation.item
+            route="planilla.empleados.index"
+            icon="users"
+            label="Planilla"
+            :active="request()->routeIs('planilla.empleados*')" />
+
+    @endcan
+
+    @can('planilla.planillas.ver')
+
+        <x-navigation.item
+            route="planilla.planillas.index"
+            icon="file-text"
+            label="Planillas"
+            :active="request()->routeIs('planilla.planillas*')" />
+
+    @endcan
+
 </nav>
 
     {{-- FOOTER --}}
