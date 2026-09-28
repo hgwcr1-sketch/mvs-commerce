@@ -121,7 +121,7 @@
             @endif
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'conexion']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
-                <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). La conexión la administra MVS; aquí solo registra sus credenciales.</p>
+                <p class="text-sm text-slate-600">Ingrese las credenciales necesarias para conectar MVS Commerce con Hacienda.</p>
                 <div>
                     <span class="text-sm font-bold">Ambiente</span>
                     <div class="mt-2 space-y-2">
@@ -165,7 +165,7 @@
             @if($config->hasPending())
                 <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">Hay cambios pendientes: al verificar con éxito se activan. Si falla, la conexión actual sigue intacta.</div>
             @endif
-            <p class="mt-4 text-sm text-slate-600">Comprobamos la conexión con Hacienda <strong>sin emitir ningún documento</strong> y sin consumir cuota.</p>
+            <p class="mt-4 text-sm text-slate-600">Comprobamos que su conexión fiscal esté correctamente configurada, sin emitir ningún documento ni consumir cuota.</p>
             <form method="POST" action="{{ route('fiscal.verify') }}" class="mt-4">
                 @csrf
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Verificar conexión</button>
@@ -188,20 +188,22 @@
                     </select>
                 </div>
                 <label class="flex min-h-[44px] items-center gap-2 text-sm">
-                    <input type="checkbox" name="auto_emit_enabled" value="1" @checked(old('auto_emit_enabled', $config->auto_emit_enabled)) class="h-5 w-5"> Emitir automáticamente desde POS cuando la licencia lo permite
+                    <input type="checkbox" name="auto_emit_enabled" value="1" @checked(old('auto_emit_enabled', $config->auto_emit_enabled)) class="h-5 w-5"> Emitir automáticamente al completar una venta en el POS
                 </label>
                 <label class="flex min-h-[44px] items-center gap-2 text-sm">
                     <input type="checkbox" name="notify_receptor_email" value="1" @checked(old('notify_receptor_email', $config->notify_receptor_email)) class="h-5 w-5"> Avisar por correo al receptor cuando esté disponible
                 </label>
                 <p class="text-xs text-slate-500">El tiquete interno nunca sale a Hacienda ni consume cuota.</p>
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y terminar</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y continuar</button>
                 <a href="{{ route('fiscal.setup', ['step' => 'verificar']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
             </form>
         @else
             <p class="mt-4 text-sm text-slate-600">Revise que todo esté correcto antes de finalizar. Puede volver a cualquier paso sin perder datos.</p>
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
                 <div class="flex justify-between gap-3"><dt>Empresa</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }} <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
-                <div class="flex justify-between gap-3"><dt>Identificación</dt><dd class="font-bold text-right">{{ $company->identification_number ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Actividad económica</dt><dd class="font-bold text-right">{{ $config->economic_activity ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Ubicación fiscal</dt><dd class="font-bold text-right">{{ $locationComplete ? 'Completa' : 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }} <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
                 <div class="flex justify-between gap-3"><dt>Conexión</dt><dd class="font-bold text-right">{{ $config->hasCredentials() ? 'Credenciales registradas' : 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at && !$config->hasPending() ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>

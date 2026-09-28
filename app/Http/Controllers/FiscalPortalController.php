@@ -149,6 +149,7 @@ class FiscalPortalController extends Controller
                 ? 'Configuración de Facturación Electrónica'
                 : 'Conectar facturación',
             'providers' => $this->providerOptions(),
+            'locationComplete' => $company->province_id !== null && $company->canton_id !== null && $company->district_id !== null,
             'provinces' => \App\Models\Province::orderBy('id')->get(),
             'cantons' => \App\Models\Canton::orderBy('province_id')->orderBy('id')->get(),
             'districts' => \App\Models\District::orderBy('canton_id')->orderBy('id')->get(),
@@ -386,7 +387,7 @@ class FiscalPortalController extends Controller
                 'resolve' => null,
             ],
             [
-                'label' => 'Última comunicación con Hacienda',
+                'label' => 'Actividad con Hacienda',
                 'ok' => $latest !== null && $latest->status === 'accepted',
                 'detail' => $this->haciendaActivity($latest),
                 'resolve' => $latest !== null ? 'historial' : null,
@@ -410,7 +411,7 @@ class FiscalPortalController extends Controller
     private function haciendaActivity(?ElectronicDocument $latest): string
     {
         if ($latest === null) {
-            return 'Sin comunicaciones todavía.';
+            return 'Aún no se han enviado documentos.';
         }
 
         $when = $latest->updated_at->format('d/m/Y H:i');

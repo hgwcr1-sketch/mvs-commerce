@@ -2,6 +2,10 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Corrección final de prueba manual del configurador fiscal (2026-09-28, rama feature/factura-electronica)
+
+Textos: Paso 2 "Ingrese las credenciales necesarias para conectar MVS Commerce con Hacienda", Paso 3 "Comprobamos que su conexión fiscal esté correctamente configurada, sin emitir ningún documento ni consumir cuota" (sin presentar auth/verify como comunicación con Hacienda), Paso 4 "Emitir automáticamente al completar una venta en el POS" + "Guardar y continuar"; Paso 5 agrega read-only actividad económica, ubicación fiscal (Completa/Pendiente) y sucursal/terminal. Diagnóstico Master: "Actividad con Hacienda: Aún no se han enviado documentos." separado de "Última comprobación". Auditoría de ubicación: obligatorios solo identificación + nombre fiscal + credenciales (mapper + `identityComplete`); provincia/cantón/distrito, actividad y sucursal/terminal son informativos y no viajan en payloads (−37 = configuración del emisor en el proveedor); regla documentada. Evidencia: `FiscalPortalTest` 37/37, `FiscalMasterTest` 15/15, `FiscalAdjustmentTest` 34/34, `FiscalConsumptionTest` 16/16, CERO HTTP real, `git diff --check` limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
 ## Pulido final configurador fiscal (2026-09-27, rama feature/factura-electronica)
 
 Causa CTA fantasma: CSS desactualizado (rebuild Vite); títulos por estado; cadena 1→5 con Paso 5 "Revisar y finalizar" real (preferencias→confirmación→finalizar), mensajes por paso y Anterior en cada paso; pendiente oculta fecha vieja de verificación; desconexión en Zona de seguridad; Series solo en avanzada. Evidencia: portal+master 49/49, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.

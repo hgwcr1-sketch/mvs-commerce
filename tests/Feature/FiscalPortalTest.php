@@ -807,6 +807,128 @@ class FiscalPortalTest extends TestCase
         $this->assertStringContainsString('Verificación pendiente', $html);
     }
 
+    public function test_wizard_texts_review_location_rule_and_activity(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $conexion = $this->get(route('fiscal.setup', ['step' => 'conexion']))->getContent();
+        $this->assertStringContainsString('Ingrese las credenciales necesarias para conectar MVS Commerce', $conexion);
+        $this->assertStringNotContainsString('La conexión la administra MVS', $conexion);
+
+        $verificar = $this->get(route('fiscal.setup', ['step' => 'verificar']))->getContent();
+        $this->assertStringContainsString('correctamente configurada,', $verificar);
+        $this->assertStringContainsString('sin emitir ningún documento ni consumir cuota', $verificar);
+        $this->assertStringNotContainsString('Comprobamos la conexión con Hacienda', $verificar);
+        $this->assertStringNotContainsString('FacturaEnCR', $verificar);
+
+        $prefs = $this->get(route('fiscal.setup', ['step' => 'preferencias']))->getContent();
+        $this->assertStringContainsString('al completar una venta en el POS', $prefs);
+        $this->assertStringContainsString('Guardar y continuar', $prefs);
+        $this->assertStringNotContainsString('Guardar y terminar', $prefs);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $review = $this->get(route('fiscal.setup', ['step' => 'confirmacion']))->getContent();
+        $this->assertStringContainsString('Actividad económica', $review);
+        $this->assertStringContainsString('Ubicación fiscal', $review);
+        $this->assertStringContainsString('Sucursal / Terminal', $review);
+        $this->assertMatchesRegularExpression('#<dt>Ubicación fiscal</dt><dd[^>]*>Pendiente</dd>#', $review);
+        $this->assertStringNotContainsString('facturaencr', $review);
+        $this->assertStringNotContainsString('efk_K', $review);
+        $this->assertStringNotContainsString('efs_S', $review);
+
+        $index = $this->get(route('fiscal.index'))->getContent();
+        $this->assertStringContainsString('Actividad con Hacienda', $index);
+        $this->assertStringContainsString('Aún no se han enviado documentos.', $index);
+        $this->assertStringNotContainsString('Sin comunicaciones todavía', $index);
+        $this->assertStringNotContainsString('Última comunicación con Hacienda', $index);
+        $this->assertStringNotContainsString('facturaencr', $index);
+        $this->assertStringNotContainsString('efk_K', $index);
+        $this->assertStringNotContainsString('efs_S', $index);
+
+        $this->assertSame(CompanyFiscalConfigService::STATUS_READY, $service->status($company->fresh()));
+        $this->assertNull($company->fresh()->province_id);
+    }
+
+    public function test_emitter_location_is_informational_not_a_blocker(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '3101000000',
+            'legal_name' => 'Demo S.A.',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'conexion']));
+
+        $this->assertNull($company->fresh()->province_id);
+        $this->assertNull($company->fresh()->canton_id);
+        $this->assertNull($company->fresh()->district_id);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $this->assertSame(CompanyFiscalConfigService::STATUS_READY, $service->status($company->fresh()));
+
+        $review = $this->get(route('fiscal.setup', ['step' => 'confirmacion']))->getContent();
+        $this->assertMatchesRegularExpression('#<dt>Ubicación fiscal</dt><dd[^>]*>Pendiente</dd>#', $review);
+
+        $country = \App\Models\Country::create([
+            'name' => 'Costa Rica ' . uniqid(), 'iso2' => strtoupper(substr(md5(uniqid()), 0, 2)),
+            'iso3' => strtoupper(substr(md5(uniqid()), 0, 3)), 'phone_code' => '+506',
+            'currency' => 'CRC', 'currency_symbol' => '₡', 'is_default' => false, 'is_active' => true,
+        ]);
+        $province = \App\Models\Province::create(['country_id' => $country->id, 'code' => '1', 'name' => 'San José', 'is_active' => true]);
+        $canton = \App\Models\Canton::create(['province_id' => $province->id, 'code' => '101', 'name' => 'San José', 'is_active' => true]);
+        $district = \App\Models\District::create(['province_id' => $province->id, 'canton_id' => $canton->id, 'code' => '10101', 'name' => 'Carmen', 'is_active' => true]);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '3101000000',
+            'legal_name' => 'Demo S.A.',
+            'province_id' => $province->id,
+            'canton_id' => $canton->id,
+            'district_id' => $district->id,
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'conexion']));
+
+        $complete = $this->get(route('fiscal.setup', ['step' => 'confirmacion']))->getContent();
+        $this->assertMatchesRegularExpression('#<dt>Ubicación fiscal</dt><dd[^>]*>Completa</dd>#', $complete);
+    }
+
+    public function test_master_never_claims_ready_without_mandatory_identity(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [
+            'identification_type' => '02',
+            'identification_number' => '',
+            'legal_name' => '',
+        ])->assertSessionHasErrors(['identification_number', 'legal_name']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $this->assertSame(CompanyFiscalConfigService::STATUS_INCOMPLETE, $service->status($company->fresh()));
+
+        $index = $this->get(route('fiscal.index'))->getContent();
+        $this->assertStringContainsString('Configuración incompleta', $index);
+        $this->assertStringContainsString('Faltan datos fiscales de la empresa.', $index);
+        $this->assertStringNotContainsString('Verificada y lista para emitir', $index);
+    }
+
     public function test_master_has_single_series_access(): void
     {
         [$company, $branch] = $this->fiscalContext();

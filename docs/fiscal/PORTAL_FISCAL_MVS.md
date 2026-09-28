@@ -133,3 +133,32 @@ empresa, ambiente, tipo de cambio y resultado; jamás secretos.
 - Diagnóstico checklist con enlace "Resolver" al paso exacto del wizard.
 - Identidad MVS reutilizada (layout, cards, tipografía y espaciados
   existentes; dorado #D4AF37, negro/blanco, sin índigo ni fuentes nuevas).
+
+## Reglas de datos obligatorios del emisor (2026-09-28)
+
+Auditoría sobre código y decisiones existentes, sin inventar requisitos:
+
+- **Obligatorios para emitir:** identificación (`identification_type`,
+  `identification_number`) y nombre fiscal (`legal_name`) + credenciales
+  verificadas. Son los únicos que `FacturaencrInvoiceMapper::validate()`
+  exige del emisor, los que `CompanyFiscalConfigService::identityComplete()`
+  comprueba y los que el Paso 1 ya envía como `required` (validación
+  bloqueante: sin ellos no se avanza ni se llega a `ready`).
+- **Informativos (NO bloquean):** provincia/cantón/distrito, otras señas,
+  actividad económica y sucursal/terminal. Son `nullable` en
+  `FiscalPortalController::storeIdentity()` y no viajan en ningún payload
+  MVS: el mapper no los exige ni los envía. Evidencia: `docs/fiscal/NC03_ND02_DESIGN.md`
+  §9 — los rechazos por ubicación del emisor (-37) pertenecen a la
+  configuración del emisor/patrón DGT resuelta en el proveedor, no al
+  payload MVS (FE01/TE04 se aceptaron igual); `docs/ESTADO_ACTUAL.md`
+  confirma "-37 es configuración del emisor sandbox".
+- Por eso el Paso 5 muestra "Ubicación fiscal: Completa/Pendiente" como
+  resumen read-only sin impedir finalizar, y el Master solo declara
+  "Verificada y lista para emitir" cuando identidad + credenciales +
+  verificación están completas; si falta identidad obligatoria el estado
+  es Incompleto y esa frase no aparece.
+- **Verificación ≠ actividad documental:** `auth/verify` comprueba la
+  conexión sin emitir, por lo que no se contabiliza como comunicación con
+  Hacienda. El diagnóstico separa "Última comprobación" (verify) de
+  "Actividad con Hacienda" (documentos reales: "Aún no se han enviado
+  documentos." hasta que exista un ElectronicDocument).
