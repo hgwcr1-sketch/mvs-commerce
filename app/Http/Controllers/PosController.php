@@ -18,6 +18,7 @@ use App\Models\Sale;
 use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
+use App\Services\CustomerTaxpayerActivityService;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
 use App\Services\PaymentMethodProvisioner;
@@ -419,6 +420,14 @@ class PosController extends Controller
             'points' => 0,
             'is_active' => true,
         ]);
+
+        // Mismas reglas que el módulo de Clientes: solo se persisten las
+        // actividades económicas aplicadas explícitamente desde la consulta
+        // de Hacienda. Ninguna llamada externa participa aquí.
+        if (is_array($data['taxpayer_activities'] ?? null)) {
+            app(CustomerTaxpayerActivityService::class)
+                ->syncForCustomer($customer, $data['taxpayer_activities']);
+        }
 
         $portal = null;
         if ($createPortalAccess) {

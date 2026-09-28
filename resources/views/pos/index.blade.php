@@ -1001,6 +1001,49 @@
                         <p x-show="identStatusText()" x-text="identStatusText()" role="status" aria-live="polite" class="mt-1 text-xs font-medium" :class="identStatusClass()"></p>
                     </div>
 
+                    {{-- Propuesta oficial de Hacienda: misma consulta y mismas
+                         reglas que el módulo de Clientes. Se aplica al guardar;
+                         nada se guarda sin que aparezca en esta lista. --}}
+                    <div class="md:col-span-2" x-show="quickCustomer.ident.status === 'found'" x-cloak>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm font-semibold text-slate-700">Datos oficiales de Hacienda</p>
+                            <p class="mt-1 text-xs text-slate-600"
+                               x-text="[quickCustomer.ident.regime ? 'Régimen: ' + quickCustomer.ident.regime : '', quickCustomer.ident.situation ? 'Situación: ' + quickCustomer.ident.situation : ''].filter(Boolean).join(' · ')"></p>
+
+                            <template x-if="quickCustomer.ident.activities.length">
+                                <div class="mt-3">
+                                    <p class="text-xs font-semibold uppercase text-slate-500">Actividades económicas</p>
+                                    <ul class="mt-2 flex flex-wrap gap-2">
+                                        <template x-for="activity in quickCustomer.ident.activities" :key="activity.code">
+                                            <li class="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                                                <span x-text="activity.code + (activity.description && activity.description !== activity.code ? ' — ' + activity.description : '')"></span>
+                                                <button type="button"
+                                                        @click="quickCustomer.ident.applied = quickCustomer.ident.applied.filter(item => item.code !== activity.code)"
+                                                        x-show="quickCustomer.ident.applied.some(item => item.code === activity.code)"
+                                                        class="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                                                        aria-label="Quitar actividad">×</button>
+                                            </li>
+                                        </template>
+                                    </ul>
+
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <button type="button" @click="quickCustomer.ident.applied = quickCustomer.ident.activities.slice()"
+                                                class="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                                            Aplicar todas
+                                        </button>
+                                        <button type="button" @click="quickCustomer.ident.applied = []"
+                                                class="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                                            Limpiar selección
+                                        </button>
+                                    </div>
+
+                                    <p class="mt-2 text-xs text-slate-500"
+                                       x-text="quickCustomer.ident.applied.length + ' actividad(es) se guardarán con el cliente.'"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-slate-700">Teléfono</label>
                         <input x-model="quickCustomer.form.phone" maxlength="30" class="w-full rounded-xl border border-slate-300 px-4 py-3">
@@ -1188,7 +1231,7 @@ document.addEventListener('alpine:init', () => {
             errors: {},
             message: '',
             delivery: null,
-            ident: { status: '', name: '', timer: null, token: 0 },
+            ident: { status: '', name: '', timer: null, token: 0, regime: '', situation: '', activities: [], applied: [] },
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
@@ -2519,22 +2562,28 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
             this.quickCustomer.delivery = null;
-            this.quickCustomer.ident.status = '';
-            this.quickCustomer.ident.name = '';
+            this.resetTaxpayerProposal();
         },
         identificationInput() {
             const form = this.quickCustomer.form;
             form.identification = window.MvsIdentification.format(form.identification_type, form.identification);
-            this.quickCustomer.ident.status = '';
-            this.quickCustomer.ident.name = '';
+            this.resetTaxpayerProposal();
             this.scheduleTaxpayerLookup();
         },
         identificationTypeChange() {
             const form = this.quickCustomer.form;
             form.identification = window.MvsIdentification.transform(form.identification_type, form.identification);
-            this.quickCustomer.ident.status = '';
-            this.quickCustomer.ident.name = '';
+            this.resetTaxpayerProposal();
             this.scheduleTaxpayerLookup();
+        },
+        resetTaxpayerProposal() {
+            const state = this.quickCustomer.ident;
+            state.status = '';
+            state.name = '';
+            state.regime = '';
+            state.situation = '';
+            state.activities = [];
+            state.applied = [];
         },
         scheduleTaxpayerLookup() {
             const identification = window.MvsIdentification;
@@ -2559,6 +2608,10 @@ document.addEventListener('alpine:init', () => {
 
             state.status = 'loading';
             state.name = '';
+            state.regime = '';
+            state.situation = '';
+            state.activities = [];
+            state.applied = [];
 
             try {
                 const data = await identification.consult(type, value);
@@ -2567,6 +2620,10 @@ document.addEventListener('alpine:init', () => {
                 if (data.status === 'found') {
                     state.status = 'found';
                     state.name = data.name || '';
+                    state.regime = data.regime || '';
+                    state.situation = data.situation || '';
+                    state.activities = Array.isArray(data.activities) ? data.activities.filter(item => item && item.code) : [];
+                    state.applied = state.activities.slice();
                     if (!this.quickCustomer.form.name.trim()) this.quickCustomer.form.name = data.name;
                     return;
                 }
@@ -2600,8 +2657,7 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.open = false;
             this.quickCustomer.delivery = null;
             this.quickCustomer.form = { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false };
-            this.quickCustomer.ident.status = '';
-            this.quickCustomer.ident.name = '';
+            this.resetTaxpayerProposal();
         },
         async storeQuickCustomer() {
             if (this.quickCustomer.saving || !this.quickCustomer.form.name.trim()) return;
@@ -2609,6 +2665,17 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.errors = {};
             this.quickCustomer.message = '';
             try {
+                const requestBody = Object.assign({}, this.quickCustomer.form);
+
+                // Solo las actividades que el cajero dejó aplicadas viajan al
+                // servidor; una consulta de Hacienda nunca escribe por sí sola.
+                if (this.quickCustomer.ident.applied.length) {
+                    requestBody.taxpayer_activities = this.quickCustomer.ident.applied.map(item => ({
+                        code: item.code,
+                        description: item.description || '',
+                    }));
+                }
+
                 const response = await fetch({{ Illuminate\Support\Js::from(route('pos.customers.quick-store', [], false)) }}, {
                     method: 'POST',
                     headers: {
@@ -2616,7 +2683,7 @@ document.addEventListener('alpine:init', () => {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
-                    body: JSON.stringify(this.quickCustomer.form),
+                    body: JSON.stringify(requestBody),
                 });
                 const payload = await this.readFetchResponse(response);
                 if (response.status === 422) {

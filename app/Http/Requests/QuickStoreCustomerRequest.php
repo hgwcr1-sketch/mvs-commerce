@@ -3,8 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Rules\ValidIdentification;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 
@@ -59,12 +59,15 @@ class QuickStoreCustomerRequest extends FormRequest
             'mobile' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:150'],
             'create_portal_access' => ['nullable', 'boolean'],
+            'taxpayer_activities' => ['nullable', 'array', 'max:50'],
+            'taxpayer_activities.*.code' => ['required_with:taxpayer_activities', 'string', 'max:20', 'regex:/^\d{1,20}$/'],
+            'taxpayer_activities.*.description' => ['nullable', 'string', 'max:255'],
             'company_id' => ['prohibited'],
             'is_active' => ['prohibited'],
             'points' => ['prohibited'],
             'credit_limit' => ['prohibited'],
-'credit_days' => ['prohibited'],
-'price_level' => ['prohibited'],
+            'credit_days' => ['prohibited'],
+            'price_level' => ['prohibited'],
         ];
     }
 
