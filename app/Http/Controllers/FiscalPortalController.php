@@ -86,6 +86,8 @@ class FiscalPortalController extends Controller
             ->limit(6)
             ->get();
 
+        $consumption = $this->consumptionCard($license, $usage);
+
         return view('fiscal.index', [
             'company' => $company,
             'license' => $license,
@@ -94,7 +96,7 @@ class FiscalPortalController extends Controller
             'statusLabel' => $this->statusLabel($status),
             'environmentLabel' => $config->isProduction() ? 'Producción' : 'Pruebas',
             'usage' => $usage,
-            'quotaText' => $this->quotaText($license, $usage),
+            'consumption' => $consumption,
             'recent' => $recent,
             'latest' => $latest,
             'counts' => $counts,
@@ -291,42 +293,48 @@ class FiscalPortalController extends Controller
         };
     }
 
-    private function quotaText(CompanyLicense $license, array $usage): string
+    /**
+     * @return array{used: int, quota: ?int, left: ?int, percent: int, unlimited: bool, overage: int}
+     */
+    private function consumptionCard(CompanyLicense $license, array $usage): array
     {
-        if (! $license->fiscal_enabled) {
-            return '';
+        if (! $license->fiscal_enabled || $license->fiscal_monthly_quota === null) {
+            return [
+                'used' => $usage['total'], 'quota' => null, 'left' => null,
+                'percent' => $usage['total'] > 0 ? 100 : 0,
+                'unlimited' => true, 'overage' => $usage['overage'],
+            ];
         }
 
-        if ($license->fiscal_monthly_quota === null) {
-            return " Consumidos este mes: {$usage['total']} (sin límite).";
-        }
+        $quota = (int) $license->fiscal_monthly_quota;
 
-        $left = max(0, $license->fiscal_monthly_quota - $usage['total']);
-
-        return " Consumidos: {$usage['total']} de {$license->fiscal_monthly_quota} (disponibles: {$left}).";
+        return [
+            'used' => $usage['total'],
+            'quota' => $quota,
+            'left' => max(0, $quota - $usage['total']),
+            'percent' => $quota > 0 ? min(100, (int) round($usage['total'] / $quota * 100)) : 0,
+            'unlimited' => false,
+            'overage' => $usage['overage'],
+        ];
     }
 
     /**
-     * @return array<int, array{label: string, ok: bool, detail: string}>
+     * @return array<int, array{label: string, ok: bool, detail: string, resolve: ?string}>
      */
     private function diagnostic(Company $company, CompanyLicense $license, CompanyFiscalConfig $config, ?ElectronicDocument $latest): array
     {
         $seriesCount = \App\Models\FiscalSeries::query()->where('company_id', $company->id)->count();
 
+        $configState = $this->configurationState($company, $config);
+
         return [
-            [
-                'label' => 'Conexión',
-                'ok' => $config->last_verified_at !== null && $config->last_error_code === null,
-                'detail' => $config->last_verified_at !== null
-                    ? 'Verificada el ' . $config->last_verified_at->format('d/m/Y H:i') . '.'
-                    : 'Sin verificar. Complete la conexión.',
-            ],
             [
                 'label' => 'Licencia',
                 'ok' => (bool) $license->fiscal_enabled,
                 'detail' => $license->fiscal_enabled
                     ? 'Módulo fiscal habilitado por Panel Maestro.'
                     : 'Módulo no habilitado. El POS solo emite tiquetes internos.',
+                'resolve' => null,
             ],
             [
                 'label' => 'Datos fiscales',
@@ -334,18 +342,25 @@ class FiscalPortalController extends Controller
                 'detail' => $this->configs->identityComplete($company)
                     ? 'Identificación y nombre fiscal registrados.'
                     : 'Faltan datos fiscales de la empresa.',
+                'resolve' => $this->configs->identityComplete($company) ? null : 'datos',
             ],
             [
-                'label' => 'Conexión fiscal',
+                'label' => 'Configuración fiscal',
+                'ok' => $configState === 'verified',
+                'detail' => match ($configState) {
+                    'verified' => 'Verificada y lista para emitir.',
+                    'pending' => 'Pendiente de verificar.',
+                    default => 'Incompleta.',
+                },
+                'resolve' => $configState === 'verified' ? null : 'verificar',
+            ],
+            [
+                'label' => 'Credenciales de conexión',
                 'ok' => $config->hasCredentials(),
                 'detail' => $config->hasCredentials()
                     ? 'Credenciales registradas (' . ($config->maskedKey() ?? '—') . ').'
                     : 'Faltan credenciales de conexión.',
-            ],
-            [
-                'label' => 'Canal fiscal',
-                'ok' => true,
-                'detail' => 'Conectado con Hacienda.',
+                'resolve' => $config->hasCredentials() ? null : 'conexion',
             ],
             [
                 'label' => 'Series',
@@ -353,15 +368,43 @@ class FiscalPortalController extends Controller
                 'detail' => $seriesCount > 0
                     ? "{$seriesCount} serie(s) observada(s), sin resets."
                     : 'Sin series observadas todavía.',
+                'resolve' => 'series',
             ],
             [
                 'label' => 'Última comunicación con Hacienda',
                 'ok' => $latest !== null && $latest->status === 'accepted',
-                'detail' => $latest !== null
-                    ? (self::STATUS_LABELS[$latest->status] ?? $latest->status) . ' el ' . $latest->updated_at->format('d/m/Y H:i') . '.'
-                    : 'Aún no se ha emitido ningún documento.',
+                'detail' => $this->haciendaActivity($latest),
+                'resolve' => $latest !== null ? 'historial' : null,
             ],
         ];
+    }
+
+    private function configurationState(Company $company, CompanyFiscalConfig $config): string
+    {
+        if (! $this->configs->identityComplete($company) || ! $config->hasCredentials()) {
+            return 'incomplete';
+        }
+
+        if ($config->last_error_code !== null || $config->last_verified_at === null) {
+            return 'pending';
+        }
+
+        return 'verified';
+    }
+
+    private function haciendaActivity(?ElectronicDocument $latest): string
+    {
+        if ($latest === null) {
+            return 'Sin comunicaciones todavía.';
+        }
+
+        $when = $latest->updated_at->format('d/m/Y H:i');
+
+        return match ($latest->status) {
+            'accepted' => "Último documento aceptado el {$when}.",
+            'rejected' => "Último documento rechazado el {$when}.",
+            default => 'Hay documentos en proceso.',
+        };
     }
 
     public function series(): View

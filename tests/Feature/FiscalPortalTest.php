@@ -540,13 +540,17 @@ class FiscalPortalTest extends TestCase
             }
         }
     }
-public function test_master_shows_complete_or_manage_action(): void
+    public function test_master_shows_complete_or_manage_action(): void
     {
         [$company, $branch] = $this->fiscalContext();
         $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
-        $this->get(route('fiscal.index'))->assertSee('Completar configuración');
+        $incomplete = $this->get(route('fiscal.index'));
+        $incomplete->assertOk();
+        $incomplete->assertSee('Configuración incompleta');
+        $incomplete->assertSee('Completar configuración');
+        $incomplete->assertSee(route('fiscal.setup', ['step' => 'datos']), false);
 
         $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
         $service = app(CompanyFiscalConfigService::class);
@@ -555,8 +559,51 @@ public function test_master_shows_complete_or_manage_action(): void
         $this->post(route('fiscal.verify'));
 
         $ready = $this->get(route('fiscal.index'));
+        $ready->assertSee('Facturación electrónica configurada');
         $ready->assertSee('Administrar configuración');
         $ready->assertSee('Actualizar conexión');
         $ready->assertSee('Centro de Facturación Electrónica');
+        $ready->assertSee('Verificada y lista para emitir');
+        $ready->assertDontSee('Sin verificar');
+    }
+
+    public function test_viewer_without_edit_hides_actions(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver']);
+
+        $response = $this->get(route('fiscal.index'));
+        $response->assertOk();
+        $response->assertDontSee('Completar configuración');
+        $response->assertDontSee('Administrar configuración');
+        $response->assertDontSee('Actualizar conexión');
+    }
+
+    public function test_consumption_card_and_badges(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company, ['fiscal_monthly_quota' => 50]);
+        $this->actingUser($company, $branch, ['fiscal.ver']);
+
+        ElectronicDocument::create([
+            'company_id' => $company->id, 'provider' => 'facturaencr', 'document_type' => '01',
+            'environment' => 'sandbox', 'idempotency_key' => md5('c1' . uniqid()), 'status' => 'accepted',
+            'consecutivo' => '00100001010000000001',
+        ]);
+        \App\Models\FiscalConsumption::create([
+            'company_id' => $company->id,
+            'electronic_document_id' => ElectronicDocument::latest('id')->first()->id,
+            'document_type' => '01', 'period' => now()->startOfMonth()->toDateString(),
+            'classification' => 'included',
+        ]);
+
+        $response = $this->get(route('fiscal.index'));
+        $response->assertOk();
+        $response->assertSee('1 de 50 utilizados');
+        $response->assertSee('49 disponibles');
+        $response->assertSee('progressbar');
+        $response->assertSee('Aceptado');
+        $response->assertSee('Ver historial');
     }
 }

@@ -77,7 +77,6 @@ borrar historial. Auditoría (`fiscal_config_audits`): usuario, fecha,
 empresa, ambiente, tipo de cambio y resultado; jamás secretos.
 
 ## Fase 2 — Master (2026-09-27)
-
 - Onboarding completo: actividad económica + sucursal/terminal fiscales
   (3/5 dígitos, formato oficial) en el paso de datos; ubicación fiscal =
   campos existentes de Company; certificados/custodia quedan en el
@@ -102,3 +101,22 @@ empresa, ambiente, tipo de cambio y resultado; jamás secretos.
   conteos aceptados/rechazados/en proceso, consumo, series, diagnóstico
   extendido (licencia, datos, credenciales, proveedor, series, última
   respuesta) y detalle por documento con custodia.
+
+## Master visual MVS (2026-09-27)
+
+- Encabezado "Centro de Facturación Electrónica" con empresa secundaria,
+  badge de estado y CTA dorado a la derecha en desktop / full-width en
+  móvil: "Completar configuración" (incompleto) o "Administrar
+  configuración" + "Actualizar conexión" (configurado). Sin scroll
+  necesario en desktop.
+- Estados sin contradicción: CONFIGURACIÓN (Incompleta / Pendiente de
+  verificar / Verificada) separada de ACTIVIDAD HACIENDA (último aceptado
+  / rechazado / en proceso / sin comunicaciones). Nunca se afirma
+  conexión vigente por historial solo.
+- Consumo como tarjeta: "X de Y utilizados", disponibles, barra dorada y
+  desglose FE/TE/NC/ND (verde/rojo solo semántico).
+- Recientes con badges Aceptado/Rechazado/En proceso, consecutivo e
+  intento visibles según pantalla y enlace "Ver".
+- Diagnóstico checklist con enlace "Resolver" al paso exacto del wizard.
+- Identidad MVS reutilizada (layout, cards, tipografía y espaciados
+  existentes; dorado #D4AF37, negro/blanco, sin índigo ni fuentes nuevas).

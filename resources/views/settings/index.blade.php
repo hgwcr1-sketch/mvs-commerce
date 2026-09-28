@@ -21,7 +21,7 @@
                     <p class="font-semibold text-slate-800">Configuración fiscal</p>
                     <p class="text-sm text-slate-500">Conexión con Hacienda, ambiente, series y preferencias de Facturación Electrónica.</p>
                 </div>
-                <a href="{{ route('fiscal.index') }}" class="inline-flex min-h-[44px] items-center rounded-lg bg-[#D4AF37] px-5 font-semibold text-black">Abrir portal fiscal</a>
+                <a href="{{ route('fiscal.index') }}" class="inline-flex min-h-[44px] items-center rounded-lg bg-[#D4AF37] px-5 font-semibold text-black">Administrar</a>
             </div>
         </div>
     @endcan

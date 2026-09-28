@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Master fiscal marca MVS + rotación segura (2026-09-27, rama feature/factura-electronica)
+## Master visual MVS + CTA (2026-09-27, rama feature/factura-electronica)
 
-Master "Centro de Facturación Electrónica" con accesos Completar/Administrar/Actualizar + Configuración fiscal; wizard crear/editar de 9 bloques (ubicación con catálogo real); rotación por etapas (pendiente→verificar→activar, anterior intacta si falla, auditoría sin secretos, producción con confirmación, desconexión independiente sin borrar historial); proveedor oculto en las 5 vistas tenant (marca MVS, arquitectura intacta); diagnóstico neutro. Evidencia: portal+master+ajustes 71/71, core 47/47, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+Centro "Centro de Facturación Electrónica" con CTA dorado inmediato (Completar/Administrar + Actualizar conexión), tarjeta Configuración fiscal, estados Configuración vs Hacienda sin contradicción, consumo con barra dorada y desglose, recientes con badges y detalle, diagnóstico con Resolver al paso exacto. Solo UI/controlador-vista (motor intacto). Evidencia: portal 24/24, master+ajustes 49/49, core 43/43, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master fiscal marca MVS + rotación segura (2026-09-27, histórico, previo a visual/CTA)
+
+Master "Centro de Facturación Electrónica" con accesos Completar/Administrar/Actualizar + Configuración fiscal; wizard crear/editar de 9 bloques (ubicación con catálogo real); rotación por etapas (pendiente→verificar→activar, anterior intacta si falla, auditoría sin secretos, producción con confirmación, desconexión independiente sin borrar historial); proveedor oculto en las 5 vistas tenant (marca MVS, arquitectura intacta); diagnóstico neutro. Evidencia entonces: portal+master+ajustes 71/71, core 47/47, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
 
 ## Master Fiscal MVS fase 2 (2026-09-27, histórico, previo a marca/rotación)
 

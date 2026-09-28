@@ -9,7 +9,42 @@
 
     <section class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-7">
         <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Centro de Facturación Electrónica</p>
-        <h1 class="mt-2 text-2xl font-bold text-slate-950">{{ $company->trade_name }}</h1>
+
+        <div class="mt-2 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div class="min-w-0">
+                @if($status === 'ready')
+                    <p class="text-lg font-bold text-slate-950">Facturación electrónica configurada</p>
+                @else
+                    <p class="text-lg font-bold text-slate-950">Configuración incompleta</p>
+                @endif
+                <p class="mt-1 text-sm text-slate-600">{{ $company->legal_name ?: $company->trade_name }}{{ $company->identification_number ? ' · ' . $company->identification_number : '' }}</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                    <span class="rounded-full px-3 py-1 font-bold
+                        {{ $status === 'ready' ? 'bg-emerald-100 text-emerald-900' : ($status === 'attention' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900') }}">
+                        {{ $statusLabel }}
+                    </span>
+                    <span class="rounded-full px-3 py-1 font-bold {{ $config->isProduction() ? 'bg-slate-950 text-[#D4AF37]' : 'bg-slate-100 text-slate-700' }}">
+                        {{ $environmentLabel }}
+                    </span>
+                </div>
+            </div>
+            @can('fiscal.editar')
+                <div class="flex flex-col gap-2 md:items-end">
+                    @if($status === 'ready')
+                        <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
+                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95 md:w-auto">
+                            Administrar configuración
+                        </a>
+                        <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800 md:w-auto">Actualizar conexión</a>
+                    @elseif($status !== 'disabled')
+                        <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
+                           class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95 md:w-auto">
+                            Completar configuración
+                        </a>
+                    @endif
+                </div>
+            @endcan
+        </div>
 
         @if(session('status'))
             <div class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
@@ -28,18 +63,7 @@
                 La habilitación y la cuota las administra Panel Maestro.
             </div>
         @else
-            <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
-                <span class="rounded-full px-3 py-1 font-bold
-                    {{ $status === 'ready' ? 'bg-emerald-100 text-emerald-900' : ($status === 'attention' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900') }}">
-                    {{ $statusLabel }}
-                </span>
-                <span class="rounded-full px-3 py-1 font-bold {{ $config->isProduction() ? 'bg-slate-950 text-[#D4AF37]' : 'bg-slate-100 text-slate-700' }}">
-                    {{ $environmentLabel }}
-                </span>
-            </div>
-
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
-                <div class="flex justify-between gap-3"><dt>Emisor</dt><dd class="font-bold text-right">{{ $company->legal_name ?: $company->trade_name }} ({{ $company->identification_number ?: 'pendiente' }})</dd></div>
                 <div class="flex justify-between gap-3"><dt>Actividad económica</dt><dd class="font-bold text-right">{{ $config->economic_activity ?: 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Llave registrada</dt><dd class="font-bold text-right">{{ $config->maskedKey() ?: 'Pendiente' }}</dd></div>
@@ -53,38 +77,32 @@
             </div>
 
             <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-                <p class="font-bold">Consumo del mes{{ $quotaText }}</p>
-                @if(count($usage['by_type']) > 0)
-                    <ul class="mt-2 space-y-1">
-                        @foreach($usage['by_type'] as $type => $count)
-                            <li>{{ $typeLabels[$type] ?? ('Documento ' . $type) }}: <strong>{{ $count }}</strong></li>
-                        @endforeach
-                    </ul>
-                @endif
-                @if($usage['overage'] > 0)
-                    <p class="mt-2">Excedentes del mes: <strong>{{ $usage['overage'] }}</strong></p>
-                @endif
-            </div>
-        @endif
-
-        @can('fiscal.editar')
-            <div class="mt-5 flex flex-wrap gap-2">
-                @if($status === 'ready')
-                    <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-                       class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
-                        Administrar configuración
-                    </a>
-                    <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Actualizar conexión</a>
+                <p class="font-bold">Consumo del mes</p>
+                @if($consumption['unlimited'])
+                    <p class="mt-1">{{ $consumption['used'] }} utilizados (sin límite).</p>
                 @else
-                    <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-                       class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
-                        Completar configuración
-                    </a>
+                    <p class="mt-1"><strong>{{ $consumption['used'] }} de {{ $consumption['quota'] }} utilizados</strong> · {{ $consumption['left'] }} disponibles</p>
+                    <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuenow="{{ $consumption['percent'] }}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="h-full rounded-full bg-[#D4AF37]" style="width: {{ $consumption['percent'] }}%"></div>
+                    </div>
                 @endif
-                <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
-                <a href="{{ route('fiscal.switch') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Proveedor</a>
+                <ul class="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                    @foreach(['01' => 'FE', '04' => 'TE', '03' => 'NC', '02' => 'ND'] as $code => $short)
+                        <li>{{ $short }}: <strong>{{ $usage['by_type'][$code] ?? 0 }}</strong></li>
+                    @endforeach
+                </ul>
+                @if($consumption['overage'] > 0)
+                    <p class="mt-2">Excedentes del mes: <strong>{{ $consumption['overage'] }}</strong></p>
+                @endif
             </div>
-        @endcan
+
+            @can('fiscal.editar')
+                <div class="mt-4 flex flex-wrap gap-2 text-sm">
+                    <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
+                    <a href="{{ route('fiscal.switch') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Proveedor</a>
+                </div>
+            @endcan
+        @endif
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
@@ -100,18 +118,27 @@
                     <thead>
                         <tr class="text-left text-slate-500">
                             <th class="py-2 pr-3">Tipo</th>
+                            <th class="py-2 pr-3 hidden md:table-cell">Fecha</th>
+                            <th class="py-2 pr-3 hidden lg:table-cell">Consecutivo</th>
                             <th class="py-2 pr-3 hidden md:table-cell">Intento</th>
                             <th class="py-2 pr-3">Estado</th>
+                            <th class="py-2"><span class="sr-only">Detalle</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($recent as $doc)
                             <tr class="border-t border-slate-100">
-                                <td class="py-2 pr-3 font-bold">
-                                    <a href="{{ route('fiscal.documents.show', $doc) }}" class="underline decoration-amber-500">{{ $typeLabels[$doc->document_type] ?? $doc->document_type }}</a>
-                                </td>
+                                <td class="py-2 pr-3 font-bold">{{ $typeLabels[$doc->document_type] ?? $doc->document_type }}</td>
+                                <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->created_at->format('d/m/Y') }}</td>
+                                <td class="py-2 pr-3 hidden lg:table-cell font-mono text-xs">{{ $doc->consecutivo ?: '—' }}</td>
                                 <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->attempt_number }}</td>
-                                <td class="py-2 pr-3">{{ $statusLabels[$doc->status] ?? $doc->status }}</td>
+                                <td class="py-2 pr-3">
+                                    <span class="rounded-full px-2 py-0.5 text-xs font-bold
+                                        {{ $doc->status === 'accepted' ? 'bg-emerald-100 text-emerald-900' : ($doc->status === 'rejected' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900') }}">
+                                        {{ $statusLabels[$doc->status] ?? $doc->status }}
+                                    </span>
+                                </td>
+                                <td class="py-2"><a href="{{ route('fiscal.documents.show', $doc) }}" class="inline-flex min-h-[44px] items-center font-bold text-amber-700">Ver</a></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -125,8 +152,12 @@
         <ul class="mt-3 space-y-2 text-sm">
             @foreach($diagnostic as $row)
                 <li class="flex items-start gap-2">
-                    <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full {{ $row['ok'] ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">{{ $row['ok'] ? '✓' : '!' }}</span>
-                    <span><strong>{{ $row['label'] }}:</strong> {{ $row['detail'] }}</span>
+                    <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full {{ $row['ok'] ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">{{ $row['ok'] ? '✓' : '!' }}</span>
+                    <span class="min-w-0 flex-1"><strong>{{ $row['label'] }}:</strong> {{ $row['detail'] }}
+                        @if(!empty($row['resolve']))
+                            <a href="{{ $row['resolve'] === 'series' ? route('fiscal.series') : ($row['resolve'] === 'historial' ? route('fiscal.history') : route('fiscal.setup', ['step' => $row['resolve']])) }}" class="ml-1 inline-flex min-h-[44px] items-center font-bold text-amber-700">Resolver</a>
+                        @endif
+                    </span>
                 </li>
             @endforeach
         </ul>
