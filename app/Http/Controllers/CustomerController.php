@@ -437,8 +437,8 @@ class CustomerController extends Controller
                     'credit_days' => $before['credit_days'],
                 ] : null,
                 [
-                    'credit_limit' => $after['credit_limit'],
-                    'credit_days' => $after['credit_days'],
+                    'credit_limit' => $after['credit_limit'] ?? null,
+                    'credit_days' => $after['credit_days'] ?? null,
                 ],
                 ['context' => $context],
                 $request->user(),

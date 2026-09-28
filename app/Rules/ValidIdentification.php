@@ -12,9 +12,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class ValidIdentification implements ValidationRule
 {
-    public function __construct(private readonly ?string $type = null)
-    {
-    }
+    public function __construct(private readonly ?string $type = null) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
