@@ -461,6 +461,10 @@ Route::get('/planilla/planillas', [\App\Http\Controllers\PayrollController::clas
     ->middleware(['active.branch', 'permission:planilla.planillas.ver'])
     ->name('planilla.planillas.index');
 
+Route::get('/planilla/planillas/crear', [\App\Http\Controllers\PayrollController::class, 'create'])
+    ->middleware(['active.branch', 'permission:planilla.planillas.crear'])
+    ->name('planilla.planillas.create');
+
 Route::post('/planilla/planillas', [\App\Http\Controllers\PayrollController::class, 'store'])
     ->middleware(['active.branch', 'permission:planilla.planillas.crear'])
     ->name('planilla.planillas.store');

@@ -10,6 +10,15 @@
 
     <div class="flex justify-between items-center">
         <h1 class="text-2xl font-bold text-slate-800">Planillas</h1>
+
+        @can('planilla.planillas.crear')
+            <a href="{{ route('planilla.planillas.create') }}">
+                <x-button>
+                    + Nueva planilla
+                </x-button>
+            </a>
+        @endcan
+
     </div>
 
     {{-- Tabla --}}
