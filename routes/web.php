@@ -15,6 +15,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\CabysController;
 // Catálogos
 use App\Http\Controllers\CashClosingController;
 use App\Http\Controllers\CashDrawerController;
@@ -35,14 +36,15 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataCenterController;
 use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
+use App\Http\Controllers\DevolucionesController;
 use App\Http\Controllers\InventoryAdjustmentController;
-use App\Http\Controllers\InventoryController;
 // Compras
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
-use App\Http\Controllers\LabelCenterController;
 // Ventas
+use App\Http\Controllers\LabelCenterController;
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
@@ -60,18 +62,17 @@ use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
 use App\Http\Controllers\MvsPrint\MvsPrintConfigController;
-use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 // MVS Print
+use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
 use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
 use App\Http\Controllers\MvsPrint\MvsPrintTicketController;
-use App\Http\Controllers\NotificationCenterController;
 // Finanzas
+use App\Http\Controllers\NotificationCenterController;
 use App\Http\Controllers\OrderController;
-use App\Http\Controllers\PaymentMethodController;
 // Administración
+use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PosController;
-use App\Http\Controllers\RouteosController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductSupplierController;
@@ -83,9 +84,9 @@ use App\Http\Controllers\PurchaseXmlImportController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\DevolucionesController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\RouteosController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SaleReceiptMailController;
 use App\Http\Controllers\SettingController;
@@ -93,12 +94,19 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
+use App\Mail\CashSessionClosedMail;
+use App\Models\Branch;
+use App\Models\CashPaymentReconciliation;
+use App\Models\CashRegister;
+use App\Models\CashSession;
+use App\Models\Company;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 if (app()->environment('local')) {
     Route::get('/_local/preview/cash-session-closed/{session?}', function (?int $session = null) {
-        $cashSession = \App\Models\CashSession::query()
-            ->where('status', \App\Models\CashSession::STATUS_CLOSED)
+        $cashSession = CashSession::query()
+            ->where('status', CashSession::STATUS_CLOSED)
             ->when($session, fn ($query) => $query->whereKey($session))
             ->latest('closed_at')
             ->first();
@@ -108,13 +116,13 @@ if (app()->environment('local')) {
         }
 
         if ($cashSession === null) {
-            $company = new \App\Models\Company(['trade_name' => 'MVS Demo', 'timezone' => 'America/Costa_Rica']);
-            $branch = new \App\Models\Branch(['name' => 'Sucursal Demo']);
-            $register = new \App\Models\CashRegister(['name' => 'Caja Demo']);
-            $user = new \App\Models\User(['name' => 'Operador Demo']);
-            $cashSession = new \App\Models\CashSession([
+            $company = new Company(['trade_name' => 'MVS Demo', 'timezone' => 'America/Costa_Rica']);
+            $branch = new Branch(['name' => 'Sucursal Demo']);
+            $register = new CashRegister(['name' => 'Caja Demo']);
+            $user = new User(['name' => 'Operador Demo']);
+            $cashSession = new CashSession([
                 'session_number' => 'CAJA-DEMO-0001',
-                'status' => \App\Models\CashSession::STATUS_CLOSED,
+                'status' => CashSession::STATUS_CLOSED,
                 'opening_amount' => '25000.0000',
                 'expected_cash' => '125000.0000',
                 'counted_cash' => '125000.0000',
@@ -132,14 +140,14 @@ if (app()->environment('local')) {
                 'differenceAuthorizedBy' => null,
                 'countDetails' => collect(),
                 'paymentReconciliations' => collect([
-                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'Tarjeta', 'payment_method_type_snapshot' => 'card', 'sales_amount' => '20000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '20000.0000']),
-                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'SINPE', 'payment_method_type_snapshot' => 'sinpe', 'sales_amount' => '15000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '15000.0000']),
-                    new \App\Models\CashPaymentReconciliation(['payment_method_name_snapshot' => 'Puntos', 'payment_method_type_snapshot' => 'loyalty_points', 'sales_amount' => '5000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '5000.0000']),
+                    new CashPaymentReconciliation(['payment_method_name_snapshot' => 'Tarjeta', 'payment_method_type_snapshot' => 'card', 'sales_amount' => '20000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '20000.0000']),
+                    new CashPaymentReconciliation(['payment_method_name_snapshot' => 'SINPE', 'payment_method_type_snapshot' => 'sinpe', 'sales_amount' => '15000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '15000.0000']),
+                    new CashPaymentReconciliation(['payment_method_name_snapshot' => 'Puntos', 'payment_method_type_snapshot' => 'loyalty_points', 'sales_amount' => '5000.0000', 'receivables_amount' => 0, 'layaways_amount' => 0, 'payables_amount' => 0, 'expected_amount' => '5000.0000']),
                 ]),
             ]);
         }
 
-        return response((new \App\Mail\CashSessionClosedMail($cashSession))->render())
+        return response((new CashSessionClosedMail($cashSession))->render())
             ->header('Content-Type', 'text/html; charset=UTF-8');
     })->whereNumber('session')->name('local.preview.cash-session-closed');
 }
@@ -415,6 +423,10 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware(['active.branch', 'permission:productos.ver'])
         ->name('productos.search');
 
+    // Catálogo CABYS local: única puerta de selección de código en productos.
+    Route::get('/productos/cabys/buscar', [CabysController::class, 'search'])
+        ->middleware(['active.branch', 'permission:productos.ver'])
+        ->name('productos.cabys.search');
     Route::resource('productos', ProductController::class)
         ->only(['create', 'store'])
         ->middleware(['active.branch', 'permission:productos.crear']);
