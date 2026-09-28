@@ -10,7 +10,7 @@
             <div class="flex justify-between gap-3"><dt>Fecha</dt><dd class="font-bold text-right">{{ $document->created_at->format('d/m/Y H:i') }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Intento</dt><dd class="font-bold text-right">{{ $document->attempt_number }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Origen</dt><dd class="font-bold text-right">{{ $document->source_type ?: ('venta ' . ($document->sale_id ?: '—')) }}</dd></div>
-            <div class="flex justify-between gap-3"><dt>Proveedor</dt><dd class="font-bold text-right">{{ $document->provider }}</dd></div>
+            <div class="flex justify-between gap-3"><dt>Estado de Hacienda</dt><dd class="font-bold text-right">{{ $statusLabels[$document->status] ?? $document->status }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Clave</dt><dd class="font-mono text-xs text-right break-all">{{ $document->clave ?: '—' }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Consecutivo</dt><dd class="font-bold text-right">{{ $document->consecutivo ?: '—' }}</dd></div>
             @if($document->status === 'rejected' || $document->status === 'error')

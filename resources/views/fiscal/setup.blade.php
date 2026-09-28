@@ -46,6 +46,50 @@
                     <input id="email" type="email" name="email" value="{{ old('email', $company->email) }}" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
                 <div>
+                    <span class="text-sm font-bold">Ubicación fiscal</span>
+                    <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div>
+                            <label class="text-xs font-bold text-slate-600" for="province_id">Provincia</label>
+                            <select id="province_id" name="province_id" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                                <option value="">Elegir…</option>
+                                @foreach($provinces as $province)
+                                    <option value="{{ $province->id }}" @selected((string) old('province_id', $company->province_id) === (string) $province->id)>{{ $province->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-600" for="canton_id">Cantón</label>
+                            <select id="canton_id" name="canton_id" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                                <option value="">Elegir…</option>
+                                @foreach($provinces as $province)
+                                    <optgroup label="{{ $province->name }}">
+                                        @foreach($cantons->where('province_id', $province->id) as $canton)
+                                            <option value="{{ $canton->id }}" @selected((string) old('canton_id', $company->canton_id) === (string) $canton->id)>{{ $canton->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-600" for="district_id">Distrito</label>
+                            <select id="district_id" name="district_id" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                                <option value="">Elegir…</option>
+                                @foreach($cantons as $canton)
+                                    <optgroup label="{{ $canton->name }}">
+                                        @foreach($districts->where('canton_id', $canton->id) as $district)
+                                            <option value="{{ $district->id }}" @selected((string) old('district_id', $company->district_id) === (string) $district->id)>{{ $district->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm font-bold" for="address">Otras señas</label>
+                    <input id="address" name="address" value="{{ old('address', $company->address) }}" placeholder="Dirección exacta" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                </div>
+                <div>
                     <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
                     <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
@@ -62,41 +106,68 @@
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y continuar</button>
             </form>
         @elseif($step === 'conexion')
+            @if($config->hasPending())
+                <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">
+                    Actualización requerida: hay cambios pendientes de verificación. La conexión actual sigue funcionando.
+                </div>
+                <form method="POST" action="{{ route('fiscal.connection.discard') }}" class="mt-2">
+                    @csrf
+                    <button type="submit" class="inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Cancelar cambios pendientes</button>
+                </form>
+            @endif
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'conexion']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
-                <div>
-                    <label class="text-sm font-bold" for="provider">Proveedor técnico</label>
-                    <select id="provider" name="provider" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
-                        @foreach($providers as $code => $label)
-                            <option value="{{ $code }}" @selected(old('provider', $config->provider) === $code)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                    <p class="mt-1 text-xs text-slate-500">El proveedor puede cambiar en el futuro sin rehacer este portal.</p>
-                </div>
+                @if(count($providers) > 1)
+                    <div>
+                        <label class="text-sm font-bold" for="provider">Conexión fiscal</label>
+                        <select id="provider" name="provider" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                            @foreach($providers as $code => $label)
+                                <option value="{{ $code }}" @selected(old('provider', $config->pending_provider ?? $config->provider) === $code)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @else
+                    <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). Sin opciones adicionales por ahora.</p>
+                @endif
                 <div>
                     <span class="text-sm font-bold">Ambiente</span>
                     <div class="mt-2 space-y-2">
                         <label class="flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 p-3">
-                            <input type="radio" name="environment" value="sandbox" @checked(old('environment', $config->environment) === 'sandbox')> Pruebas (sin validez fiscal)
+                            <input type="radio" name="environment" value="sandbox" @checked(old('environment', $config->pending_environment ?? $config->environment) === 'sandbox')> Pruebas (sin validez fiscal)
                         </label>
                         <label class="flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 p-3">
-                            <input type="radio" name="environment" value="production" @checked(old('environment', $config->environment) === 'production')> Producción (documentos reales)
+                            <input type="radio" name="environment" value="production" @checked(old('environment', $config->pending_environment ?? $config->environment) === 'production')> Producción (documentos reales)
                         </label>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">Las credenciales de pruebas nunca se copian a producción.</p>
                 </div>
+                <label class="flex min-h-[44px] items-center gap-2 text-sm">
+                    <input type="checkbox" name="production_confirm" value="1" class="h-5 w-5"> Entiendo que producción emite documentos con validez fiscal (obligatorio para producción)
+                </label>
                 <div>
-                    <label class="text-sm font-bold" for="api_key">Llave del proveedor {{ $config->maskedKey() ? '(registrada: ' . $config->maskedKey() . ')' : '' }}</label>
+                    <label class="text-sm font-bold" for="api_key">Llave de conexión {{ $config->maskedKey() ? '(registrada: ' . $config->maskedKey() . ')' : '' }}</label>
                     <input id="api_key" type="password" name="api_key" autocomplete="off" placeholder="Vacío = conservar la actual" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
                 <div>
-                    <label class="text-sm font-bold" for="api_secret">Secreto del proveedor {{ $config->maskedSecret() ? '(registrado)' : '' }}</label>
+                    <label class="text-sm font-bold" for="api_secret">Secreto de conexión {{ $config->maskedSecret() ? '(registrado)' : '' }}</label>
                     <input id="api_secret" type="password" name="api_secret" autocomplete="off" placeholder="Vacío = conservar el actual" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
-                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y continuar</button>
+                <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Guardar y verificar</button>
             </form>
+            @if($config->hasCredentials())
+                <form method="POST" action="{{ route('fiscal.disconnect') }}" class="mt-6 border-t border-slate-200 pt-4" onsubmit="return confirm('¿Retirar la conexión fiscal? El historial se conserva.');">
+                    @csrf
+                    <label class="flex min-h-[44px] items-center gap-2 text-sm">
+                        <input type="checkbox" name="disconnect_confirm" value="1" class="h-5 w-5"> Confirmo que quiero retirar la conexión
+                    </label>
+                    <button type="submit" class="mt-2 inline-flex min-h-[44px] items-center text-sm font-bold text-rose-700">Retirar conexión</button>
+                </form>
+            @endif
         @elseif($step === 'verificar')
-            <p class="mt-4 text-sm text-slate-600">Comprobamos las credenciales con el proveedor <strong>sin emitir ningún documento</strong> y sin consumir cuota.</p>
+            @if($config->hasPending())
+                <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">Hay cambios pendientes: al verificar con éxito se activan. Si falla, la conexión actual sigue intacta.</div>
+            @endif
+            <p class="mt-4 text-sm text-slate-600">Comprobamos la conexión con Hacienda <strong>sin emitir ningún documento</strong> y sin consumir cuota.</p>
             <form method="POST" action="{{ route('fiscal.verify') }}" class="mt-4">
                 @csrf
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">Verificar conexión</button>

@@ -4,15 +4,15 @@
     <section class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-7">
         <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Facturación Electrónica</p>
         <h1 class="mt-2 text-2xl font-bold text-slate-950">Cambio de proveedor</h1>
-        <p class="mt-2 text-sm text-slate-600">Proveedor actual: <strong>{{ $current }}</strong>. El portal y el POS no cambian; el historial conserva su proveedor original. El cambio real se hace desde la conexión después de cumplir la lista.</p>
+        <p class="mt-2 text-sm text-slate-600">Conexión actual: <strong>Conexión fiscal MVS</strong>. El portal y el POS no cambian; el historial conserva su origen. El cambio real se hace desde la conexión después de cumplir la lista.</p>
 
         <form method="GET" action="{{ route('fiscal.switch') }}" class="mt-4 flex flex-wrap items-end gap-3">
             <div>
-                <label class="text-sm font-bold" for="to">Proveedor destino</label>
+                <label class="text-sm font-bold" for="to">Conexión destino</label>
                 <select id="to" name="to" class="mt-1 rounded-xl border border-slate-300 p-3 min-h-[44px]">
                     <option value="">Elegir…</option>
                     @foreach($providers as $code)
-                        <option value="{{ $code }}" @selected($target === $code)>{{ $code }}</option>
+                        <option value="{{ $code }}" @selected($target === $code)>Conexión alternativa {{ $loop->iteration }}</option>
                     @endforeach
                 </select>
             </div>

@@ -144,6 +144,9 @@ class FiscalPortalController extends Controller
             'status' => $status,
             'statusLabel' => $this->statusLabel($status),
             'providers' => $this->providerOptions(),
+            'provinces' => \App\Models\Province::orderBy('id')->get(),
+            'cantons' => \App\Models\Canton::orderBy('province_id')->orderBy('id')->get(),
+            'districts' => \App\Models\District::orderBy('canton_id')->orderBy('id')->get(),
         ]);
     }
 
@@ -169,11 +172,11 @@ class FiscalPortalController extends Controller
     public function verify(): RedirectResponse
     {
         $company = $this->company();
-        $result = $this->configs->verify($company);
+        $result = $this->configs->verify($company, auth()->id());
 
         if ($result->connected) {
-            return redirect()->route('fiscal.setup', ['step' => 'verificar'])
-                ->with('status', 'Conexión verificada. No se emitió ningún documento.');
+            return redirect()->route('fiscal.setup', ['step' => 'preferencias'])
+                ->with('status', 'Conexión verificada y activada. No se emitió ningún documento.');
         }
 
         return redirect()->route('fiscal.setup', ['step' => 'verificar'])
@@ -190,9 +193,13 @@ class FiscalPortalController extends Controller
             'economic_activity' => ['nullable', 'string', 'max:30'],
             'fiscal_branch_code' => ['nullable', 'regex:/^\d{3}$/'],
             'fiscal_terminal_code' => ['nullable', 'regex:/^\d{5}$/'],
+            'province_id' => ['nullable', 'exists:provinces,id'],
+            'canton_id' => ['nullable', 'exists:cantons,id'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+            'address' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $this->configs->updateIdentity($company, $validated);
+        $this->configs->updateIdentity($company, $validated, auth()->id());
         $this->configs->updateFiscalData($company, $validated);
     }
 
@@ -201,13 +208,40 @@ class FiscalPortalController extends Controller
         $allowedProviders = array_keys((array) config('fiscal.providers', []));
 
         $validated = $request->validate([
-            'provider' => ['required', 'string', 'in:' . implode(',', $allowedProviders)],
+            'provider' => ['nullable', 'string', 'in:' . implode(',', $allowedProviders)],
             'environment' => ['required', 'string', 'in:sandbox,production'],
             'api_key' => ['nullable', 'string', 'max:255'],
             'api_secret' => ['nullable', 'string', 'max:255'],
+            'production_confirm' => ['nullable'],
         ]);
 
-        $this->configs->updateConnection($company, $validated);
+        if ($validated['environment'] === 'production' && ! $request->boolean('production_confirm')) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'production_confirm' => 'Confirme explícitamente que usará producción con validez fiscal.',
+            ]);
+        }
+
+        $this->configs->stageConnection($company, $validated, auth()->id());
+    }
+
+    public function discardPending(): RedirectResponse
+    {
+        $company = $this->company();
+        $this->configs->discardPending($company, auth()->id());
+
+        return redirect()->route('fiscal.setup', ['step' => 'conexion'])
+            ->with('status', 'Cambios descartados. La conexión vigente sigue intacta.');
+    }
+
+    public function disconnect(Request $request): RedirectResponse
+    {
+        $request->validate(['disconnect_confirm' => ['accepted']]);
+
+        $company = $this->company();
+        $this->configs->disconnect($company, auth()->id());
+
+        return redirect()->route('fiscal.index')
+            ->with('status', 'Conexión retirada. El historial fiscal se conserva.');
     }
 
     private function storePreferences(Request $request, Company $company): void
@@ -221,7 +255,7 @@ class FiscalPortalController extends Controller
         $validated['auto_emit_enabled'] = $request->boolean('auto_emit_enabled');
         $validated['notify_receptor_email'] = $request->boolean('notify_receptor_email');
 
-        $this->configs->updatePreferences($company, $validated);
+        $this->configs->updatePreferences($company, $validated, auth()->id());
     }
 
     private function nextStep(string $step): string
@@ -240,8 +274,8 @@ class FiscalPortalController extends Controller
 
         foreach (array_keys((array) config('fiscal.providers', [])) as $code) {
             $options[$code] = $code === CompanyFiscalConfig::PROVIDER_FACTURAENCR
-                ? 'FacturaEnCR (proveedor técnico actual)'
-                : 'Proveedor ' . $code;
+                ? 'Conexión fiscal estándar'
+                : 'Conexión fiscal alternativa';
         }
 
         return $options;
@@ -302,18 +336,16 @@ class FiscalPortalController extends Controller
                     : 'Faltan datos fiscales de la empresa.',
             ],
             [
-                'label' => 'Credenciales',
+                'label' => 'Conexión fiscal',
                 'ok' => $config->hasCredentials(),
                 'detail' => $config->hasCredentials()
                     ? 'Credenciales registradas (' . ($config->maskedKey() ?? '—') . ').'
-                    : 'Faltan credenciales del proveedor.',
+                    : 'Faltan credenciales de conexión.',
             ],
             [
-                'label' => 'Proveedor',
+                'label' => 'Canal fiscal',
                 'ok' => true,
-                'detail' => $config->provider === CompanyFiscalConfig::PROVIDER_FACTURAENCR
-                    ? 'FacturaEnCR (proveedor técnico actual).'
-                    : 'Proveedor ' . $config->provider . '.',
+                'detail' => 'Conectado con Hacienda.',
             ],
             [
                 'label' => 'Series',
@@ -323,7 +355,7 @@ class FiscalPortalController extends Controller
                     : 'Sin series observadas todavía.',
             ],
             [
-                'label' => 'Última respuesta',
+                'label' => 'Última comunicación con Hacienda',
                 'ok' => $latest !== null && $latest->status === 'accepted',
                 'detail' => $latest !== null
                     ? (self::STATUS_LABELS[$latest->status] ?? $latest->status) . ' el ' . $latest->updated_at->format('d/m/Y H:i') . '.'

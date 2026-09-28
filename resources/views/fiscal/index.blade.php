@@ -8,11 +8,18 @@
     @endif
 
     <section class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm sm:p-7">
-        <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Facturación Electrónica</p>
+        <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Centro de Facturación Electrónica</p>
         <h1 class="mt-2 text-2xl font-bold text-slate-950">{{ $company->trade_name }}</h1>
 
         @if(session('status'))
             <div class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
+        @endif
+
+        @if($config->hasPending())
+            <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">
+                Actualización requerida: hay una conexión nueva pendiente de verificación. La actual sigue funcionando.
+                <a href="{{ route('fiscal.setup', ['step' => 'verificar']) }}" class="underline">Revisar ahora</a>
+            </div>
         @endif
 
         @if($status === 'disabled')
@@ -62,10 +69,18 @@
 
         @can('fiscal.editar')
             <div class="mt-5 flex flex-wrap gap-2">
-                <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
-                   class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
-                    {{ $status === 'ready' ? 'Revisar conexión' : 'Conectar facturación' }}
-                </a>
+                @if($status === 'ready')
+                    <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
+                       class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
+                        Administrar configuración
+                    </a>
+                    <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Actualizar conexión</a>
+                @else
+                    <a href="{{ route('fiscal.setup', ['step' => 'datos']) }}"
+                       class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:brightness-95">
+                        Completar configuración
+                    </a>
+                @endif
                 <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
                 <a href="{{ route('fiscal.switch') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Proveedor</a>
             </div>
@@ -86,7 +101,6 @@
                         <tr class="text-left text-slate-500">
                             <th class="py-2 pr-3">Tipo</th>
                             <th class="py-2 pr-3 hidden md:table-cell">Intento</th>
-                            <th class="py-2 pr-3 hidden md:table-cell">Proveedor</th>
                             <th class="py-2 pr-3">Estado</th>
                         </tr>
                     </thead>
@@ -97,7 +111,6 @@
                                     <a href="{{ route('fiscal.documents.show', $doc) }}" class="underline decoration-amber-500">{{ $typeLabels[$doc->document_type] ?? $doc->document_type }}</a>
                                 </td>
                                 <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->attempt_number }}</td>
-                                <td class="py-2 pr-3 hidden md:table-cell">{{ $doc->provider }}</td>
                                 <td class="py-2 pr-3">{{ $statusLabels[$doc->status] ?? $doc->status }}</td>
                             </tr>
                         @endforeach

@@ -14,6 +14,18 @@
         <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
     @endif
 
+    @can('fiscal.ver')
+        <div class="rounded-xl border border-amber-200 bg-white p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="font-semibold text-slate-800">Configuración fiscal</p>
+                    <p class="text-sm text-slate-500">Conexión con Hacienda, ambiente, series y preferencias de Facturación Electrónica.</p>
+                </div>
+                <a href="{{ route('fiscal.index') }}" class="inline-flex min-h-[44px] items-center rounded-lg bg-[#D4AF37] px-5 font-semibold text-black">Abrir portal fiscal</a>
+            </div>
+        </div>
+    @endcan
+
     @php
         $dec = fn ($v) => is_numeric($v) ? number_format((float) $v, 2, '.', '') : $v;
         $settingsTabs = [
