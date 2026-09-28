@@ -53,6 +53,38 @@ class HaciendaActivityFlowTest extends TestCase
         ];
     }
 
+    public function test_la_vista_real_expone_los_hooks_del_flujo_hacienda(): void
+    {
+        [$company, $branch, $user] = $this->context();
+
+        $html = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('clientes.create'))
+            ->assertOk()
+            ->getContent();
+
+        // El JS de identification.js se engancha a estos ids y a ninguno más.
+        foreach (['id="identification_type"', 'id="identification"', 'id="identification_status"'] as $id) {
+            $this->assertStringContainsString($id, $html, 'Falta el hook '.$id.' en /clientes/create');
+        }
+
+        // Contenedores donde el JS pinta propuesta, régimen, situación y actividades.
+        foreach ([
+            'id="taxpayer_proposal"',
+            'id="taxpayer_meta"',
+            'id="taxpayer_activities_box"',
+            'id="taxpayer_activities_list"',
+            'id="taxpayer_activities_inputs"',
+            'id="taxpayer_proposal_seed"',
+            'id="taxpayer_apply_all"',
+            'id="taxpayer_clear"',
+        ] as $id) {
+            $this->assertStringContainsString($id, $html, 'Falta el contenedor '.$id.' en /clientes/create');
+        }
+
+        // El bundle de Vite debe servirse: sin él no arranca nada de lo anterior.
+        $this->assertStringContainsString('/build/assets/', $html, 'La vista no está cargando el bundle de Vite');
+    }
+
     public function test_endpoint_devuelve_el_json_real_consumido_por_cliente_y_pos(): void
     {
         Http::fake(['api.hacienda.go.cr/*' => Http::response($this->haciendaConActividad(), 200)]);
