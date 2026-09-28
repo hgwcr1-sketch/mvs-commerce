@@ -10,6 +10,7 @@ use App\Services\PayrollEmployeeService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class PayrollEmployeeServiceTest extends TestCase
@@ -195,5 +196,119 @@ class PayrollEmployeeServiceTest extends TestCase
         $this->expectException(AuthorizationException::class);
 
         $service->find(1);
+    }
+
+    public function test_create_employee_in_active_company(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+
+        $companyA = Company::create(['trade_name' => 'Empresa A', 'is_active' => true]);
+        $branchA = Branch::create(['company_id' => $companyA->id, 'name' => 'Sucursal A', 'code' => 'SA', 'is_active' => true]);
+
+        $user->companies()->attach($companyA->id);
+        $user->branches()->attach($branchA->id);
+
+        session(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id]);
+        $this->actingAs($user);
+
+        $service = new PayrollEmployeeService;
+
+        $employee = $service->create([
+            'employee_code' => 'EMP-001',
+            'identification' => '111111111',
+            'first_name' => 'Juan',
+            'last_name' => 'Perez',
+            'position' => 'Developer',
+            'hire_date' => '2024-01-01',
+            'base_salary' => 3000.00,
+        ]);
+
+        $this->assertSame($companyA->id, $employee->company_id);
+        $this->assertSame('EMP-001', $employee->employee_code);
+        $this->assertSame('Juan', $employee->first_name);
+        $this->assertSame('Perez', $employee->last_name);
+        $this->assertDatabaseHas('employees', ['id' => $employee->id, 'company_id' => $companyA->id]);
+    }
+
+    public function test_create_rejects_injected_company_id(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+
+        $companyA = Company::create(['trade_name' => 'Empresa A', 'is_active' => true]);
+        $branchA = Branch::create(['company_id' => $companyA->id, 'name' => 'Sucursal A', 'code' => 'SA', 'is_active' => true]);
+
+        $companyB = Company::create(['trade_name' => 'Empresa B', 'is_active' => true]);
+
+        $user->companies()->attach($companyA->id);
+        $user->branches()->attach($branchA->id);
+
+        session(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id]);
+        $this->actingAs($user);
+
+        $service = new PayrollEmployeeService;
+
+        $employee = $service->create([
+            'employee_code' => 'EMP-001',
+            'identification' => '111111111',
+            'first_name' => 'Juan',
+            'last_name' => 'Perez',
+            'position' => 'Developer',
+            'hire_date' => '2024-01-01',
+            'base_salary' => 3000.00,
+            'company_id' => $companyB->id,
+        ]);
+
+        $this->assertSame($companyA->id, $employee->company_id);
+        $this->assertNotSame($companyB->id, $employee->company_id);
+    }
+
+    public function test_create_throws_on_invalid_data(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+
+        $companyA = Company::create(['trade_name' => 'Empresa A', 'is_active' => true]);
+        $branchA = Branch::create(['company_id' => $companyA->id, 'name' => 'Sucursal A', 'code' => 'SA', 'is_active' => true]);
+
+        $user->companies()->attach($companyA->id);
+        $user->branches()->attach($branchA->id);
+
+        session(['active_company_id' => $companyA->id, 'active_branch_id' => $branchA->id]);
+        $this->actingAs($user);
+
+        $service = new PayrollEmployeeService;
+
+        $this->expectException(ValidationException::class);
+
+        $service->create([
+            'employee_code' => '',
+            'identification' => '111111111',
+            'first_name' => 'Juan',
+            'last_name' => 'Perez',
+            'position' => 'Developer',
+            'hire_date' => '2024-01-01',
+            'base_salary' => 3000.00,
+        ]);
+    }
+
+    public function test_create_throws_on_invalid_session(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $this->actingAs($user);
+
+        session(['active_company_id' => 999, 'active_branch_id' => 999]);
+
+        $service = new PayrollEmployeeService;
+
+        $this->expectException(AuthorizationException::class);
+
+        $service->create([
+            'employee_code' => 'EMP-001',
+            'identification' => '111111111',
+            'first_name' => 'Juan',
+            'last_name' => 'Perez',
+            'position' => 'Developer',
+            'hire_date' => '2024-01-01',
+            'base_salary' => 3000.00,
+        ]);
     }
 }
