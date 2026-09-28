@@ -118,6 +118,8 @@ class PayrollMigrationTest extends TestCase
             'frequency' => 'mensual',
         ]);
 
+        Schema::dropIfExists('payroll_details');
+
         $this->artisan('migrate:rollback --path=database/migrations/2026_09_28_221914_create_payrolls_table.php');
 
         $this->assertFalse(Schema::hasTable('payrolls'));
