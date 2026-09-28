@@ -136,6 +136,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'planilla.empleados.ver', 'label' => 'Ver empleados de planilla', 'module' => 'Planilla'],
             ['name' => 'planilla.empleados.crear', 'label' => 'Crear empleados de planilla', 'module' => 'Planilla'],
             ['name' => 'planilla.planillas.ver', 'label' => 'Ver planillas', 'module' => 'Planilla'],
+            ['name' => 'planilla.planillas.crear', 'label' => 'Crear planillas', 'module' => 'Planilla'],
 
             // Reportes
             ['name' => 'reportes.ver', 'label' => 'Ver reportes', 'module' => 'Reportes'],
@@ -161,6 +162,7 @@ class PermissionSeeder extends Seeder
                 'planilla.empleados.ver',
                 'planilla.empleados.crear',
                 'planilla.planillas.ver',
+                'planilla.planillas.crear',
             ])
             ->pluck('id')
             ->all();
