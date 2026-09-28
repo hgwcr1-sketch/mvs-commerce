@@ -219,7 +219,17 @@ class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col transition-all 
             route="planilla.empleados.index"
             icon="users"
             label="Planilla"
-            :active="request()->routeIs('planilla.*')" />
+            :active="request()->routeIs('planilla.empleados*')" />
+
+    @endcan
+
+    @can('planilla.planillas.ver')
+
+        <x-navigation.item
+            route="planilla.planillas.index"
+            icon="file-text"
+            label="Planillas"
+            :active="request()->routeIs('planilla.planillas*')" />
 
     @endcan
 

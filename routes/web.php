@@ -457,6 +457,10 @@ Route::post('/planilla/empleados', [\App\Http\Controllers\PayrollEmployeeControl
     ->middleware(['active.branch', 'permission:planilla.empleados.crear'])
     ->name('planilla.empleados.store');
 
+Route::get('/planilla/planillas', [\App\Http\Controllers\PayrollController::class, 'index'])
+    ->middleware(['active.branch', 'permission:planilla.planillas.ver'])
+    ->name('planilla.planillas.index');
+
 Route::resource('reportes', ReportController::class);
 
 });
