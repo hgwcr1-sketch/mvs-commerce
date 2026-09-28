@@ -2,6 +2,19 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Auditoría flujo actividad económica Hacienda — SIN DEFECTO DE CÓDIGO (2026-09-28)
+
+**Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities` @ `dbf2d80`. **Sin producción.**
+
+- **Forma REAL de Hacienda (verificada en vivo, solo claves):** `api.hacienda.go.cr/fe/ae` devuelve `nombre`, `tipoIdentificacion`, `regimen{codigo,descripcion}`, `situacion{moroso,omiso,estado,administracionTributaria,mensaje}` y `actividades[]{estado,tipo,codigo,descripcion}`. Sin contribuyente: HTTP 200 con `status` textual ("Information no available...") y `actividades` vacío; inexistente: HTTP 404.
+- **Capa 1 servicio:** OK en vivo (local 1579 ms y **producción 289 ms**: `found`, 1 actividad `960113`, régimen y situación). El filtro `^\d{1,20}$` NO descarta códigos reales (son de 6 dígitos).
+- **Capa 2 endpoint:** devuelve `status/name/type/regime/situation/activities` con `code`/`description` — los nombres exactos que lee la UI. Sin caché `hacienda*` en producción (0 filas); `CACHE_STORE=database`.
+- **Capa 3 Cliente:** `_form.blade.php` renderiza los 11 hooks (`taxpayer_proposal`, `taxpayer_activities_list`, `taxpayer_activities_inputs`…), `layouts/app` carga el bundle y `x-input`/`x-select` sí generan `id="identification"` / `id="identification_type"`. El JS real, ejecutado en DOM contra el JSON real, **muestra, marca, etiqueta y envía** `taxpayer_activities[][code|description]`.
+- **Capa 4 POS:** el componente Alpine real consulta el endpoint, guarda `ident.regime/situation/activities`, aplica `applied` y **aplica el nombre oficial**; `storeQuickCustomer()` envía `{code, description}`. Sin actividades no inventa ninguna.
+- **Conclusión:** no hay incompatibilidad de nombres (`activities`/`code`/`description` son consistentes en las 4 capas) ni estado temporal que se limpie al aplicar. Los 31 tests previos pasaban porque solo cubrían servicios aislados. **La causa reportada NO está en el código de esta rama**: queda como hipótesis a confirmar en navegador real (cédula consultada sin actividades, o caché/JS del navegador).
+- **Tests agregados (sin tocar código de aplicación):** `HaciendaActivityFlowTest` (5) ata endpoint → payload real → persistencia usando la forma real de Hacienda; `tests/js/hacienda-actividades-real.cjs` y `tests/js/pos-hacienda-real.cjs` ejecutan el JS real en DOM. Verde: 36 PHP (261 aserciones) + 2 JS. Pint PASS.
+- **Anomalía preexistente (no tocada, ajena a la tarea):** `clientes/create.blade.php` tiene `<form` duplicado (líneas 31-32) desde `17dc37d`, también presente en producción.
+
 ## Pagos mixtos de apartado desde POS (2026-09-24)
 
 **Rama:** `feature/pos` @ `b89465d` + cambios locales sin commit. Sin migraciones ni producción.
