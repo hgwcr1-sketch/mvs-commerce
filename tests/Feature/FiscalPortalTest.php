@@ -578,6 +578,50 @@ class FiscalPortalTest extends TestCase
         $response->assertDontSee('Completar configuración');
         $response->assertDontSee('Administrar configuración');
         $response->assertDontSee('Actualizar conexión');
+        $response->assertDontSee('Resolver');
+        $response->assertSee('Incompleto');
+        $response->assertSee('Pruebas');
+    }
+
+    public function test_viewer_edit_routes_stay_forbidden(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver']);
+
+        $this->get(route('fiscal.setup', ['step' => 'datos']))->assertForbidden();
+        $this->get(route('fiscal.setup', ['step' => 'conexion']))->assertForbidden();
+        $this->get(route('fiscal.series'))->assertOk();
+        $this->get(route('fiscal.switch'))->assertForbidden();
+        $this->put(route('fiscal.setup.store', ['step' => 'datos']), [])->assertForbidden();
+        $this->post(route('fiscal.verify'))->assertForbidden();
+        $this->post(route('fiscal.disconnect'), ['disconnect_confirm' => '1'])->assertForbidden();
+    }
+
+    public function test_editor_resolver_targets_never_403(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        foreach (['datos', 'conexion', 'verificar', 'preferencias', 'confirmacion'] as $step) {
+            $this->get(route('fiscal.setup', ['step' => $step]))->assertOk();
+        }
+
+        $this->get(route('fiscal.series'))->assertOk();
+        $this->get(route('fiscal.history'))->assertOk();
+        $this->get(route('fiscal.switch'))->assertOk();
+    }
+
+    public function test_series_empty_is_neutral_not_satisfactory(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver']);
+
+        $response = $this->get(route('fiscal.index'));
+        $response->assertOk();
+        $response->assertSee('Sin series observadas todavía');
     }
 
     public function test_consumption_card_and_badges(): void

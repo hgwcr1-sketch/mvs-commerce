@@ -155,7 +155,9 @@
                     <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full {{ $row['ok'] ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">{{ $row['ok'] ? '✓' : '!' }}</span>
                     <span class="min-w-0 flex-1"><strong>{{ $row['label'] }}:</strong> {{ $row['detail'] }}
                         @if(!empty($row['resolve']))
-                            <a href="{{ $row['resolve'] === 'series' ? route('fiscal.series') : ($row['resolve'] === 'historial' ? route('fiscal.history') : route('fiscal.setup', ['step' => $row['resolve']])) }}" class="ml-1 inline-flex min-h-[44px] items-center font-bold text-amber-700">Resolver</a>
+                            @can('fiscal.editar')
+                                <a href="{{ $row['resolve'] === 'series' ? route('fiscal.series') : ($row['resolve'] === 'historial' ? route('fiscal.history') : route('fiscal.setup', ['step' => $row['resolve']])) }}" class="ml-1 inline-flex min-h-[44px] items-center font-bold text-amber-700">Resolver</a>
+                            @endcan
                         @endif
                     </span>
                 </li>

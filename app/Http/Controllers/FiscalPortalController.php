@@ -364,7 +364,7 @@ class FiscalPortalController extends Controller
             ],
             [
                 'label' => 'Series',
-                'ok' => true,
+                'ok' => $seriesCount > 0,
                 'detail' => $seriesCount > 0
                     ? "{$seriesCount} serie(s) observada(s), sin resets."
                     : 'Sin series observadas todavía.',
