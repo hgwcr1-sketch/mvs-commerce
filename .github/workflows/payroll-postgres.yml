@@ -51,7 +51,18 @@ jobs:
           DB_USERNAME: mvstest
           DB_PASSWORD: mvstest
 
-      - name: Run targeted migration tests
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build Vite assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run targeted payroll tests
         timeout-minutes: 5
         run: php artisan test tests/Unit/PayrollTenantContextTest.php tests/Unit/EmployeeMigrationTest.php tests/Unit/PayrollMigrationTest.php tests/Unit/PayrollDetailMigrationTest.php tests/Unit/PayrollEmployeeServiceTest.php tests/Unit/PayrollServiceTest.php tests/Feature/PayrollEmpleadosRouteTest.php tests/Feature/PayrollEmpleadosStoreRouteTest.php tests/Feature/PayrollEmpleadosCreateRouteTest.php tests/Feature/PayrollPlanillasRouteTest.php tests/Feature/PayrollPlanillasStoreRouteTest.php tests/Feature/PayrollPlanillasCreateRouteTest.php --compact
         env:
