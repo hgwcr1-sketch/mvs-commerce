@@ -272,15 +272,20 @@ class FiscalMasterTest extends TestCase
         $response->assertDontSee('PRUEBAS — SIN VALOR FISCAL');
     }
 
-    public function test_switch_checklist_page_shows_blockers(): void
+    public function test_switch_checklist_lives_in_platform_and_forbids_tenant(): void
     {
         [$company, $branch] = $this->context();
         $this->enableFiscal($company);
-        $this->actingUser($company, $branch, ['fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
         $this->acceptedDoc($company, null, '01', '00100001010000000001', 'queued');
 
-        $response = $this->get(route('fiscal.switch', ['to' => 'facturaencr']));
+        $this->get(route('fiscal.switch', ['to' => 'facturaencr']))->assertForbidden();
 
+        $admin = User::factory()->create(['is_active' => true]);
+        \Illuminate\Support\Facades\DB::table('users')->where('id', $admin->id)->update(['is_platform_admin' => true]);
+        $admin->refresh();
+
+        $response = $this->actingAs($admin)->get(route('platform.fiscal.switch', ['company' => $company->id, 'to' => 'facturaencr']));
         $response->assertOk();
         $response->assertSee('Aún no se puede cambiar');
     }

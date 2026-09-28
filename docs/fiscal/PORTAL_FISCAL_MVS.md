@@ -65,6 +65,19 @@ técnico (ni nombre, ni código, ni endpoints). El portal habla de
 (`provider`, adapters, históricos, auditoría) conserva el proveedor
 internamente para FiscalManager, migración futura y soporte autorizado.
 
+## Limpieza tenant (2026-09-27)
+
+- Sin botón "Proveedor" en el Master y sin acceso tenant al cambio de
+  proveedor: la URL tenant responde 403 y la pantalla vive en Panel
+  Maestro (solo administración interna MVS).
+- Series fuera del dashboard: viven en Configuración avanzada con texto
+  de uso ("al migrar numeración o cuando soporte MVS lo indique"); sin
+  series se muestra estado neutral ("Las series se registrarán al
+  emitir"), sin alerta falsa ni Resolver.
+- En el Master no se muestra ni siquiera la máscara de credencial: solo
+  "Conexión fiscal" (Verificada / Pendiente / Requiere atención). La
+  máscara vive únicamente en Configuración → Conexión.
+
 ## Rotación segura (2026-09-27)
 
 Editar la conexión NO destruye la vigente: lo nuevo queda pendiente,

@@ -2,9 +2,13 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Master visual MVS + CTA (2026-09-27, rama feature/factura-electronica)
+## Limpieza tenant master fiscal (2026-09-27, rama feature/factura-electronica)
 
-Centro "Centro de Facturación Electrónica" con CTA dorado inmediato (Completar/Administrar + Actualizar conexión), tarjeta Configuración fiscal, estados Configuración vs Hacienda sin contradicción, consumo con barra dorada y desglose, recientes con badges y detalle, diagnóstico con Resolver al paso exacto. Solo UI/controlador-vista (motor intacto). Evidencia: portal 24/24, master+ajustes 49/49, core 43/43, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+Sin botón Proveedor ni acceso tenant a cambio de provider (403; pantalla solo en Panel Maestro). Series en Configuración avanzada con estado neutral sin alerta falsa. Master sin máscara de credencial (solo "Conexión fiscal": Verificada/Pendiente/Requiere atención). Arquitectura multi-provider intacta. Evidencia: portal+master 43/43, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master visual MVS + CTA (2026-09-27, histórico, previo a limpieza tenant)
+
+Centro "Centro de Facturación Electrónica" con CTA dorado inmediato (Completar/Administrar + Actualizar conexión), tarjeta Configuración fiscal, estados Configuración vs Hacienda sin contradicción, consumo con barra dorada y desglose, recientes con badges y detalle, diagnóstico con Resolver al paso exacto. Solo UI/controlador-vista (motor intacto). Evidencia entonces: portal 24/24, master+ajustes 49/49, core 43/43, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
 
 ## Master fiscal marca MVS + rotación segura (2026-09-27, histórico, previo a visual/CTA)
 

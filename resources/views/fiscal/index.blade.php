@@ -66,7 +66,7 @@
             <dl class="mt-4 space-y-2 text-sm text-slate-700">
                 <div class="flex justify-between gap-3"><dt>Actividad económica</dt><dd class="font-bold text-right">{{ $config->economic_activity ?: 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Llave registrada</dt><dd class="font-bold text-right">{{ $config->maskedKey() ?: 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Conexión fiscal</dt><dd class="font-bold text-right">{{ $config->last_error_code !== null ? 'Requiere atención' : ($config->last_verified_at ? 'Verificada' : 'Pendiente') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Última comprobación</dt><dd class="font-bold text-right">{{ $config->last_verified_at ? $config->last_verified_at->format('d/m/Y H:i') : 'Sin verificar' }}</dd></div>
             </dl>
 
@@ -99,7 +99,6 @@
             @can('fiscal.editar')
                 <div class="mt-4 flex flex-wrap gap-2 text-sm">
                     <a href="{{ route('fiscal.series') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Series</a>
-                    <a href="{{ route('fiscal.switch') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 font-bold text-slate-800">Proveedor</a>
                 </div>
             @endcan
         @endif
@@ -164,5 +163,13 @@
             @endforeach
         </ul>
     </section>
+
+    @can('fiscal.editar')
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            <h2 class="text-lg font-bold text-slate-950">Configuración avanzada</h2>
+            <p class="mt-1 text-sm text-slate-600">Normalmente no necesita modificar esta información. Utilícela al migrar numeración existente o cuando soporte MVS se lo indique.</p>
+            <a href="{{ route('fiscal.series') }}" class="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-800">Series fiscales / Migración</a>
+        </section>
+    @endcan
 </div>
 @endsection

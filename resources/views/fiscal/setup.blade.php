@@ -29,6 +29,7 @@
         @if($step === 'datos')
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'datos']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
+                <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Datos fiscales de la empresa</p>
                 <div>
                     <label class="text-sm font-bold" for="identification_type">Tipo de identificación</label>
                     <input id="identification_type" name="identification_type" value="{{ old('identification_type', $company->identification_type) }}" required class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
@@ -44,6 +45,11 @@
                 <div>
                     <label class="text-sm font-bold" for="email">Correo fiscal</label>
                     <input id="email" type="email" name="email" value="{{ old('email', $company->email) }}" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                </div>
+                <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Actividad económica y ubicación fiscal</p>
+                <div>
+                    <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
+                    <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
                 <div>
                     <span class="text-sm font-bold">Ubicación fiscal</span>
@@ -89,10 +95,7 @@
                     <label class="text-sm font-bold" for="address">Otras señas</label>
                     <input id="address" name="address" value="{{ old('address', $company->address) }}" placeholder="Dirección exacta" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                 </div>
-                <div>
-                    <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
-                    <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
-                </div>
+                <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Sucursal / terminal</p>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-sm font-bold" for="fiscal_branch_code">Sucursal fiscal (3 dígitos)</label>
@@ -118,14 +121,7 @@
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'conexion']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
                 @if(count($providers) > 1)
-                    <div>
-                        <label class="text-sm font-bold" for="provider">Conexión fiscal</label>
-                        <select id="provider" name="provider" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
-                            @foreach($providers as $code => $label)
-                                <option value="{{ $code }}" @selected(old('provider', $config->pending_provider ?? $config->provider) === $code)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+                <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). La conexión la administra MVS; aquí solo registra sus credenciales.</p>
                 @else
                     <p class="text-sm text-slate-600">Conexión fiscal MVS (Hacienda). Sin opciones adicionales por ahora.</p>
                 @endif

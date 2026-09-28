@@ -610,7 +610,31 @@ class FiscalPortalTest extends TestCase
 
         $this->get(route('fiscal.series'))->assertOk();
         $this->get(route('fiscal.history'))->assertOk();
-        $this->get(route('fiscal.switch'))->assertOk();
+        $this->get(route('fiscal.switch'))->assertForbidden();
+    }
+
+    public function test_master_hides_provider_and_masked_secret(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $response = $this->get(route('fiscal.index'));
+        $response->assertOk();
+        $response->assertDontSee('>Proveedor<');
+        $response->assertDontSee('facturaencr');
+        $response->assertDontSee('••••');
+        $response->assertSee('Conexión fiscal');
+        $response->assertSee('Verificada');
+        $response->assertSee('Configuración avanzada');
+        $response->assertSee('Series fiscales / Migración');
+        $response->assertSee('Normalmente no necesita modificar esta información');
     }
 
     public function test_series_empty_is_neutral_not_satisfactory(): void
@@ -621,7 +645,7 @@ class FiscalPortalTest extends TestCase
 
         $response = $this->get(route('fiscal.index'));
         $response->assertOk();
-        $response->assertSee('Sin series observadas todavía');
+        $response->assertSee('Las series se registrarán al emitir.');
     }
 
     public function test_consumption_card_and_badges(): void

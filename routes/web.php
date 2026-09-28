@@ -192,6 +192,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
+    Route::get('/fiscal/{company}/proveedor', [FiscalPortalController::class, 'switchForCompany'])->name('fiscal.switch');
 });
 
 Route::middleware(['auth', 'active.company'])->group(function () {

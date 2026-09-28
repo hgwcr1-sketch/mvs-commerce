@@ -358,7 +358,7 @@ class FiscalPortalController extends Controller
                 'label' => 'Credenciales de conexión',
                 'ok' => $config->hasCredentials(),
                 'detail' => $config->hasCredentials()
-                    ? 'Credenciales registradas (' . ($config->maskedKey() ?? '—') . ').'
+                    ? 'Credenciales registradas.'
                     : 'Faltan credenciales de conexión.',
                 'resolve' => $config->hasCredentials() ? null : 'conexion',
             ],
@@ -367,8 +367,8 @@ class FiscalPortalController extends Controller
                 'ok' => $seriesCount > 0,
                 'detail' => $seriesCount > 0
                     ? "{$seriesCount} serie(s) observada(s), sin resets."
-                    : 'Sin series observadas todavía.',
-                'resolve' => 'series',
+                    : 'Las series se registrarán al emitir.',
+                'resolve' => null,
             ],
             [
                 'label' => 'Última comunicación con Hacienda',
@@ -467,17 +467,34 @@ class FiscalPortalController extends Controller
         ]);
     }
 
+    /**
+     * Pantalla interna MVS (NO tenant): el cambio de proveedor es
+     * responsabilidad administrativa. El tenant recibe 403 aunque
+     * conozca la URL.
+     */
     public function switchChecklist(Request $request): View
     {
-        $company = $this->company();
-        $target = (string) $request->query('to', '');
+        abort_unless(auth()->user()?->isPlatformAdmin(), 403);
+
+        return $this->switchView($this->company(), (string) $request->query('to', ''));
+    }
+
+    /**
+     * Cambio de proveedor desde Panel Maestro para una empresa explícita.
+     */
+    public function switchForCompany(Company $company, Request $request): View
+    {
+        return $this->switchView($company, (string) $request->query('to', ''));
+    }
+
+    private function switchView(Company $company, string $target): View
+    {
         $check = $target !== ''
             ? app(\App\Services\Fiscal\FiscalProviderSwitchService::class)->canSwitch($company, $target)
             : null;
 
         return view('fiscal.switch', [
             'company' => $company,
-            'current' => $this->configs->ensure($company)->provider,
             'providers' => array_keys((array) config('fiscal.providers', [])),
             'target' => $target,
             'check' => $check,
