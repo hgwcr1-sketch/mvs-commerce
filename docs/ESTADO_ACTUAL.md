@@ -15,6 +15,17 @@ Documento corto de relevo entre agentes. Actualizar al terminar cada tarea impor
 - **Tests agregados (sin tocar código de aplicación):** `HaciendaActivityFlowTest` (5) ata endpoint → payload real → persistencia usando la forma real de Hacienda; `tests/js/hacienda-actividades-real.cjs` y `tests/js/pos-hacienda-real.cjs` ejecutan el JS real en DOM. Verde: 36 PHP (261 aserciones) + 2 JS. Pint PASS.
 - **Anomalía preexistente (no tocada, ajena a la tarea):** `clientes/create.blade.php` tiene `<form` duplicado (líneas 31-32) desde `17dc37d`, también presente en producción.
 
+## Causa raíz del flujo Hacienda invisible — TIPO DE IDENTIFICACIÓN VACÍO (2026-09-28)
+
+**Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities`. **Sin producción.** Corrige la conclusión de la auditoría anterior.
+
+- **Síntoma real del usuario (navegador):** en `/clientes/create` y en Nuevo Cliente del POS no aparecía consulta, propuesta, nombre oficial, régimen, situación ni actividades.
+- **No era deploy ni assets.** Auditoría por MD5 de los 7 archivos frente a producción (`932d432`): **idénticos**. La vista Blade compilada en producción contiene los 11 hooks, `manifest.json` es coherente, no hay `public/build/hot`, el bundle se sirve 200 (116.615 B) e `identificacion.js` está dentro de él. **Ningún archivo faltaba ni difería.**
+- **Causa raíz:** `identification_type` inicia en `''` en ambos formularios (`_form.blade.php` y `resetQuickCustomer()`), y `canLookup('')` es `false` porque `LOOKUP_TYPES` solo cubre `01-04`. `schedule()` y `scheduleTaxpayerLookup()` entoncesaban la consulta y llamaban `hideTaxpayerProposal()`: sin consulta no había propuesta, ni régimen, ni situación, ni actividades. El flujo solo funcionaba si la persona **tocaba el desplegable de tipo**, algo que no ocurre al abrir el formulario.
+- **Fix mínimo y único:** `inferType()`/`resolveType()` en `resources/js/modules/identificacion.js` deducen el tipo por cantidad de dígitos (9→`01`, 10→`02`, 11/12→`03`) **solo cuando el tipo está vacío**, y se reflejan en el `<select>` para que se guarde el mismo tipo que se consultó. Un tipo ya elegido por la persona **nunca** se sobreescribe. El POS reutiliza esa **misma** función: no hay segunda integración ni ruta nueva; se sigue usando `/clientes/contribuyente`.
+- **Tests:** los 3 archivos previos ahora reproducen el caso real (tipo vacío) y se añadió `test_la_vista_real_expone_los_hooks_del_flujo_hacienda`, que valida el HTML renderizado de `/clientes/create`. Verde: **37 PHP (274 aserciones) + 2 JS**. `npm run build` correcto (`app-C1cOIp4W.js`), Pint PASS.
+- **No se tocó** CABYS, MF05 ni factura electrónica. Producción intacta.
+
 ## Pagos mixtos de apartado desde POS (2026-09-24)
 
 **Rama:** `feature/pos` @ `b89465d` + cambios locales sin commit. Sin migraciones ni producción.

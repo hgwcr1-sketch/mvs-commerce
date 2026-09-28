@@ -122,6 +122,37 @@ function canLookup(type) {
     return LOOKUP_TYPES.indexOf(type) !== -1;
 }
 
+/**
+ * Deduce el tipo de identificación a partir de la cantidad de dígitos.
+ *
+ * Sin esto, un formulario recién abierto (tipo en "") NUNCA consulta a
+ * Hacienda: el cajero tendría que tocar el desplegable de tipo para ver la
+ * propuesta, el nombre oficial y las actividades económicas.
+ *
+ * 9 dígitos -> 01 Cédula física; 10 -> 02 Cédula jurídica; 11 o 12 -> 03 DIMEX.
+ * El tipo 04 NITE comparte 10 dígitos con 02 y 05 Extranjero no admite
+ * consulta, así que solo se completan los casos que las reglas fijan de forma
+ * unívoca. Si el cajero YA eligió un tipo, ese tipo manda siempre.
+ */
+function inferType(value) {
+    if (!isNumericLike(value)) return null;
+
+    const length = digitsOf(value).length;
+
+    if (length === 9) return '01';
+    if (length === 10) return '02';
+    if (length === 11 || length === 12) return '03';
+
+    return null;
+}
+
+/** Tipo efectivo: el elegido por la persona o, si está vacío, el deducido. */
+function resolveType(type, value) {
+    if (canLookup(type)) return type;
+
+    return type ? null : inferType(value);
+}
+
 async function consult(type, value) {
     // La máscara con guiones es solo visual: a Hacienda siempre viajan dígitos.
     const url = '/clientes/contribuyente?tipo=' + encodeURIComponent(type)
@@ -164,6 +195,8 @@ window.MvsIdentification = {
     complete,
     transform,
     canLookup,
+    inferType,
+    resolveType,
     consult,
     statusText,
     statusClass,
@@ -385,10 +418,26 @@ function initCustomerForm() {
         }
     };
 
+    /**
+     * Tipo efectivo del formulario. Si la persona no eligió tipo, se deduce de
+     * los dígitos y SE REFLEJA en el <select>: así el mismo tipo que se usó
+     * para consultar es el que se guarda con el cliente.
+     */
+    const effectiveType = () => {
+        const deduced = resolveType(typeInput.value, numberInput.value);
+
+        if (deduced && !canLookup(typeInput.value)) {
+            typeInput.value = deduced;
+            applyMeta();
+        }
+
+        return typeInput.value;
+    };
+
     const schedule = () => {
         clearTimeout(timer);
 
-        const type = typeInput.value;
+        const type = effectiveType();
         const value = numberInput.value;
 
         if (!canLookup(type) || !complete(type, value)) {
@@ -405,7 +454,7 @@ function initCustomerForm() {
         if (legacy && numberInput.value === '') legacy = false;
 
         if (!legacy) {
-            const formatted = format(typeInput.value, numberInput.value);
+            const formatted = format(effectiveType(), numberInput.value);
             if (numberInput.value !== formatted) numberInput.value = formatted;
         }
 
@@ -441,4 +490,4 @@ if (document.readyState === 'loading') {
     initCustomerForm();
 }
 
-export { RULES, digitsOf, isNumericLike, maxLengthOf, placeholderOf, format, complete, transform, canLookup, consult };
+export { RULES, digitsOf, isNumericLike, maxLengthOf, placeholderOf, format, complete, transform, canLookup, inferType, resolveType, consult };

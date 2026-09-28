@@ -109,6 +109,35 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 
 (async function ejecutar() {
+    // 0) REPRODUCCIÓN DEL FALLO REAL: el formulario recién abierto tiene el
+    // tipo de identificación en "". Antes de la corrección, escribir una
+    // cédula válida NO disparaba ninguna consulta y no aparecía nada.
+    let solicitadoInferido = null;
+    const dom0 = crearDom();
+    cargarModulo(dom0, async (url) => {
+        solicitadoInferido = url;
+        return { ok: true, status: 200, json: async () => LOOKUP_OK };
+    });
+    dom0._elementos.identification_type.value = '';
+    dom0._elementos.identification.value = '109870988';
+    dom0._elementos.identification.dispatch('input');
+    await dormir(700);
+
+    assert.equal(solicitadoInferido, '/clientes/contribuyente?tipo=01&identificacion=109870988',
+        'Con el tipo vacío, escribir 9 dígitos debe consultar como 01 (cédula física)');
+    assert.equal(dom0._elementos.taxpayer_proposal.hidden, false, 'La propuesta debe verse sin tocar el desplegable de tipo');
+    assert.equal(dom0._elementos.taxpayer_activities_list.children.length, 2, 'Las actividades deben listarse sin elegir tipo');
+    assert.equal(dom0._elementos.identification_type.value, '01',
+        'El tipo deducido debe reflejarse en el select para que se guarde el mismo que se consultó');
+    assert.equal(dom0._elementos.identification.value, '1-0987-0988', 'La máscara oficial debe aplicarse al deducir el tipo');
+
+    // Un tipo ya elegido por la persona NUNCA se sobreescribe.
+    dom0._elementos.identification_type.value = '02';
+    dom0._elementos.identification.value = '';
+    dom0._elementos.identification.dispatch('input');
+    await dormir(700);
+    assert.equal(dom0._elementos.identification_type.value, '02', 'El tipo elegido por la persona se respeta');
+
     // 1) Cliente nuevo: actividades visibles y enviadas al guardar.
     let solicitado = null;
     const dom1 = crearDom();

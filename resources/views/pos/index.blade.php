@@ -2566,7 +2566,16 @@ document.addEventListener('alpine:init', () => {
         },
         identificationInput() {
             const form = this.quickCustomer.form;
-            form.identification = window.MvsIdentification.format(form.identification_type, form.identification);
+            const rules = window.MvsIdentification;
+
+            // Sin tipo elegido se deduce de los dígitos: el flujo de Hacienda
+            // no puede depender de que el cajero toque el desplegable.
+            if (!form.identification_type) {
+                const deduced = rules.resolveType('', form.identification);
+                if (deduced) form.identification_type = deduced;
+            }
+
+            form.identification = rules.format(form.identification_type, form.identification);
             this.resetTaxpayerProposal();
             this.scheduleTaxpayerLookup();
         },
