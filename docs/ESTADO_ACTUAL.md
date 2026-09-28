@@ -2,6 +2,17 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## POS: el input del modal NUNCA llegaba al estado (causa real) (2026-09-28)
+
+**Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities`. **Sin producción.**
+
+- **Síntoma real:** en el modal "Nuevo cliente" del POS se escribía `109880401` y el tipo seguía en "Seleccione…", sin nombre ni propuesta.
+- **Causa raíz:** el input estaba declarado con `:value="quickCustomer.form.identification"` + `x-on:input="identificationInput()"` **sin `x-model`**. Ese binding `:value` reescribe el input con el estado en cada tecla, y el handler leía `form.identification` (el valor **viejo**, vacío) en vez del evento: `resolveType('', '')` devolvía `null`, no había tipo, no había debounce y nunca se llamaba a `/clientes/contribuyente`. La inferencia de tipo del hotfix anterior era correcta pero nunca se alcanzaba.
+- **Fix:** `x-model` en el input + `identificationInput($event)` que lee `$event.target.value`. La deducción por dígitos, la máscara y el guardado usan ese valor real. Sin segundo lookup: sigue `/clientes/contribuyente`.
+- **Cliente normal:** no tenía defecto de binding; la cédula probada (`109880401`) **no tiene actividades en la API real** (0 registros verificados en vivo). Para que "no aparece" nunca vuelva a confundirse con "no se muestra", `taxpayer_activities_box` **ya no arranca oculto**: siempre se ve y, sin actividades, dice explícitamente "Hacienda no informó actividades económicas para esta identificación" (`#taxpayer_activities_empty`).
+- **Tests:** `tests/js/pos-modal-binding-real.cjs` afirma el marcado real del Blade (x-model, sin `:value`, `$event` en el handler) y `pos-hacienda-real.cjs` reproduce el caso exacto del usuario (`109880401`, tipo vacío, evento real) verificando inferir `01`, máscara, consulta, nombre oficial y actividades. Verde: **37 PHP + 3 JS**, `npm run build` OK, Pint PASS.
+- **No se tocó** CABYS, MF05 ni factura electrónica.
+
 ## Auditoría flujo actividad económica Hacienda — SIN DEFECTO DE CÓDIGO (2026-09-28)
 
 **Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities` @ `dbf2d80`. **Sin producción.**

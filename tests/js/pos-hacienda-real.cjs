@@ -90,23 +90,23 @@ function crearPos(fetchMock) {
 }
 
 (async function ejecutar() {
-    // 0) REPRODUCCIÓN DEL FALLO REAL: el modal de Nuevo Cliente del POS abre
-    // con el tipo de identificación en "". Antes de la corrección, escribir la
-    // cédula no disparaba la consulta y el flujo de Hacienda no aparecía.
-    let solicitadoInferido = null;
+    // 0) REPRODUCCIÓN EXACTA DEL USUARIO: modal POS, tipo en "Seleccione…" y
+    // 109880401 tecleado. El evento debe llegar con el valor REAL tecleado.
+    let solicitadoUsuario = null;
     const pos0 = crearPos(async (url) => {
-        solicitadoInferido = url;
+        solicitadoUsuario = url;
         return { ok: true, status: 200, json: async () => LOOKUP_OK };
     });
     pos0.quickCustomer.form.identification_type = '';
-    pos0.quickCustomer.form.identification = '109870988';
-    pos0.identificationInput();
+    pos0.quickCustomer.form.identification = '';
+    pos0.identificationInput({ target: { value: '109880401' } });
     await dormir(700);
 
-    assert.equal(solicitadoInferido, '/clientes/contribuyente?tipo=01&identificacion=109870988',
-        'El POS debe consultar aun con el tipo vacío');
-    assert.equal(pos0.quickCustomer.form.identification_type, '01', 'El POS debe deducir el tipo para poder guardarlo');
-    assert.equal(pos0.quickCustomer.form.identification, '1-0987-0988', 'El POS debe aplicar la máscara oficial');
+    assert.equal(solicitadoUsuario, '/clientes/contribuyente?tipo=01&identificacion=109880401',
+        'El POS debe consultar la identificación tecleada, no el valor viejo del estado');
+    assert.equal(pos0.quickCustomer.form.identification_type, '01',
+        'El POS debe deducir Cédula Física y rellenar el select');
+    assert.equal(pos0.quickCustomer.form.identification, '1-0988-0401', 'El POS debe aplicar la máscara oficial');
     assert.equal(pos0.quickCustomer.ident.status, 'found', 'El POS debe mostrar el flujo de Hacienda');
     assert.equal(pos0.quickCustomer.ident.activities.length, 1, 'El POS debe mostrar la actividad económica');
     assert.equal(pos0.quickCustomer.form.name, 'COMERCIAL EJEMPLO SOCIEDAD ANONIMA', 'El POS debe aplicar el nombre oficial');

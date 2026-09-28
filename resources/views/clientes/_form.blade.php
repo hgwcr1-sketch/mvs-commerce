@@ -105,7 +105,11 @@
 
         {{-- Propuesta oficial de Hacienda: régimen, situación y actividades
              económicas. Es SOLO propuesta: nada se guarda sin que el usuario
-             lo confirme con los checkboxes. --}}
+             lo confirme con los checkboxes.
+             `taxpayer_activities_box` NO arranca oculto: la sección de
+             actividades debe quedar visible aunque la consulta aún no se haya
+             hecho o Hacienda no devuelva ninguna, para que quede explícito
+             que no hay actividades y que se está esperando la consulta. --}}
         <div class="md:col-span-2" id="taxpayer_proposal" hidden>
 
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -116,10 +120,16 @@
 
                 <p id="taxpayer_meta" class="mt-1 text-xs text-slate-600"></p>
 
-                <div id="taxpayer_activities_box" class="mt-3" hidden>
+                <div id="taxpayer_activities_box" class="mt-3">
 
                     <p class="text-xs font-semibold uppercase text-slate-500">
                         Actividades económicas
+                    </p>
+
+                    <p id="taxpayer_activities_empty"
+                       class="mt-2 text-xs text-slate-600">
+                        Aún no se ha consultado Hacienda. Ingrese la identificación para ver las
+                        actividades económicas oficiales.
                     </p>
 
                     <ul id="taxpayer_activities_list" class="mt-2 space-y-1.5"></ul>

@@ -990,8 +990,8 @@
 
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-slate-700">Identificación</label>
-                        <input :value="quickCustomer.form.identification"
-                               x-on:input="identificationInput()"
+                        <input x-model="quickCustomer.form.identification"
+                               x-on:input="identificationInput($event)"
                                :maxlength="window.MvsIdentification.maxLength(quickCustomer.form.identification_type)"
                                :placeholder="window.MvsIdentification.placeholder(quickCustomer.form.identification_type)"
                                :inputmode="window.MvsIdentification.RULES[quickCustomer.form.identification_type]?.digits ? 'numeric' : 'text'"
@@ -2564,18 +2564,24 @@ document.addEventListener('alpine:init', () => {
             this.quickCustomer.delivery = null;
             this.resetTaxpayerProposal();
         },
-        identificationInput() {
+        identificationInput($event) {
             const form = this.quickCustomer.form;
             const rules = window.MvsIdentification;
+
+            // Sin `x-model` el input solo tenía `:value`, y eso NO guarda lo
+            // tecleado en el estado: el handler terminaba formateando el valor
+            // viejo y la consulta a Hacienda nunca se disparaba. Se lee el
+            // valor REAL del evento y además se usa `x-model` en el marcado.
+            const typed = $event && $event.target ? String($event.target.value) : form.identification;
 
             // Sin tipo elegido se deduce de los dígitos: el flujo de Hacienda
             // no puede depender de que el cajero toque el desplegable.
             if (!form.identification_type) {
-                const deduced = rules.resolveType('', form.identification);
+                const deduced = rules.resolveType('', typed);
                 if (deduced) form.identification_type = deduced;
             }
 
-            form.identification = rules.format(form.identification_type, form.identification);
+            form.identification = rules.format(form.identification_type, typed);
             this.resetTaxpayerProposal();
             this.scheduleTaxpayerLookup();
         },
