@@ -133,44 +133,45 @@ class FiscalPortalTest extends TestCase
         ])->assertSessionHasErrors(['identification_number', 'legal_name']);
     }
 
-    public function test_connection_stores_encrypted_and_masks_output(): void
+    public function test_connection_stages_encrypted_and_masks_output(): void
     {
         [$company, $branch] = $this->fiscalContext();
         $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
-            'provider' => 'facturaencr',
             'environment' => 'sandbox',
             'api_key' => 'efk_TESTKEY1234',
             'api_secret' => 'efs_TESTSECRET5678',
         ])->assertRedirect();
 
         $raw = DB::table('company_fiscal_configs')->where('company_id', $company->id)->first();
-        $this->assertNotSame('efk_TESTKEY1234', $raw->provider_api_key);
-        $this->assertNotSame('efs_TESTSECRET5678', $raw->provider_api_secret);
-        $this->assertSame('efk_TESTKEY1234', decrypt($raw->provider_api_key, false));
+        $this->assertNotSame('efk_TESTKEY1234', $raw->pending_api_key);
+        $this->assertSame('efk_TESTKEY1234', decrypt($raw->pending_api_key, false));
+        $this->assertNull($raw->provider_api_key);
 
         $response = $this->get(route('fiscal.index'));
         $response->assertDontSee('efk_TESTKEY1234');
         $response->assertDontSee('efs_TESTSECRET5678');
-        $response->assertSee('••••1234');
+        $response->assertSee('Actualización requerida');
     }
 
-    public function test_empty_secret_keeps_existing_and_rotation_resets_verification(): void
+    public function test_empty_secret_stages_nothing_and_keeps_active(): void
     {
         [$company, $branch] = $this->fiscalContext();
         $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.editar']);
 
         $service = app(CompanyFiscalConfigService::class);
-        $service->updateConnection($company, ['api_key' => 'efk_FIRST', 'api_secret' => 'efs_FIRST']);
+        $service->stageConnection($company, ['api_key' => 'efk_FIRST', 'api_secret' => 'efs_FIRST']);
         CompanyFiscalConfig::query()->where('company_id', $company->id)->update([
-            'last_verified_at' => now(), 'last_error_code' => null, 'last_error_message' => null,
+            'provider_api_key' => encrypt('efk_FIRST', false),
+            'provider_api_secret' => encrypt('efs_FIRST', false),
+            'pending_api_key' => null, 'pending_api_secret' => null,
+            'last_verified_at' => now(),
         ]);
 
         $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
-            'provider' => 'facturaencr',
             'environment' => 'sandbox',
             'api_key' => '',
             'api_secret' => '',
@@ -179,18 +180,113 @@ class FiscalPortalTest extends TestCase
         $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
         $this->assertSame('efk_FIRST', $config->provider_api_key);
         $this->assertNotNull($config->last_verified_at);
+        $this->assertFalse($config->hasPending());
+    }
 
-        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
-            'provider' => 'facturaencr',
-            'environment' => 'sandbox',
-            'api_key' => 'efk_SECOND',
-            'api_secret' => '',
-        ])->assertRedirect();
+    public function test_failed_verification_keeps_active_connection(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_GOOD', 'api_secret' => 'efs_GOOD']);
+        CompanyFiscalConfig::query()->where('company_id', $company->id)->update([
+            'provider_api_key' => encrypt('efk_GOOD', false),
+            'provider_api_secret' => encrypt('efs_GOOD', false),
+            'pending_api_key' => null, 'pending_api_secret' => null,
+            'last_verified_at' => now(),
+        ]);
+
+        $service->stageConnection($company, ['api_key' => 'efk_BAD', 'api_secret' => 'efs_BAD']);
+        Http::fake(['auth/verify' => Http::response(['error' => 'unauthorized'], 401)]);
+
+        $this->post(route('fiscal.verify'))->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertSame('efk_GOOD', $config->provider_api_key);
+        $this->assertTrue($config->hasPending());
+        $this->assertSame('invalid_credentials', $config->last_error_code);
+
+        $this->post(route('fiscal.connection.discard'))->assertRedirect();
 
         $config->refresh();
-        $this->assertSame('efk_SECOND', $config->provider_api_key);
-        $this->assertSame('efs_FIRST', $config->provider_api_secret);
-        $this->assertNull($config->last_verified_at);
+        $this->assertFalse($config->hasPending());
+        $this->assertSame('efk_GOOD', $config->provider_api_key);
+    }
+
+    public function test_successful_rotation_activates_pending(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_NEW', 'api_secret' => 'efs_NEW']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+
+        $this->post(route('fiscal.verify'))->assertRedirect(route('fiscal.setup', ['step' => 'preferencias']));
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertSame('efk_NEW', $config->provider_api_key);
+        $this->assertFalse($config->hasPending());
+        $this->assertNotNull($config->last_verified_at);
+
+        $this->assertDatabaseHas('fiscal_config_audits', [
+            'company_id' => $company->id,
+            'change_type' => \App\Models\FiscalConfigAudit::TYPE_CONNECTION_ACTIVATED,
+        ]);
+    }
+
+    public function test_disconnect_clears_credentials_and_keeps_history(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $doc = ElectronicDocument::create([
+            'company_id' => $company->id, 'provider' => 'facturaencr', 'document_type' => '01',
+            'environment' => 'sandbox', 'idempotency_key' => md5('hist' . uniqid()), 'status' => 'accepted',
+        ]);
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_X', 'api_secret' => 'efs_X']);
+
+        $this->post(route('fiscal.disconnect'), ['disconnect_confirm' => '1'])->assertRedirect(route('fiscal.index'));
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertNull($config->provider_api_key);
+        $this->assertFalse($config->hasCredentials());
+        $this->assertNotNull(ElectronicDocument::find($doc->id));
+        $this->assertDatabaseHas('fiscal_config_audits', [
+            'company_id' => $company->id,
+            'change_type' => \App\Models\FiscalConfigAudit::TYPE_DISCONNECTED,
+        ]);
+
+        $this->post(route('fiscal.disconnect'), [])->assertSessionHasErrors('disconnect_confirm');
+    }
+
+    public function test_production_requires_explicit_confirmation(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'production',
+            'api_key' => 'efk_P',
+            'api_secret' => 'efs_P',
+        ])->assertSessionHasErrors('production_confirm');
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'production',
+            'production_confirm' => '1',
+            'api_key' => 'efk_P',
+            'api_secret' => 'efs_P',
+        ])->assertRedirect();
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertSame('production', $config->pending_environment);
+        $this->assertSame('sandbox', $config->environment);
     }
 
     public function test_sandbox_and_production_stay_separate(): void
@@ -200,22 +296,26 @@ class FiscalPortalTest extends TestCase
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $service = app(CompanyFiscalConfigService::class);
-        $service->updateConnection($company, ['api_key' => 'efk_SANDBOX', 'api_secret' => 'efs_SANDBOX']);
+        $service->stageConnection($company, ['api_key' => 'efk_SANDBOX', 'api_secret' => 'efs_SANDBOX']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'))->assertRedirect();
 
         $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
-            'provider' => 'facturaencr',
             'environment' => 'production',
+            'production_confirm' => '1',
             'api_key' => 'efk_PROD',
             'api_secret' => 'efs_PROD',
         ])->assertRedirect();
 
         $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
-        $this->assertSame('production', $config->environment);
-        $this->assertSame('efk_PROD', $config->provider_api_key);
-        $this->assertSame('efs_PROD', $config->provider_api_secret);
+        $this->assertSame('sandbox', $config->environment);
+        $this->assertSame('efk_SANDBOX', $config->provider_api_key);
+        $this->assertSame('production', $config->pending_environment);
+        $this->assertSame('efk_PROD', $config->pending_api_key);
 
         $response = $this->get(route('fiscal.index'));
-        $response->assertSee('Producción');
+        $response->assertDontSee('Producción');
+        $response->assertSee('Actualización requerida');
     }
 
     public function test_verify_ok_marks_ready_without_emitting(): void
@@ -226,17 +326,18 @@ class FiscalPortalTest extends TestCase
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $service = app(CompanyFiscalConfigService::class);
-        $service->updateConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
 
         Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
 
         $this->post(route('fiscal.verify'))
-            ->assertRedirect(route('fiscal.setup', ['step' => 'verificar']))
+            ->assertRedirect(route('fiscal.setup', ['step' => 'preferencias']))
             ->assertSessionHasNoErrors();
 
         $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
         $this->assertNotNull($config->last_verified_at);
         $this->assertNull($config->last_error_code);
+        $this->assertFalse($config->hasPending());
         $this->assertSame(0, ElectronicDocument::where('company_id', $company->id)->count());
         $this->assertSame(CompanyFiscalConfigService::STATUS_READY, $service->status($company->fresh()));
     }
@@ -249,7 +350,7 @@ class FiscalPortalTest extends TestCase
         $this->actingUser($company, $branch, ['fiscal.editar']);
 
         $service = app(CompanyFiscalConfigService::class);
-        $service->updateConnection($company, ['api_key' => 'efk_BAD', 'api_secret' => 'efs_BAD']);
+        $service->stageConnection($company, ['api_key' => 'efk_BAD', 'api_secret' => 'efs_BAD']);
 
         Http::fake(['auth/verify' => Http::response(['error' => 'unauthorized'], 401)]);
 
@@ -399,5 +500,63 @@ class FiscalPortalTest extends TestCase
         (new \Database\Seeders\PermissionSeeder())->run();
 
         $this->assertSame(1, Permission::where('name', 'fiscal.ver')->count());
+    }
+
+    public function test_tenant_views_hide_provider_brand(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $doc = ElectronicDocument::create([
+            'company_id' => $company->id, 'provider' => 'facturaencr', 'document_type' => '03',
+            'environment' => 'sandbox', 'idempotency_key' => md5('brand' . uniqid()), 'status' => 'rejected',
+            'attempt_number' => 2, 'last_error_code' => 'HACIENDA_REJECTED',
+        ]);
+
+        $forbidden = ['FacturaEnCR', 'proveedor facturaencr', 'facturaencr', 'Proveedor tecnico'];
+
+        $urls = [
+            route('fiscal.index'),
+            route('fiscal.setup', ['step' => 'datos']),
+            route('fiscal.setup', ['step' => 'conexion']),
+            route('fiscal.setup', ['step' => 'verificar']),
+            route('fiscal.history'),
+            route('fiscal.documents.show', $doc),
+        ];
+
+        foreach ($urls as $url) {
+            $response = $this->get($url);
+            $response->assertOk();
+
+            foreach ($forbidden as $word) {
+                $response->assertDontSee($word, false);
+            }
+        }
+    }
+public function test_master_shows_complete_or_manage_action(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->get(route('fiscal.index'))->assertSee('Completar configuración');
+
+        $company->update(['identification_number' => '3101000000', 'legal_name' => 'Demo S.A.']);
+        $service = app(CompanyFiscalConfigService::class);
+        $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
+        Http::fake(['auth/verify' => Http::response(['ok' => true], 200)]);
+        $this->post(route('fiscal.verify'));
+
+        $ready = $this->get(route('fiscal.index'));
+        $ready->assertSee('Administrar configuración');
+        $ready->assertSee('Actualizar conexión');
+        $ready->assertSee('Centro de Facturación Electrónica');
     }
 }

@@ -150,7 +150,7 @@ class FiscalMasterTest extends TestCase
         [$company] = $this->context();
         app(FiscalSeriesService::class)->import($company->id, 'sandbox', '001', '00001', '01', '00100001010000000009');
 
-        app(\App\Services\Fiscal\CompanyFiscalConfigService::class)->updateConnection($company, [
+        app(\App\Services\Fiscal\CompanyFiscalConfigService::class)->stageConnection($company, [
             'provider' => 'facturaencr', 'environment' => 'sandbox',
         ]);
 
