@@ -73,6 +73,7 @@ class HaciendaActivityFlowTest extends TestCase
             'id="taxpayer_meta"',
             'id="taxpayer_activities_box"',
             'id="taxpayer_activities_list"',
+            'id="taxpayer_activities_empty"',
             'id="taxpayer_activities_inputs"',
             'id="taxpayer_proposal_seed"',
             'id="taxpayer_apply_all"',
@@ -80,6 +81,14 @@ class HaciendaActivityFlowTest extends TestCase
         ] as $id) {
             $this->assertStringContainsString($id, $html, 'Falta el contenedor '.$id.' en /clientes/create');
         }
+
+        // La sección de actividades NO debe arrancar oculta: si se consulta una
+        // identificación sin actividades debe quedar explícito, no desaparecer.
+        $this->assertDoesNotMatchRegularExpression(
+            '/id="taxpayer_activities_box"[^>]*\shidden/',
+            $html,
+            'La sección de actividades no debe iniciar oculta'
+        );
 
         // El bundle de Vite debe servirse: sin él no arranca nada de lo anterior.
         $this->assertStringContainsString('/build/assets/', $html, 'La vista no está cargando el bundle de Vite');

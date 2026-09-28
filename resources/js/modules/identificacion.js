@@ -241,11 +241,23 @@ function renderActivities(activities) {
     const list = document.getElementById('taxpayer_activities_list');
     if (!box || !list) return;
 
-    box.hidden = activities.length === 0;
+    // La sección NUNCA se oculta: si no hay actividades se dice explícitamente,
+    // para que "no aparece" nunca signifique "no se está mostrando".
+    box.hidden = false;
+
+    const vacio = document.getElementById('taxpayer_activities_empty');
+    const utiles = activities.filter((activity) => activity && activity.code);
+
+    if (vacio) {
+        vacio.textContent = utiles.length
+            ? ''
+            : 'Hacienda no informó actividades económicas para esta identificación.';
+        vacio.hidden = utiles.length > 0;
+    }
+
     list.innerHTML = '';
 
-    activities.forEach((activity, index) => {
-        if (!activity || !activity.code) return;
+    utiles.forEach((activity, index) => {
 
         const item = document.createElement('li');
         const checkbox = document.createElement('input');

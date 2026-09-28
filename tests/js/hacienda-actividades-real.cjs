@@ -74,7 +74,8 @@ function crearDom() {
         'identification_type', 'identification', 'identification_status',
         'name', 'taxpayer_name', 'taxpayer_proposal', 'taxpayer_meta',
         'taxpayer_activities_box', 'taxpayer_activities_list',
-        'taxpayer_activities_inputs', 'taxpayer_apply_all', 'taxpayer_clear',
+        'taxpayer_activities_empty', 'taxpayer_activities_inputs',
+        'taxpayer_apply_all', 'taxpayer_clear',
     ];
     const elementos = {};
     ids.forEach((id) => {
@@ -177,7 +178,11 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
     dom2._elementos.identification.dispatch('input');
     await dormir(700);
     assert.equal(dom2._elementos.taxpayer_activities_list.children.length, 0, 'No debe inventar actividades');
-    assert.equal(dom2._elementos.taxpayer_activities_box.hidden, true, 'La caja de actividades debe seguir oculta');
+    assert.equal(dom2._elementos.taxpayer_activities_box.hidden, false,
+        'La sección de actividades debe seguir VISIBLE aunque no haya ninguna');
+    assert.equal(dom2._elementos.taxpayer_activities_empty.hidden, false,
+        'Debe decir explícitamente que Hacienda no informó actividades');
+    assert.match(dom2._elementos.taxpayer_activities_empty.textContent, /no informó actividades/);
     assert.equal(dom2._elementos.taxpayer_activities_inputs.children.length, 0, 'No debe enviar actividades');
     assert.equal(dom2._elementos.taxpayer_proposal.hidden, false, 'El nombre oficial debe seguir mostrandose');
 
