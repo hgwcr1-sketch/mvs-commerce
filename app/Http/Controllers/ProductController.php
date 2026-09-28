@@ -6,12 +6,15 @@ use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Brand;
 use App\Models\Color;
+use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
+use App\Services\Cabys\ProductCabysService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -96,64 +99,63 @@ class ProductController extends Controller
             ->orderBy('name')
             ->get();
 
+        $statsProducts = Product::where('company_id', $companyId)
+            ->with([
+                'branches' => function ($query) use ($branchId) {
+                    $query->where('branches.id', $branchId);
+                },
+            ])
+            ->get();
 
-$statsProducts = Product::where('company_id', $companyId)
-    ->with([
-        'branches' => function ($query) use ($branchId) {
-            $query->where('branches.id', $branchId);
-        }
-    ])
-    ->get();
+        $totalProducts = $statsProducts->count();
 
-$totalProducts = $statsProducts->count();
+        $activeProducts = $statsProducts
+            ->where('is_active', true)
+            ->count();
 
-$activeProducts = $statsProducts
-    ->where('is_active', true)
-    ->count();
+        $outOfStockProducts = $statsProducts
+            ->filter(function ($product) {
 
-$outOfStockProducts = $statsProducts
-    ->filter(function ($product) {
+                $branch = $product->branches->first();
 
-        $branch = $product->branches->first();
+                $stock = $branch
+                    ? (float) $branch->pivot->stock
+                    : 0;
 
-        $stock = $branch
-            ? (float) $branch->pivot->stock
-            : 0;
+                return $stock <= 0;
+            })
+            ->count();
 
-        return $stock <= 0;
-    })
-    ->count();
+        $lowStockProducts = $statsProducts
+            ->filter(function ($product) {
 
-$lowStockProducts = $statsProducts
-    ->filter(function ($product) {
+                $branch = $product->branches->first();
 
-        $branch = $product->branches->first();
+                if (! $branch) {
+                    return false;
+                }
 
-        if (!$branch) {
-            return false;
-        }
+                $stock = (float) $branch->pivot->stock;
+                $minimum = $branch->pivot->minimum_stock;
 
-        $stock = (float) $branch->pivot->stock;
-        $minimum = $branch->pivot->minimum_stock;
+                if ($minimum === null) {
+                    return false;
+                }
 
-        if ($minimum === null) {
-            return false;
-        }
-
-        return $stock > 0
-            && $stock <= (float) $minimum;
-    })
-    ->count();
+                return $stock > 0
+                    && $stock <= (float) $minimum;
+            })
+            ->count();
 
         return view('productos.index', compact(
-    'products',
-    'categories',
-    'brands',
-    'totalProducts',
-    'activeProducts',
-    'lowStockProducts',
-    'outOfStockProducts'
-));
+            'products',
+            'categories',
+            'brands',
+            'totalProducts',
+            'activeProducts',
+            'lowStockProducts',
+            'outOfStockProducts'
+        ));
 
     }
 
@@ -195,13 +197,17 @@ $lowStockProducts = $statsProducts
             ->orderBy('name')
             ->get();
 
+        // Alta: todavía no hay asignación CABYS que mostrar.
+        $cabysState = null;
+
         return view('productos.create', compact(
             'categories',
             'brands',
             'units',
             'styles',
             'sizes',
-            'colors'
+            'colors',
+            'cabysState'
         ));
     }
 
@@ -212,6 +218,14 @@ $lowStockProducts = $statsProducts
     {
         $data = $request->validated();
         $data['company_id'] = session('active_company_id');
+
+        /*
+         * MF04: la selección CABYS viene del buscador del catálogo local, no
+         * es texto libre ni columna de products: se resuelve dentro de la
+         * misma transacción que crea el producto.
+         */
+        $proposedCabysCode = trim((string) ($data['cabys_proposed_code'] ?? ''));
+        unset($data['cabys_proposed_code'], $data['cabys_code']);
 
         if ($request->has('subcategory_id') && $request->subcategory_id) {
             $data['category_id'] = $request->subcategory_id;
@@ -236,44 +250,66 @@ $lowStockProducts = $statsProducts
         $minimumStock = $data['minimum_stock'] ?? null;
         $maximumStock = $data['maximum_stock'] ?? null;
 
-        $product = Product::create($data);
+        $cabysState = null;
 
-        /*
-         * Asociar producto con la sucursal activa.
-         */
-        $branchId = session('active_branch_id');
+        $product = DB::transaction(function () use ($data, $initialStock, $minimumStock, $maximumStock, $proposedCabysCode, $request, &$cabysState) {
+            $product = Product::create($data);
 
-        if ($branchId) {
-            $product->branches()->attach($branchId, [
-                'stock' => $initialStock,
-                'minimum_stock' => $minimumStock,
-                'maximum_stock' => $maximumStock,
-            ]);
+            /*
+             * Asociar producto con la sucursal activa.
+             */
+            $branchId = session('active_branch_id');
+
+            if ($branchId) {
+                $product->branches()->attach($branchId, [
+                    'stock' => $initialStock,
+                    'minimum_stock' => $minimumStock,
+                    'maximum_stock' => $maximumStock,
+                ]);
+            }
+
+            /*
+             * Producto + asignación CABYS en UNA operación: si el código sigue
+             * válido contra la versión vigente se confirma aquí mismo; si es
+             * ambiguo, inválido o no hay catálogo, el producto se guarda igual
+             * y la asignación queda pendiente. Nada del alta depende de que la
+             * asignación se confirme.
+             */
+            if ($proposedCabysCode !== '') {
+                $cabysState = $this->registerCabysSelection(
+                    $product,
+                    $proposedCabysCode,
+                    (int) $request->user()?->id
+                );
+            }
+
+            return $product;
+        });
+
+        if ($request->expectsJson()) {
+            $product->load(['brand', 'category', 'unit']);
+
+            return response()->json([
+                'id' => $product->id,
+                'name' => $product->name,
+                'internal_code' => $product->internal_code,
+                'barcode' => $product->barcode,
+                'barcodes' => [],
+                'brand' => $product->brand?->name,
+                'category' => $product->category?->name,
+                'unit' => $product->unit?->name,
+                'cost' => (float) $product->cost,
+                'sale_price' => (float) $product->sale_price,
+                'tax_rate' => (float) $product->tax_rate,
+                'track_inventory' => (bool) $product->track_inventory,
+                'stock' => (float) $initialStock,
+                'cabys' => $cabysState,
+            ], 201);
         }
-
-if ($request->expectsJson()) {
-    $product->load(['brand', 'category', 'unit']);
-
-    return response()->json([
-        'id' => $product->id,
-        'name' => $product->name,
-        'internal_code' => $product->internal_code,
-        'barcode' => $product->barcode,
-        'barcodes' => [],
-        'brand' => $product->brand?->name,
-        'category' => $product->category?->name,
-        'unit' => $product->unit?->name,
-        'cost' => (float) $product->cost,
-        'sale_price' => (float) $product->sale_price,
-        'tax_rate' => (float) $product->tax_rate,
-        'track_inventory' => (bool) $product->track_inventory,
-        'stock' => (float) $initialStock,
-    ], 201);
-}
 
         return redirect()
             ->route('productos.index')
-            ->with('success', 'Producto creado correctamente.');
+            ->with('success', 'Producto creado correctamente.'.$this->cabysSuffix($cabysState));
     }
 
     /**
@@ -290,70 +326,77 @@ if ($request->expectsJson()) {
      * Editar producto.
      */
     public function edit(Product $producto)
-{
-    $this->scoped($producto);
-    $companyId = session('active_company_id');
-    $branchId = session('active_branch_id');
+    {
+        $this->scoped($producto);
+        $companyId = session('active_company_id');
+        $branchId = session('active_branch_id');
 
-    $categories = ProductCategory::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $categories = ProductCategory::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $brands = Brand::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $brands = Brand::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $units = Unit::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $units = Unit::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $styles = Style::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $styles = Style::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $sizes = Size::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('sort_order')
-        ->orderBy('name')
-        ->get();
+        $sizes = Size::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
-    $colors = Color::where('company_id', $companyId)
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get();
+        $colors = Color::where('company_id', $companyId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
 
-    $branch = $producto->branches()
-        ->where('branches.id', $branchId)
-        ->first();
+        $branch = $producto->branches()
+            ->where('branches.id', $branchId)
+            ->first();
 
-    $product = $producto;
+        $product = $producto;
 
-    $product->branch_stock = $branch
-        ? $branch->pivot->stock
-        : 0;
+        $product->branch_stock = $branch
+            ? $branch->pivot->stock
+            : 0;
 
-    $product->branch_minimum_stock = $branch
-        ? $branch->pivot->minimum_stock
-        : null;
+        $product->branch_minimum_stock = $branch
+            ? $branch->pivot->minimum_stock
+            : null;
 
-    $product->branch_maximum_stock = $branch
-        ? $branch->pivot->maximum_stock
-        : null;
+        $product->branch_maximum_stock = $branch
+            ? $branch->pivot->maximum_stock
+            : null;
 
-    return view('productos.edit', compact(
-        'product',
-        'categories',
-        'brands',
-        'units',
-        'styles',
-        'sizes',
-        'colors'
-    ));
-}
+        $company = Company::query()->find((int) $companyId);
+
+        $cabysState = $company !== null
+            ? app(ProductCabysService::class)->stateFor($company, $producto)
+            : null;
+
+        return view('productos.edit', compact(
+            'product',
+            'categories',
+            'brands',
+            'units',
+            'styles',
+            'sizes',
+            'colors',
+            'cabysState'
+        ));
+    }
 
     /**
      * Actualizar producto.
@@ -362,6 +405,13 @@ if ($request->expectsJson()) {
     {
         $this->scoped($producto);
         $data = $request->validated();
+
+        /*
+         * MF04: igual que en el alta, la selección CABYS viaja desde el
+         * buscador del catálogo local y no es columna de products.
+         */
+        $proposedCabysCode = trim((string) ($data['cabys_proposed_code'] ?? ''));
+        unset($data['cabys_proposed_code'], $data['cabys_code']);
 
         if ($request->has('subcategory_id') && $request->subcategory_id) {
             $data['category_id'] = $request->subcategory_id;
@@ -383,39 +433,145 @@ if ($request->expectsJson()) {
         $data['is_active'] = $request->boolean('is_active');
 
         /*
- * Stock mínimo y máximo pertenecen a la sucursal activa.
- * Nunca modificamos aquí el stock actual.
- */
-$minimumStock = $data['minimum_stock'] ?? null;
-$maximumStock = $data['maximum_stock'] ?? null;
+         * Stock mínimo y máximo pertenecen a la sucursal activa.
+         * Nunca modificamos aquí el stock actual.
+         */
+        $minimumStock = $data['minimum_stock'] ?? null;
+        $maximumStock = $data['maximum_stock'] ?? null;
 
-/*
- * Evitar guardar estos valores como inventario global del producto.
- */
-unset(
-    $data['stock'],
-    $data['minimum_stock'],
-    $data['maximum_stock']
-);
+        /*
+         * Evitar guardar estos valores como inventario global del producto.
+         */
+        unset(
+            $data['stock'],
+            $data['minimum_stock'],
+            $data['maximum_stock']
+        );
 
-$producto->update($data);
+        /*
+         * T2: si el usuario cambia el impuesto en el formulario, el valor vigente
+         * vuelve a ser MANUAL. Así ninguna sincronización futura de CABYS lo
+         * sobrescribe en silencio y una tarifa manual que difiera queda respetada.
+         */
+        $taxChangedManually = array_key_exists('tax_rate', $data)
+            && abs((float) $data['tax_rate'] - (float) $producto->tax_rate) > 0.0001;
 
-/*
- * Actualizar configuración de inventario
- * de la sucursal activa.
- */
-$branchId = session('active_branch_id');
+        $producto->update($data);
 
-if ($branchId) {
-    $producto->branches()->updateExistingPivot($branchId, [
-        'minimum_stock' => $minimumStock,
-        'maximum_stock' => $maximumStock,
-    ]);
-}
+        if ($taxChangedManually) {
+            $company = Company::query()->find((int) session('active_company_id'));
+
+            if ($company !== null) {
+                app(ProductCabysService::class)->markManualTaxRate($company, $producto);
+            }
+        }
+
+        /*
+         * Actualizar configuración de inventario
+         * de la sucursal activa.
+         */
+        $branchId = session('active_branch_id');
+
+        if ($branchId) {
+            $producto->branches()->updateExistingPivot($branchId, [
+                'minimum_stock' => $minimumStock,
+                'maximum_stock' => $maximumStock,
+            ]);
+        }
+
+        $cabysState = null;
+
+        if ($proposedCabysCode !== '') {
+            $cabysState = $this->registerCabysSelection(
+                $producto->fresh(),
+                $proposedCabysCode,
+                (int) $request->user()?->id
+            );
+        }
 
         return redirect()
             ->route('productos.index')
-            ->with('success', 'Producto actualizado correctamente.');
+            ->with('success', 'Producto actualizado correctamente.'.$this->cabysSuffix($cabysState));
+    }
+
+    /**
+     * Registra la selección CABYS hecha en el formulario del producto.
+     *
+     * El código viene del buscador del catálogo local (no es texto libre).
+     * Aquí se registra como propuesta y, si sigue existiendo en la versión
+     * vigente, se confirma en la misma operación. Un fallo del motor (sin
+     * catálogo, código inexistente) NO revierte el guardado: queda pendiente.
+     *
+     * @return array{status: string, code: string, message: string, tax: array<string, mixed>|null}
+     */
+    private function registerCabysSelection(Product $product, string $code, int $userId): array
+    {
+        if (preg_match('/^\d{13}$/', $code) !== 1) {
+            return [
+                'status' => 'pending',
+                'code' => $code,
+                'message' => 'El código CABYS debe tener 13 dígitos y salir del buscador: no se registró.',
+                'tax' => null,
+            ];
+        }
+
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        if ($company === null) {
+            return [
+                'status' => 'pending',
+                'code' => $code,
+                'message' => 'Sin empresa activa: el código quedó sin registrar.',
+                'tax' => null,
+            ];
+        }
+
+        try {
+            app(ProductCabysService::class)->suggest($company, $product, $code);
+        } catch (\Throwable $exception) {
+            Log::warning('cabys.proposal_failed', [
+                'product_id' => $product->getKey(),
+                'code' => $code,
+            ]);
+
+            return [
+                'status' => 'pending',
+                'code' => $code,
+                'message' => 'No se pudo registrar la propuesta CABYS; podrá asignarla en la edición.',
+                'tax' => null,
+            ];
+        }
+
+        try {
+            $result = app(ProductCabysService::class)
+                ->confirmWithProposal($company, $product->fresh(), $userId);
+
+            return [
+                'status' => 'confirmed',
+                'code' => $code,
+                'message' => 'Código CABYS confirmado. '.$result['proposal']['message'],
+                'tax' => $result['proposal'],
+            ];
+        } catch (\RuntimeException $exception) {
+            /* Fallo cerrado esperado: sin catálogo activo o código que ya no
+             * está en la versión vigente. La propuesta queda pendiente. */
+            return [
+                'status' => 'pending',
+                'code' => $code,
+                'message' => 'El código quedó pendiente: '.$exception->getMessage(),
+                'tax' => null,
+            ];
+        }
+    }
+
+    /**
+     * Sufijo visible en el listado tras guardar: el estado CABYS del guardado.
+     *
+     * @param  array{status: string, code: string, message: string}|null  $state
+     */
+    private function cabysSuffix(?array $state): string
+    {
+        return $state === null ? '' : ' '.$state['message'];
     }
 
     /**
@@ -443,7 +599,7 @@ if ($branchId) {
     {
         $search = request('q');
 
-        if (!$search || strlen($search) < 1) {
+        if (! $search || strlen($search) < 1) {
             return response()->json([]);
         }
 
@@ -501,31 +657,29 @@ if ($branchId) {
     }
 
     public function createProduct(Request $request)
-{
+    {
 
-    $companyId = session('active_company_id');
+        $companyId = session('active_company_id');
 
+        return view('compras.product-create-import', [
 
-    return view('compras.product-create-import', [
+            'code' => $request->code,
 
-        'code' => $request->code,
+            'name' => $request->name,
 
-        'name' => $request->name,
+            'cost' => $request->cost,
 
-        'cost' => $request->cost,
+            'categories' => ProductCategory::where(
+                'company_id',
+                $companyId
+            )
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(),
 
+        ]);
 
-        'categories' => \App\Models\ProductCategory::where(
-            'company_id',
-            $companyId
-        )
-        ->where('is_active', true)
-        ->orderBy('name')
-        ->get(),
-
-    ]);
-
-}
+    }
 
     private function scoped(Product $producto): Product
     {

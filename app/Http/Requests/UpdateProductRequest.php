@@ -94,10 +94,15 @@ class UpdateProductRequest extends FormRequest
                 ]),
             ],
 
-            'cabys_code' => [
+            /**
+             * MF04: en edición el CABYS también sale del buscador del
+             * catálogo local; el texto libre no es un código verificable.
+             */
+            'cabys_proposed_code' => [
                 'nullable',
                 'string',
                 'max:20',
+                'regex:/^([0-9]{13})?$/',
             ],
 
             'short_description' => [
@@ -191,50 +196,35 @@ class UpdateProductRequest extends FormRequest
     {
         return [
 
-            'name.required' =>
-                'Debe ingresar el nombre del producto.',
+            'name.required' => 'Debe ingresar el nombre del producto.',
 
-            'internal_code.required' =>
-                'Debe ingresar el código interno.',
+            'internal_code.required' => 'Debe ingresar el código interno.',
 
-            'internal_code.unique' =>
-                'El código interno ya existe en esta empresa.',
+            'internal_code.unique' => 'El código interno ya existe en esta empresa.',
 
-            'barcode.unique' =>
-                'El código de barras ya existe en esta empresa.',
+            'barcode.unique' => 'El código de barras ya existe en esta empresa.',
 
-            'category_id.required' =>
-                'Debe seleccionar una categoría.',
+            'category_id.required' => 'Debe seleccionar una categoría.',
 
-            'category_id.exists' =>
-                'La categoría seleccionada no pertenece a la empresa activa.',
+            'category_id.exists' => 'La categoría seleccionada no pertenece a la empresa activa.',
 
-            'brand_id.exists' =>
-                'La marca seleccionada no pertenece a la empresa activa.',
+            'brand_id.exists' => 'La marca seleccionada no pertenece a la empresa activa.',
 
-            'unit_id.required' =>
-                'Debe seleccionar una unidad de medida.',
+            'unit_id.required' => 'Debe seleccionar una unidad de medida.',
 
-            'unit_id.exists' =>
-                'La unidad seleccionada no pertenece a la empresa activa.',
+            'unit_id.exists' => 'La unidad seleccionada no pertenece a la empresa activa.',
 
-            'style_id.exists' =>
-                'El estilo seleccionado no pertenece a la empresa activa.',
+            'style_id.exists' => 'El estilo seleccionado no pertenece a la empresa activa.',
 
-            'size_id.exists' =>
-                'La talla seleccionada no pertenece a la empresa activa.',
+            'size_id.exists' => 'La talla seleccionada no pertenece a la empresa activa.',
 
-            'color_id.exists' =>
-                'El color seleccionado no pertenece a la empresa activa.',
+            'color_id.exists' => 'El color seleccionado no pertenece a la empresa activa.',
 
-            'cost.required' =>
-                'Debe ingresar el costo.',
+            'cost.required' => 'Debe ingresar el costo.',
 
-            'sale_price.required' =>
-                'Debe ingresar el precio de venta.',
+            'sale_price.required' => 'Debe ingresar el precio de venta.',
 
-            'tax_rate.required' =>
-                'Debe seleccionar el impuesto.',
+            'tax_rate.required' => 'Debe seleccionar el impuesto.',
 
         ];
     }

@@ -56,10 +56,8 @@
             @enderror
         </div>
 
-        <x-input
-            name="cabys_code"
-            label="Código CABYS"
-            :value="$product->cabys_code ?? ''" />
+        {{-- CABYS: se asigna desde el catálogo oficial, nunca como texto libre. --}}
+        <x-cabys-search :state="$cabysState ?? null" />
 
         <x-select
             name="product_type"

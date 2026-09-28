@@ -59,6 +59,7 @@ class Product extends Model
         'allow_negative_stock' => 'boolean',
         'is_active' => 'boolean',
         'prints_label' => 'boolean',
+        'tax_rate_official_pct' => 'decimal:2',
     ];
 
     /**
