@@ -59,8 +59,15 @@
                 @if($customer->portfolio_last_payment)
                     <p class="mt-2 text-xs text-slate-500">Último pago: {{ $customer->portfolio_last_payment->paid_at->format('d/m/Y') }} · @include('cobros.components.money', ['amount' => $customer->portfolio_last_payment->amount, 'currency' => $company->currency])</p>
                 @endif
-                <a href="{{ route('cobros.collector.portfolio.show', $customer) }}"
-                   class="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-primary/10">Ver cliente</a>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <a href="{{ route('cobros.collector.portfolio.show', $customer) }}"
+                       class="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-primary/10">Ver cliente</a>
+                    {{-- 3A: el botón solo existe cuando el Gate permite iniciar el cobro. --}}
+                    @if(isset($chargeableAccounts[$customer->id]))
+                        <a href="{{ route('cobros.collector.payments.create', $chargeableAccounts[$customer->id]) }}"
+                           class="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-slate-950 hover:bg-primary-hover">COBRAR</a>
+                    @endif
+                </div>
             </li>
         @endforeach
     </ul>

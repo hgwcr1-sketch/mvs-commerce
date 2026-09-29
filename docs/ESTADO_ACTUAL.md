@@ -2,6 +2,19 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — Fase 3A COMPLETADA LOCALMENTE (2026-09-29)
+
+Base `feature/cobros-v1`, `552a0a6`. Se completó la implementación local
+preexistente del gate: `CobrosPaymentGate`, decisión inmutable, GET de pantalla
+previa y botones condicionados en cartera/ficha/agenda. Validación final:
+220/220 pruebas, 1679 aserciones (`Cobros|CustomerCompanyIsolation`), Pint
+en archivos nuevos y `git diff --check` correctos; sin prueba visual real.
+Reutiliza identidad, permisos, cartera y CollectorAccessService; exige permiso
+explícito incluso para roles super admin, vigencia, asignación y sucursal.
+La URL con visita exige empresa, cobrador, cliente y cuenta coherentes.
+Solo lectura financiera; continuar deshabilitado, sin POST de pagos.
+3B pendiente, sin iniciar. Temporales preexistentes preservados fuera del commit.
+
 ## Worktree CobrOS — FASE 1E-C COMPLETADA / CERTIFICADA (2026-09-23)
 
 **FASE 1E-C = COMPLETADA / CERTIFICADA.** Asignación de cartera por CLIENTE

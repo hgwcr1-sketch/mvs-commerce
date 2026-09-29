@@ -98,6 +98,11 @@
                 @endif
 
                 <a href="{{ route('cobros.visits.customer', $visit->customer) }}" class="mt-2 inline-flex min-h-[44px] items-center text-sm font-semibold text-slate-700 hover:text-slate-900">Historial del cliente →</a>
+                {{-- 3A: entrada al Gate desde la visita, solo si el Gate lo permite. --}}
+                @if(isset($chargeableAccounts[$visit->customer_id]) && (!$visit->account_receivable_id || (int) $visit->account_receivable_id === $chargeableAccounts[$visit->customer_id]))
+                    <a href="{{ route('cobros.collector.payments.create', ['account' => $chargeableAccounts[$visit->customer_id], 'visit' => $visit->id]) }}"
+                       class="mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-base font-bold text-slate-950 hover:bg-primary-hover">💰 COBRAR</a>
+                @endif
             </li>
         @endforeach
     </ul>

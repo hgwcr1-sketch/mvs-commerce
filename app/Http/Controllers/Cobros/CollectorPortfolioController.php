@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cobros;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Services\Cobros\CobrosPaymentGate;
 use App\Services\Cobros\CollectorAccessService;
 use App\Services\Cobros\CollectorPortfolioService;
 use Illuminate\Contracts\View\View;
@@ -17,11 +18,12 @@ use Illuminate\Http\Request;
  */
 class CollectorPortfolioController extends Controller
 {
-    public function index(Request $request, CollectorPortfolioService $service, CollectorAccessService $access): View
+    public function index(Request $request, CollectorPortfolioService $service, CollectorAccessService $access, CobrosPaymentGate $gate): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
         $search = $request->string('q')->trim()->toString() ?: null;
         $portfolio = $service->portfolio($request->user(), $company, $search);
+        $customerIds = $portfolio['customers']->getCollection()->modelKeys();
 
         return view('cobros.collector.portfolio', [
             'company' => $company,
@@ -30,10 +32,12 @@ class CollectorPortfolioController extends Controller
             'search' => $search ?? '',
             // Contrato conservado del shell: sucursales operativas del cobrador en la empresa activa.
             'branches' => $access->branchesForCollecting($request->user(), $company),
+            // Fase 3A: el botón COBRAR solo existe si el Gate lo permite.
+            'chargeableAccounts' => $gate->chargeableAccountIds($request->user(), $company, $customerIds),
         ]);
     }
 
-    public function show(Request $request, Customer $customer, CollectorPortfolioService $service): View
+    public function show(Request $request, Customer $customer, CollectorPortfolioService $service, CobrosPaymentGate $gate): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
         $data = $service->customerPortfolio($request->user(), $company, $customer);
@@ -44,6 +48,7 @@ class CollectorPortfolioController extends Controller
             'openAccounts' => $data['openAccounts'],
             'totalBalance' => $data['total_balance'],
             'payments' => $data['payments'],
+            'chargeableAccounts' => $gate->chargeableAccountIds($request->user(), $company, [$customer->id]),
         ]);
     }
 

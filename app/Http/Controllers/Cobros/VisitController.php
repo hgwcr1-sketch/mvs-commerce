@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\CobrosVisit;
 use App\Models\Customer;
+use App\Services\Cobros\CobrosPaymentGate;
 use App\Services\Cobros\VisitService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -19,14 +20,21 @@ use Illuminate\Http\Request;
  */
 class VisitController extends Controller
 {
-    public function today(Request $request, VisitService $service): View
+    public function today(Request $request, VisitService $service, CobrosPaymentGate $gate): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
+        $visits = $service->today($request->user(), $company);
 
         return view('cobros.visits.today', [
             'company' => $company,
-            'visits' => $service->today($request->user(), $company),
+            'visits' => $visits,
             'branches' => $request->user()->branches()->where('branches.company_id', $company->id)->get(),
+            // Fase 3A: entrada al Gate desde una visita autorizada del propio cobrador.
+            'chargeableAccounts' => $gate->chargeableAccountIds(
+                $request->user(),
+                $company,
+                $visits->pluck('customer_id')->map(fn ($id) => (int) $id)->all()
+            ),
         ]);
     }
 

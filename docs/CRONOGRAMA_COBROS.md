@@ -171,6 +171,13 @@ pertenece a la fase y dependencia.
 - Dependencia: 2B.
 
 ### 3A — GATE: infraestructura de cobro seguro
+**Alcance vigente autorizado (2026-09-29):** exclusivamente autorización
+centralizada y pantalla previa sin escrituras financieras, sin migraciones.
+**Estado: COMPLETADA LOCALMENTE.** 220 pruebas, 1679 aserciones; 3B pendiente.
+La infraestructura financiera descrita abajo queda pendiente de diseño y
+autorización para 3B; no forma parte del cierre de 3A. Evidencia en
+`PROGRESO_COBROS.md`.
+
 - Objetivo: habilitar la escritura financiera con todas las garantías ANTES
   de exponer cobros en UI.
 - Funcionalidades: capa segura `Cobros\SecurePaymentService` que envuelve

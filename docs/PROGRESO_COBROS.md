@@ -687,3 +687,35 @@ Sin migraciones, sin commit, sin push. `tmp_generate_cobros_icons.php` intacto.
   expresiones Blade crudas prohibidas (regresión), gestión cerrada sin
   formularios, paneles ocultos por defecto.
 - Suite CobrOS: 191/191, 1534 aserciones (VERDE).
+
+## 3A — Gate seguro para iniciar cobro (2026-09-29) — COMPLETADA LOCALMENTE
+
+Alcance autorizado: únicamente autorización centralizada y pantalla previa;
+sustituye para esta fase la previsión financiera original del cronograma.
+Se revisó y completó el trabajo local existente sobre `552a0a6`.
+
+- `CobrosPaymentGate` + `PaymentGateDecision`: usuario activo, empresa activa,
+  licencia operable y vigente, módulo CobrOS habilitado, permiso explícito
+  `cobros.cobrar` sin herencia por super admin, cartera asignada vigente,
+  cliente/cuenta de la empresa, sucursal activa autorizada mediante
+  `CollectorAccessService`, saldo positivo BCMath y cuenta no pagada/cancelada.
+- GET protegido `cobros.collector.payments.create`; cuenta/cliente ajeno →
+  404. Si llega una visita, se valida empresa, cobrador, cliente y vínculo
+  opcional a cuenta. Los IDs adicionales no conceden autoridad.
+- COBRAR condicionado por el mismo gate en Mi cartera, ficha y agenda.
+  Pantalla propia con cliente, saldo a dos decimales, estado cotidiano,
+  VOLVER, IR AL CLIENTE si tiene coordenadas y CONTINUAR CON EL COBRO
+  deshabilitado. No existe campo fiable de cuota esperada en la cuenta:
+  no se inventa ni se confunde con una promesa de visita.
+- Revisión conceptual responsive 360/768/1280: columna fluida, ancho máximo,
+  nombres/montos ajustables, controles de 44–56px y dorado con texto oscuro.
+  No equivale a certificación visual en navegador/dispositivo.
+- Auditoría del diff: sin modelos/servicios financieros modificados,
+  migraciones ni escrituras de pagos, saldos, estados o caja. No hay POST
+  para guardar cobros; pruebas verifican rechazo y snapshots financieros.
+- Validación final: **220/220 pruebas, 1679 aserciones**, filtro
+  `Cobros|CustomerCompanyIsolation` (18 pruebas nuevas del gate, regresión
+  completa CobrOS incluyendo 2A/2B/2C, permisos y aislamiento).
+  Pint en archivos nuevos y `git diff --check` correctos.
+  3B pendiente y sin iniciar; idempotencia,
+  captura financiera y recibos requieren su fase y autorización propias.

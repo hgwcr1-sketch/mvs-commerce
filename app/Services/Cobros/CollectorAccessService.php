@@ -24,7 +24,12 @@ class CollectorAccessService
             && $this->assignedBranches($user, $company)->where('branches.id', $branchId)->exists();
     }
 
-    private function canCollect(User $user, Company $company): bool
+    /**
+     * Autoridad de cobranza del usuario en la empresa: usuario activo + permiso
+     * cobros.cobrar (que internamente valida rol activo, pertenencia y módulo).
+     * Público para reutilizarlo desde capas superiores (Gate 3A) sin duplicar reglas.
+     */
+    public function canCollect(User $user, Company $company): bool
     {
         // hasPermission valida company_user, rol de esa empresa activo y módulo.
         return $user->isActive() && $user->hasPermission('cobros.cobrar', $company);

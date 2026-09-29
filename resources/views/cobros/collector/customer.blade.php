@@ -47,6 +47,11 @@
                     <p class="mt-2 text-sm {{ $account->due_date->isPast() ? 'font-semibold text-red-700' : 'text-slate-600' }}">
                         Vence {{ $account->due_date->format('d/m/Y') }}{{ $account->due_date->isPast() ? ' · vencida' : '' }}
                     </p>
+                    {{-- 3A: acceso al Gate solo para la cuenta que el Gate declara cobrable. --}}
+                    @if(($chargeableAccounts[$customer->id] ?? null) === $account->id)
+                        <a href="{{ route('cobros.collector.payments.create', $account) }}"
+                           class="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-base font-bold text-slate-950 hover:bg-primary-hover">💰 COBRAR</a>
+                    @endif
                 </li>
             @endforeach
         </ul>
