@@ -69,11 +69,13 @@ class CabysImporterDeepestLevelTest extends TestCase
         return $fila;
     }
 
-    private function importar(string $ruta): array
+    private function importar(string $ruta, bool $borrar = true): array
     {
         $resultado = app(CabysCatalogImporter::class)->import($ruta, 'TEST-1', false);
 
-        @unlink($ruta);
+        if ($borrar) {
+            @unlink($ruta);
+        }
 
         return $resultado;
     }
@@ -195,6 +197,29 @@ class CabysImporterDeepestLevelTest extends TestCase
 
         $e = CabysCatalogEntry::query()->where('code', self::CODE_11)->firstOrFail();
         $this->assertSame('Primera aparición', $e->description, 'Se conserva la primera fila');
+    }
+
+    public function test_permite_reimportar_mismo_archivo_si_la_version_anterior_esta_incompleta(): void
+    {
+        // La idempotencia anterior era solo por checksum: al cambiar el criterio
+        // (nivel más profundo) la misma fuente quedaba congelada en 1.440.
+        $ruta = $this->archivo([
+            $this->fila(self::CODE_11, 'Licencias', '13%'),
+            $this->fila('011110000', 'Trigo', '1%', self::CODE_13, 'Trigo duro'),
+        ]);
+
+        $primera = $this->importar($ruta, false);
+        $this->assertTrue($primera['ok']);
+        $this->assertSame(2, $primera['imported']);
+
+        // Mismo archivo, mismo checksum: ahora debe reconocerse como ya
+        // importado (el criterio vigente produce las mismas 2 entradas).
+        $segunda = $this->importar($ruta, false);
+        $this->assertTrue($segunda['ok'], $segunda['message']);
+        $this->assertTrue($segunda['already'], 'Con el mismo criterio no se reimporta');
+        $this->assertSame(2, CabysCatalogEntry::query()->count());
+
+        @unlink($ruta);
     }
 
     public function test_encabezado_invalido_no_importa_nada(): void
