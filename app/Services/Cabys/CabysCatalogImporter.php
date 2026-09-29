@@ -16,9 +16,13 @@ use Illuminate\Support\Facades\DB;
  *     nadie puede auditar.
  *  2. FAIL CLOSED: sin encabezado reconocible no se importa nada. Un
  *     catálogo fiscal que no se puede identificar no entra al sistema.
- *  3. Solo se importan códigos de 13 dígitos escritos como texto en el
- *     archivo. Las celdas dañadas por Excel (notación científica) se cuentan
- *     como `skipped`: reconstruirlas sería inventar códigos fiscales.
+ *  3. Solo se importan códigos CABYS OFICIALES escritos como texto: el
+ *     nivel MÁS PROFUNDO presente en la fila, de 8 a 13 dígitos. El archivo
+ *     oficial usa nivel 8 (11 dígitos) para la mayoría de bienes y servicios
+ *     —incluidos los de tecnología— y nivel 9 (13 dígitos) para un subconjunto.
+ *     Fijar la columna "Categoría 9" descartaba 19.066 códigos válidos. Las
+ *     celdas dañadas por Excel (notación científica) se cuentan como
+ *     `skipped`: reconstruirlas sería inventar códigos fiscales.
  *  4. El CHECKSUM hace la operación idempotente: el mismo archivo no se
  *     reimporta.
  *  5. La activación es TRANSACCIONAL y conserva la versión anterior como
@@ -30,7 +34,17 @@ class CabysCatalogImporter
 {
     public const SOURCE = 'BCCR CABYS';
 
-    private const CODE_LENGTH = 13;
+    /**
+     * Niveles de categoría del archivo oficial, del más profundo al más
+     * superficial. Se recorren en este orden para tomar el código válido más
+     * específico de cada fila.
+     */
+    private const CODE_LEVELS = [9, 8];
+
+    /** Longitud mínima y máxima de un código CABYS oficial. */
+    private const CODE_MIN_LENGTH = 8;
+
+    private const CODE_MAX_LENGTH = 13;
 
     private const CHUNK = 500;
 
@@ -90,16 +104,21 @@ class CabysCatalogImporter
         $header = is_array($header) ? $this->normalizeHeader($header) : [];
         $columns = $this->columns($header);
 
-        if ($columns['code'] === null || $columns['description'] === null || $columns['tax'] === null) {
+        // El archivo oficial NO tiene una columna fija de código: cada fila
+        // declara su nivel más profundo (8 para bienes y servicios, 9 para
+        // otros). Se exige al menos una columna de categoría.
+        if ($columns['description'] === null || $columns['tax'] === null || $columns['levels'] === []) {
             fclose($handle);
 
             return $this->fail(
                 'El encabezado no corresponde al catálogo CABYS oficial del BCCR '
-                .'(se esperan Categoría 9, Descripción (categoría 9) e Impuesto). No se importa nada.'
+                .'(se esperan Categoría N, Descripción (categoría N) e Impuesto). No se importa nada.'
             );
         }
 
         $entries = [];
+        $vistos = [];
+        $duplicados = 0;
         $skipped = 0;
         $position = 0;
 
@@ -108,7 +127,7 @@ class CabysCatalogImporter
                 continue;
             }
 
-            $code = $this->code($row, $columns['code']);
+            $code = $this->code($row, $columns);
 
             if ($code === null) {
                 $skipped++;
@@ -116,9 +135,28 @@ class CabysCatalogImporter
                 continue;
             }
 
+            // El archivo oficial repite códigos en distintas ramas de
+            // categoría. Se conserva la PRIMERA aparición y se cuenta el
+            // resto: el índice único (versión, código) no admite repetidos y
+            // no se inventa una variante para "cuadrar" el catálogo.
+            if (isset($vistos[$code])) {
+                $duplicados++;
+
+                continue;
+            }
+
+            $vistos[$code] = true;
+
+            // La descripción y el impuesto son SIEMPRE los de la fila, pero la
+            // descripción corresponde al nivel del código detectado: en las
+            // filas de nivel 8 la columna de nivel 9 viene vacía.
+            $nivel = $this->levelFor($row, $columns, $code);
+
             $entry = [
                 'code' => $code,
-                'description' => $this->text($row, $columns['description']) ?? $code,
+                'description' => $this->text($row, $columns["category{$nivel}_description"] ?? null)
+                    ?? $this->text($row, $columns['description'])
+                    ?? $code,
                 'tax_rate_raw' => $this->text($row, $columns['tax']),
                 'tax_rate_pct' => null,
                 'note_include' => $this->text($row, $columns['note_include']),
@@ -140,10 +178,13 @@ class CabysCatalogImporter
         $imported = count($entries);
 
         if ($imported === 0) {
-            return $this->fail('El archivo no contiene códigos CABYS válidos de 13 dígitos. No se importa nada.');
+            return $this->fail(
+                'El archivo no contiene códigos CABYS oficiales válidos de '
+                .self::CODE_MIN_LENGTH.' a '.self::CODE_MAX_LENGTH.' dígitos. No se importa nada.'
+            );
         }
 
-        return $this->persist($path, $checksum, $version, $entries, $imported, $skipped, $activate);
+        return $this->persist($path, $checksum, $version, $entries, $imported, $skipped, $duplicados, $activate);
     }
 
     /**
@@ -157,6 +198,7 @@ class CabysCatalogImporter
         array $entries,
         int $imported,
         int $skipped,
+        int $duplicados,
         bool $activate,
     ): array {
         $sourceVersion = trim((string) ($version ?? ''));
@@ -207,7 +249,8 @@ class CabysCatalogImporter
         }
 
         $message = "Catálogo {$sourceVersion}: {$imported} códigos importados";
-        $message .= $skipped > 0 ? " ({$skipped} filas descartadas por no traer un código de 13 dígitos)." : '.';
+        $message .= $skipped > 0 ? " ({$skipped} filas descartadas por no traer un código oficial)." : '.';
+        $message .= $duplicados > 0 ? " {$duplicados} filas repetidas se omitieron (se conserva la primera)." : '';
         $message .= $activate ? ' Versión activada.' : ' Versión en estado borrador.';
 
         return [
@@ -216,6 +259,7 @@ class CabysCatalogImporter
             'version' => $sourceVersion,
             'imported' => $imported,
             'skipped' => $skipped,
+            'duplicates' => $duplicados,
             'already' => false,
         ];
     }
@@ -287,34 +331,72 @@ class CabysCatalogImporter
         };
 
         $columns = [
-            'code' => $find('Categoría 9'),
             'description' => $find('Descripción (categoría 9)'),
             'tax' => $find('Impuesto'),
             'note_include' => $find('Nota explicativa 1. Incluye'),
             'note_exclude' => $find('Nota explicativa 2. Excluye'),
+            'levels' => [],
         ];
 
         for ($level = 1; $level <= 9; $level++) {
             $columns["category{$level}_code"] = $find('Categoría '.$level);
             $columns["category{$level}_description"] = $find('Descripción (categoría '.$level.')');
+
+            if ($columns["category{$level}_code"] !== null) {
+                $columns['levels'][] = $level;
+            }
         }
 
         return $columns;
     }
 
     /**
+     * Nivel del que proviene el código detectado en la fila.
+     *
      * @param  list<string|null>  $row
+     * @param  array<string, mixed>  $columns
      */
-    private function code(array $row, ?int $index): ?string
+    private function levelFor(array $row, array $columns, string $code): int
     {
-        $raw = $this->text($row, $index);
+        foreach (self::CODE_LEVELS as $level) {
+            $raw = $this->text($row, $columns["category{$level}_code"] ?? null);
 
-        if ($raw === null) {
-            return null;
+            if ($raw === $code) {
+                return $level;
+            }
         }
 
-        // Solo dígitos y exactamente 13 posiciones: nada se reconstruye.
-        return preg_match('/^\d{13}$/', $raw) === 1 ? $raw : null;
+        return self::CODE_LEVELS[count(self::CODE_LEVELS) - 1];
+    }
+
+    /**
+     * Código CABYS de la fila: el nivel MÁS PROFUNDO presente.
+     *
+     * El archivo oficial usa 8 categorías (11 dígitos) para la mayoría de
+     * bienes y servicios —incluidos los de tecnología— y 9 (13 dígitos) para
+     * un subconjunto. Fijar la columna "Categoría 9" descartaba 19.066
+     * códigos válidos. Ahora se baja desde el nivel 9 hasta el 8 y se toma el
+     * primero que sea un código numérico oficial. Nada se reconstruye.
+     *
+     * @param  list<string|null>  $row
+     * @param  array<string, mixed>  $columns
+     */
+    private function code(array $row, array $columns): ?string
+    {
+        foreach (self::CODE_LEVELS as $level) {
+            $raw = $this->text($row, $columns["category{$level}_code"] ?? null);
+
+            if ($raw === null) {
+                continue;
+            }
+
+            // Solo dígitos y longitud oficial: nada se transforma ni se completa.
+            if (preg_match('/^\d{'.self::CODE_MIN_LENGTH.','.self::CODE_MAX_LENGTH.'}$/', $raw) === 1) {
+                return $raw;
+            }
+        }
+
+        return null;
     }
 
     /**
