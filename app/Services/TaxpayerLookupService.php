@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Contracts\Cache\Repository;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -37,6 +38,20 @@ class TaxpayerLookupService
     public const CACHE_NOT_FOUND_MINUTES = 60;
 
     /**
+     * La fuente oficial es intermitente: se han medido ventanas de varios
+     * segundos sin respuesta. Con 4 s de espera total, un timeout se
+     * confundía con "contribuyente sin actividades".
+     */
+    public const CONNECT_TIMEOUT_SECONDS = 3;
+
+    public const TIMEOUT_SECONDS = 8;
+
+    /** Un reintento con espera corta: solo para timeout/5xx transitorio. */
+    public const RETRIES = 1;
+
+    public const RETRY_DELAY_MS = 400;
+
+    /**
      * Alias aceptados por concepto (mismo criterio que la fuente oficial):
      * la documentación pública no fija un único nombre por concepto.
      */
@@ -61,12 +76,11 @@ class TaxpayerLookupService
             return $cached;
         }
 
-        try {
-            $response = Http::acceptJson()
-                ->timeout(4)
-                ->connectTimeout(2)
-                ->get(self::ENDPOINT, ['identificacion' => $digits]);
-        } catch (Throwable) {
+        // `unavailable` significa "no se pudo consultar", nunca "no tiene
+        // actividades": esos dos casos se reportan por separado.
+        $response = $this->fetchWithRetry($digits);
+
+        if ($response === null) {
             return $this->empty(self::STATUS_UNAVAILABLE);
         }
 
@@ -91,24 +105,68 @@ class TaxpayerLookupService
             return $this->store($cache, $key, $this->empty(self::STATUS_NOT_FOUND), self::CACHE_NOT_FOUND_MINUTES);
         }
 
+        $activities = $this->activities($payload);
+
         return $this->store($cache, $key, [
             'status' => self::STATUS_FOUND,
             'name' => $name,
             'type' => $type,
             'regime' => $this->regime($payload['regimen'] ?? null),
             'situation' => $this->situation($payload['situacion'] ?? null),
-            'activities' => $this->activities($payload),
+            'activities' => $activities,
+            // Distingue "no tiene actividades" de "no se pudo consultar".
+            'activities_queried' => true,
+            'has_activities' => $activities !== [],
         ], self::CACHE_FOUND_MINUTES);
+    }
+
+    /**
+     * Una consulta a la fuente oficial, con UN reintento corto cuando la
+     * falla es transitoria (timeout o 5xx). Un 404 o un 4xx NO se reintenta:
+     * son respuestas definitivas. Devuelve null solo si no hubo respuesta
+     * utilizable, y eso se traduce en `unavailable`, nunca en "sin actividades".
+     */
+    private function fetchWithRetry(string $digits): ?Response
+    {
+        $attempts = self::RETRIES + 1;
+
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $response = Http::acceptJson()
+                    ->timeout(self::TIMEOUT_SECONDS)
+                    ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+                    ->get(self::ENDPOINT, ['identificacion' => $digits]);
+            } catch (Throwable) {
+                $response = null;
+            }
+
+            // 4xx (salvo 408/429) es definitivo: no se reintenta.
+            if ($response !== null && $response->clientError() && ! $response->notFound()) {
+                return $response;
+            }
+
+            if ($response !== null && ! $response->serverError()) {
+                return $response;
+            }
+
+            if ($attempt < $attempts) {
+                usleep(self::RETRY_DELAY_MS * 1000);
+            }
+        }
+
+        return null;
     }
 
     /**
      * Estructura completa (con campos vacíos) para que la UI lea siempre las
      * mismas claves, haya o no respuesta oficial.
      *
-     * @return array{status: string, name: null, type: null, regime: null, situation: null, activities: list<array{code: string, description: string|null}>}
+     * @return array{status: string, name: null, type: null, regime: null, situation: null, activities: list<array{code: string, description: string|null}>, activities_queried: bool, has_activities: bool}
      */
     private function empty(string $status): array
     {
+        $consulted = $status === self::STATUS_FOUND;
+
         return [
             'status' => $status,
             'name' => null,
@@ -116,6 +174,10 @@ class TaxpayerLookupService
             'regime' => null,
             'situation' => null,
             'activities' => [],
+            // `unavailable` y `invalid` NUNCA son "se consultó y no hay
+            // actividades": la UI debe decirlo distinto.
+            'activities_queried' => $consulted,
+            'has_activities' => false,
         ];
     }
 
@@ -214,7 +276,12 @@ class TaxpayerLookupService
                 }
             }
 
-            if ($code === null || $code === '' || preg_match('/^\d{1,20}$/', $code) !== 1) {
+            // La fuente oficial entrega el código como texto y puede traer
+            // punto decimal ("0144.0", "0141.1"), no solo dígitos. Un código
+            // con punto ES un código oficial: rechazarlo descartaba
+            // actividades reales sin avisar. Solo se descarta lo que no es un
+            // código (letras, guiones u otros símbolos).
+            if ($code === null || $code === '' || preg_match('/^\d{1,10}(\.\d{1,4})?$/', $code) !== 1) {
                 continue;
             }
 

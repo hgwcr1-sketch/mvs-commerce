@@ -233,13 +233,37 @@ function renderTaxpayerProposal(data) {
         meta.textContent = parts.length ? parts.join(' · ') : 'Hacienda no informó régimen ni situación.';
     }
 
-    renderActivities(Array.isArray(data.activities) ? data.activities : []);
+    renderActivities(Array.isArray(data.activities) ? data.activities : [], {
+        consulted: data.activities_queried === true,
+    });
 }
 
-function renderActivities(activities) {
+/**
+ * Los tres casos se muestran DISTINTOS y nunca se confunden:
+ *  - consultó y hay actividades  -> lista marcada
+ *  - consultó y no hay ninguna    -> "Hacienda no informó actividades..."
+ *  - no se pudo consultar         -> "No fue posible consultar... Intente nuevamente"
+ *
+ * Un fallo temporal NUNCA borra lo que ya estaba seleccionado ni enviado:
+ * en ese caso no se tocan la lista ni los inputs del formulario.
+ */
+function renderActivities(activities, opciones) {
     const box = document.getElementById('taxpayer_activities_box');
     const list = document.getElementById('taxpayer_activities_list');
     if (!box || !list) return;
+
+    const consultada = !opciones || opciones.consulted !== false;
+
+    // Fallo transitorio: se avisa, pero no se destruye lo aplicado antes.
+    if (!consultada) {
+        box.hidden = false;
+        const aviso = document.getElementById('taxpayer_activities_empty');
+        if (aviso) {
+            aviso.textContent = 'No fue posible consultar actividades en Hacienda. Intente nuevamente.';
+            aviso.hidden = false;
+        }
+        return;
+    }
 
     // La sección NUNCA se oculta: si no hay actividades se dice explícitamente,
     // para que "no aparece" nunca signifique "no se está mostrando".
@@ -251,7 +275,7 @@ function renderActivities(activities) {
     if (vacio) {
         vacio.textContent = utiles.length
             ? ''
-            : 'Hacienda no informó actividades económicas para esta identificación.';
+            : 'Hacienda no informó actividades económicas en esta consulta.';
         vacio.hidden = utiles.length > 0;
     }
 
@@ -420,11 +444,19 @@ function initCustomerForm() {
                 return;
             }
 
+            // Fallo transitorio (unavailable): se avisa SIN borrar lo aplicado.
+            // Un "no encontrado" sí limpia la propuesta, porque no hay datos.
+            if (data.status === 'unavailable') {
+                renderActivities([], { consulted: false });
+                render('error');
+                return;
+            }
+
             hideTaxpayerProposal();
             render(data.status === 'not_found' ? 'not_found' : 'error');
         } catch (error) {
             if (current === token) {
-                hideTaxpayerProposal();
+                renderActivities([], { consulted: false });
                 render('error');
             }
         }

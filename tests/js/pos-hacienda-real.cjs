@@ -18,11 +18,20 @@ const LOOKUP_OK = {
     regime: 'Impuesto sobre las Utilidades',
     situation: 'Inscrito',
     activities: [{ code: '960113', description: 'Actividades de contratado de servicios' }],
+    activities_queried: true,
+    has_activities: true,
 };
 
 const LOOKUP_SIN_ACTIVIDADES = {
     status: 'found', name: 'PERSONA SIN ACTIVIDAD', type: '01',
     regime: 'No tiene', situation: 'No inscrito', activities: [],
+    activities_queried: true, has_activities: false,
+};
+
+const LOOKUP_NO_DISPONIBLE = {
+    status: 'unavailable', name: null, type: null,
+    regime: null, situation: null, activities: [],
+    activities_queried: false, has_activities: false,
 };
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -182,6 +191,27 @@ function crearPos(fetchMock) {
     assert.equal(pos3.quickCustomer.ident.activities.length, 0, 'POS no debe inventar actividades');
     assert.equal(pos3.quickCustomer.ident.applied.length, 0, 'POS no debe aplicar actividades inexistentes');
     assert.equal(pos3.quickCustomer.ident.name, 'PERSONA SIN ACTIVIDAD', 'POS debe conservar el nombre oficial');
+    assert.equal(pos3.quickCustomer.ident.queried, true, 'Sí se consultó: no es un fallo temporal');
+
+    // 5) C) unavailable en POS: NO es "sin actividades" y NO borra lo aplicado.
+    const pos4 = crearPos(async () => ({ ok: true, status: 200, json: async () => LOOKUP_NO_DISPONIBLE }));
+    pos4.quickCustomer.form.identification_type = '';
+    pos4.quickCustomer.form.identification = '';
+    pos4.identificationInput({ target: { value: '109880401' } });
+    await dormir(700);
+
+    assert.equal(pos4.quickCustomer.ident.status, 'error', 'Un fallo temporal se reporta como error');
+    assert.equal(pos4.quickCustomer.ident.queried, false,
+        'unavailable no es una consulta: queried debe quedar en false');
+    assert.equal(pos4.quickCustomer.ident.activities.length, 0, 'No se inventan actividades');
+    assert.equal(pos4.quickCustomer.ident.applied.length, 0, 'No se envía lista de actividades por un fallo');
+
+    // Con algo ya aplicado, un fallo posterior NO lo borra.
+    pos4.quickCustomer.ident.applied = [{ code: '960113', description: 'Previa' }];
+    pos4.identificationInput({ target: { value: '109880402' } });
+    await dormir(700);
+    assert.equal(pos4.quickCustomer.ident.applied.length, 1,
+        'Un fallo temporal no debe borrar las actividades ya aplicadas');
 
     console.log('POS Hacienda UI OK');
 })().catch((e) => { console.error('FALLO:', e.message); process.exit(1); });
