@@ -63,10 +63,16 @@ class CabysCatalogImporter
             return $this->fail('No se pudo calcular el checksum del archivo');
         }
 
+        // Un archivo solo se considera "ya importado" si su versión guardada
+        // tiene el MISMO conteo de filas que produciría hoy el criterio
+        // vigente. Con un criterio de importación distinto (por ejemplo, al
+        // incluir el nivel más profundo) el checksum no basta: la misma fuente
+        // debe poder generar una versión nueva y completa.
         $existing = FiscalCatalogVersion::query()
             ->ofKind(FiscalCatalogVersion::KIND_CABYS)
             ->where('checksum', $checksum)
-            ->first();
+            ->get()
+            ->first(fn (FiscalCatalogVersion $candidate) => $this->matchesCurrentCriteria($candidate, $path));
 
         if ($existing !== null) {
             if ($activate && $existing->status !== FiscalCatalogVersion::STATUS_ACTIVE) {
@@ -367,6 +373,63 @@ class CabysCatalogImporter
         }
 
         return self::CODE_LEVELS[count(self::CODE_LEVELS) - 1];
+    }
+
+    /**
+     * ¿La versión guardada fue producida por el criterio vigente?
+     *
+     * Se recalcula el conteo con el criterio de esta importación y se compara
+     * con las entradas realmente guardadas. Si el archivo cambió de criterio
+     * (más niveles válidos, deduplicación) la versión vieja queda incompleta y
+     * se debe permitir una versión nueva.
+     */
+    private function matchesCurrentCriteria(FiscalCatalogVersion $candidate, string $path): bool
+    {
+        $esperadas = $this->countEntries($path);
+
+        if ($esperadas === 0) {
+            return false;
+        }
+
+        $guardadas = CabysCatalogEntry::query()
+            ->where('fiscal_catalog_version_id', $candidate->id)
+            ->count();
+
+        return $guardadas === $esperadas;
+    }
+
+    /**
+     * Cuenta cuántos códigos únicos admite hoy el archivo, sin escribir nada.
+     */
+    private function countEntries(string $path): int
+    {
+        $handle = fopen($path, 'r');
+        $firstLine = fgets($handle);
+        rewind($handle);
+        $delimiter = $this->delimiter((string) $firstLine);
+        $header = fgetcsv($handle, 0, $delimiter);
+        $header = is_array($header) ? $this->normalizeHeader($header) : [];
+        $columns = $this->columns($header);
+
+        if ($columns['description'] === null || $columns['tax'] === null || $columns['levels'] === []) {
+            fclose($handle);
+
+            return 0;
+        }
+
+        $vistos = [];
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+            if ($row === [null]) {
+                continue;
+            }
+            $code = $this->code($row, $columns);
+            if ($code !== null) {
+                $vistos[$code] = true;
+            }
+        }
+        fclose($handle);
+
+        return count($vistos);
     }
 
     /**
