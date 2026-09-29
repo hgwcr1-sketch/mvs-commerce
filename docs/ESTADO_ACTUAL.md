@@ -2,6 +2,17 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Códigos de actividad con punto decimal + timeout vs "sin actividades" (2026-09-28)
+
+**Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities`. **Sin producción.**
+
+- **Causa raíz de "0 actividades":** la fuente oficial entrega `actividades[].codigo` como **texto y con punto decimal** (ej. `0144.0`, `0141.1`, `960113`). El filtro `^\d{1,20}$` descartaba los decimales **en silencio**: el contribuyente tenía actividades y el sistema mostraba cero.
+- **Segundo problema:** la API es intermitente (se midieron timeouts con Guzzle mientras curl respondía en 0.15 s). Con `timeout(4)` un corte transitorio se reportaba como `unavailable` ** indistinguible de "consultó y no hay"** en la UI.
+- **Cambios:** el código acepta `\d{1,10}(\.\d{1,4})?` en `TaxpayerLookupService`, `CustomerTaxpayerActivityService`, `StoreCustomerRequest` y `QuickStoreCustomerRequest` (la columna `code` es `string(20)`, no hubo migración). `connectTimeout` 3 s, `timeout` 8 s y **1 reintento con backoff de 400 ms solo ante timeout/5xx** (4xx no se reintenta). SeAdded `activities_queried` y `has_activities` para separar "se consultó y no hay" de "no se pudo consultar".
+- **Regla crítica aplicada:** `unavailable` **nunca** se muestra como "Hacienda no informó actividades" ni borra lo ya aplicado. Cliente y POS muestran 3 mensajes distintos (hay / no hay / no se pudo consultar) y un fallo temporal **no** persiste lista vacía ni elimina actividades existentes (el POS conserva `applied` con `keepApplied`).
+- **Tests:** 6 nuevos en `HaciendaActivityFlowTest` (timeout→unavailable no vacío, retry recupera, decimal se conserva y persiste en Cliente y POS, timeout no borra lo existente, consultado-vacío correcto) y 2 casos nuevos por JS. Verde: **43 PHP (309 aserciones) + 3 JS**, `npm run build` OK, Pint PASS (5 archivos).
+- **No se tocó** CABYS, MF05 ni factura electrónica.
+
 ## POS: el input del modal NUNCA llegaba al estado (causa real) (2026-09-28)
 
 **Worktree:** `mvs-prod-integration`, rama `fix/prod-fiscal-capabilities`. **Sin producción.**

@@ -53,6 +53,179 @@ class HaciendaActivityFlowTest extends TestCase
         ];
     }
 
+    /**
+     * Códigos con punto decimal tal como los devuelve la fuente oficial
+     * (ej. "0144.0", "0141.1"). Antes se descartaban en silencio y el
+     * contribuyente aparecía con cero actividades.
+     */
+    private function haciendaConCodigosDecimales(): array
+    {
+        return [
+            'nombre' => 'SOCIEDAD CON ACTIVIDADES DECIMALES',
+            'tipoIdentificacion' => '02',
+            'regimen' => ['codigo' => 1, 'descripcion' => 'Régimen General'],
+            'situacion' => ['estado' => 'Inscrito', 'moroso' => 'NO', 'omiso' => 'NO'],
+            'actividades' => [
+                ['estado' => 'A', 'tipo' => 'P', 'codigo' => '0144.0', 'descripcion' => 'Actividad decimal A'],
+                ['estado' => 'A', 'tipo' => 'S', 'codigo' => '0141.1', 'descripcion' => 'Actividad decimal B'],
+            ],
+        ];
+    }
+
+    public function test_timeout_produce_unavailable_y_jamas_actividades_vacias(): void
+    {
+        // C) unavailable/timeout NUNCA debe parecer "consultó y no hay".
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+
+        [$company, $branch, $user] = $this->context();
+
+        $respuesta = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '01', 'identificacion' => '1-0987-0988']))
+            ->assertOk();
+
+        $this->assertSame('unavailable', $respuesta->json('status'));
+        $this->assertFalse($respuesta->json('activities_queried'),
+            'unavailable no significa que se consultó: activities_queried debe ser false');
+        $this->assertFalse($respuesta->json('has_activities'));
+        $this->assertSame([], $respuesta->json('activities'));
+    }
+
+    public function test_retry_recupera_una_respuesta_que_falla_una_vez(): void
+    {
+        // El primer intento falla por timeout; el reintento debe recuperar.
+        // `Http::sequence()` no admite excepciones, así que se cuenta a mano.
+        $intentos = 0;
+
+        Http::fake(['api.hacienda.go.cr/*' => function () use (&$intentos) {
+            $intentos++;
+
+            if ($intentos === 1) {
+                throw new ConnectionException('timeout transitorio');
+            }
+
+            return Http::response($this->haciendaConActividad(), 200);
+        }]);
+
+        [$company, $branch, $user] = $this->context();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '02', 'identificacion' => '3-101-000000']))
+            ->assertOk()
+            ->assertJsonPath('status', 'found')
+            ->assertJsonPath('activities_queried', true)
+            ->assertJsonPath('has_activities', true)
+            ->assertJsonPath('activities.0.code', '960113');
+
+        $this->assertSame(2, $intentos, 'Debe reintentar una vez tras el timeout');
+    }
+
+    public function test_consultado_sin_actividades_se_reporta_como_consultado_vacio(): void
+    {
+        // B) found + actividades = 0: SÍ se consultó, y eso se dice.
+        Http::fake(['api.hacienda.go.cr/*' => Http::response([
+            'nombre' => 'CONTRIBUYENTE SIN ACTIVIDADES',
+            'tipoIdentificacion' => '01',
+            'regimen' => ['codigo' => 0, 'descripcion' => 'No tiene'],
+            'situacion' => ['estado' => 'No inscrito'],
+            'actividades' => [],
+        ], 200)]);
+        [$company, $branch, $user] = $this->context();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '01', 'identificacion' => '1-0987-0988']))
+            ->assertOk()
+            ->assertJsonPath('status', 'found')
+            ->assertJsonPath('activities_queried', true)
+            ->assertJsonPath('has_activities', false)
+            ->assertJsonPath('activities', []);
+    }
+
+    public function test_codigos_con_punto_decimal_se_conservan_y_se_persisten(): void
+    {
+        Http::fake(['api.hacienda.go.cr/*' => Http::response($this->haciendaConCodigosDecimales(), 200)]);
+        [$company, $branch, $user] = $this->context();
+
+        $lookup = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '02', 'identificacion' => '3-101-000000']));
+
+        $lookup->assertOk()
+            ->assertJsonPath('has_activities', true)
+            ->assertJsonPath('activities.0.code', '0144.0')
+            ->assertJsonPath('activities.1.code', '0141.1');
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('clientes.store'), $this->payload([
+                'identification_type' => '02',
+                'identification' => '3-101-000000',
+                'name' => 'SOCIEDAD CON ACTIVIDADES DECIMALES',
+                'taxpayer_activities' => $lookup->json('activities'),
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('customer_taxpayer_activities', ['code' => '0144.0']);
+        $this->assertDatabaseHas('customer_taxpayer_activities', ['code' => '0141.1']);
+    }
+
+    public function test_pos_persiste_actividades_con_codigo_decimal(): void
+    {
+        Http::fake(['api.hacienda.go.cr/*' => Http::response($this->haciendaConCodigosDecimales(), 200)]);
+        [$company, $branch, $user] = $this->context();
+
+        $lookup = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '02', 'identificacion' => '3-101-000000']));
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->postJson(route('pos.customers.quick-store'), [
+                'name' => $lookup->json('name'),
+                'customer_type' => 'company',
+                'identification_type' => '02',
+                'identification' => '3-101-000000',
+                'taxpayer_activities' => $lookup->json('activities'),
+            ])
+            ->assertCreated();
+
+        $this->assertSame(2, CustomerTaxpayerActivity::query()->count());
+        $this->assertDatabaseHas('customer_taxpayer_activities', ['code' => '0144.0']);
+    }
+
+    public function test_un_timeout_no_persiste_lista_vacia_ni_borra_lo_existente(): void
+    {
+        Http::fake(['api.hacienda.go.cr/*' => Http::response($this->haciendaConActividad(), 200)]);
+        [$company, $branch, $user] = $this->context();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->post(route('clientes.store'), $this->payload([
+                'identification_type' => '02',
+                'identification' => '3-101-000000',
+                'name' => 'Cliente Con Actividades',
+                'taxpayer_activities' => [['code' => '960113', 'description' => 'Actividad previa']],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $cliente = Customer::query()->where('identification', '3-101-000000')->firstOrFail();
+        $this->assertSame(1, CustomerTaxpayerActivity::query()->count());
+
+        // Ahora Hacienda falla: no se guarda lista vacía ni se borra la previa.
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->getJson(route('clientes.contribuyente', ['tipo' => '02', 'identificacion' => '3-101-000000']))
+            ->assertOk()
+            ->assertJsonPath('status', 'unavailable');
+
+        // Guardar sin `taxpayer_activities` no debe tocar lo persistido.
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->put(route('clientes.update', $cliente), $this->payload([
+                'identification_type' => '02',
+                'identification' => '3-101-000000',
+                'name' => 'Cliente Con Actividades',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, CustomerTaxpayerActivity::query()->count());
+        $this->assertDatabaseHas('customer_taxpayer_activities', ['code' => '960113']);
+    }
+
     public function test_la_vista_real_expone_los_hooks_del_flujo_hacienda(): void
     {
         [$company, $branch, $user] = $this->context();

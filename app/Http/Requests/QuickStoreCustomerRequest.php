@@ -60,7 +60,7 @@ class QuickStoreCustomerRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:150'],
             'create_portal_access' => ['nullable', 'boolean'],
             'taxpayer_activities' => ['nullable', 'array', 'max:50'],
-            'taxpayer_activities.*.code' => ['required_with:taxpayer_activities', 'string', 'max:20', 'regex:/^\d{1,20}$/'],
+            'taxpayer_activities.*.code' => ['required_with:taxpayer_activities', 'string', 'max:20', 'regex:/^\d{1,10}(\.\d{1,4})?$/'],
             'taxpayer_activities.*.description' => ['nullable', 'string', 'max:255'],
             'company_id' => ['prohibited'],
             'is_active' => ['prohibited'],

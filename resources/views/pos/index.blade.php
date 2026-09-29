@@ -1041,8 +1041,21 @@
                                        x-text="quickCustomer.ident.applied.length + ' actividad(es) se guardarán con el cliente.'"></p>
                                 </div>
                             </template>
+
+                            {{-- Se consultó y Hacienda no devolvió ninguna actividad. --}}
+                            <p x-show="!quickCustomer.ident.activities.length"
+                               class="mt-3 text-xs text-slate-600">
+                                Hacienda no informó actividades económicas en esta consulta.
+                            </p>
                         </div>
                     </div>
+
+                    {{-- Fallo transitorio: NO es "sin actividades" y no borra lo aplicado. --}}
+                    <p x-show="quickCustomer.ident.status === 'error' && !quickCustomer.ident.queried"
+                       x-cloak
+                       class="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800">
+                        No fue posible consultar actividades en Hacienda. Intente nuevamente.
+                    </p>
 
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-slate-700">Teléfono</label>
@@ -1231,7 +1244,7 @@ document.addEventListener('alpine:init', () => {
             errors: {},
             message: '',
             delivery: null,
-            ident: { status: '', name: '', timer: null, token: 0, regime: '', situation: '', activities: [], applied: [] },
+            ident: { status: '', name: '', timer: null, token: 0, regime: '', situation: '', activities: [], applied: [], queried: false },
             form: { name: '', customer_type: 'individual', identification_type: '', identification: '', phone: '', mobile: '', email: '', create_portal_access: false },
         },
         suspended: { open: false, loading: false, saving: false, list: [], error: '', activeId: null, recoveryToken: null, warnings: [], customerInvalid: false, canCancel: @json($canCancelSuspended) },
@@ -2582,7 +2595,10 @@ document.addEventListener('alpine:init', () => {
             }
 
             form.identification = rules.format(form.identification_type, typed);
-            this.resetTaxpayerProposal();
+
+            // Al reconsultar se limpia la propuesta anterior, pero SOLO si la
+            // consulta va a poder responder: ante un fallo transitorio las
+            // actividades ya aplicadas deben sobrevivir intactas.
             this.scheduleTaxpayerLookup();
         },
         identificationTypeChange() {
@@ -2591,14 +2607,18 @@ document.addEventListener('alpine:init', () => {
             this.resetTaxpayerProposal();
             this.scheduleTaxpayerLookup();
         },
-        resetTaxpayerProposal() {
+        resetTaxpayerProposal(options) {
             const state = this.quickCustomer.ident;
+            const conservarAplicadas = !!(options && options.keepApplied);
             state.status = '';
             state.name = '';
             state.regime = '';
             state.situation = '';
             state.activities = [];
-            state.applied = [];
+            state.queried = false;
+            if (!conservarAplicadas) {
+                state.applied = [];
+            }
         },
         scheduleTaxpayerLookup() {
             const identification = window.MvsIdentification;
@@ -2614,6 +2634,10 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
 
+            // La propuesta anterior se limpia al LANZAR la consulta, pero lo
+            // que la persona YA aplicó se conserva hasta saber qué respondió
+            // Hacienda: si la consulta falla, ese estado sobrevive intacto.
+            this.resetTaxpayerProposal({ keepApplied: true });
             state.timer = setTimeout(() => this.runTaxpayerLookup(type, value), 450);
         },
         async runTaxpayerLookup(type, value) {
@@ -2622,11 +2646,10 @@ document.addEventListener('alpine:init', () => {
             const token = ++state.token;
 
             state.status = 'loading';
-            state.name = '';
-            state.regime = '';
-            state.situation = '';
-            state.activities = [];
-            state.applied = [];
+            // La propuesta previa ya se limpió en scheduleTaxpayerLookup() al
+            // lanzar la consulta. Aquí NO se borra nada más: si Hacienda falla,
+            // el estado aplicado permanece y solo se muestra el aviso.
+            state.queried = false;
 
             try {
                 const data = await identification.consult(type, value);
@@ -2639,13 +2662,25 @@ document.addEventListener('alpine:init', () => {
                     state.situation = data.situation || '';
                     state.activities = Array.isArray(data.activities) ? data.activities.filter(item => item && item.code) : [];
                     state.applied = state.activities.slice();
+                    state.queried = true;
                     if (!this.quickCustomer.form.name.trim()) this.quickCustomer.form.name = data.name;
                     return;
                 }
 
+                if (data.status === 'unavailable') {
+                    // Fallo transitorio: se avisa y NO se borra lo aplicado.
+                    state.status = 'error';
+                    state.queried = false;
+                    return;
+                }
+
                 state.status = data.status === 'not_found' ? 'not_found' : 'error';
+                state.queried = data.status === 'not_found';
             } catch (error) {
-                if (token === state.token) state.status = 'error';
+                if (token === state.token) {
+                    state.status = 'error';
+                    state.queried = false;
+                }
             }
         },
         identStatusText() {

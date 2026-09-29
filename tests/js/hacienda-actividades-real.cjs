@@ -20,6 +20,8 @@ const LOOKUP_OK = {
         { code: '960113', description: 'Actividades de contratado de servicios' },
         { code: '461010', description: 'Venta al por menor' },
     ],
+    activities_queried: true,
+    has_activities: true,
 };
 
 const LOOKUP_SIN_ACTIVIDADES = {
@@ -29,6 +31,19 @@ const LOOKUP_SIN_ACTIVIDADES = {
     regime: 'No tiene',
     situation: 'No inscrito',
     activities: [],
+    activities_queried: true,
+    has_activities: false,
+};
+
+const LOOKUP_NO_DISPONIBLE = {
+    status: 'unavailable',
+    name: null,
+    type: null,
+    regime: null,
+    situation: null,
+    activities: [],
+    activities_queried: false,
+    has_activities: false,
 };
 
 function checkboxesDe(node, soloMarcados) {
@@ -195,6 +210,35 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
     await dormir(700);
     assert.equal(dom3._elementos.taxpayer_activities_list.children.length, 0, 'Sin red no hay actividades');
     assert.equal(dom3._elementos.identification_status.textContent, 'No fue posible consultar Hacienda. Puede continuar.');
+
+    // 4) C) unavailable: mensaje de fallo temporal, NUNCA "no informó actividades",
+    //    y sin borrar lo que ya estaba aplicado/seleccionado.
+    const dom4 = crearDom();
+    cargarModulo(dom4, async () => ({ ok: true, status: 200, json: async () => LOOKUP_NO_DISPONIBLE }));
+    dom4._elementos.identification_type.value = '02';
+    dom4._elementos.identification.value = '3-101-000000';
+    dom4._elementos.identification.dispatch('input');
+    await dormir(700);
+
+    const aviso = dom4._elementos.taxpayer_activities_empty;
+    assert.equal(aviso.hidden, false, 'El aviso de fallo debe verse');
+    assert.match(aviso.textContent, /No fue posible consultar actividades/,
+        'unavailable debe decir que no se pudo consultar, no que no hay actividades');
+    assert.doesNotMatch(aviso.textContent, /no informó actividades/,
+        'unavailable NUNCA debe mostrarse como "Hacienda no informó actividades"');
+    assert.equal(dom4._elementos.taxpayer_activities_list.children.length, 0, 'No se inventa ninguna actividad');
+    assert.equal(dom4._elementos.taxpayer_activities_inputs.children.length, 0,
+        'Ante un fallo temporal no se envía lista de actividades');
+
+    // 5) B) found sin actividades: mensaje correcto de "consultó y no hay".
+    const dom5 = crearDom();
+    cargarModulo(dom5, async () => ({ ok: true, status: 200, json: async () => LOOKUP_SIN_ACTIVIDADES }));
+    dom5._elementos.identification_type.value = '01';
+    dom5._elementos.identification.value = '1-0987-0988';
+    dom5._elementos.identification.dispatch('input');
+    await dormir(700);
+    assert.match(dom5._elementos.taxpayer_activities_empty.textContent, /no informó actividades económicas en esta consulta/,
+        'found sin actividades debe decirlo explícitamente');
 
     console.log('Hacienda actividades UI OK');
 })().catch((e) => { console.error('FALLO:', e.message); process.exit(1); });

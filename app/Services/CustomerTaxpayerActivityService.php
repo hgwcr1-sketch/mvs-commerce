@@ -39,9 +39,14 @@ class CustomerTaxpayerActivityService
                 continue;
             }
 
+            // La fuente oficial entrega el código como texto y puede traer
+            // punto decimal ("0144.0", "0141.1"), no solo dígitos. Un código
+            // con punto ES un código oficial: rechazarlo descartaba
+            // actividades reales sin avisar. Solo se descarta lo que no es un
+            // código (letras, guiones u otros símbolos).
             $code = isset($entry['code']) ? mb_substr(trim((string) $entry['code']), 0, 20) : '';
 
-            if ($code === '' || preg_match('/^\d{1,20}$/', $code) !== 1) {
+            if ($code === '' || preg_match('/^\d{1,10}(\.\d{1,4})?$/', $code) !== 1) {
                 continue;
             }
 
