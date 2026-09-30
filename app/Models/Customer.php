@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -147,6 +148,15 @@ class Customer extends Model
     public function loyaltyContacts(): HasMany
     {
         return $this->hasMany(LoyaltyCustomerContact::class);
+    }
+
+    /**
+     * Cuenta de fidelización (fuente de verdad del saldo de puntos).
+     * Filtrar siempre por company_id en la consulta para aislar empresas.
+     */
+    public function loyaltyAccount(): HasOne
+    {
+        return $this->hasOne(LoyaltyAccount::class, 'customer_id');
     }
 
     /**

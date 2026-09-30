@@ -163,7 +163,7 @@
 
             <div>
                 <label class="text-sm text-slate-500">Puntos</label>
-                <p>{{ $customer->points }}</p>
+                <p>{{ number_format((float) ($customer->loyaltyAccount?->balance ?? 0)) }}</p>
             </div>
 
             <div>

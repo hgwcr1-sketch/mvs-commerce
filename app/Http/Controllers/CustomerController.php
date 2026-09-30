@@ -34,6 +34,12 @@ class CustomerController extends Controller
 
         $customers = Customer::forCompany($companyId)
 
+            // Saldo real de fidelización (loyalty_accounts.balance), misma fuente que POS/Portal.
+            // Subquery con aggregate: evita N+1 y aísla por company_id.
+            ->withAggregate([
+                'loyaltyAccount' => fn ($query) => $query->where('company_id', $companyId),
+            ], 'balance')
+
             ->when($search, function ($query) use ($search) {
 
                 $query->where(function ($q) use ($search) {
@@ -236,6 +242,8 @@ class CustomerController extends Controller
             'province',
             'canton',
             'district',
+            // Saldo real de fidelización (loyalty_accounts.balance), misma fuente que POS/Portal.
+            'loyaltyAccount' => fn ($query) => $query->where('company_id', $cliente->company_id),
             'contacts',
             'addresses.country',
             'addresses.province',
@@ -289,6 +297,11 @@ class CustomerController extends Controller
     public function edit(Customer $cliente)
     {
         $this->ensureCustomerBelongsToActiveCompany($cliente);
+
+        $cliente->load([
+            // Saldo real de fidelización (loyalty_accounts.balance), misma fuente que POS/Portal.
+            'loyaltyAccount' => fn ($query) => $query->where('company_id', $cliente->company_id),
+        ]);
 
         return view('clientes.edit', [
 
