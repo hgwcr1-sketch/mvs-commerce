@@ -133,7 +133,7 @@ class CobrosCollectorAccessTest extends TestCase
         $this->get(route('cobros.owner.dashboard'))->assertOk()->assertSee('Cartera del dueño');
         $role->permissions()->detach(Permission::where('name', 'cobros.portal_dueno')->first()->id);
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.supervisor.index'));
-        $this->get(route('cobros.supervisor.index'))->assertOk()->assertSee('Disponible próximamente');
+        $this->get(route('cobros.supervisor.index'))->assertOk()->assertSee('Panel del supervisor');
         $role->permissions()->detach(Permission::where('name', 'cobros.supervisar')->first()->id);
         $this->get(route('cobros.index'))->assertRedirect(route('cobros.collector.index'));
         $this->get(route('cobros.collector.index'))->assertOk()->assertSee('Mi cartera')
@@ -212,7 +212,7 @@ class CobrosCollectorAccessTest extends TestCase
                 $this->assertTrue(str_starts_with($href, '#') || str_starts_with($href, url('/cobros')), $href);
             }
             if ($selected === 'supervisor.index') {
-                $response->assertSee('Disponible próximamente')->assertDontSee('Total por cobrar')->assertDontSee('Clientes con saldo');
+                $response->assertSee('Panel del supervisor')->assertDontSee('Total por cobrar')->assertDontSee('Clientes con saldo');
             }
         }
     }

@@ -56,7 +56,11 @@ class PortfolioSummaryService
         return compact('metrics', 'accounts', 'today', 'alertDays');
     }
 
-    private function decimalSum(Builder $query, string $column): string
+    /**
+     * Suma decimal BCMath (nunca float). Público para reutilizarlo desde el
+     * panel del supervisor 4A sin duplicar la regla de suma.
+     */
+    public function decimalSum(Builder $query, string $column): string
     {
         $sum = '0.0000';
         // Los casts decimal:4 existentes y BCMath evitan sumas float (incluido SQLite).

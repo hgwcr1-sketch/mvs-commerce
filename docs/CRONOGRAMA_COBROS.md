@@ -247,6 +247,14 @@ pantalla de auditoría para dueño/supervisor. Evidencia en `PROGRESO_COBROS.md`
 - Dependencia: 3B.
 
 ### 4A — Portal del supervisor
+**Estado: COMPLETADA LOCALMENTE (2026-09-30).** Panel operativo de solo
+lectura: cartera por cobrador, agenda del día con incidencias, cobrado,
+recibos, anulaciones, auditoría y filtro por sucursal (alcance del
+supervisor y de la empresa), con `cobros.supervisar` y sin funciones de
+dueño. La reasignación de cartera/visitas prevista en el alcance original
+queda cubierta por la pantalla existente `cobros.asignar` (1E) y no se tocó
+en 4A. Evidencia en `PROGRESO_COBROS.md`; 253/253 pruebas focales, 1932
+aserciones. 4B queda como siguiente bloque.
 - Objetivo: supervisión operativa diaria.
 - Funcionalidades: cartera por cobrador; visitas del día; cobrado hoy por
   cobrador; pendientes/incidencias (no localizados, promesas vencidas);

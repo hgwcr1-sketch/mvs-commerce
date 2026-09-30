@@ -822,3 +822,42 @@ trazabilidad inmutable. Sin liquidaciones de efectivo ni Fase 4.
   nuevos/de 3C (`CompanySequence` conserva 1 deuda de estilo preexistente en
   la base) y `git diff --check` limpio. Sin validación visual en navegador ni
   build Vite; `tmp_*` fuera del commit.
+
+## 4A — Panel operativo del supervisor (2026-09-30) — COMPLETADA LOCALMENTE
+
+Alcance entregado: supervisión operativa diaria en solo lectura. Sin
+reasignaciones nuevas, sin reportes históricos ni Fase 4B.
+
+- **`SupervisorPanelService` (solo lectura):** consolida cartera por
+  cobrador (clientes asignados de `cobros_assignments`, saldo real de CxC y
+  cobrado hoy), agenda del día con conteos por estado, incidencias (no
+  localizados hoy y promesas vencidas), recibos y anulaciones de hoy y los
+  últimos 5 eventos de auditoría. Reutiliza `CollectorManagementService::
+  listCollectors` y `PortfolioSummaryService` (su `decimalSum` BCMath pasó a
+  público); no crea reglas financieras nuevas ni duplica saldos.
+- **Filtro por sucursal:** GET `branch_id` validado contra la empresa activa
+  y contra el alcance del supervisor (`filterableBranches`: sus sucursales
+  vinculadas; sin vínculo explícito, toda la empresa activa) → fuera de
+  alcance 404. Cada consulta sigue acotada por `company_id`.
+- **Permisos/tenant:** ruta única `cobros.supervisor.index` con
+  `permission:cobros.supervisar` (antes placeholder de 4A) + stack CobrOS;
+  dueño/supervisor/cobrador sin el permiso → 403; el panel no ofrece
+  funciones de dueño (`owner.*` → 403 para el supervisor) ni acciones
+  financieras (sin POST, sin escrituras).
+- **UI:** `resources/views/cobros/supervisor/panel.blade.php` mobile-first,
+  dorado oficial, targets ≥44px, tarjetas de indicadores, cartera por
+  cobrador, agenda/incidencias, recibos-anulaciones, auditoría reciente con
+  enlace a la auditoría completa 3C. Filtro de sucursal con formularo GET.
+- **Pruebas:** nuevo `tests/Feature/CobrosSupervisorPanelTest.php` —
+  **8/8, 58 aserciones**: panel completo con cobro y anulación reales,
+  alcance del filtro por sucursal (incl. ajena a empresa → 404), alcance de
+  sucursales del supervisor, permisos, ausencia de funciones de dueño,
+  solo-lectura vía query log + snapshot financiero y aislamiento multiempresa,
+  estados vacíos y enlaces confines `/cobros`.
+- **Adaptación mínima de tests 2A/1E:** dos aserciones de
+  `CobrosCollectorAccessTest` que esperaban el placeholder "Disponible
+  próximamente" ahora esperan "Panel del supervisor" (el resto intacto).
+- **Validación final:** suite focal `Cobros|CustomerCompanyIsolation` →
+  **253/253, 1932 aserciones (VERDE)**; Pint limpio en archivos 4A y
+  `git diff --check` limpio. Sin migraciones, sin visual en navegador ni
+  build Vite; `tmp_*` fuera del commit.

@@ -2,6 +2,23 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
+
+Base `feature/cobros-v1`, `f556650`. Panel operativo del supervisor en solo
+lectura (`cobros.supervisor.index` + `SupervisorPanelService`): cartera por
+cobrador (asignaciones, saldo CxC, cobrado hoy), agenda del día e
+incidencias (no localizados, promesas vencidas), recibos y anulaciones de
+hoy, últimos eventos de auditoría con enlace a la auditoría 3C y filtro por
+sucursal validado contra empresa y alcance del supervisor (fuera → 404).
+Reutiliza `CollectorManagementService::listCollectors` y
+`PortfolioSummaryService::decimalSum` (ahora público); sin reglas
+financieras nuevas ni escrituras (query log y snapshots verificados).
+Adaptadas dos aserciones del placeholder en `CobrosCollectorAccessTest`.
+Validación: `CobrosSupervisorPanelTest` 8/8 (58 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **253/253, 1932 aserciones**; Pint y
+`git diff --check` correctos. Sin migraciones ni build.
+4B pendiente y sin iniciar. Temporales `tmp_*` preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 3C COMPLETADA LOCALMENTE (2026-09-30)
 
 Base `feature/cobros-v1`, `b3d725f`. Auditoría completa, anulaciones seguras
