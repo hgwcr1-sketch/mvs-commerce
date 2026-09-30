@@ -940,4 +940,69 @@ class FiscalPortalTest extends TestCase
         $this->assertStringNotContainsString('>Series<', $html);
         $this->assertStringContainsString('Series fiscales / Migración', $html);
     }
+
+    public function test_new_company_fiscal_wizard_starts_fresh(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $response = $this->get(route('fiscal.setup', ['step' => 'datos']));
+
+        $response->assertOk();
+
+        $html = $response->getContent();
+
+        // Identification type, province, canton and district start empty for a brand-new company
+        $this->assertStringContainsString('<option value="">Elegir…</option>', $html);
+        $this->assertStringNotContainsString('value="01" selected', $html);
+        $this->assertStringNotContainsString('value="02" selected', $html);
+
+        $provinceStart = strpos($html, 'id="province_id"');
+        $provinceBlock = substr($html, $provinceStart, strpos($html, '</select>', $provinceStart) - $provinceStart);
+        $this->assertStringNotContainsString('selected', $provinceBlock);
+
+        // Address stays empty when the company has no stored address
+        $this->assertStringContainsString('value="" placeholder="Dirección exacta"', $html);
+        $this->assertStringNotContainsString('Test Address', $html);
+
+        // Economic activity placeholder should be present
+        $this->assertStringContainsString('Ej. 1071.9', $html);
+    }
+
+    public function test_identification_type_dropdown_has_codes_01_to_05(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $response = $this->get(route('fiscal.setup', ['step' => 'datos']));
+
+        $response->assertOk();
+
+        $html = $response->getContent();
+
+        foreach (['01', '02', '03', '04', '05'] as $code) {
+            $this->assertStringContainsString('value="' . $code . '"', $html);
+        }
+
+        foreach (['Cédula Física', 'Cédula Jurídica', 'DIMEX', 'NITE', 'Extranjero no domiciliado'] as $label) {
+            $this->assertStringContainsString($label, $html);
+        }
+
+        $this->assertStringContainsString('<option value="">Elegir…</option>', $html);
+    }
+
+    public function test_economic_activity_help_text_is_present(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+
+        $response = $this->get(route('fiscal.setup', ['step' => 'datos']));
+
+        $response->assertOk();
+        $response->assertSee('actividad económica registrada por su empresa ante Hacienda');
+        $response->assertSee('Este campo no es el código CABYS de un producto.');
+    }
 }

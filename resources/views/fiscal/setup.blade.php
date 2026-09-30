@@ -32,7 +32,14 @@
                 <p class="text-sm font-bold uppercase tracking-wide text-amber-700">Datos fiscales de la empresa</p>
                 <div>
                     <label class="text-sm font-bold" for="identification_type">Tipo de identificación</label>
-                    <input id="identification_type" name="identification_type" value="{{ old('identification_type', $company->identification_type) }}" required class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                    <select id="identification_type" name="identification_type" required class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                        <option value="">Elegir…</option>
+                        <option value="01" @selected((string) old('identification_type', $company->identification_type) === '01')>01 Cédula Física</option>
+                        <option value="02" @selected((string) old('identification_type', $company->identification_type) === '02')>02 Cédula Jurídica</option>
+                        <option value="03" @selected((string) old('identification_type', $company->identification_type) === '03')>03 DIMEX</option>
+                        <option value="04" @selected((string) old('identification_type', $company->identification_type) === '04')>04 NITE</option>
+                        <option value="05" @selected((string) old('identification_type', $company->identification_type) === '05')>05 Extranjero no domiciliado</option>
+                    </select>
                 </div>
                 <div>
                     <label class="text-sm font-bold" for="identification_number">Número de identificación</label>
@@ -50,6 +57,7 @@
                 <div>
                     <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
                     <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                    <p class="mt-1 text-xs text-slate-500">Use la actividad económica registrada por su empresa ante Hacienda. Este campo no es el código CABYS de un producto.</p>
                 </div>
                 <div>
                     <span class="text-sm font-bold">Ubicación fiscal</span>
