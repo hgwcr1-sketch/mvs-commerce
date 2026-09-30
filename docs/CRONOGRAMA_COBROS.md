@@ -200,6 +200,12 @@ autorización para 3B; no forma parte del cierre de 3A. Evidencia en
 - Dependencia: 2C + aprobación explícita del diseño.
 
 ### 3B — Cobros reales y recibos
+**Estado: COMPLETADA LOCALMENTE (2026-09-30).** Pagos parciales/totales con
+confirmación en servidor, recibos `RCB-` únicos por empresa e idempotencia
+por `client_token` (mismo payload → mismo pago; distinto → 409), sin caja ni
+efecto en caja (custodia pendiente). Evidencia y detalle en
+`PROGRESO_COBROS.md`; 234/234 pruebas focales, 1772 aserciones. 3C queda
+como siguiente bloque.
 - Objetivo: registrar abonos/pago total desde CobrOS de forma segura.
 - Funcionalidades: UI de cobro en ficha de cliente/visita (parcial o total);
   captura operacional explícita antes de aplicar (confirmación con detalle);

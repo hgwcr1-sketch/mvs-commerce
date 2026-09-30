@@ -41,7 +41,7 @@ class CobrosPaymentGateTest extends TestCase
             ->assertSee($customer->name)
             ->assertSee('Saldo pendiente')
             ->assertSee('25,000.50')
-            ->assertSee('CONTINUAR CON EL COBRO')
+            ->assertSee('REVISAR COBRO')
             ->assertSee('VOLVER')
             // Lenguaje cotidiano, sin jerga contable ni otros módulos.
             ->assertDontSee('balance_due')

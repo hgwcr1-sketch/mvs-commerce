@@ -719,3 +719,54 @@ Se revisó y completó el trabajo local existente sobre `552a0a6`.
   Pint en archivos nuevos y `git diff --check` correctos.
   3B pendiente y sin iniciar; idempotencia,
   captura financiera y recibos requieren su fase y autorización propias.
+
+## 3B — Cobros reales y recibos (2026-09-30) — COMPLETADA LOCALMENTE
+
+Alcance entregado: pagos parciales/totales con confirmación explícita,
+recibos únicos por empresa e idempotencia por token. Sin anulaciones ni
+liquidaciones (3C en adelante). Sin push/merge/deploy.
+
+- **Migraciones aditivas:** `2026_09_30_000001` hace nullable
+  `accounts_receivable_payments.cash_session_id` (custodia sin caja) y
+  `2026_09_30_000002` crea `cobros_receipts` con UNIQUE
+  `(company_id, client_token)`, `(company_id, receipt_number)` y
+  `payment_id` único.
+- **`Cobros\SecurePaymentService`:** reutiliza el Gate 3A (re-evaluado en
+  servidor antes de escribir) y `AccountsReceivableService::payInCustody()`
+  (nuevo método que comparte el mismo cuerpo transaccional/BCMath de
+  `pay()`, solo sin sesión de caja). Orden: resolución de idempotencia
+  primero → Gate → validaciones → transacción. Mismo token + mismo payload
+  devuelve el mismo pago/recibo; token con payload distinto (o de otro
+  cobrador) → 409; carrera concurrente cubierta por la restricción única y
+  resuelta como replay o 409. Montos `\d+(\.\d{1,4})?` + BCMath, límite contra
+  saldo, métodos de la empresa activos y sin crédito/puntos, referencia
+  obligatoria si el método la exige, visita revalidada por empresa/cobrador/
+  cliente.
+- **Custodia explícita:** el pago se registra con `cash_session_id = null`,
+  `affects_cash_snapshot = false` y `cash_effect_amount = 0`; ninguna caja
+  recibe efectivo automáticamente y las expectativas de cierre existentes
+  (filtradas por sesión) no cambian. El dinero queda en custodia del
+  cobrador hasta una liquidación futura (3C+); así lo dice el recibo.
+- **Recibos:** `CompanySequence::COBROS_RECEIPT` → `RCB-%08d` único por
+  empresa; pantalla de recibo con detalle, historial paginado propio y
+  acceso del dueño (`cobros.portal_dueno`) al recibo de su empresa; las
+  rutas exigen `cobros.cobrar` y todo recurso ajeno/cross-company → 404.
+- **UI CobrOS:** `payment-create` pasó de pantalla previa bloqueada a captura
+  (monto parcial/total, forma de pago, referencia condicionada, nota, token
+  oculto) + confirmación en servidor con detalle (`confirm=1`): sin
+  confirmación no hay escritura alguna. Vista de recibo (Imprimir/Compartir)
+  e historial; enlace "Mis recibos" en la navegación fuente CobrOS.
+  Mobile-first, controles ≥44px, dorado oficial `#D4AF37`.
+- **Pruebas:** nuevo `tests/Feature/CobrosPaymentTest.php` — **14/14, 91
+  aserciones**: parcial, total, monto mayor al saldo, replay idéntico → un
+  solo pago, payload distinto → 409, sin confirmación → cero escrituras,
+  permiso `cobros.cobrar`, cuenta/recibo cross-company → 404, método
+  inválido/ajeno/referencia faltante, números `RCB-00000001/2` por empresa,
+  Gate re-evaluado antes de escribir, historial/detalle aislados, dueño con
+  portal_dueno y snapshots financieros/cash intactos.
+- **Validación final:** suite focal `Cobros|CustomerCompanyIsolation` →
+  **234/234, 1772 aserciones (VERDE)**; Pint aplicado a los archivos PHP
+  nuevos/modificados de 3B y `git diff --check` limpio. `CobrosPaymentGateTest`
+  solo adaptó la expectativa del CTA (`REVISAR COBRO` sustituye al botón
+  deshabilitado de 3A). Sin validación visual en navegador ni build Vite.
+  `tmp_generate_cobros_icons.php` y los `tmp_*` quedan fuera del commit.

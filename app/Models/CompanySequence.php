@@ -24,6 +24,8 @@ class CompanySequence extends Model
     public const PURCHASE_ORDER = 'purchase_order';
     public const CUSTOMER_CODE = 'customer_code';
 
+    public const COBROS_RECEIPT = 'cobros_receipt';
+
     protected $fillable = [
         'company_id',
         'name',
@@ -105,5 +107,10 @@ class CompanySequence extends Model
     public static function nextCustomerCode(int $companyId): string
     {
         return sprintf('%06d', static::nextValue($companyId, static::CUSTOMER_CODE));
+    }
+
+    public static function nextCobrosReceiptNumber(int $companyId): string
+    {
+        return sprintf('RCB-%08d', static::nextValue($companyId, static::COBROS_RECEIPT));
     }
 }

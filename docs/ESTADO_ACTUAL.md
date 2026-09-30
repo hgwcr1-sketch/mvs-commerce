@@ -2,6 +2,24 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — Fase 3B COMPLETADA LOCALMENTE (2026-09-30)
+
+Base `feature/cobros-v1`, `751a363`. Cobros parciales/totales y recibos en
+CobrOS: `Cobros\SecurePaymentService` (Gate 3A + idempotencia `client_token`,
+mismo payload → mismo pago, distinto → 409, carrera vía UNIQUE),
+`AccountsReceivableService::payInCustody()` (mismo cuerpo transaccional de
+`pay()` sin sesión de caja: `cash_session_id=null`, `affects_cash_snapshot=false`,
+efectivo en custodia del cobrador, nunca ingresado a caja), migraciones
+aditivas `2026_09_30_000001` (cash_session nullable) y `2026_09_30_000002`
+(`cobros_receipts` + `RCB-%08d` por empresa), captura + confirmación en
+servidor, vista de recibo, historial y enlace "Mis recibos".
+Validación: `CobrosPaymentTest` 14/14 (91 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **234/234, 1772 aserciones**; Pint en
+archivos 3B y `git diff --check` limpio. Sin validación visual ni build.
+3C (anulaciones/auditoría) pendiente y sin iniciar. Temporales
+`tmp_gate_result.txt`, `tmp_gate_summary.txt` y `tmp_generate_cobros_icons.php`
+preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 3A COMPLETADA LOCALMENTE (2026-09-29)
 
 Base `feature/cobros-v1`, `552a0a6`. Se completó la implementación local

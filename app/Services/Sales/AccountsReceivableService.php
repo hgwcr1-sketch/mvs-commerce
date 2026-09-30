@@ -39,7 +39,25 @@ class AccountsReceivableService
 
     public function pay(AccountReceivable $account, array $data, User $user, int $companyId, int $branchId): AccountReceivablePayment
     {
-        return DB::transaction(function () use ($account, $data, $user, $companyId, $branchId) {
+        return $this->applyPayment($account, $data, $user, $companyId, $branchId, false);
+    }
+
+    /**
+     * Fase 3B CobrOS — abono en custodia: SIN sesión de caja y SIN efecto
+     * sobre el efectivo esperado de cualquier caja. El dinero cobrado queda
+     * en custodia del cobrador hasta una liquidación futura (3C+).
+     *
+     * Reutiliza exactamente las mismas reglas de bloqueo, decimales y estado
+     * que pay(): solo cambia dónde queda el dinero.
+     */
+    public function payInCustody(AccountReceivable $account, array $data, User $user, int $companyId, int $branchId): AccountReceivablePayment
+    {
+        return $this->applyPayment($account, $data, $user, $companyId, $branchId, true);
+    }
+
+    private function applyPayment(AccountReceivable $account, array $data, User $user, int $companyId, int $branchId, bool $custody): AccountReceivablePayment
+    {
+        return DB::transaction(function () use ($account, $data, $user, $companyId, $branchId, $custody) {
             $account = AccountReceivable::query()->forCompany($companyId)->forBranch($branchId)->whereKey($account->id)->lockForUpdate()->firstOrFail();
             if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true) || (float) $account->balance_due <= 0) {
                 throw ValidationException::withMessages(['account' => 'La cuenta ya no admite abonos.']);
@@ -49,11 +67,11 @@ class AccountsReceivableService
             $method = PaymentMethod::query()->forCompany($companyId)->active()->whereKey($data['payment_method_id'])->lockForUpdate()->first();
             if (!$method || in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) throw ValidationException::withMessages(['payment_method_id' => 'La forma de pago no está disponible para abonos.']);
             if ($method->requires_reference && empty($data['reference'])) throw ValidationException::withMessages(['reference' => "La referencia es obligatoria para {$method->name}."]);
-            $session = $this->cashSessionResolver->resolve($user, $companyId, $branchId, $data['cash_session_id'] ?? null, true);
+            $session = $custody ? null : $this->cashSessionResolver->resolve($user, $companyId, $branchId, $data['cash_session_id'] ?? null, true);
             $payment = AccountReceivablePayment::create([
                 'account_receivable_id' => $account->id, 'company_id' => $companyId, 'branch_id' => $branchId, 'customer_id' => $account->customer_id,
-                'user_id' => $user->id, 'cash_session_id' => $session->id, 'payment_method_id' => $method->id, 'amount' => $amount,
-                'affects_cash_snapshot' => $method->affects_cash, 'cash_effect_amount' => $method->affects_cash ? $amount : 0,
+                'user_id' => $user->id, 'cash_session_id' => $session?->id, 'payment_method_id' => $method->id, 'amount' => $amount,
+                'affects_cash_snapshot' => $session !== null && $method->affects_cash, 'cash_effect_amount' => $session !== null && $method->affects_cash ? $amount : 0,
                 'reference' => $data['reference'] ?? null, 'notes' => $data['notes'] ?? null, 'paid_at' => now(),
             ]);
             $balance = round((float) $account->balance_due - $amount, 4);

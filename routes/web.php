@@ -161,6 +161,12 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.location');
     Route::get('/collector/payments/create/{account}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'create'])
         ->middleware('permission:cobros.cobrar')->name('collector.payments.create');
+    Route::post('/collector/payments/{account}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'store'])
+        ->middleware('permission:cobros.cobrar')->name('collector.payments.store');
+    Route::get('/collector/receipts', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'history'])
+        ->middleware('permission:cobros.cobrar')->name('collector.payments.history');
+    Route::get('/collector/receipts/{receipt}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'receipt'])
+        ->middleware('permission:cobros.cobrar')->name('collector.payments.receipt');
     Route::get('/visits/today', [App\Http\Controllers\Cobros\VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
     Route::get('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'customerHistory'])
