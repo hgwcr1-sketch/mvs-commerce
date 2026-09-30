@@ -257,6 +257,30 @@ class FiscalMasterTest extends TestCase
         $response->assertSee('Diagnóstico');
     }
 
+    public function test_platform_shows_fiscal_status_metrics_and_keeps_admin_access(): void
+    {
+        [$company, $branch] = $this->context();
+        $this->enableFiscal($company);
+        app(\App\Services\Fiscal\CompanyFiscalConfigService::class)->ensure($company);
+
+        $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
+
+        $on = $this->actingAs($admin)->get(route('platform.companies.show', $company));
+        $on->assertOk();
+        $on->assertSee('Facturación Electrónica');
+        $on->assertSee('Habilitada');
+        $on->assertSee('Conexión fiscal');
+        $on->assertSee('Sin configurar');
+        $on->assertSee('restante 50');
+        $on->assertDontSee('facturaencr');
+
+        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => false]);
+
+        $this->actingAs($admin)->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertSee('Deshabilitada');
+    }
+
     public function test_production_banner_is_distinct(): void
     {
         [$company, $branch] = $this->context();
@@ -293,6 +317,7 @@ class FiscalMasterTest extends TestCase
     public function test_series_and_document_pages_require_permission(): void
     {
         [$company, $branch] = $this->context();
+        $this->enableFiscal($company);
         $this->actingUser($company, $branch, []);
 
         $this->get(route('fiscal.series'))->assertForbidden();

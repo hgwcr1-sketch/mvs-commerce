@@ -98,13 +98,32 @@ class FiscalPortalTest extends TestCase
         app(\App\Services\CompanyLicenseService::class)->ensure($company);
         $this->actingUser($company, $branch, ['fiscal.ver']);
 
-        $response = $this->get(route('fiscal.index'));
-
-        $response->assertOk();
-        $response->assertSee('no está habilitado');
+        $this->get(route('fiscal.index'))->assertForbidden();
+        $this->get(route('fiscal.setup', ['step' => 'datos']))->assertForbidden();
+        $this->get(route('dashboard'))->assertOk()->assertDontSee('Facturación Electrónica');
 
         $sale = $this->completedSale($company, $branch, $this->actingUser($company, $branch, ['fiscal.ver']));
         $this->assertFalse(app(\App\Services\Fiscal\PosEmissionDispatcher::class)->forSale($sale));
+    }
+
+    public function test_fiscal_license_off_hides_sidebar_and_blocks_direct_urls_per_company(): void
+    {
+        [$companyOff, $branchOff] = $this->fiscalContext();
+        app(\App\Services\CompanyLicenseService::class)->ensure($companyOff);
+        $this->actingUser($companyOff, $branchOff, ['fiscal.ver', 'fiscal.editar']);
+
+        $this->get(route('fiscal.index'))->assertForbidden();
+        $this->get(route('fiscal.history'))->assertForbidden();
+        $this->get(route('fiscal.setup', ['step' => 'conexion']))->assertForbidden();
+        $this->get(route('fiscal.series'))->assertForbidden();
+        $this->get(route('dashboard'))->assertOk()->assertDontSee('Facturación Electrónica');
+
+        [$companyOn, $branchOn] = $this->fiscalContext();
+        $this->enableFiscal($companyOn);
+        $this->actingUser($companyOn, $branchOn, ['fiscal.ver']);
+
+        $this->get(route('fiscal.index'))->assertOk();
+        $this->get(route('dashboard'))->assertOk()->assertSee('Facturación Electrónica');
     }
 
     public function test_identity_wizard_updates_company(): void
@@ -951,7 +970,7 @@ class FiscalPortalTest extends TestCase
     public function test_new_company_fiscal_wizard_starts_fresh(): void
     {
         [$company, $branch] = $this->fiscalContext();
-        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $response = $this->get(route('fiscal.setup', ['step' => 'datos']));
@@ -980,7 +999,7 @@ class FiscalPortalTest extends TestCase
     public function test_identification_type_dropdown_has_codes_01_to_05(): void
     {
         [$company, $branch] = $this->fiscalContext();
-        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $response = $this->get(route('fiscal.setup', ['step' => 'datos']));
@@ -1003,7 +1022,7 @@ class FiscalPortalTest extends TestCase
     public function test_economic_activity_help_text_is_present(): void
     {
         [$company, $branch] = $this->fiscalContext();
-        app(\App\Services\CompanyLicenseService::class)->ensure($company);
+        $this->enableFiscal($company);
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $response = $this->get(route('fiscal.setup', ['step' => 'datos']));

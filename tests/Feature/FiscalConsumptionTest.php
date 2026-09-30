@@ -369,7 +369,9 @@ class FiscalConsumptionTest extends TestCase
         $response = $this->actingAs($admin)->get(route('platform.companies.show', $company));
 
         $response->assertOk();
-        $response->assertSee('Consumo fiscal del mes', false);
+        $response->assertSee('Facturación Electrónica · estado y consumo', false);
+        $response->assertSee('Conexión fiscal', false);
+        $response->assertSee('restante 9', false);
         $response->assertSee('Servicio fiscal', false);
         $response->assertDontSee('api_key', false);
         $response->assertDontSee('secret', false);

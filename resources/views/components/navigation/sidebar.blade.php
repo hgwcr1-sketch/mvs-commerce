@@ -133,7 +133,9 @@
     @endcanany
 
     @can('fiscal.ver')
-        <x-navigation.item route="fiscal.index" icon="document" label="Facturación Electrónica" :active="request()->routeIs('fiscal.*')" />
+        @can('fiscal.enabled')
+            <x-navigation.item route="fiscal.index" icon="document" label="Facturación Electrónica" :active="request()->routeIs('fiscal.*')" />
+        @endcan
     @endcan
 
         {{-- PRODUCTOS --}}

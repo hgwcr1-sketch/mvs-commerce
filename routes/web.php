@@ -207,6 +207,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     |--------------------------------------------------------------------------
     */
 
+    Route::middleware('fiscal.enabled')->group(function () {
+
     Route::get('/facturacion-electronica', [FiscalPortalController::class, 'index'])
         ->middleware('permission:fiscal.ver')
         ->name('fiscal.index');
@@ -245,6 +247,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::get('/facturacion-electronica/cambio-proveedor', [FiscalPortalController::class, 'switchChecklist'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.switch');
+
+    });
 
     /*
     |--------------------------------------------------------------------------

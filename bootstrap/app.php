@@ -31,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
             'permission' => PermissionMiddleware::class,
 
+            'fiscal.enabled' => \App\Http\Middleware\EnsureFiscalEnabled::class,
+
             'platform.admin' => EnsurePlatformAdmin::class,
             'pos.cash-session' => EnsurePosCashSession::class,
         ]);

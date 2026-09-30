@@ -101,11 +101,29 @@ class PlatformAdminController extends Controller
         $company->license->load(['events.actor']);
         $fiscalUsage = app(\App\Services\Fiscal\FiscalConsumptionService::class)->monthlyBreakdown($company->id);
 
+        $fiscalConfig = \App\Models\CompanyFiscalConfig::query()->where('company_id', $company->id)->first();
+        $fiscalConnectionLabel = 'Sin configurar';
+        if ($fiscalConfig !== null) {
+            if ($fiscalConfig->last_verified_at !== null && ! $fiscalConfig->hasPending()) {
+                $fiscalConnectionLabel = 'Verificada';
+            } elseif ($fiscalConfig->hasCredentials() || $fiscalConfig->hasPending()) {
+                $fiscalConnectionLabel = 'Pendiente';
+            }
+        }
+
+        $fiscalQuota = $company->license->fiscal_monthly_quota;
+        $fiscalUsed = (int) ($fiscalUsage['total'] ?? 0);
+        $fiscalRemaining = $fiscalQuota !== null ? max(0, (int) $fiscalQuota - $fiscalUsed) : null;
+
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
             'fiscalUsage' => $fiscalUsage,
+            'fiscalConnectionLabel' => $fiscalConnectionLabel,
+            'fiscalQuota' => $fiscalQuota,
+            'fiscalUsed' => $fiscalUsed,
+            'fiscalRemaining' => $fiscalRemaining,
         ]);
     }
 

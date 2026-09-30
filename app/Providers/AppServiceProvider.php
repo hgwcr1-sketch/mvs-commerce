@@ -43,5 +43,9 @@ class AppServiceProvider extends ServiceProvider
                 ? true
                 : null;
         });
+
+        Gate::define('fiscal.enabled', function (User $user) {
+            return app(\App\Services\Fiscal\FiscalAccessService::class)->enabledForRequest(request());
+        });
     }
 }
