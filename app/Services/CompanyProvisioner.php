@@ -219,6 +219,9 @@ class CompanyProvisioner
                 'license_plan_id' => $contract['license_plan_id'] ?? null,
                 'plan' => $contract['plan'], 'branch_limit' => $contract['branch_limit'],
                 'user_limit' => $contract['user_limit'] ?? null, 'created_by' => $actor->id,
+                'contract_snapshot' => $contract['contract_snapshot'] ?? null,
+                'fiscal_enabled' => (bool) ($contract['fiscal_enabled'] ?? false),
+                'fiscal_monthly_quota' => $contract['fiscal_monthly_quota'] ?? null,
             ]);
             $this->companyLicenseService->updateModules($company, $actor, $moduleKeys);
             $owner->update(['tenant_invited_at' => now()]);

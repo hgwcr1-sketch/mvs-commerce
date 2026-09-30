@@ -10,6 +10,7 @@ use App\Models\CompanyLicense;
 use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\Backups\CompanyBackupService;
+use App\Services\Billing\CommercialPricingService;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
 use App\Services\Modules\ModuleRegistry;
@@ -21,15 +22,17 @@ use Illuminate\View\View;
 
 class PlatformAdminController extends Controller
 {
-    public function createCompany(): View
+    public function createCompany(CommercialPricingService $pricing): View
     {
         return view('platform.onboarding', [
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->where('is_active', true)->orderBy('name')->get(),
+            'fiscalPlans' => $pricing->fiscalCatalog(),
+            'planCatalog' => $this->planCatalog(),
         ]);
     }
 
-    public function storeCompany(Request $request, CompanyProvisioner $provisioner): RedirectResponse
+    public function storeCompany(Request $request, CompanyProvisioner $provisioner, CommercialPricingService $pricing): RedirectResponse
     {
         $data = $request->validate([
             'trade_name' => ['required', 'string', 'max:150'],
@@ -39,24 +42,69 @@ class PlatformAdminController extends Controller
             'license_plan_id' => ['nullable', Rule::exists('license_plans', 'id')->where('is_active', true)],
             'plan' => ['required_without:license_plan_id', 'nullable', 'string', 'max:80'],
             'branch_limit' => ['nullable', 'integer', 'min:1'], 'user_limit' => ['nullable', 'integer', 'min:1'],
+            'branches' => ['nullable', 'integer', 'min:0', 'max:500'],
+            'users' => ['nullable', 'integer', 'min:0', 'max:5000'],
+            'commerce_price_usd' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
+            'fiscal_plan' => ['nullable', Rule::in(array_keys(CommercialPricingService::FISCAL_PLANS))],
+            'fiscal_price_crc' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,12}(?:\.\d{1,2})?$/'],
+            'fiscal_quota' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'status' => ['required', Rule::in(CompanyLicense::STATUSES)], 'notes' => ['nullable', 'string', 'max:2000'],
             'modules' => ['nullable', 'array'], 'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))],
         ]);
 
         $plan = isset($data['license_plan_id']) ? LicensePlan::findOrFail($data['license_plan_id']) : null;
+        $branches = (int) ($data['branches'] ?? $data['branch_limit'] ?? $plan?->branch_limit ?? 1);
+        $users = (int) ($data['users'] ?? $data['user_limit'] ?? $plan?->user_limit ?? 1);
+
+        $quote = $pricing->quote(
+            $plan,
+            $branches,
+            $users,
+            $data['fiscal_plan'] ?? 'none',
+            isset($data['commerce_price_usd']) ? (float) $data['commerce_price_usd'] : null,
+            isset($data['fiscal_price_crc']) ? (float) $data['fiscal_price_crc'] : null,
+            isset($data['fiscal_quota']) ? (int) $data['fiscal_quota'] : null,
+        );
+
         $contract = collect($data)->only(['trade_name', 'plan', 'branch_limit', 'user_limit', 'status', 'notes'])->all();
+        $contract['branch_limit'] = $branches;
+        $contract['user_limit'] = $users;
+
         if ($plan) {
             $contract = array_merge([
                 'license_plan_id' => $plan->id, 'plan' => $plan->name,
-                'branch_limit' => $plan->branch_limit, 'user_limit' => $plan->user_limit,
             ], array_filter($contract, fn ($value) => $value !== null));
         }
+
+        $contract['contract_snapshot'] = $pricing->snapshot($quote, $plan);
+        $contract += $pricing->licenseFiscalAttributes($quote['fiscal']);
+
         $company = $provisioner->commercialOnboard($data['owner'], $contract, $data['modules'] ?? $plan?->modules ?? [], $request->user());
 
         return redirect()->route('platform.companies.show', $company)->with('success', 'Tenant y contrato creados. El propietario debe completar su activación y onboarding.');
     }
 
-    public function index(Request $request): View
+    /**
+     * Datos de precio de cada plantilla para el recálculo en vivo (el
+     * navegador usa exactamente los mismos números que el servidor).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function planCatalog(): array
+    {
+        return LicensePlan::query()->where('is_active', true)->orderBy('name')->get()->map(fn (LicensePlan $plan): array => [
+            'id' => $plan->id,
+            'code' => $plan->code,
+            'name' => $plan->name,
+            'base' => $plan->base_price_usd === null ? null : (float) $plan->base_price_usd,
+            'extraBranch' => (float) ($plan->extra_branch_price_usd ?? 0),
+            'extraUser' => (float) ($plan->extra_user_price_usd ?? 0),
+            'includedBranches' => (int) ($plan->branch_limit ?? 0),
+            'includedUsers' => (int) ($plan->user_limit ?? 0),
+        ])->all();
+    }
+
+    public function index(Request $request, CommercialPricingService $pricing): View
     {
         $search = trim((string) $request->query('search'));
         $status = trim((string) $request->query('status'));
@@ -87,6 +135,10 @@ class PlatformAdminController extends Controller
             ],
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->orderBy('name')->get(),
+            'contractSummaries' => $companies->getCollection()
+                ->mapWithKeys(fn (Company $company): array => [$company->id => $pricing->summaryFor($company)]),
+            'fiscalPlans' => $pricing->fiscalCatalog(),
+            'pendingPriceLabel' => $pricing->label(),
         ]);
     }
 
@@ -185,11 +237,20 @@ class PlatformAdminController extends Controller
             'name' => ['required', 'string', 'max:80'],
             'branch_limit' => ['nullable', 'integer', 'min:1'],
             'user_limit' => ['nullable', 'integer', 'min:1'],
+            'base_price_usd' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
+            'extra_branch_price_usd' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
+            'extra_user_price_usd' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
+            'fiscal_plan_code' => ['nullable', Rule::in(array_keys(CommercialPricingService::FISCAL_PLANS))],
+            'fiscal_monthly_price_crc' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,12}(?:\.\d{1,2})?$/'],
+            'fiscal_included_quota' => ['nullable', 'integer', 'min:0'],
+            'is_custom' => ['nullable', 'boolean'],
             'modules' => ['required', 'array', 'min:1'],
             'modules.*' => [Rule::in(array_keys(ModuleRegistry::MODULES))],
             'is_active' => ['nullable', 'boolean'],
         ]);
         $data['is_active'] = $request->boolean('is_active');
+        $data['is_custom'] = $request->boolean('is_custom');
+        $data['fiscal_plan_code'] = $data['fiscal_plan_code'] ?? 'none';
         $licenses->savePlan(null, $request->user(), $data);
 
         return back()->with('success', 'Plantilla comercial creada.');
