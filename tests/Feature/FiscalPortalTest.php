@@ -384,6 +384,8 @@ class FiscalPortalTest extends TestCase
         $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
             'provider' => 'facturaencr',
             'environment' => 'sandbox',
+            'api_key' => 'efk_QUOTA',
+            'api_secret' => 'efs_QUOTA',
             'fiscal_enabled' => false,
             'fiscal_monthly_quota' => 999,
         ])->assertRedirect();
@@ -1004,5 +1006,118 @@ class FiscalPortalTest extends TestCase
         $response->assertOk();
         $response->assertSee('actividad económica registrada por su empresa ante Hacienda');
         $response->assertSee('Este campo no es el código CABYS de un producto.');
+    }
+
+    public function test_connection_requires_credentials_for_new_company(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+        ])->assertSessionHasErrors(['api_key', 'api_secret']);
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertNotNull($config);
+        $this->assertNull($config->pending_api_key);
+        $this->assertNull($config->pending_api_secret);
+        $this->assertNull($config->provider_api_key);
+
+        $errorBag = session('errors');
+        $this->assertNotNull($errorBag);
+        $this->assertStringContainsString('Registre la llave de conexión', $errorBag->getBag('default')->first('api_key'));
+        $this->assertStringContainsString('Registre el secreto de conexión', $errorBag->getBag('default')->first('api_secret'));
+
+        // Sesiones JSON guardan los errores como arreglo; se reinyecta en ese formato
+        // porque las pruebas no reenvían la cookie de sesión entre peticiones.
+        $this->withSession(['errors' => ['default' => [
+            'format' => ':message',
+            'messages' => [
+                'api_key' => $errorBag->getBag('default')->get('api_key'),
+                'api_secret' => $errorBag->getBag('default')->get('api_secret'),
+            ],
+        ]]])->get(route('fiscal.setup', ['step' => 'conexion']))
+            ->assertOk()
+            ->assertSee('Registre la llave de conexión')
+            ->assertSee('Registre el secreto de conexión')
+            ->assertDontSee('efk_');
+    }
+
+    public function test_connection_stages_both_credentials_for_new_company(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+            'api_key' => 'efk_INITIAL',
+            'api_secret' => 'efs_INITIAL',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        $raw = DB::table('company_fiscal_configs')->where('company_id', $company->id)->first();
+        $this->assertSame('efk_INITIAL', decrypt($raw->pending_api_key, false));
+        $this->assertSame('efs_INITIAL', decrypt($raw->pending_api_secret, false));
+        $this->assertNull($raw->provider_api_key);
+        $this->assertNull($raw->provider_api_secret);
+    }
+
+    public function test_connection_empty_input_keeps_active_credentials(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        app(CompanyFiscalConfigService::class)->ensure($company);
+        CompanyFiscalConfig::query()->where('company_id', $company->id)->update([
+            'provider_api_key' => encrypt('efk_ACTIVE', false),
+            'provider_api_secret' => encrypt('efs_ACTIVE', false),
+            'last_verified_at' => now(),
+        ]);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+            'api_key' => '',
+            'api_secret' => '',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        $config = CompanyFiscalConfig::where('company_id', $company->id)->first();
+        $this->assertSame('efk_ACTIVE', $config->provider_api_key);
+        $this->assertSame('efs_ACTIVE', $config->provider_api_secret);
+        $this->assertNull($config->pending_api_key);
+        $this->assertNull($config->pending_api_secret);
+        $this->assertFalse($config->hasPending());
+    }
+
+    public function test_staged_rotation_survives_empty_restaging(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, ['fiscal.editar']);
+
+        app(CompanyFiscalConfigService::class)->ensure($company);
+        CompanyFiscalConfig::query()->where('company_id', $company->id)->update([
+            'provider_api_key' => encrypt('efk_ACTIVE', false),
+            'provider_api_secret' => encrypt('efs_ACTIVE', false),
+            'last_verified_at' => now(),
+        ]);
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+            'api_key' => 'efk_ROTATED',
+            'api_secret' => 'efs_ROTATED',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        $this->put(route('fiscal.setup.store', ['step' => 'conexion']), [
+            'environment' => 'sandbox',
+            'api_key' => '',
+            'api_secret' => '',
+        ])->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+
+        $raw = DB::table('company_fiscal_configs')->where('company_id', $company->id)->first();
+        $this->assertSame('efk_ACTIVE', decrypt($raw->provider_api_key, false));
+        $this->assertSame('efk_ROTATED', decrypt($raw->pending_api_key, false));
+        $this->assertSame('efs_ROTATED', decrypt($raw->pending_api_secret, false));
     }
 }

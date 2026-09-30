@@ -218,13 +218,17 @@ class FiscalPortalController extends Controller
     private function storeConnection(Request $request, Company $company): void
     {
         $allowedProviders = array_keys((array) config('fiscal.providers', []));
+        $requiresCredentials = ! $this->configs->ensure($company)->hasCredentials();
 
         $validated = $request->validate([
             'provider' => ['nullable', 'string', 'in:' . implode(',', $allowedProviders)],
             'environment' => ['required', 'string', 'in:sandbox,production'],
-            'api_key' => ['nullable', 'string', 'max:255'],
-            'api_secret' => ['nullable', 'string', 'max:255'],
+            'api_key' => [$requiresCredentials ? 'required' : 'nullable', 'string', 'max:255'],
+            'api_secret' => [$requiresCredentials ? 'required' : 'nullable', 'string', 'max:255'],
             'production_confirm' => ['nullable'],
+        ], [
+            'api_key.required' => 'Registre la llave de conexión: esta empresa aún no tiene credenciales activas.',
+            'api_secret.required' => 'Registre el secreto de conexión: esta empresa aún no tiene credenciales activas.',
         ]);
 
         if ($validated['environment'] === 'production' && ! $request->boolean('production_confirm')) {
