@@ -6,9 +6,11 @@ use App\Http\Requests\StoreQuoteRequest;
 use App\Http\Requests\UpdateQuoteRequest;
 use App\Models\Quote;
 use App\Services\Sales\QuoteService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -81,6 +83,21 @@ class QuoteController extends Controller
         $quote = $this->scoped($cotizacione)->load(['items.product.style', 'items.product.size', 'items.product.color', 'customer', 'user', 'branch', 'cancelledBy', 'convertedSale']);
 
         return view('quotes.show', compact('quote'));
+    }
+
+    /**
+     * PDF público de la cotización vía enlace firmado temporal.
+     *
+     * Únicamente entrega el PDF: no inicia sesión ni permite acceder a POS,
+     * clientes, empresa u otras pantallas. El vencimiento del enlace no
+     * modifica la vigencia ni los datos de la cotización.
+     */
+    public function publicPdf(Quote $quote): Response
+    {
+        $quote->load(['items.product.style', 'items.product.size', 'items.product.color', 'customer', 'user', 'branch', 'company']);
+
+        return Pdf::loadView('quotes.print', ['quote' => $quote, 'pdfMode' => true])
+            ->download("Cotizacion-{$quote->quote_number}.pdf");
     }
 
     /**

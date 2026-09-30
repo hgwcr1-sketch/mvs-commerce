@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Cotización {{ $quote->quote_number }}</title>@include('pdf.partials.corporate-styles')</head>
 <body><main class="document">
-@include('pdf.partials.corporate-header', ['company' => $quote->company, 'branch' => $quote->branch, 'documentTitle' => 'COTIZACIÓN', 'documentNumber' => $quote->quote_number])
+@include('pdf.partials.corporate-header', ['company' => $quote->company, 'branch' => $quote->branch, 'documentTitle' => 'COTIZACIÓN', 'documentNumber' => $quote->quote_number, 'pdfMode' => $pdfMode ?? false])
 <div class="document-alert">NO ES COMPROBANTE FISCAL</div>
 <table class="document-meta"><tr><td><div class="document-label">Cliente</div><div class="document-value">{{ $quote->customer?->name ?? 'Consumidor Final' }}</div>@if($quote->customer?->identification)<div class="document-muted">{{ $quote->customer->identification }}</div>@endif</td><td><div class="document-label">Fecha de emisión</div><div class="document-value">{{ $quote->created_at->format('d/m/Y H:i') }}</div><div class="document-label" style="margin-top:7px">Vigencia</div><div class="document-value">{{ $quote->expires_at?->format('d/m/Y') ?? 'Sin vencimiento' }}</div></td></tr></table>
 <table class="document-table"><thead><tr><th>Producto</th><th class="right">Cantidad</th><th class="right">Precio unitario</th><th class="right">Descuento</th><th class="right">Impuesto</th><th class="right">Total</th></tr></thead><tbody>@foreach($quote->items as $item)<tr><td>{{ $item->description }}@if($item->product_code)<br><span class="document-muted">{{ $item->product_code }}</span>@endif @php($variantLabel = \App\Support\ProductVariantFormatter::label($item->product)) @if($variantLabel)<br><span class="document-muted">{{ $variantLabel }}</span>@endif</td><td class="right">{{ number_format((float) $item->quantity, 2, ',', '.') }}</td><td class="right">{{ $quote->currency_code }} {{ number_format((float) $item->unit_price, 2, ',', '.') }}</td><td class="right">{{ $quote->currency_code }} {{ number_format((float) $item->discount_total, 2, ',', '.') }}</td><td class="right">{{ $quote->currency_code }} {{ number_format((float) $item->tax_total, 2, ',', '.') }}</td><td class="right">{{ $quote->currency_code }} {{ number_format((float) $item->total, 2, ',', '.') }}</td></tr>@endforeach</tbody></table>
@@ -9,5 +9,5 @@
 @if($quote->notes)<section class="document-notes"><strong>Observaciones</strong><br>{{ $quote->notes }}</section>@endif
 <p class="document-notes">Condiciones: los precios, disponibilidad y vigencia corresponden a esta cotización.</p>
 @include('pdf.partials.corporate-footer', ['company' => $quote->company])
-<div class="no-print" style="margin-top:16px;text-align:center"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>
+@if(empty($pdfMode))<div class="no-print" style="margin-top:16px;text-align:center"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>@endif
 </main></body></html>

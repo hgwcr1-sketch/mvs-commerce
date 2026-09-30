@@ -183,8 +183,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
                 customers.forEach(function (customer) {
+                    // Seleccionar un resultado NO abre la ficha: queda en el
+                    // listado filtrado por ese cliente (identification / código /
+                    // nombre) y conserva los filtros activos. "Limpiar filtros"
+                    // vuelve a todos los clientes.
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('search', customer.identification || customer.customer_code || customer.name);
                     const link = document.createElement('a');
-                    link.href = '{{ url('/clientes/') }}/' + customer.id;
+                    link.href = '{{ route('clientes.index') }}?' + params.toString();
                     link.className = 'block border-b border-slate-100 px-4 py-3 hover:bg-amber-50';
                     link.innerHTML = `
                         <div class="font-semibold text-slate-800">${escapeHtml(customer.name)}</div>
@@ -265,6 +271,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 </form>
 
+    @if($search)
+        <div class="mt-4 flex flex-col gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200 sm:flex-row sm:items-center sm:justify-between">
+            <p>Mostrando clientes que coinciden con <strong>{{ $search }}</strong>.</p>
+            <a href="{{ route('clientes.index') }}" class="font-semibold underline">Limpiar</a>
+        </div>
+    @endif
+
     {{-- Tabla --}}
 
     <x-table>
@@ -286,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             @forelse($customers as $customer)
 
-                <tr class="border-t hover:bg-slate-50">
+                <tr class="border-t hover:bg-slate-50 {{ $search ? 'bg-amber-50' : '' }}">
 
                     <td class="px-4 py-3 font-mono text-sm">
                         {{ $customer->customer_code ?: '-' }}

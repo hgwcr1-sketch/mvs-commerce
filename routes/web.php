@@ -179,6 +179,21 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
+/*
+|---------------------------------------------------------------------------
+| Cotización compartida (enlace público temporal)
+|--------------------------------------------------------------------------
+|
+| Únicamente entrega el PDF de una cotización mediante URL firmada temporal
+| (7 días). No otorga acceso a POS, clientes, empresa ni otras pantallas y
+| su vencimiento no modifica la cotización.
+*/
+
+Route::get('/compartidas/cotizaciones/{quote}', [QuoteController::class, 'publicPdf'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('cotizaciones.public.pdf');
+
+
 Route::middleware('auth')->group(function () {
     Route::get('/empresa/create', [CompanyController::class, 'create'])->name('empresa.create');
     Route::post('/empresa', [CompanyController::class, 'store'])->name('empresa.store');
