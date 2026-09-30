@@ -106,8 +106,10 @@ class LoyaltySaleReceiptService
             return null;
         }
 
+        $invitationUrl = route('loyalty.customer.login', $company);
+
         try {
-            $svg = $qr->qrSvg(route('loyalty.customer.login', $company));
+            $svg = $qr->qrSvg($invitationUrl);
         } catch (\Throwable) {
             return null;
         }
@@ -117,6 +119,7 @@ class LoyaltySaleReceiptService
             'portal_name' => $portal?->displayName($company) ?? $company->trade_name,
             // Embedded SVG works in browsers and DomPDF without remote image requests.
             'qr_image' => 'data:image/svg+xml;base64,'.base64_encode($svg),
+            'invitation_url' => $invitationUrl,
         ];
     }
 }

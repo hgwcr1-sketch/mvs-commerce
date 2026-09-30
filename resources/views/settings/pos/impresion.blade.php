@@ -4,7 +4,7 @@
 @section('description', 'Configura terminales POS y su impresión local.')
 
 @section('content')
-<div class="space-y-6" x-data="mvsPrintQz({ testUrl: '{{ str_replace(route('mvs.print.terminals.test-print', 0), '/0/', '/__ID__/') }}', drawerUrl: '{{ str_replace(route('mvs.print.terminals.open-drawer', 0), '/0/', '/__ID__/') }}', signatureUrl: '{{ route('mvs.print.signature') }}', signedMode: {{ $qzSignedMode ? 'true' : 'false' }} })">
+<div class="space-y-6" x-data="mvsPrintQz({ testUrl: '{{ str_replace(route('mvs.print.terminals.test-print', 0), '/0/', '/__ID__/') }}', drawerUrl: '{{ str_replace(route('mvs.print.terminals.open-drawer', 0), '/0/', '/__ID__/') }}', signatureUrl: '{{ route('mvs.print.signature') }}', certificateUrl: '{{ route('mvs.print.certificate') }}', signedMode: {{ $qzSignedMode ? 'true' : 'false' }} })">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h2 class="text-xl font-semibold text-slate-800">Impresión (MVS Print)</h2>
@@ -43,11 +43,11 @@
             <div>
                 <p class="text-sm text-slate-600">Estado del servicio de impresión local en este equipo.</p>
                 <div class="mt-3 flex flex-wrap gap-3">
-                    <button type="button" @click="check()"
+                    <button type="button" @click="check()" :disabled="checking || busy"
                             class="min-h-11 rounded-lg bg-amber-500 px-4 py-2.5 font-semibold text-white hover:bg-amber-600">
                         Detectar MVS Print
                     </button>
-                    <button type="button" @click="listPrinters()" :disabled="!connected"
+                    <button type="button" @click="listPrinters()" :disabled="!connected || checking || busy"
                             class="min-h-11 rounded-lg border border-slate-300 px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40">
                         Ver impresoras
                     </button>

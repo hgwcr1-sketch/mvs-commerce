@@ -26,8 +26,8 @@ class PurchaseImportFiscalColumnsTest extends TestCase
     public function test_excel_reader_extracts_fiscal_columns(): void
     {
         $path = $this->xlsx([
-            ['Código *', 'Producto *', 'Cantidad *', 'Costo *', 'Impuesto %', 'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal'],
-            ['SKU-FIS', 'Producto fiscal', 2, 100, '13', '01', '08', '7'],
+            ['Código *', 'Producto *', 'Proveedor *', 'Unidad de medida *', 'Cantidad *', 'Costo *', 'Impuesto %', 'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal'],
+            ['SKU-FIS', 'Producto fiscal', 'Proveedor Fiscal', 'Unidad', 2, 100, '13', '01', '08', '7'],
         ]);
 
         $rows = app(PurchaseExcelImport::class)->read($path);

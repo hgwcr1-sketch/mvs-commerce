@@ -31,8 +31,8 @@ class PurchaseImportCharacterizationTest extends TestCase
     public function test_excel_reader_preserves_supported_columns_aliases_and_dates(): void
     {
         $path = $this->xlsx([
-            ['Código *', 'Código Barras', 'Producto *', 'Categoría', 'Cantidad *', 'Costo *', 'Precio de Venta', 'Fecha de vencimiento'],
-            ['SKU-1', '744100000001', 'Producto Uno', 'General>Hogar', 2, 1250.50, 2500, '2026-09-30'],
+            ['Código *', 'Código Barras', 'Producto *', 'Categoría', 'Proveedor *', 'Unidad de medida *', 'Cantidad *', 'Costo *', 'Precio de Venta', 'Fecha de vencimiento'],
+            ['SKU-1', '744100000001', 'Producto Uno', 'General>Hogar', 'Proveedor Uno', 'Unidad', 2, 1250.50, 2500, '2026-09-30'],
         ]);
 
         $rows = app(PurchaseExcelImport::class)->read($path);

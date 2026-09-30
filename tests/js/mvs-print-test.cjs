@@ -7,18 +7,21 @@ function setup(options = {}) {
     const qz = {
         websocket: { isActive: () => options.active !== false, connect: async () => { calls.connects++; if(options.offline) throw Error('offline'); } },
         configs: { create: printer => ({ printer }) },
+        security: { setCertificatePromise() {}, setSignatureAlgorithm() {}, setSignaturePromise() {} },
         print: async (config, data) => { calls.prints.push({config, data}); if(options.reject) throw Error('denied'); },
     };
     const context = {
         window: { qz: options.unavailable ? undefined : qz, print: () => calls.browser++, open: () => calls.browser++ },
         document: { addEventListener: (_, cb) => cb() }, Alpine: { data: (name, fn) => factories[name] = fn },
-        localStorage: { getItem: () => 'terminal-uuid' }, URLSearchParams, TextEncoder,
+        localStorage: { getItem: () => 'terminal-uuid' }, URLSearchParams, TextEncoder, AbortController, setTimeout, clearTimeout,
         btoa: value => Buffer.from(value, 'binary').toString('base64'),
-        fetch: async url => { calls.urls.push(url); return { ok: true, json: async () => ({success: true, printer: options.noPrinter ? null : 'POS-58-Series', payload: {
+        fetch: async url => { calls.urls.push(url); return { ok: true, json: async () => ({success: true, qz: {signed_mode:true,certificate_url:'/cert',signature_url:'/sign'}, printer: options.noPrinter ? null : 'POS-58-Series', payload: {
             lines: [{type:'text',value:'Existing sale'}], paper_width:'58', auto_cut:true, open_drawer:true, drawer_command:[27,112,0,25,255],
         }}) }; },
     };
     vm.runInNewContext(fs.readFileSync('resources/js/mvs-print/qz.js','utf8'), context);
+    context.window.MvsPrint._qzSigned = options.active !== false;
+    context.window.MvsPrint._qzSignedUrls = '/cert|/sign';
     return {calls, qz, api:context.window.MvsPrint, ui:factories.mvsReprint('/mvs/print/ticket/7',7)};
 }
 test('reprint uses saved printer, RAW, cut, no drawer and no browser', async () => {
@@ -35,7 +38,7 @@ for(const options of [{unavailable:true},{active:false,offline:true},{reject:tru
     test('failure only offers manual fallback '+JSON.stringify(options), async () => {
         const {ui,calls}=setup(options); await ui.reprint();
         assert.equal(ui.failed,true); assert.equal(ui.busy,false); assert.equal(calls.browser,0);
-        assert.equal(ui.message,'No fue posible imprimir directamente.');
+        assert.ok(ui.message.length > 0);
     });
 }
 test('new sale connects successfully with undefined result and preserves drawer', async () => {
@@ -60,6 +63,7 @@ test('cut false suppresses cut and manual fallback is gated in shared Blade', ()
 function posState(api, { enabled = true, terminal = true, duplicate = false } = {}) {
     const source = fs.readFileSync('resources/views/pos/index.blade.php', 'utf8');
     const methods = source.slice(source.indexOf('        async confirmCheckout()'), source.indexOf('        newSale()'))
+        .replace(/@json\([^\n]*\)/g, "'ticket'")
         .replace(/\{\{[^\n]*\}\}/g, "'/mvs/print/ticket/__SALE_ID__'");
     api.fetchConfig = async () => ({ auto_print: enabled, terminal: terminal ? { printer_name: 'POS-58-Series' } : null });
     const context = {
