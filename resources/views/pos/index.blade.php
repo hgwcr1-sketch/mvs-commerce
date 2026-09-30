@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('title', 'Punto de venta')
 
@@ -555,9 +555,27 @@
                 type="button"
                 @click.prevent.stop="
                     if (quoteMode) leaveQuoteMode();
+                    documentType = 'ticket';
+                    notice = '';
+                "
+                :class="documentType === 'ticket'
+                    ? 'bg-primary border-primary text-black'
+                    : 'bg-white border-slate-300 text-slate-700'"
+                title="Comprobante interno. No se envía a Hacienda."
+                class="pos-top-btn min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-50 hover:border-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="false">
+                Tiquete
+                <span class="block text-[11px] font-normal opacity-80">No se envía a Hacienda</span>
+            </button>
+@if(($fiscalEnabled ?? false))
+            <button
+                type="button"
+                @click.prevent.stop="
+                    if (quoteMode) leaveQuoteMode();
                     documentType = 'electronic_ticket';
                     notice = '';
                 "
+                title="Tiquete Electrónico 04. Se envía a Hacienda."
                 :class="documentType === 'electronic_ticket'
                     ? 'bg-primary border-primary text-black'
                     : 'bg-white border-slate-300 text-slate-700'"
@@ -576,6 +594,7 @@
                         notice = 'Seleccione un cliente antes de usar Factura electrónica.';
                     }
                 "
+                title="Factura Electrónica 01. Se envía a Hacienda."
                 :class="documentType === 'electronic_invoice'
                     ? 'bg-primary border-primary text-black'
                     : 'bg-white border-slate-300 text-slate-700'"
@@ -583,6 +602,8 @@
                 :disabled="false">
                 Factura electrónica
             </button>
+
+            @endif
 
             <button type="button" @click="suspendCurrent" :disabled="cart.length === 0 || suspended.saving" x-text="suspended.activeId && suspended.recoveryToken ? 'Volver a suspender' : 'Suspender'" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"></button>
             <button type="button" @click="openSuspended" class="min-h-[44px] cursor-pointer whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400">Suspendidas</button>
@@ -1206,7 +1227,7 @@ document.addEventListener('alpine:init', () => {
         notice: '',
         imageModal: { open: false, url: null, name: '' },
         customerId: null,
-        documentType: 'electronic_ticket',
+        documentType: @json($defaultDocumentType ?? 'ticket'),
         selectedCustomer: null,
         customerQuery: '',
         customerResults: [],
@@ -1940,7 +1961,7 @@ document.addEventListener('alpine:init', () => {
                 this.selectedCustomer = null;
                 this.creditNotes = { loading: false, available: [], selected: [], error: '', requestNumber: 0 };
                 if (this.documentType === 'electronic_invoice') {
-    this.documentType = 'electronic_ticket';
+    this.documentType = @json($defaultDocumentType ?? 'ticket');
 }
                 this.clearSuspendedRecovery();
                 this.quoteId = null;

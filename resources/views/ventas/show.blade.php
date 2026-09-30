@@ -140,7 +140,9 @@
                 <p class="mt-1 text-slate-800">
                     {{ $sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE
                         ? 'Factura electrónica'
-                        : 'Tiquete electrónico' }}
+                        : ($sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET
+                            ? 'Tiquete electrónico'
+                            : 'Tiquete') }}
                 </p>
             </div>
 

@@ -193,8 +193,8 @@ class EscPosSaleTicket
 
         $lines[] = ['type' => 'empty'];
 
-        // Tipo documento
-        $this->addText($lines, $data->document['type'], self::ALIGN_CENTER, $width, true);
+        // Tipo documento (termico sin tildes: charset de la impresora)
+        $this->addText($lines, $this->thermalDocumentLabel($data->document['type']), self::ALIGN_CENTER, $width, true);
 
         $lines[] = ['type' => 'empty'];
 
@@ -407,6 +407,18 @@ class EscPosSaleTicket
         }
 
         return $lines;
+    }
+
+    /**
+     * La impresora térmica no interpreta tildes: conserva la etiqueta fiscal
+     * del DTO pero la emite sin acentos.
+     */
+    private function thermalDocumentLabel(string $label): string
+    {
+        return strtr($label, [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
     }
 
     private function cashSessionLines(SaleReceiptData $data, string $paperWidth): array

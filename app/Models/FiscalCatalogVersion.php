@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Versión de un catálogo fiscal (MF04).
@@ -71,5 +72,10 @@ class FiscalCatalogVersion extends Model
         }
 
         return true;
+    }
+
+    public function profiles(): HasMany
+    {
+        return $this->hasMany(FiscalProfile::class);
     }
 }

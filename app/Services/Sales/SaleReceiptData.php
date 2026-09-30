@@ -224,10 +224,6 @@ readonly class SaleReceiptData
 
     private static function documentLabel(string $documentType): string
     {
-        return match ($documentType) {
-            'electronic_invoice' => 'FACTURA ELECTRÓNICA',
-            'electronic_ticket' => 'TICKET ELECTRÓNICO',
-            default => 'COMPROBANTE',
-        };
+        return Sale::receiptLabel($documentType);
     }
 }

@@ -4,13 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\AccountReceivable;
 use App\Models\Branch;
-use App\Models\CashMovement;
 use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\LoyaltyAccount;
 use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
@@ -24,7 +24,8 @@ use App\Models\SaleReturn;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\PaymentMethodProvisioner;
-use App\Services\Sales\AccountsReceivableService;
+use App\Services\Sales\CreditNoteService;
+use App\Services\Sales\SaleVoidService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -602,7 +603,7 @@ class PosCreditNoteTest extends TestCase
         $this->assertSame(CreditNote::STATUS_APPLIED, $nc->status);
 
         // Anular la venta debe revertir la aplicación de NC
-        app(\App\Services\Sales\SaleVoidService::class)->void($sale, $user, 'Anulación con NC aplicada');
+        app(SaleVoidService::class)->void($sale, $user, 'Anulación con NC aplicada');
 
         // Verificar que la venta quedó anulada
         $sale->refresh();
@@ -623,7 +624,7 @@ class PosCreditNoteTest extends TestCase
         $this->assertSame(CreditNote::STATUS_ISSUED, $nc->status);
 
         // La NC debe estar disponible nuevamente
-        $available = app(\App\Services\Sales\CreditNoteService::class)->availableForCustomer((int) $company->id, (int) $customer->id);
+        $available = app(CreditNoteService::class)->availableForCustomer((int) $company->id, (int) $customer->id);
         $this->assertCount(1, $available);
         $this->assertSame($nc->id, $available->first()->id);
     }
@@ -865,6 +866,7 @@ class PosCreditNoteTest extends TestCase
     {
         $company = $this->company($name);
         $branch = $this->branch($company, 'Principal');
+
         return [$company, $branch];
     }
 
@@ -883,6 +885,7 @@ class PosCreditNoteTest extends TestCase
         }
         $user->companies()->attach($company->id, ['role_id' => $role->id]);
         $user->branches()->attach($branch->id);
+
         return $user;
     }
 
@@ -891,7 +894,13 @@ class PosCreditNoteTest extends TestCase
         $suffix = uniqid();
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'allows_decimals' => $decimals, 'is_active' => true]);
-        return Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'P-'.$suffix, 'cost' => 500, 'sale_price' => 1000, 'stock' => 123, 'tax_rate' => 13, 'track_inventory' => $tracked, 'is_active' => true], $attributes));
+        $product = Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'P-'.$suffix, 'cost' => 500, 'sale_price' => 1000, 'stock' => 123, 'tax_rate' => 13, 'track_inventory' => $tracked, 'is_active' => true], $attributes));
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function customer(Company $company, array $attributes = []): Customer
@@ -933,6 +942,7 @@ class PosCreditNoteTest extends TestCase
         ]);
         $customer = Customer::create(['company_id' => $company->id, 'name' => 'Cliente '.uniqid(), 'customer_type' => 'individual', 'is_active' => true]);
         LoyaltyAccount::create(['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => $balance]);
+
         return $customer;
     }
 
@@ -1000,8 +1010,11 @@ class PosCreditNoteTest extends TestCase
     private function ensureCashSession(Company $company, Branch $branch, User $user): CashSession
     {
         $session = CashSession::query()->forCompany($company->id)->forBranch($branch->id)->where('opened_by', $user->id)->where('status', CashSession::STATUS_OPEN)->first();
-        if ($session) return $session;
+        if ($session) {
+            return $session;
+        }
         $register = CashRegister::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'code' => 'CAJA-'.uniqid(), 'name' => 'Caja', 'is_active' => true]);
+
         return CashSession::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'cash_register_id' => $register->id, 'session_number' => 'S-'.uniqid(), 'opened_by' => $user->id, 'status' => CashSession::STATUS_OPEN, 'open_guard' => CashSession::OPEN_GUARD, 'opening_amount' => 0, 'opened_at' => now()]);
     }
 

@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Models\Company;
 use App\Models\Sale;
+use App\Services\Fiscal\FiscalConsumptionService;
+use App\Services\PosDefaultDocumentType;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -28,9 +30,12 @@ class StorePosSaleRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        // Seguridad fiscal: la ausencia de document_type jamás se convierte en
+        // un tipo fiscal. Se aplica el default configurado de la empresa (que
+        // a su vez cae a 'ticket' interno si no está configurado).
         if (! $this->filled('document_type')) {
             $this->merge([
-                'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET,
+                'document_type' => app(PosDefaultDocumentType::class)->resolve((int) session('active_company_id')),
             ]);
         }
     }
@@ -74,7 +79,15 @@ class StorePosSaleRequest extends FormRequest
             ],
             'document_type' => [
                 'required',
-                'in:'.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+                'in:'.Sale::DOCUMENT_TICKET.','.Sale::DOCUMENT_ELECTRONIC_TICKET.','.Sale::DOCUMENT_ELECTRONIC_INVOICE,
+                function ($attribute, $value, $fail) use ($companyId) {
+                    if (
+                        in_array($value, [Sale::DOCUMENT_ELECTRONIC_TICKET, Sale::DOCUMENT_ELECTRONIC_INVOICE], true)
+                        && ! app(FiscalConsumptionService::class)->isFiscalEnabled($companyId)
+                    ) {
+                        $fail('El servicio fiscal no está habilitado para esta empresa.');
+                    }
+                },
             ],
 
             'payments' => ['present', 'array', ($this->filled('requested_points') || $this->filled('credit_note_applications') || $this->filled('credit_note_bearer_applications')) ? 'min:0' : 'min:1'],

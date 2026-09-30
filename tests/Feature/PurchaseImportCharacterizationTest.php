@@ -31,8 +31,8 @@ class PurchaseImportCharacterizationTest extends TestCase
     public function test_excel_reader_preserves_supported_columns_aliases_and_dates(): void
     {
         $path = $this->xlsx([
-            ['Código *', 'Código Barras', 'Producto *', 'Categoría', 'Cantidad *', 'Costo *', 'Precio de Venta', 'Fecha de vencimiento'],
-            ['SKU-1', '744100000001', 'Producto Uno', 'General>Hogar', 2, 1250.50, 2500, '2026-09-30'],
+            ['Código *', 'Código Barras', 'Producto *', 'Categoría', 'Proveedor *', 'Unidad de medida *', 'Cantidad *', 'Costo *', 'Precio de Venta', 'Fecha de vencimiento'],
+            ['SKU-1', '744100000001', 'Producto Uno', 'General>Hogar', 'Proveedor Uno', 'Unidad', 2, 1250.50, 2500, '2026-09-30'],
         ]);
 
         $rows = app(PurchaseExcelImport::class)->read($path);
@@ -70,13 +70,14 @@ class PurchaseImportCharacterizationTest extends TestCase
         $response->assertOk()->assertDownload('plantilla_importacion_compras.xlsx');
         $path = tempnam(sys_get_temp_dir(), 'purchase-template-');
         file_put_contents($path, $response->streamedContent());
-        $headers = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:S1')[0];
+        $headers = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:V1')[0];
 
         $this->assertSame([
             'Código *', 'Código Barra', 'Producto *', 'Descripción', 'Categoría', 'Marca',
             'Proveedor *', 'Unidad de medida *', 'Tipo Artículo', 'Cantidad *', 'Costo *',
             'Precio Venta', 'Impuesto %', 'Descuento %', 'CABYS', 'Mínimo Stock',
             'Máximo Stock', 'Lote', 'Fecha Vencimiento',
+            'Código Impuesto', 'Código Tarifa', 'Perfil Fiscal',
         ], $headers);
     }
 
@@ -155,7 +156,7 @@ class PurchaseImportCharacterizationTest extends TestCase
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'Unid', 'slug' => 'unidad-'.$suffix, 'is_active' => true]);
         $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id,
             'name' => 'Producto', 'internal_code' => 'P-'.$suffix, 'cost' => 400, 'sale_price' => 800,
-            'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+            'tax_rate' => 0, 'fiscal_profile_id' => \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id'), 'track_inventory' => true, 'is_active' => true]);
 
         return [$company, $branch, $user, $supplier, $product];
     }

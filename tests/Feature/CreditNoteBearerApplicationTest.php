@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountReceivable;
 use App\Models\Branch;
 use App\Models\CashMovement;
 use App\Models\CashRegister;
@@ -10,6 +11,8 @@ use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
+use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -27,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -94,7 +98,7 @@ class CreditNoteBearerApplicationTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'allows_decimals' => false, 'is_active' => true]);
 
-        return Product::create(array_merge([
+        $product = Product::create(array_merge([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -106,6 +110,13 @@ class CreditNoteBearerApplicationTest extends TestCase
             'track_inventory' => true,
             'is_active' => true,
         ], $attributes));
+
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function stock(Branch $branch, Product $product, float $stock): void
@@ -309,7 +320,7 @@ class CreditNoteBearerApplicationTest extends TestCase
 
     private function paymentMethod(Company $company, string $type)
     {
-        return \App\Models\PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
+        return PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
     }
 
     private function voidSale(Sale $sale, User $user, string $reason = 'Anulación test'): TestResponse
@@ -430,7 +441,7 @@ class CreditNoteBearerApplicationTest extends TestCase
         try {
             $this->service()->authorizeBearerApplication($company->id, $note->credit_note_number, 'SECRETPLACEHOLDER', '10000');
             $this->fail('No debe autorizarse una NC nominativa por el flujo portador.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             $this->assertSame(self::GENERIC, $e->errors()['credit_note_bearer_applications'][0]);
         }
 
@@ -650,7 +661,7 @@ class CreditNoteBearerApplicationTest extends TestCase
         $this->assertSame(Sale::CONDITION_CREDIT, $sale->sale_condition);
         $this->assertSame('6000.0000', (string) $sale->balance_due);
 
-        $ar = \App\Models\AccountReceivable::where('sale_id', $sale->id)->firstOrFail();
+        $ar = AccountReceivable::where('sale_id', $sale->id)->firstOrFail();
         $this->assertSame('6000.0000', (string) $ar->original_amount);
         $this->assertDatabaseHas('credit_notes', ['id' => $note->id, 'balance' => '0.0000']);
     }

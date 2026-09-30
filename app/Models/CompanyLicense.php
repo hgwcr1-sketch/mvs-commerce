@@ -10,11 +10,11 @@ class CompanyLicense extends Model
 
     public const OPERABLE = ['trial', 'active', 'grace'];
 
-    protected $fillable = ['company_id', 'license_plan_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'notes', 'created_by', 'updated_by'];
+    protected $fillable = ['company_id', 'license_plan_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'fiscal_enabled', 'fiscal_monthly_quota', 'fiscal_overage_enabled', 'fiscal_overage_unit_price', 'notes', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
-        return ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'next_renewal_at' => 'datetime', 'grace_until' => 'datetime', 'user_limit' => 'integer', 'branch_limit' => 'integer'];
+        return ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'next_renewal_at' => 'datetime', 'grace_until' => 'datetime', 'user_limit' => 'integer', 'branch_limit' => 'integer', 'fiscal_enabled' => 'boolean', 'fiscal_monthly_quota' => 'integer', 'fiscal_overage_enabled' => 'boolean', 'fiscal_overage_unit_price' => 'decimal:4'];
     }
 
     public function company()

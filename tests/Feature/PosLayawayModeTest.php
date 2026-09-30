@@ -7,6 +7,7 @@ use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\Layaway;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
@@ -565,7 +566,11 @@ class PosLayawayModeTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$id, 'slug' => 'cat-'.$id, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$id, 'allows_decimals' => false, 'is_active' => true]);
 
-        return Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$id, 'internal_code' => 'P-'.$id, 'cost' => 500, 'sale_price' => 1000, 'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+        $product = Product::create(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$id, 'internal_code' => 'P-'.$id, 'cost' => 500, 'sale_price' => 1000, 'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+        $product->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $product->save();
+
+        return $product;
     }
 
     private function stock(Branch $branch, Product $product, float $stock): void

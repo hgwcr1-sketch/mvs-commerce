@@ -57,6 +57,12 @@
                     <option value="">Todos</option>
 
                     <option
+                        value="{{ \App\Models\Sale::DOCUMENT_TICKET }}"
+                        @selected(request('document_type') === \App\Models\Sale::DOCUMENT_TICKET)>
+                        Tiquete
+                    </option>
+
+                    <option
                         value="{{ \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET }}"
                         @selected(request('document_type') === \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET)>
                         Tiquete electrónico
@@ -229,8 +235,10 @@
                                 <td class="px-4 py-3 text-sm text-slate-700">
                                     @if($sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE)
                                         Factura electrónica
-                                    @else
+                                    @elseif($sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET)
                                         Tiquete electrónico
+                                    @else
+                                        Tiquete
                                     @endif
                                 </td>
 

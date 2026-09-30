@@ -5,13 +5,17 @@ namespace App\Services\Exports;
 use App\Models\AccountPayable;
 use App\Models\AccountReceivable;
 use App\Models\Branch;
+use App\Models\Cabys;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\InventoryMovement;
 use App\Models\LoyaltyAccount;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Supplier;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Imports\LoyaltyMigrationImportService;
+use InvalidArgumentException;
 
 class DataExportService
 {
@@ -26,7 +30,13 @@ class DataExportService
         'payables' => ['label' => 'Cuentas por pagar', 'permission' => 'cuentas_pagar.ver', 'branch' => true],
         'loyalty' => ['label' => 'Fidelización', 'permission' => 'fidelidad.ver', 'branch' => false],
         'loyalty-migration' => ['label' => 'Migración fidelización P37', 'permission' => 'fidelidad.ver', 'branch' => false],
+        'cabys' => ['label' => 'Catálogo CABYS', 'permission' => 'reportes.exportar', 'branch' => false],
+        'fiscal-catalog' => ['label' => 'Catálogo fiscal', 'permission' => 'reportes.exportar', 'branch' => false],
     ];
+
+    public function __construct(private FiscalTaxService $fiscalTaxService)
+    {
+    }
 
     public function dataset(string $dataset, int $companyId, ?int $branchId): array
     {
@@ -41,7 +51,70 @@ class DataExportService
             'payables' => $this->payables($companyId, $branchId),
             'loyalty' => $this->loyalty($companyId),
             'loyalty-migration' => $this->loyaltyMigration($companyId, $branchId),
+            'cabys' => $this->cabys(),
+            'fiscal-catalog' => $this->fiscalCatalog(),
+            default => throw new InvalidArgumentException('Dataset no soportado: '.$dataset),
         };
+    }
+
+    /**
+     * Catálogo CABYS oficial cargado en la tabla cabys (InstallCatalogs).
+     * Sin inferencias: solo los datos tal como fueron importados.
+     */
+    private function cabys(): array
+    {
+        $rows = Cabys::query()->orderBy('code')->get()->map(fn (Cabys $cabys) => [
+            $cabys->code,
+            $cabys->description,
+            $this->cabysHierarchy($cabys),
+            $cabys->tax_rate,
+            $cabys->note1,
+            $cabys->note2,
+            $cabys->is_active ? 'Sí' : 'No',
+        ])->all();
+
+        return [['Código', 'Descripción', 'Jerarquía', 'Impuesto', 'Nota incluye', 'Nota excluye', 'Activo'], $rows];
+    }
+
+    private function cabysHierarchy(Cabys $cabys): string
+    {
+        $parts = [];
+        for ($level = 1; $level <= 9; $level++) {
+            $description = $cabys->{'category'.$level.'_description'};
+            if (filled($description)) {
+                $parts[] = $description;
+            }
+        }
+
+        return implode(' > ', $parts);
+    }
+
+    /**
+     * Perfiles fiscales activos de la versión de catálogo activa (autoridad
+     * FiscalTaxService), con la versión como metadato por fila.
+     */
+    private function fiscalCatalog(): array
+    {
+        $rows = $this->fiscalTaxService->activeCatalog()->map(fn (FiscalProfile $profile) => [
+            $profile->tax_code,
+            $profile->tax_rate_code,
+            $profile->name,
+            $profile->treatment,
+            $profile->rate,
+            $profile->factor_iva,
+            $profile->tax_rate_other,
+            implode(', ', (array) $profile->document_types),
+            $profile->valid_from?->format('Y-m-d'),
+            $profile->valid_until?->format('Y-m-d'),
+            $profile->catalogVersion?->source,
+            $profile->catalogVersion?->source_version,
+        ])->all();
+
+        return [[
+            'Código impuesto', 'Código tarifa', 'Nombre', 'Tratamiento', 'Tarifa', 'Factor IVA',
+            'Otro impuesto', 'Tipos de documento', 'Vigente desde', 'Vigente hasta',
+            'Catálogo origen', 'Catálogo versión',
+        ], $rows];
     }
 
     private function products(int $companyId): array

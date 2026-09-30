@@ -46,7 +46,7 @@ class CompanyLicenseService
         }
 
         return DB::transaction(function () use ($license, $status, $actor, $notes, $action, $attributes) {
-            $tracked = ['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit'];
+            $tracked = ['status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'fiscal_enabled', 'fiscal_monthly_quota', 'fiscal_overage_enabled', 'fiscal_overage_unit_price'];
             $before = $license->only($tracked);
             $from = $license->status;
             $license->update([...$attributes, 'status' => $status, 'notes' => $notes, 'updated_by' => $actor?->id]);

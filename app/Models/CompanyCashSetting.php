@@ -13,7 +13,7 @@ class CompanyCashSetting extends Model
     public const USD_CHANGE_USD_ONLY = 'usd_only';
     public const USD_CHANGE_EITHER = 'either';
 
-    protected $fillable = ['company_id', 'require_open_session', 'allow_multiple_registers', 'session_mode', 'difference_tolerance', 'require_difference_authorization', 'auto_print_closure', 'blind_closing', 'accepts_usd', 'usd_exchange_rate_min', 'usd_exchange_rate_max', 'usd_change_policy', 'closure_email_recipients'];
+    protected $fillable = ['company_id', 'require_open_session', 'allow_multiple_registers', 'session_mode', 'difference_tolerance', 'require_difference_authorization', 'auto_print_closure', 'blind_closing', 'accepts_usd', 'usd_exchange_rate_min', 'usd_exchange_rate_max', 'usd_change_policy', 'closure_email_recipients', 'default_document_type'];
 
     protected function casts(): array
     {

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\CompanyCashSetting;
+use App\Models\Sale;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -63,6 +64,11 @@ class UpdateCompanyCashSettingRequest extends FormRequest
             'auto_print_closure' => ['boolean'],
             'closure_email_recipients' => ['nullable', 'array', 'max:10'],
             'closure_email_recipients.*' => ['email', 'max:150', 'distinct'],
+            'default_document_type' => ['nullable', Rule::in([
+                Sale::DOCUMENT_TICKET,
+                Sale::DOCUMENT_ELECTRONIC_TICKET,
+                Sale::DOCUMENT_ELECTRONIC_INVOICE,
+            ])],
         ];
     }
 
@@ -86,6 +92,7 @@ class UpdateCompanyCashSettingRequest extends FormRequest
             'closure_email_recipients.*.email' => 'Cada destinatario debe ser un correo válido.',
             'closure_email_recipients.*.max' => 'Cada correo puede tener como máximo 150 caracteres.',
             'closure_email_recipients.*.distinct' => 'No puede repetir correos para avisos de apertura y cierre.',
+            'default_document_type.in' => 'El comprobante predeterminado no es válido.',
         ];
     }
 }

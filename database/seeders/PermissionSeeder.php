@@ -170,6 +170,10 @@ class PermissionSeeder extends Seeder
             ['name' => 'configuracion.editar', 'label' => 'Modificar configuración', 'module' => 'Configuración'],
             ['name' => 'formas_pago.administrar', 'label' => 'Administrar formas de pago', 'module' => 'Configuración'],
 
+            // Facturación Electrónica (portal fiscal del tenant)
+            ['name' => 'fiscal.ver', 'label' => 'Ver portal fiscal', 'module' => 'Facturación Electrónica'],
+            ['name' => 'fiscal.editar', 'label' => 'Configurar conexión fiscal', 'module' => 'Facturación Electrónica'],
+
             // Agenda
             ['name' => 'agenda.ver', 'label' => 'Ver agenda', 'module' => 'Agenda'],
             ['name' => 'agenda.crear', 'label' => 'Crear citas', 'module' => 'Agenda'],

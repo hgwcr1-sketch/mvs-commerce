@@ -19,12 +19,15 @@ use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\CustomerTaxpayerActivityService;
+use App\Services\Fiscal\PosEmissionDispatcher;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
+use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
 use App\Services\Sales\CreditNoteService;
 use App\Services\Sales\LayawayService;
+use App\Services\PosDefaultDocumentType;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
@@ -85,6 +88,8 @@ class PosController extends Controller
             'canOverridePrice' => $request->user()->hasPermission('pos.cambiar_precio', $company),
             'canCreateLayaway' => $request->user()->hasPermission('apartados.crear', $company),
             'layawayValidityDays' => (int) ($company->layaway_validity_days ?? 30),
+            'defaultDocumentType' => app(PosDefaultDocumentType::class)->resolve($companyId),
+            'fiscalEnabled' => app(FiscalConsumptionService::class)->isFiscalEnabled($companyId),
         ]);
     }
 
@@ -625,7 +630,7 @@ class PosController extends Controller
         ]);
     }
 
-    public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor): JsonResponse
+    public function checkout(StorePosSaleRequest $request, PosSaleProcessor $processor, PosEmissionDispatcher $emissionDispatcher): JsonResponse
     {
         try {
             $result = $processor->process(
@@ -640,6 +645,9 @@ class PosController extends Controller
                 'errors' => $exception->errors(),
             ], 422);
         }
+
+        $emissionDispatcher->forSale($result['sale']);
+
         $sale = $result['sale']->load('payments.paymentMethod');
         $payments = $sale->payments;
         $firstPayment = $payments->first();

@@ -102,6 +102,21 @@ class PlatformAdminController extends Controller
 
         $company->setRelation('license', $licenses->refresh($licenses->ensure($company)));
         $company->license->load(['events.actor']);
+        $fiscalUsage = app(\App\Services\Fiscal\FiscalConsumptionService::class)->monthlyBreakdown($company->id);
+
+        $fiscalConfig = \App\Models\CompanyFiscalConfig::query()->where('company_id', $company->id)->first();
+        $fiscalConnectionLabel = 'Sin configurar';
+        if ($fiscalConfig !== null) {
+            if ($fiscalConfig->last_verified_at !== null && ! $fiscalConfig->hasPending()) {
+                $fiscalConnectionLabel = 'Verificada';
+            } elseif ($fiscalConfig->hasCredentials() || $fiscalConfig->hasPending()) {
+                $fiscalConnectionLabel = 'Pendiente';
+            }
+        }
+
+        $fiscalQuota = $company->license->fiscal_monthly_quota;
+        $fiscalUsed = (int) ($fiscalUsage['total'] ?? 0);
+        $fiscalRemaining = $fiscalQuota !== null ? max(0, (int) $fiscalQuota - $fiscalUsed) : null;
 
         $backupService = app(CompanyBackupService::class);
 
@@ -114,6 +129,11 @@ class PlatformAdminController extends Controller
             'backupPlans' => CompanyBackupSetting::PLAN_LABELS,
             'backupFrequencies' => CompanyBackupSetting::FREQUENCY_LABELS,
             'backupExternalCopies' => CompanyBackupSetting::EXTERNAL_COPY_LABELS,
+            'fiscalUsage' => $fiscalUsage,
+            'fiscalConnectionLabel' => $fiscalConnectionLabel,
+            'fiscalQuota' => $fiscalQuota,
+            'fiscalUsed' => $fiscalUsed,
+            'fiscalRemaining' => $fiscalRemaining,
         ]);
     }
 
@@ -125,6 +145,10 @@ class PlatformAdminController extends Controller
             'starts_at' => ['nullable', 'date'], 'expires_at' => ['nullable', 'date'],
             'next_renewal_at' => ['nullable', 'date'], 'grace_until' => ['nullable', 'date', 'after_or_equal:expires_at'],
             'user_limit' => ['nullable', 'integer', 'min:1'], 'branch_limit' => ['nullable', 'integer', 'min:1'],
+            'fiscal_enabled' => ['nullable', 'boolean'],
+            'fiscal_monthly_quota' => ['nullable', 'integer', 'min:1'],
+            'fiscal_overage_enabled' => ['nullable', 'boolean'],
+            'fiscal_overage_unit_price' => ['nullable', 'numeric', 'min:0', 'regex:/^\d{1,15}(?:\.\d{1,4})?$/'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'license_plan_id' => ['nullable', Rule::exists('license_plans', 'id')->where('is_active', true)],
             'apply_plan' => ['nullable', 'boolean'],

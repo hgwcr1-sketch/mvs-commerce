@@ -173,6 +173,17 @@ class CompanyCashSettingManagementTest extends TestCase
         $this->getAs($all, $company)->assertSeeInOrder(['Configuración de Caja', 'Cajas', 'Formas de pago']);
     }
 
+    public function test_default_document_type_is_saved_and_invalid_is_rejected(): void
+    {
+        [$company] = $this->context('Empresa'); $settings = $this->settings($company);
+        $user = $this->userWithPermissions($company, ['caja.administrar']);
+        $this->putAs($user, $company, $this->payload(['default_document_type' => 'electronic_ticket']))->assertSessionHasNoErrors();
+        $this->assertSame('electronic_ticket', $settings->fresh()->default_document_type);
+        $this->putAs($user, $company, $this->payload(['default_document_type' => 'factura_magica']))->assertSessionHasErrors('default_document_type');
+        $this->assertSame('electronic_ticket', $settings->fresh()->default_document_type);
+        $this->getAs($user, $company)->assertOk()->assertSee('Comprobante predeterminado en POS')->assertSee('name="default_document_type"', false);
+    }
+
     public function test_missing_configuration_is_provisioned_for_active_company_only(): void
     {
         [$company] = $this->context('Empresa'); [$other] = $this->context('Ajena');

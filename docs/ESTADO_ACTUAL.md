@@ -1,5 +1,14 @@
 # MVS Commerce — Estado actual
 
+## Integración FE: perfil pendiente y reconciliación CABYS (2026-09-30)
+
+**Rama:** `integration/prod-facturacion-electronica`. Validación local; sin producción, SSH, HTTP fiscal ni deploy.
+- Productos: el perfil pendiente permanece NULL; alta/edición e importación no lo infieren de `tax_rate`. La confirmación explícita sincroniza la tasa operativa; omitir el campo al editar conserva un perfil ya confirmado.
+- POS normal: calcula con la tasa operativa si no hay perfil, sin inventar snapshot ni filas fiscales. FE/TE: preflight local bloquea antes de persistir si faltan perfil, CABYS, unidad o emisor; FE exige receptor identificado. El mapper rechaza líneas históricas sin datos fiscales explícitos, sin inferir del porcentaje.
+- Migraciones: BD SQLite limpia y upgrade local desde el commit base `8014283` convergen en tablas/índices/FK de CABYS y perfiles. Se conservaron IDs y contenido de versión/entrada CABYS de prueba; `PRAGMA foreign_key_check` vacío y segunda migración idempotente. No certifica ejecución sobre una BD productiva real.
+- Validación: 52 tests focales únicos (productos, POS fiscal, emisión con fake, mapper, servicio fiscal, importaciones y reconciliación); bloques secuenciales menores de 30 segundos. No se ejecutó `PosSuspendedSalesTest` completo.
+- Se preservan los untracked preexistentes. No implica aprobación para despliegue.
+
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
 ## Códigos de actividad con punto decimal + timeout vs "sin actividades" (2026-09-28)
@@ -335,6 +344,77 @@ Versión bump a 1.0.2 en todos los archivos fuente: NSI (`!ifndef` guard, única
 ## MVS Print — instalador 1.0.1 completado, producción actualizada (2026-09-16)
 
 Instalador 1.0.1 completado con launcher propio C# x64 (`MVS Print.exe`, 27,648 bytes), QZ 2.2.6 embebido, ruta automática `C:\Program Files\MVS Print`, identidad dorada oficial (`#D4AF37`), certificado público para trust management, single instance vía Mutex, y tests automatizados. Builds y uploads a producción verificados: SHA256 `1d8a5e66...`, URL `https://app.mvscommerce.com/mvs-print/MVS-Print-Setup.exe?v=1.0.1`. SmartScreen requiere certificado de firma de código (limitación externa, no bug). Pruebas PHP 62/62, JS 25/25 (QZ real), JS 14/14, npm build PASS. Prueba física final pendiente en Liberia.
+## Fix focal Paso 2 wizard fiscal — credenciales exigidas (2026-09-29, rama feature/factura-electronica)
+
+Commit `b0be769` (`fix(fe): require provider credentials on initial fiscal connection step`), push a `origin/feature/factura-electronica` limitado a 3 archivos. `FiscalPortalController::storeConnection()` exige `api_key`/`api_secret` cuando la empresa no tiene credenciales activas (`configs->ensure()->hasCredentials()`), con mensajes propios ("Registre la llave/secreto de conexión: esta empresa aún no tiene credenciales activas."); vacío = conservar activas (validación inline `@error` en `setup.blade.php`); botón "Guardar y verificar" → "Guardar y continuar". 4 tests nuevos en `FiscalPortalTest` (sin config fiscal, staging de ambas llaves, vacío conserva activas, rotación sobrevive re-staging vacío) + ajuste del test de cuota de licencia. Evidencia: `FiscalPortalTest` **44/44**, `git diff --check` limpio, CERO HTTP fiscal real, sin tocar untracked ni company 10/9. Hallazgo de test: con `serialization=json`, `Store::marshalErrorBag()` vacía un `errors` que llegue como objeto `ViewErrorBag` si el handler no devuelve la cookie entre peticiones; los tests reinyectan errores en formato arreglo. No es bug de producción (cookie compartida). Pendiente: validación visual del usuario.
+
+## Corrección final de prueba manual del configurador fiscal (2026-09-28, rama feature/factura-electronica)
+
+Textos: Paso 2 "Ingrese las credenciales necesarias para conectar MVS Commerce con Hacienda", Paso 3 "Comprobamos que su conexión fiscal esté correctamente configurada, sin emitir ningún documento ni consumir cuota" (sin presentar auth/verify como comunicación con Hacienda), Paso 4 "Emitir automáticamente al completar una venta en el POS" + "Guardar y continuar"; Paso 5 agrega read-only actividad económica, ubicación fiscal (Completa/Pendiente) y sucursal/terminal. Diagnóstico Master: "Actividad con Hacienda: Aún no se han enviado documentos." separado de "Última comprobación". Auditoría de ubicación: obligatorios solo identificación + nombre fiscal + credenciales (mapper + `identityComplete`); provincia/cantón/distrito, actividad y sucursal/terminal son informativos y no viajan en payloads (−37 = configuración del emisor en el proveedor); regla documentada. Evidencia: `FiscalPortalTest` 37/37, `FiscalMasterTest` 15/15, `FiscalAdjustmentTest` 34/34, `FiscalConsumptionTest` 16/16, CERO HTTP real, `git diff --check` limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Pulido final configurador fiscal (2026-09-27, rama feature/factura-electronica)
+
+Causa CTA fantasma: CSS desactualizado (rebuild Vite); títulos por estado; cadena 1→5 con Paso 5 "Revisar y finalizar" real (preferencias→confirmación→finalizar), mensajes por paso y Anterior en cada paso; pendiente oculta fecha vieja de verificación; desconexión en Zona de seguridad; Series solo en avanzada. Evidencia: portal+master 49/49, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Fix visual wizard fiscal (2026-09-27, histórico, previo a pulido final)
+
+Causa botón fantasma: `bg-[#D4AF37]` no estaba en el CSS compilado (build desactualizado); rebuild `npm run build` + affordance (sombra/focus) en CTAs. Título del wizard por estado (Conectar vs Configuración de Facturación Electrónica). Navegación 1→5 con mensajes por paso + enlaces Anterior (datos persisten en servidor, PUTs idempotentes). Series solo en Configuración avanzada. Evidencia entonces: portal+master 47/47, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Limpieza tenant master fiscal (2026-09-27, histórico, previo a fix visual)
+
+Sin botón Proveedor ni acceso tenant a cambio de provider (403; pantalla solo en Panel Maestro). Series en Configuración avanzada con estado neutral sin alerta falsa. Master sin máscara de credencial (solo "Conexión fiscal": Verificada/Pendiente/Requiere atención). Arquitectura multi-provider intacta. Evidencia entonces: portal+master 43/43, core 62/62, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master visual MVS + CTA (2026-09-27, histórico, previo a limpieza tenant)
+
+Centro "Centro de Facturación Electrónica" con CTA dorado inmediato (Completar/Administrar + Actualizar conexión), tarjeta Configuración fiscal, estados Configuración vs Hacienda sin contradicción, consumo con barra dorada y desglose, recientes con badges y detalle, diagnóstico con Resolver al paso exacto. Solo UI/controlador-vista (motor intacto). Evidencia entonces: portal 24/24, master+ajustes 49/49, core 43/43, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master fiscal marca MVS + rotación segura (2026-09-27, histórico, previo a visual/CTA)
+
+Master "Centro de Facturación Electrónica" con accesos Completar/Administrar/Actualizar + Configuración fiscal; wizard crear/editar de 9 bloques (ubicación con catálogo real); rotación por etapas (pendiente→verificar→activar, anterior intacta si falla, auditoría sin secretos, producción con confirmación, desconexión independiente sin borrar historial); proveedor oculto en las 5 vistas tenant (marca MVS, arquitectura intacta); diagnóstico neutro. Evidencia entonces: portal+master+ajustes 71/71, core 47/47, CERO HTTP real. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Master Fiscal MVS fase 2 (2026-09-27, histórico, previo a marca/rotación)
+
+Portal convertido en centro de control: banner de ambiente (PRUEBAS sin valor fiscal / PRODUCCIÓN), emisor, actividad, sucursal/terminal, conteos, series, diagnóstico extendido y detalle por documento con custodia. Onboarding con actividad + códigos 3/5; series provider-neutrales (observan, importan sin retroceder, sin resets, claim con lock); gate de cambio de proveedor (sin MvsFiscal real); webhooks con contrato neutral pero receptor NO implementado (docs oficiales sin espec de firma — bloqueador documentado, polling vigente); custodia payload-inmutable + respuesta. Evidencia entonces: `FiscalMasterTest` 15/15, portal 15/15, core 49/49, CERO HTTP real. Docs: `PORTAL_FISCAL_MVS.md`, `MIGRACION_PROVEEDOR_FISCAL.md`.
+
+## Portal Fiscal MVS por empresa (2026-09-27, histórico, previo a fase 2)
+
+Portal "Facturación Electrónica" (`fiscal.*`): estado, ambiente, consumo, historial FE/TE/NC/ND, diagnóstico y asistente de 5 pasos con verificación SIN emitir. Config por empresa (`company_fiscal_configs`, secretos cifrados, sandbox/producción separados); manager resuelve proveedor por empresa; FacturaEnCR opera con contexto empresarial; futuro MvsFiscalProvider sin rehacer portal/POS. Panel Maestro sigue autoridad comercial; tenant solo consulta. Evidencia entonces: `FiscalPortalTest` 15/15, fiscal core 46/46, CERO HTTP real. Preexistente ajeno: `ResponsiveNavigationTest::test_tenant_header...logo` falla también en HEAD limpio. Detalle: `docs/fiscal/PORTAL_FISCAL_MVS.md`.
+
+## Fiscal reemisión tras rechazo (2026-09-27, histórico, previo al portal)
+
+Doc3 rejected intacto (sin tocar). Ciclo modelado: `attempt_number` + unique `(company,sale,type,attempt)` + idempotency por intento (attempt 1 conserva formato histórico); solo `rejected` habilita N+1, otro estado devuelve el vigente sin fila/POST; secuencia estricta; backstop de concurrencia con retorno del ganador; consumo por intento, retry/polling = 0. Migración `2026_09_27_000005` aplicada en dev. Cobertura 03/02 con HTTP falso + backstop unique + aislamiento + FE/TE sin regresión. Evidencia entonces: `FiscalAdjustmentTest` 34/34, CERO HTTP real.
+
+## Fiscal NC03 -496 corregido (2026-09-27, histórico, superado por reemisión)
+
+Doc3 rechazado preservado (-496 bloqueante + -37 acompañante, sin reenvío, consumo INCLUDED intacto). Fix: `medioPago` derivado de pagos completados de la venta original (uno → código; varios → tipo/monto; crédito exento; contado sin pagos o método no mapeable bloquea pre-POST, nada hardcodeado). -37 es configuración del emisor sandbox (payloads nunca envían ubicación; FE01/TE04 aceptadas igual). Preflight endurecido a nivel mapper + provider. Venta7 tiene 1 pago cash 1010.00 → segundo E2E derivable. Evidencia entonces: `FiscalAdjustmentTest` 25/25, CERO HTTP real. Sin commit de datos E2E (doc3/consumo solo en `database.sqlite` local).
+
+## Fiscal NC03/ND02 adapter oficial (2026-09-27, histórico, superado por fix -496)
+
+Push recuperado (`0e7d03e..d6fb2ef`). Docs oficiales facturaencr.com/docs (API v2 v4.4) consultados: NC03 → `POST documents/nota-credito`, ND02 → `POST documents/nota-debito`, `referencia[]` obligatoria (tipoDocumento/numero clave-50/fechaEmision/codigo/razon). Adapter implementado SIN inferencias: mapper emite `referencia[]` oficial (corregido `informacionReferencia`), clave-50 validada localmente, provider con idempotencia + conciliación igual que 01/04. Tests con HTTP falso: emisión 03/02 aceptada, error sin consumo, retry sin duplicar. CERO POST real, CERO sandbox, sin Sale6/Sale7 ni producción. Evidencia entonces: `FiscalAdjustmentTest` 20/20. Sin módulo comercial NC/ND.
+
+## Fiscal NC03/ND02 local previo (2026-09-27, histórico, superado por adapter oficial)
+
+TE04 sandbox accepted REAL (Sale 6/doc 1). FE01 sandbox accepted REAL (Sale 7/doc 2). NC03 LOCAL implementado: referencia congelada, builder, `FiscalManager`, mapper neutral, `ElectronicDocument(03)`, 1 consumo, cuota/overage, retry sin duplicar, gates pre-provider, CERO HTTP (fake). ND02 LOCAL espejo con tipo 02 en verde. Referencias negativas, casos fiscales locales (IVA 13/4/2/1, exento explícito, exoneración parcial, multi-tax, descuento, multi-línea, BCMath, CABYS inválido, tasa ambigua bloqueada) y observabilidad (`source_type/source_id/original_document_id`, sin secretos) en verde. Evidencia entonces: `FiscalAdjustmentTest` 17/17. Matriz: `docs/MATRIZ_COMPROBANTES_FISCALES.md`; diseño: `docs/fiscal/NC03_ND02_DESIGN.md`.
+
+## Fiscal: concurrencia, UI de consumo y matriz (2026-09-27, local sin commit)
+
+`FiscalConsumptionService::record()` endurecido contra race check-then-insert (lock de licencia + recuento del ledger + backstop de constraint único que devuelve la fila ganadora); doble consumo/cobro imposible. Licencia tenant muestra uso del mes con desglose por tipo, disponibles y excedentes (2 decimales, solo lectura); Panel Maestro suma bloque de consumo y administra habilitación/cuota/excedentes/precio. NC03 auditado: sin modelo/mapper/endpoint/job en esta rama (E2E BLOCKED); gate y ledger probados listos para `03` sin POST. Matriz real en `docs/MATRIZ_COMPROBANTES_FISCALES.md` (TE04/FE01 E2E accepted; NC03/ND02 no implementados). Evidencia: `FiscalConsumptionTest` 16/16; regresión S3b 15/15, caja 21/21, checkout 19/19, licencias/plataforma 35/35; `git diff --check` limpio. Sin HTTP nuevo, sin emisiones reales, sin producción.
+
+## Primera FE01 real aceptada en Sandbox (2026-09-27, documentado sin cambios de código)
+
+Sale ID 7 / `electronic_invoice` / tipoDocumento 01; ElectronicDocument ID 2; receptor `01`/`109880401` válido; CABYS `0111100000100` IVA 1% intacto; preflight mapper FE01 → `documents/factura`; exactamente **1 POST** vía `FiscalManager` (idempotency estable `1d30621c…`, provider_ref `6ab9101eede704dd046aafc0`); estado inicial `queued`; **accepted en el primer GET** (sin más polling); clave `50627092600310191287705001034010000000001114095176`, consecutivo `05001034010000000001`; gate fiscal local habilitado con cuota 50 (`authorize` = included pre-POST); `fiscal_consumptions` exactamente **1 fila INCLUDED** con `unit_price` NULL; el GET no agregó consumo; Sale 6 / doc 1 TE04 `accepted` intacto; `auto_emit` **false**; sandbox únicamente, cero producción.
+
+Aprendizaje para MVS Fiscal: `queued` ≠ `accepted` (requiere polling); polling/retry del mismo documento no duplica consumo (identidad local estable); el consumo vive atado al documento fiscal local, no a la venta; el gate comercial/licencia debe ocurrir siempre antes del POST.
+
+## Primer E2E fiscal Sandbox exitoso (2026-09-27, documentado sin commit de código)
+
+Sale ID 6 / `electronic_ticket` / tipoDocumento 04; ElectronicDocument ID 1; CABYS `0111100000100` (Trigo duro, para siembra) con perfil fiscal IVA 1% (ID 2, `01`/`02`); exactamente **1 POST** real al Sandbox FacturaEnCR vía `FiscalManager → FiscalProviderInterface → FacturaencrProvider`; estado inicial `queued`; **2 GET** de seguimiento al mismo documento; estado final `accepted`; clave `50627092600310191287705001034040000000001192986306` y consecutivo `05001034040000000001` generados correctamente; `fiscal.emission.auto_emit` permaneció **false**; cero producción, sin cambios de código.
+
+Aprendizajes para MVS Fiscal: preflight/mapper local obligatorio antes de cualquier POST; evidencia E2E auditable (sale/documento/clave/consecutivo/conteo POST+GET); idempotency key estable `company+sale+provider`; `queued`/`pending` ≠ `accepted` (requiere polling); CABYS validado contra proveedor (13 dígitos + impuesto real 1%); validación de identificación por tipo (01 acepta cédula 9 dígitos como `109880401`); sandbox ≠ producción.
+
+## S3b — Trigger de emisión electrónica POS (2026-09-25, local sin commit)
+
+Rama `feature/factura-electronica`, base `afb3976`, trabajo local sin commit ni push. Nuevo `app/Jobs/EmitElectronicDocument` (ShouldQueue + ShouldBeUnique, tries=1, captura total de Throwable, guard idempotente `company_id+sale_id+provider`) y `app/Services/Fiscal/PosEmissionDispatcher` invocado desde `PosController::checkout` después del commit; flag `fiscal.emission.auto_emit` en `config/fiscal.php` default **false** (dispatch condicionado), no toca venta/caja/inventario ni reglas B1–B7, sin HTTP real ni `Facturaencr*` desde POS. Evidencia: `PosElectronicEmissionTriggerTest` **9/9, 66 aserciones**; Unit **222/222, 796 aserciones**; filtro `Pos|Fiscal|Facturaencr|Electronic|Layaway|Quote` **547 tests, 538 aprobados, 8 fallos + 1 error**, los nueve reproducidos idénticos en base sin cambios (preexistentes, ver "Fallos históricos conocidos"); `git diff --check` limpio. Sin commit, push, migraciones ni producción.
 
 ## MVS Print — AUTO_PRINT, Imprimir postventa y Reimprimir (2026-09-15, cierre aprobado)
 

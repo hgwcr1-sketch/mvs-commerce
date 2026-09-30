@@ -179,7 +179,7 @@ class PosCheckoutTest extends TestCase
         $cashSession = CashSession::findOrFail(Sale::findOrFail($saleId)->cash_session_id);
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))
-            ->assertOk()->assertSee('TICKET ELECTRÓNICO')->assertSee($cashSession->session_number)->assertSee(Sale::findOrFail($saleId)->sale_number);
+            ->assertOk()->assertSee('TIQUETE')->assertDontSee('TIQUETE ELECTRÓNICO')->assertSee($cashSession->session_number)->assertSee(Sale::findOrFail($saleId)->sale_number);
 
         $viewer = $this->user($company, $branch, ['pos.acceder', 'ventas.ver']);
         $this->actingAs($viewer)->withSession($this->activeSession($company, $branch))->get(route('pos.receipt', $saleId))->assertOk();
@@ -189,6 +189,40 @@ class PosCheckoutTest extends TestCase
 
         [$otherCompany, $otherBranch, $otherUser] = $this->context('Ajena');
         $this->actingAs($otherUser)->withSession($this->activeSession($otherCompany, $otherBranch))->get(route('pos.receipt', $saleId))->assertNotFound();
+    }
+
+    public function test_receipt_shows_the_label_of_each_document_type(): void
+    {
+        [$company, $branch, $user] = $this->context();
+        $session = $this->activeSession($company, $branch);
+
+        $labels = [
+            Sale::DOCUMENT_TICKET => 'TIQUETE',
+            Sale::DOCUMENT_ELECTRONIC_TICKET => 'TIQUETE ELECTRÓNICO',
+            Sale::DOCUMENT_ELECTRONIC_INVOICE => 'FACTURA ELECTRÓNICA',
+        ];
+
+        foreach ($labels as $documentType => $label) {
+            $sale = Sale::create([
+                'company_id' => $company->id, 'branch_id' => $branch->id, 'user_id' => $user->id,
+                'sale_number' => 'POS-' . strtoupper(Str::random(12)), 'document_type' => $documentType,
+                'sale_condition' => Sale::CONDITION_CASH, 'status' => Sale::STATUS_COMPLETED,
+                'currency_code' => 'CRC', 'exchange_rate' => 1, 'subtotal' => 0, 'discount_total' => 0,
+                'tax_total' => 0, 'total' => 0, 'paid_total' => 0, 'balance_due' => 0, 'completed_at' => now(),
+            ]);
+
+            $response = $this->actingAs($user)->withSession($session)->get(route('pos.receipt', $sale->id));
+            $response->assertOk()->assertSee($label, false);
+
+            foreach (['TIQUETE ELECTRÓNICO', 'FACTURA ELECTRÓNICA'] as $long) {
+                if ($long !== $label) {
+                    $response->assertDontSee($long, false);
+                }
+            }
+        }
+
+        $this->assertSame('COMPROBANTE', Sale::receiptLabel(null));
+        $this->assertSame('COMPROBANTE', Sale::receiptLabel('legado'));
     }
 
     public function test_sequence_is_independent_per_company(): void
@@ -305,6 +339,8 @@ class PosCheckoutTest extends TestCase
 public function test_electronic_invoice_requires_customer_and_is_saved_when_customer_is_valid(): void
 {
     $company = $this->company('Empresa Factura ');
+    app(\App\Services\CompanyLicenseService::class)->ensure($company);
+    \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
     $branch = $this->branch($company, 'Principal');
 
     $user = $this->user($company, $branch, [
@@ -402,7 +438,14 @@ public function test_electronic_invoice_requires_customer_and_is_saved_when_cust
         $suffix = uniqid();
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'allows_decimals' => $decimals, 'is_active' => true]);
-        return Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'P-'.$suffix, 'cost' => 500, 'sale_price' => 1000, 'stock' => 123, 'tax_rate' => 13, 'track_inventory' => $tracked, 'is_active' => true], $attributes));
+        $product = Product::create(array_merge(['company_id' => $company->id, 'category_id' => $category->id, 'unit_id' => $unit->id, 'name' => 'Producto '.$suffix, 'internal_code' => 'P-'.$suffix, 'cost' => 500, 'sale_price' => 1000, 'stock' => 123, 'tax_rate' => 13, 'track_inventory' => $tracked, 'is_active' => true], $attributes));
+
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function customer(Company $company, array $attributes = []): Customer

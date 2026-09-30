@@ -9,6 +9,8 @@ use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
+use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -28,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 /**
@@ -97,7 +100,7 @@ class CreditNotePosUiTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'allows_decimals' => false, 'is_active' => true]);
 
-        return Product::create(array_merge([
+        $product = Product::create(array_merge([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -109,6 +112,13 @@ class CreditNotePosUiTest extends TestCase
             'track_inventory' => true,
             'is_active' => true,
         ], $attributes));
+
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function stock(Branch $branch, Product $product, float $stock): void
@@ -254,7 +264,7 @@ class CreditNotePosUiTest extends TestCase
 
     private function paymentMethod(Company $company, string $type)
     {
-        return \App\Models\PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
+        return PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
     }
 
     private function checkout(User $user, Company $company, Branch $branch, Product $product, array $bearerApps, array $payload = []): TestResponse
@@ -343,7 +353,7 @@ class CreditNotePosUiTest extends TestCase
         $this->assertDatabaseHas('credit_notes', ['id' => $note->id, 'balance' => '10000.0000']);
     }
 
-public function test_pos_page_renders_bearer_panel_only_when_enabled_and_permitted(): void
+    public function test_pos_page_renders_bearer_panel_only_when_enabled_and_permitted(): void
     {
         [$company, $branch, $user] = $this->context();
         $company->update(['credit_note_consumer_final' => true]);
@@ -368,7 +378,7 @@ public function test_pos_page_renders_bearer_panel_only_when_enabled_and_permitt
         $withoutPermission->assertDontSee('Nota de crédito sin cliente');
     }
 
-public function test_pos_page_keeps_consumer_final_code_out_of_storage_and_output(): void
+    public function test_pos_page_keeps_consumer_final_code_out_of_storage_and_output(): void
     {
         [$company, $branch, $user] = $this->context();
         $company->update(['credit_note_consumer_final' => true]);
@@ -384,7 +394,7 @@ public function test_pos_page_keeps_consumer_final_code_out_of_storage_and_outpu
         $this->assertStringContainsString('\\/pos\\/notas-credito\\/validar-portador', $html);
     }
 
-public function test_thermal_ticket_prints_credit_notes_without_secret(): void
+    public function test_thermal_ticket_prints_credit_notes_without_secret(): void
     {
         [$company, $branch, $user] = $this->context();
         $company->update(['credit_note_consumer_final' => true]);
@@ -446,7 +456,7 @@ public function test_thermal_ticket_prints_credit_notes_without_secret(): void
             ->withSession($this->activeSession($company, $branch))
             ->get(route('pos.index'))->assertOk();
 
-        $process = new \Symfony\Component\Process\Process(['node', base_path('tests/js/pos-credit-note-bearer.cjs')]);
+        $process = new Process(['node', base_path('tests/js/pos-credit-note-bearer.cjs')]);
         $process->setInput($response->getContent());
         $process->mustRun();
 
