@@ -23,6 +23,7 @@
                         {{ $status === 'ready' ? 'bg-emerald-100 text-emerald-900' : ($status === 'attention' ? 'bg-rose-100 text-rose-900' : 'bg-amber-100 text-amber-900') }}">
                         {{ $statusLabel }}
                     </span>
+                    <span aria-hidden="true" class="text-lg font-bold leading-none text-slate-400">&middot;</span>
                     <span class="rounded-full px-3 py-1 font-bold {{ $config->isProduction() ? 'bg-slate-950 text-[#D4AF37]' : 'bg-slate-100 text-slate-700' }}">
                         {{ $environmentLabel }}
                     </span>

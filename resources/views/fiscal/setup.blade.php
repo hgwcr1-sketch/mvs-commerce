@@ -17,13 +17,16 @@
             <div class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('status') }}</div>
         @endif
         @if($errors->any())
-            <div class="mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">
-                <ul class="list-disc pl-5">
-                    @foreach($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
+            @php($summaryErrors = collect($errors->messages())->except(['api_key', 'api_secret'])->flatten()->all())
+            @if(count($summaryErrors) > 0)
+                <div class="mt-4 rounded-xl bg-rose-50 p-4 text-sm text-rose-800">
+                    <ul class="list-disc pl-5">
+                        @foreach($summaryErrors as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
         @endif
 
         @if($step === 'datos')
@@ -129,7 +132,7 @@
             @endif
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'conexion']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
-                <p class="text-sm text-slate-600">Ingrese las credenciales necesarias para conectar MVS Commerce con Hacienda.</p>
+                <p class="text-sm text-slate-600">Ingrese las credenciales de conexión para habilitar la facturación electrónica.</p>
                 <div>
                     <span class="text-sm font-bold">Ambiente</span>
                     <div class="mt-2 space-y-2">
@@ -191,11 +194,15 @@
             <form method="POST" action="{{ route('fiscal.setup.store', ['step' => 'preferencias']) }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
                 <div>
-                    <label class="text-sm font-bold" for="default_document">Documento predeterminado</label>
-                    <select id="default_document" name="default_document" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
-                        <option value="01" @selected(old('default_document', $config->default_document) === '01')>Factura electrónica</option>
-                        <option value="04" @selected(old('default_document', $config->default_document) === '04')>Tiquete electrónico</option>
-                    </select>
+                    <span class="text-sm font-bold">Documento predeterminado</span>
+                    <div class="mt-2 space-y-2">
+                        <label class="flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 p-3">
+                            <input type="radio" name="default_document" value="01" @checked(old('default_document', $config->default_document) === '01')> Factura electrónica
+                        </label>
+                        <label class="flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 p-3">
+                            <input type="radio" name="default_document" value="04" @checked(old('default_document', $config->default_document) === '04')> Tiquete electrónico
+                        </label>
+                    </div>
                 </div>
                 <label class="flex min-h-[44px] items-center gap-2 text-sm">
                     <input type="checkbox" name="auto_emit_enabled" value="1" @checked(old('auto_emit_enabled', $config->auto_emit_enabled)) class="h-5 w-5"> Emitir automáticamente al completar una venta en el POS
@@ -215,7 +222,7 @@
                 <div class="flex justify-between gap-3"><dt>Ubicación fiscal</dt><dd class="font-bold text-right">{{ $locationComplete ? 'Completa' : 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Sucursal / Terminal</dt><dd class="font-bold text-right">{{ ($config->fiscal_branch_code ?: '—') . ' / ' . ($config->fiscal_terminal_code ?: '—') }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }} <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
-                <div class="flex justify-between gap-3"><dt>Conexión</dt><dd class="font-bold text-right">{{ $config->hasCredentials() ? 'Credenciales registradas' : 'Pendiente' }}</dd></div>
+                <div class="flex justify-between gap-3"><dt>Conexión fiscal</dt><dd class="font-bold text-right">{{ $config->last_error_code !== null ? 'Requiere atención' : (($config->last_verified_at && ! $config->hasPending()) ? 'Verificada' : ($config->hasCredentials() ? 'Credenciales registradas' : 'Pendiente')) }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at && !$config->hasPending() ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Documento</dt><dd class="font-bold text-right">{{ $config->default_document === '04' ? 'Tiquete electrónico' : 'Factura electrónica' }} <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
                 <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $statusLabel }}</dd></div>

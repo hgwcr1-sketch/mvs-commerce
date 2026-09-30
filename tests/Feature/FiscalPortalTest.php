@@ -635,7 +635,7 @@ class FiscalPortalTest extends TestCase
         $response->assertSee('Conexión fiscal');
         $response->assertSee('Verificada');
         $response->assertSee('Configuración avanzada');
-        $response->assertSee('Series fiscales / Migración');
+        $response->assertSee('Series fiscales');
         $response->assertSee('Normalmente no necesita modificar esta información');
     }
 
@@ -817,7 +817,8 @@ class FiscalPortalTest extends TestCase
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $conexion = $this->get(route('fiscal.setup', ['step' => 'conexion']))->getContent();
-        $this->assertStringContainsString('Ingrese las credenciales necesarias para conectar MVS Commerce', $conexion);
+        $this->assertStringContainsString('Ingrese las credenciales de conexión para habilitar la facturación electrónica.', $conexion);
+        $this->assertStringNotContainsString('conectar MVS Commerce con Hacienda', $conexion);
         $this->assertStringNotContainsString('La conexión la administra MVS', $conexion);
 
         $verificar = $this->get(route('fiscal.setup', ['step' => 'verificar']))->getContent();
@@ -830,6 +831,9 @@ class FiscalPortalTest extends TestCase
         $this->assertStringContainsString('al completar una venta en el POS', $prefs);
         $this->assertStringContainsString('Guardar y continuar', $prefs);
         $this->assertStringNotContainsString('Guardar y terminar', $prefs);
+        $this->assertSame(2, substr_count($prefs, 'name="default_document"'));
+        $this->assertStringContainsString('value="01" checked', $prefs);
+        $this->assertStringContainsString('value="04"', $prefs);
 
         $service = app(CompanyFiscalConfigService::class);
         $service->stageConnection($company, ['api_key' => 'efk_K', 'api_secret' => 'efs_S']);
@@ -841,6 +845,7 @@ class FiscalPortalTest extends TestCase
         $this->assertStringContainsString('Ubicación fiscal', $review);
         $this->assertStringContainsString('Sucursal / Terminal', $review);
         $this->assertMatchesRegularExpression('#<dt>Ubicación fiscal</dt><dd[^>]*>Pendiente</dd>#', $review);
+        $this->assertMatchesRegularExpression('#<dt>Conexión fiscal</dt><dd[^>]*>Verificada</dd>#', $review);
         $this->assertStringNotContainsString('facturaencr', $review);
         $this->assertStringNotContainsString('efk_K', $review);
         $this->assertStringNotContainsString('efs_S', $review);
@@ -940,7 +945,7 @@ class FiscalPortalTest extends TestCase
         $html = $this->get(route('fiscal.index'))->getContent();
         $this->assertSame(1, substr_count($html, route('fiscal.series')));
         $this->assertStringNotContainsString('>Series<', $html);
-        $this->assertStringContainsString('Series fiscales / Migración', $html);
+        $this->assertStringContainsString('Series fiscales', $html);
     }
 
     public function test_new_company_fiscal_wizard_starts_fresh(): void
