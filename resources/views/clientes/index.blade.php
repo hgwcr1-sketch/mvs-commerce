@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </td>
 
                     <td class="px-4 py-3 text-center">
-                        {{ number_format($customer->points) }}
+                        {{ number_format((float) ($customer->loyalty_account_balance ?? 0)) }}
                     </td>
 
                     <td class="px-4 py-3 text-center">

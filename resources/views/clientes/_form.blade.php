@@ -432,7 +432,7 @@
     </label>
 
     <div class="form-input bg-slate-100 text-slate-600 cursor-not-allowed">
-        {{ number_format($customer->points ?? 0) }}
+        {{ number_format((float) ($customer->loyaltyAccount?->balance ?? 0)) }}
     </div>
 
     <p class="mt-1 text-xs text-slate-500">
