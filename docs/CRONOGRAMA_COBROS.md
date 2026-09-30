@@ -225,6 +225,11 @@ como siguiente bloque.
 - Dependencia: 3A.
 
 ### 3C — Auditoría financiera y anulaciones
+**Estado: COMPLETADA LOCALMENTE (2026-09-30).** Auditoría de cobros y
+anulaciones con `RouteosAuditService`, reverso único `RVC-` que nunca modifica
+el pago original, permiso dedicado `cobros.anular`, idempotencia por token y
+pantalla de auditoría para dueño/supervisor. Evidencia en `PROGRESO_COBROS.md`;
+245/245 pruebas focales, 1873 aserciones. 4A queda como siguiente bloque.
 - Objetivo: trazabilidad completa y reversión controlada.
 - Funcionalidades: bitácora por cobro (quién, cuándo, empresa, sucursal,
   cliente, CxC, método, ubicación si aplica, idempotency-key); anulación con

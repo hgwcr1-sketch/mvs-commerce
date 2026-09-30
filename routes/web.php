@@ -151,6 +151,8 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
 Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', App\Http\Middleware\Cobros\EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
     Route::get('/supervisor', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'supervisor'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
+    Route::get('/supervisor/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
+        ->middleware('permission:cobros.supervisar')->name('supervisor.audit');
     Route::get('/collector', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
         ->middleware('permission:cobros.cobrar')->name('collector.index');
     Route::get('/collector/portfolio', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
@@ -166,7 +168,9 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
     Route::get('/collector/receipts', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'history'])
         ->middleware('permission:cobros.cobrar')->name('collector.payments.history');
     Route::get('/collector/receipts/{receipt}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'receipt'])
-        ->middleware('permission:cobros.cobrar')->name('collector.payments.receipt');
+        ->middleware('permission:cobros.acceder')->name('collector.payments.receipt');
+    Route::post('/collector/receipts/{receipt}/annul', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'annul'])
+        ->middleware('permission:cobros.anular')->name('collector.payments.annul');
     Route::get('/visits/today', [App\Http\Controllers\Cobros\VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
     Route::get('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'customerHistory'])
@@ -177,6 +181,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.cobrar')->name('visits.update');
     Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
+    Route::get('/owner/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.audit');
     Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
     Route::post('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'store'])

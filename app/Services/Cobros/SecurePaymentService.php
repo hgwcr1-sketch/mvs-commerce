@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\CompanySequence;
 use App\Models\PaymentMethod;
 use App\Models\User;
+use App\Services\RouteosAuditService;
 use App\Services\Sales\AccountsReceivableService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ class SecurePaymentService
     public function __construct(
         private readonly CobrosPaymentGate $gate,
         private readonly AccountsReceivableService $accounts,
+        private readonly RouteosAuditService $audit,
     ) {}
 
     /**
@@ -101,6 +103,25 @@ class SecurePaymentService
                     'payment_id' => $payment->id,
                     'receipt_number' => CompanySequence::nextCobrosReceiptNumber((int) $company->id),
                 ]);
+
+                $this->audit->log(
+                    (int) $company->id,
+                    (int) $account->branch_id,
+                    'cobros.payment.registered',
+                    $payment,
+                    null,
+                    ['balance_due' => (string) $account->fresh()->balance_due, 'amount' => $amount],
+                    [
+                        'receipt_number' => $receipt->receipt_number,
+                        'payment_id' => $payment->id,
+                        'account_receivable_id' => $account->id,
+                        'customer_id' => $account->customer_id,
+                        'payment_method_id' => $method->id,
+                        'amount' => $amount,
+                        'visit_id' => $visit?->id,
+                    ],
+                    $collector
+                );
 
                 return ['payment' => $payment, 'receipt' => $receipt->fresh(), 'replayed' => false];
             });

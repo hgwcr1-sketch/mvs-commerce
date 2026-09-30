@@ -33,6 +33,9 @@ class CobrosReceipt extends Model
         'client_token',
         'payload_hash',
         'paid_at',
+        'annulled_at',
+        'annulled_by_user_id',
+        'annul_reason',
     ];
 
     protected function casts(): array
@@ -81,6 +84,11 @@ class CobrosReceipt extends Model
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function annulledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'annulled_by_user_id');
     }
 
     public function visit(): BelongsTo

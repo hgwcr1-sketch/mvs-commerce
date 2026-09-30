@@ -26,6 +26,8 @@ class CompanySequence extends Model
 
     public const COBROS_RECEIPT = 'cobros_receipt';
 
+    public const COBROS_REVERSAL = 'cobros_reversal';
+
     protected $fillable = [
         'company_id',
         'name',
@@ -112,5 +114,10 @@ class CompanySequence extends Model
     public static function nextCobrosReceiptNumber(int $companyId): string
     {
         return sprintf('RCB-%08d', static::nextValue($companyId, static::COBROS_RECEIPT));
+    }
+
+    public static function nextCobrosReversalNumber(int $companyId): string
+    {
+        return sprintf('RVC-%08d', static::nextValue($companyId, static::COBROS_REVERSAL));
     }
 }

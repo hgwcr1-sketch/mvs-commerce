@@ -2,6 +2,24 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — Fase 3C COMPLETADA LOCALMENTE (2026-09-30)
+
+Base `feature/cobros-v1`, `b3d725f`. Auditoría completa, anulaciones seguras
+y trazabilidad inmutable: `Cobros\CobrosAnnulmentService` crea reverso
+`RVC-` (nunca borra ni modifica el pago original; `UNIQUE(payment_id)` +
+locks bloquean dobles anulaciones → 409), idempotencia por `client_token`
+(mismo payload → mismo reverso; distinto → 409), motivo obligatorio,
+redevolución BCMath del saldo con empresa/sucursal bloqueadas, recibo con
+`annulled_at/by/reason`, auditoría vía `RouteosAuditService`
+(`cobros.payment.registered`/`annulled`, con actor/empresa y sin tokens),
+permiso dedicado `cobros.anular` (seeder + provisioning `2026_09_30_000005`,
+solo dueño/supervisor) y consulta de auditoría `owner.audit`/
+`supervisor.audit`. Migraciones aditivas `..._000003` y `..._000004`.
+Validación: `CobrosPaymentAnnulmentTest` 11/11 (97 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **245/245, 1873 aserciones**; Pint limpio en
+archivos 3C y `git diff --check` correcto. Sin visual/build.
+Fase 4 pendiente y sin iniciar. Temporales `tmp_*` preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 3B COMPLETADA LOCALMENTE (2026-09-30)
 
 Base `feature/cobros-v1`, `751a363`. Cobros parciales/totales y recibos en

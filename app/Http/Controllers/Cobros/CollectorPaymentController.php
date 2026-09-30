@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Cobros;
 
 use App\Http\Controllers\Controller;
 use App\Models\AccountReceivable;
+use App\Models\CobrosPaymentReversal;
 use App\Models\CobrosReceipt;
 use App\Models\CobrosVisit;
 use App\Models\Company;
 use App\Models\PaymentMethod;
+use App\Services\Cobros\CobrosAnnulmentService;
 use App\Services\Cobros\CobrosPaymentGate;
 use App\Services\Cobros\SecurePaymentService;
 use Illuminate\Contracts\View\View;
@@ -88,19 +90,48 @@ class CollectorPaymentController extends Controller
             ->with('cobros_receipt_replay', $result['replayed']);
     }
 
-    /** Recibo propio (o del dueño) — 404 seguro ante recursos ajenos. */
+    /** Recibo propio (o del dueño / quien tiene cobros.anular) — 404 seguro. */
     public function receipt(Request $request, string $receipt): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
         $model = CobrosReceipt::query()->forCompany($company->id)->where('receipt_number', $receipt)->firstOrFail();
 
-        $isOwner = (bool) $request->user()->hasPermission('cobros.portal_dueno', $company);
-        abort_unless((int) $model->collector_user_id === (int) $request->user()->id || $isOwner, 404);
+        $user = $request->user();
+        $mayRead = (int) $model->collector_user_id === (int) $user->id
+            || $user->hasPermission('cobros.portal_dueno', $company)
+            || $user->hasPermission('cobros.anular', $company);
+        abort_unless($mayRead, 404);
 
         return view('cobros.collector.payment-receipt', [
             'company' => $company,
-            'receipt' => $model->load(['customer', 'accountReceivable', 'paymentMethod', 'collector', 'branch']),
+            'receipt' => $model->load(['customer', 'accountReceivable', 'paymentMethod', 'collector', 'branch', 'annulledBy']),
+            'reversal' => CobrosPaymentReversal::query()->forCompany($company->id)
+                ->where('receipt_id', $model->id)->first(),
+            'mayAnnul' => ! $model->annulled_at && $user->hasPermission('cobros.anular', $company),
+            'annulToken' => (string) Str::uuid(),
         ]);
+    }
+
+    /** Anulación (3C): solo cobros.anular; nunca borra ni modifica el pago. */
+    public function annul(Request $request, string $receipt, CobrosAnnulmentService $annulments): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $model = CobrosReceipt::query()->forCompany($company->id)->where('receipt_number', $receipt)->firstOrFail();
+
+        $request->validate([
+            'reason' => ['required', 'string', 'min:8', 'max:250'],
+            'client_token' => ['required', 'string', 'max:64'],
+        ]);
+
+        $result = $annulments->annul($request->user(), $company, $model, [
+            'reason' => $request->input('reason'),
+            'client_token' => $request->input('client_token'),
+        ]);
+
+        return redirect()
+            ->route('cobros.collector.payments.receipt', $model->receipt_number)
+            ->with('cobros_reversal', $result['reversal']->reversal_number)
+            ->with('cobros_reversal_replay', $result['replayed']);
     }
 
     /** Historial de recibos del cobrador autenticado. */

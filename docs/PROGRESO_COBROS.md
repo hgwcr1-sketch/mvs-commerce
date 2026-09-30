@@ -770,3 +770,55 @@ liquidaciones (3C en adelante). Sin push/merge/deploy.
   solo adaptó la expectativa del CTA (`REVISAR COBRO` sustituye al botón
   deshabilitado de 3A). Sin validación visual en navegador ni build Vite.
   `tmp_generate_cobros_icons.php` y los `tmp_*` quedan fuera del commit.
+
+## 3C — Auditoría financiera y anulaciones (2026-09-30) — COMPLETADA LOCALMENTE
+
+Alcance entregado: auditoría completa de cobros, anulaciones seguras y
+trazabilidad inmutable. Sin liquidaciones de efectivo ni Fase 4.
+
+- **Anulación con reverso:** `Cobros\CobrosAnnulmentService` nunca borra ni
+  modifica `accounts_receivable_payments` (test con snapshot byte-idéntico):
+  crea `cobros_payment_reversals` (`RVC-%08d` por empresa) con monto, saldo
+  antes/después, motivo, cobrador original y anulador. `UNIQUE(payment_id)`
+  + revisión con `lockForUpdate` dentro de la transacción bloquean cualquier
+  doble anulación → 409.
+- **Idempotencia de anulación:** `client_token` único por empresa; mismo
+  token + mismo payload devuelve el mismo reverso (flash `cobros_reversal`),
+  payload distinto o de otro actor → 409; carrera cubierta también por la
+  restricción única. Motivo obligatorio (8–250 caracteres).
+- **Saldo y concurrencia:** cuenta bloqueada con `forCompany` + `forBranch` +
+  `lockForUpdate`, devolución con BCMath sin exceder `original_amount` y
+  estado recalculado (pending/partial/overdue). Recibo pasa a
+  `annulled_at/annulled_by/annul_reason` sin tocar su contenido original.
+- **Custodia y caja intactos:** pago con sesión de caja → 409 (nunca se anula
+  nada de Commerce); reverso no crea movimientos ni sesiones; recibo conserva
+  su token/payload_hash y un reintento del cobro devuelve el mismo recibo sin
+  pagos nuevos.
+- **Auditoría con `RouteosAuditService` (reutilizado):**
+  `cobros.payment.registered` (en la misma transacción del cobro) y
+  `cobros.payment.annulled` con actor, empresa, sucursal, entidad, saldos y
+  metadata (recibo/reverso/pago/monto/motivo) y **sin tokens**.
+- **Permiso dedicado `cobros.anular`:** en `PermissionSeeder` + provisioning
+  aditivo `2026_09_30_000005` (solo roles con `cobros.portal_dueno` o
+  `cobros.supervisar`, nunca Cobrador). Ruta anular con
+  `permission:cobros.anular`; cobrador → 403. Formulario de anulación solo en
+  el recibo y solo si el pago no está anulado.
+- **Consulta de auditoría:** `CobrosAuditController` (solo lectura, por
+  empresa) en `cobros.owner.audit` (portal_dueno) y `cobros.supervisor.audit`
+  (supervisar) con vista mobile-first `cobros/owner/audit.blade.php` y enlace
+  "Auditoría" en la navegación fuente. Visibilidad del recibo ampliada a
+  dueño o titular de `cobros.anular` (ruta ahora exige `cobros.acceder` y el
+  controlador aplica dueño/propietario/anulador → 404 en otro caso).
+- **Migraciones aditivas:** `2026_09_30_000003` (`cobros_payment_reversals`),
+  `2026_09_30_000004` (campos de anulación en `cobros_receipts`) y
+  `2026_09_30_000005` (permiso). Ninguna destructiva.
+- **Pruebas:** nuevo `tests/Feature/CobrosPaymentAnnulmentTest.php` —
+  **11/11, 97 aserciones**: reverso + saldo + pago intacto, permiso, doble
+  anulación 409, replay idéntico, payload distinto 409, motivo, cross-company
+  404, pago total restaurado, auditoría con actor/empresa sin tokens, custodia
+  e idempotencia intactas y pantalla de auditoría acotada/permisada.
+- **Validación final:** suite focal `Cobros|CustomerCompanyIsolation` →
+  **245/245, 1873 aserciones (VERDE)**; Pint limpio en los archivos PHP
+  nuevos/de 3C (`CompanySequence` conserva 1 deuda de estilo preexistente en
+  la base) y `git diff --check` limpio. Sin validación visual en navegador ni
+  build Vite; `tmp_*` fuera del commit.
