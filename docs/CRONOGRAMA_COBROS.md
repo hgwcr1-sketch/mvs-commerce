@@ -269,6 +269,13 @@ aserciones. 4B queda como siguiente bloque.
 - Dependencia: 3B/3C.
 
 ### 4B — Portal del Dueño avanzado y reportes
+**Estado: COMPLETADA LOCALMENTE (2026-09-30) sin exportación.** `cobros.owner.reports`
+responde “¿cuánto recuperó cada cobrador este mes?” con período y sucursal,
+ranking, antigüedad de vencimientos, custodia pendiente, recibos,
+anulaciones y auditoría; consistente con 1C y solo lectura. La exportación
+según arquitectura queda pendiente de definir. Evidencia en
+`PROGRESO_COBROS.md`; 261/261 pruebas focales, 2022 aserciones. 5A queda
+como siguiente bloque.
 - Objetivo: resultados por cobrador, sucursal y período.
 - Funcionalidades: recuperación de cartera por período; antigüedad de
   vencimientos; ranking de cobradores; exportación según arquitectura;

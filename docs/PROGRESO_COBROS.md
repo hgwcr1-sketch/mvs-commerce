@@ -861,3 +861,43 @@ reasignaciones nuevas, sin reportes históricos ni Fase 4B.
   **253/253, 1932 aserciones (VERDE)**; Pint limpio en archivos 4A y
   `git diff --check` limpio. Sin migraciones, sin visual en navegador ni
   build Vite; `tmp_*` fuera del commit.
+
+## 4B — Panel avanzado del dueño (2026-09-30) — COMPLETADA LOCALMENTE
+
+Alcance entregado: reportes del dueño con período y sucursal. Sin
+exportación de archivos, sin comisiones ni Fase 5.
+
+- **Ruta/vista:** `cobros.owner.reports` (`permission:cobros.portal_dueno`) +
+  `resources/views/cobros/owner/reports.blade.php` mobile-first, con enlace
+  "Resultados" en la navegación fuente (evita las etiquetas reservadas del
+  shell). Solo lectura: sin POST y sin escrituras financieras.
+- **`OwnerReportService`:** reutiliza `PortfolioSummaryService::summarize`
+  (consistencia exacta con el dashboard 1C y su `decimalSum` BCMath) y
+  `CollectorManagementService::listCollectors`. Entrega: cobrado del
+  período (monto, pagos, clientes atendidos), recibos, anulaciones y
+  eventos de auditoría del período; ranking de cobradores ordenado por
+  cobrado (cobrado, anulado, saldo en cartera, recibos, clientes
+  asignados); antigüedad de vencimientos (Vigente / 1-30 / 31-60 / 61-90 /
+  +90 con monto y cantidad); custodia pendiente neta (pagos sin sesión de
+  caja − sus reversos) y cartera total consistente con 1C.
+- **Filtros:** sucursal (validada contra `company_id` vía `summarize` → 404
+  si es de otra empresa o desconocida) y período `from`/`to` (`date_format
+  Y-m-d`, `after_or_equal`, por defecto primer día del mes → hoy en
+  timezone de la empresa). Cada consulta acotada por `company_id`.
+- **Permisos:** solo dueño (`cobros.portal_dueno`); supervisor/cobrador →
+  403; sin acciones de escritura (cobros y anulaciones siguen en 3B/3C con
+  sus propios permisos).
+- **Pruebas:** nuevo `tests/Feature/CobrosOwnerReportsTest.php` —
+  **8/8, 88 aserciones**: “¿cuánto recuperó cada cobrador este mes?” con
+  suma consistente y ranking, filtros de sucursal/período (ajena → 404,
+  inválidos → errores), cinco cubos de antigüedad, custodia neta tras
+  anulación, contadores de recibos/anulaciones/auditoría, permisos,
+  solo-lectura vía query log + snapshot y aislamiento multiempresa, y
+  consistencia 1C vs 4B (`total_due`/`total_overdue` idénticos).
+- **Validación final:** suite focal `Cobros|CustomerCompanyIsolation` →
+  **261/261, 2022 aserciones (VERDE)**; Pint limpio en archivos 4B y
+  `git diff --check` limpio. Sin migraciones, sin visual en navegador ni
+  build Vite; `tmp_*` fuera del commit.
+
+**Pendiente declarado de 4B:** exportación de resultados (CSV/imprenta)
+según la arquitectura de exportación del proyecto — fuera de este alcance.

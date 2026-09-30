@@ -183,6 +183,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
     Route::get('/owner/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.audit');
+    Route::get('/owner/reports', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'reports'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.reports');
     Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
     Route::post('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'store'])

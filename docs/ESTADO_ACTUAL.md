@@ -2,6 +2,24 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Worktree CobrOS — Fase 4B COMPLETADA LOCALMENTE (2026-09-30)
+
+Base `feature/cobros-v1`, `6530659`. Panel avanzado del dueño
+(`cobros.owner.reports` + `OwnerReportService`, solo lectura, permiso
+`cobros.portal_dueno`): cobrado del período, recibos, anulaciones y
+auditoría; ranking de cobradores (cobrado/anulado/saldo/recibos/clientes);
+antigüedad de vencimientos (5 cubos); custodia pendiente neta (pagos sin
+sesión de caja − reversos); cartera consistente con 1C. Filtros de sucursal
+(validada por `company_id` → 404) y período `from`/`to` por defecto mes en
+curso. Reutiliza `PortfolioSummaryService::summarize`/`decimalSum` y
+`CollectorManagementService::listCollectors`; sin escrituras (query log y
+snapshots verificados). Enlace “Resultados” en la navegación fuente.
+Validación: `CobrosOwnerReportsTest` 8/8 (88 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **261/261, 2022 aserciones**; Pint y
+`git diff --check` correctos. Sin migraciones ni build.
+**Pendiente 4B:** exportación según arquitectura (no autorizada aquí).
+5A pendiente y sin iniciar. Temporales `tmp_*` preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
 
 Base `feature/cobros-v1`, `f556650`. Panel operativo del supervisor en solo
