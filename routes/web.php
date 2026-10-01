@@ -153,6 +153,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
     Route::get('/supervisor/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.audit');
+    Route::get('/supervisor/alerts', [App\Http\Controllers\Cobros\CobrosAlertController::class, 'index'])
+        ->middleware('permission:cobros.supervisar')->name('supervisor.alerts');
     Route::get('/collector', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
         ->middleware('permission:cobros.cobrar')->name('collector.index');
     Route::get('/collector/portfolio', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
@@ -185,6 +187,8 @@ Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.activ
         ->middleware('permission:cobros.portal_dueno')->name('owner.audit');
     Route::get('/owner/reports', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'reports'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.reports');
+    Route::get('/owner/alerts', [App\Http\Controllers\Cobros\CobrosAlertController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.alerts');
     Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
     Route::post('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'store'])

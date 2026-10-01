@@ -30,7 +30,10 @@ use Illuminate\Validation\ValidationException;
  */
 class CobrosAnnulmentService
 {
-    public function __construct(private readonly RouteosAuditService $audit) {}
+    public function __construct(
+        private readonly RouteosAuditService $audit,
+        private readonly CobrosAlertService $alerts,
+    ) {}
 
     /**
      * @param  array{reason?: mixed, client_token?: mixed}  $payload
@@ -52,7 +55,7 @@ class CobrosAnnulmentService
         }
 
         try {
-            return DB::transaction(function () use ($actor, $company, $receipt, $token, $fingerprint, $reason) {
+            $result = DB::transaction(function () use ($actor, $company, $receipt, $token, $fingerprint, $reason) {
                 // 1. Ninguna segunda anulación del mismo pago (también protegida por UNIQUE).
                 $already = CobrosPaymentReversal::query()->forCompany((int) $company->id)
                     ->where('payment_id', $receipt->payment_id)->lockForUpdate()->first();
@@ -148,6 +151,12 @@ class CobrosAnnulmentService
             }
             abort(409, 'Este cobro ya fue anulado.');
         }
+
+        // Fase 5A: alerta de anulación después del commit; nunca afecta el
+        // reverso ya aplicado.
+        $this->alerts->paymentAnnulled($company, $result['reversal'], $receipt->fresh());
+
+        return $result;
     }
 
     /**

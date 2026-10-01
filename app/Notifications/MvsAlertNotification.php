@@ -55,6 +55,12 @@ class MvsAlertNotification extends Notification
     {
         $labels = [
             'purchase_verification' => 'Nueva verificación de compra asignada',
+            'cobros.payment_registered' => 'Nuevo cobro registrado en CobrOS',
+            'cobros.payment_annulled' => 'Cobro anulado en CobrOS',
+            'cobros.promise_overdue' => 'Promesa de pago vencida en CobrOS',
+            'cobros.customer_not_found' => 'Cliente no localizado en CobrOS',
+            'cobros.custody_pending' => 'Custodia pendiente en CobrOS',
+            'cobros.license_expiring' => 'Licencia próxima a vencer de CobrOS',
         ];
 
         return $labels[$this->alert->type] ?? 'Nueva alerta';
@@ -69,6 +75,34 @@ class MvsAlertNotification extends Notification
                 'Se le ha asignado la verificación %s de la compra %s.',
                 $metadata['verification_id'] ?? '#',
                 $metadata['purchase_identifier'] ?? '#'
+            ),
+            'cobros.payment_registered' => sprintf(
+                'Cobro %s por %s registrado en CobrOS.',
+                $metadata['receipt_number'] ?? '#',
+                $metadata['amount'] ?? '0'
+            ),
+            'cobros.payment_annulled' => sprintf(
+                'Cobro %s anulado (%s) en CobrOS.',
+                $metadata['receipt_number'] ?? '#',
+                $metadata['reversal_number'] ?? '#'
+            ),
+            'cobros.promise_overdue' => sprintf(
+                'Promesa de pago vencida de %s (fecha %s).',
+                $metadata['customer_name'] ?? ($metadata['customer_id'] ?? 'cliente'),
+                $metadata['promise_date'] ?? '-'
+            ),
+            'cobros.customer_not_found' => sprintf(
+                'Cliente no localizado: %s.',
+                $metadata['customer_name'] ?? ($metadata['customer_id'] ?? 'cliente')
+            ),
+            'cobros.custody_pending' => sprintf(
+                'Custodia pendiente de %s sin ingresar a caja.',
+                $metadata['net'] ?? '0'
+            ),
+            'cobros.license_expiring' => sprintf(
+                'La licencia vence el %s (%s días).',
+                $metadata['expires_at'] ?? '-',
+                $metadata['days_left'] ?? '-'
             ),
             default => $this->alert->notes ?? 'Tiene una nueva alerta en el sistema.',
         };

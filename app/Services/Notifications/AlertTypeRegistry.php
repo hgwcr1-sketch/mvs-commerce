@@ -20,12 +20,62 @@ class AlertTypeRegistry
 {
     public const TYPE_PURCHASE_VERIFICATION = 'purchase_verification';
 
+    public const TYPE_COBROS_PAYMENT_REGISTERED = 'cobros.payment_registered';
+
+    public const TYPE_COBROS_PAYMENT_ANNULLED = 'cobros.payment_annulled';
+
+    public const TYPE_COBROS_PROMISE_OVERDUE = 'cobros.promise_overdue';
+
+    public const TYPE_COBROS_CUSTOMER_NOT_FOUND = 'cobros.customer_not_found';
+
+    public const TYPE_COBROS_CUSTODY_PENDING = 'cobros.custody_pending';
+
+    public const TYPE_COBROS_LICENSE_EXPIRING = 'cobros.license_expiring';
+
     public const TYPES = [
         self::TYPE_PURCHASE_VERIFICATION => [
             'label' => 'Verificación de compras',
             'module' => 'Compras',
             'notification_permission' => 'notificaciones.compras',
             'source_permissions' => ['compras.recepcion.verificar', 'compras.recepcion.asignar', 'compras.recepcion.resolver'],
+        ],
+        // Fase 5A CobrOS — canal CobrOS del Centro de Notificaciones.
+        // Solo roles CobrOS (dueño/supervisor); una preferencia nunca concede acceso.
+        self::TYPE_COBROS_PAYMENT_REGISTERED => [
+            'label' => 'Cobro registrado (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        self::TYPE_COBROS_PAYMENT_ANNULLED => [
+            'label' => 'Cobro anulado (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        self::TYPE_COBROS_PROMISE_OVERDUE => [
+            'label' => 'Promesa de pago vencida (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        self::TYPE_COBROS_CUSTOMER_NOT_FOUND => [
+            'label' => 'Cliente no localizado (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        self::TYPE_COBROS_CUSTODY_PENDING => [
+            'label' => 'Custodia pendiente (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        self::TYPE_COBROS_LICENSE_EXPIRING => [
+            'label' => 'Licencia próxima a vencer (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'notificaciones.cobros',
+            'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
         ],
     ];
 

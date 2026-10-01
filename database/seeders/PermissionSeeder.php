@@ -228,6 +228,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
             ['name' => 'cobros.asignar', 'label' => 'Asignar cartera en CobrOS', 'module' => 'CobrOS'],
             ['name' => 'cobros.anular', 'label' => 'Anular cobros en CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'notificaciones.cobros', 'label' => 'Recibir alertas de CobrOS', 'module' => 'Notificaciones'],
         ];
 
         foreach ($permissions as $permission) {
@@ -286,6 +287,17 @@ class PermissionSeeder extends Seeder
                     $q->whereIn('permissions.name', ['cobros.portal_dueno', 'cobros.supervisar']);
                 })
                 ->each(fn (Role $role) => $role->permissions()->syncWithoutDetaching([$anular->id]));
+        }
+
+        // 5A: notificaciones.cobros solo a roles CobrOS de dueño/supervisión.
+        $notify = Permission::query()->where('name', 'notificaciones.cobros')->first();
+        if ($notify) {
+            Role::query()
+                ->where('is_active', true)
+                ->whereHas('permissions', function ($q) {
+                    $q->whereIn('permissions.name', ['cobros.portal_dueno', 'cobros.supervisar']);
+                })
+                ->each(fn (Role $role) => $role->permissions()->syncWithoutDetaching([$notify->id]));
         }
     }
 }

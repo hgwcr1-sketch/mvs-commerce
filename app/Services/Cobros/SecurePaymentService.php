@@ -34,6 +34,7 @@ class SecurePaymentService
         private readonly CobrosPaymentGate $gate,
         private readonly AccountsReceivableService $accounts,
         private readonly RouteosAuditService $audit,
+        private readonly CobrosAlertService $alerts,
     ) {}
 
     /**
@@ -73,7 +74,7 @@ class SecurePaymentService
         $visit = $this->visit($company, $collector, $account, $payload['visit_id'] ?? null);
 
         try {
-            return DB::transaction(function () use ($collector, $company, $account, $token, $fingerprint, $amount, $method, $reference, $notes, $visit) {
+            $result = DB::transaction(function () use ($collector, $company, $account, $token, $fingerprint, $amount, $method, $reference, $notes, $visit) {
                 // Reserva del token primero: la restricción única por empresa
                 // es la garantía real contra doble cobro concurrente.
                 $receipt = CobrosReceipt::create([
@@ -132,6 +133,12 @@ class SecurePaymentService
             }
             abort(409, 'Este intento de cobro ya fue registrado con otros datos.');
         }
+
+        // Fase 5A: alerta al dueño/supervisor después del commit. Si la
+        // notificación falla, el cobro ya aplicado no se ve afectado.
+        $this->alerts->paymentRegistered($company, $account, $result['payment'], $result['receipt']);
+
+        return $result;
     }
 
     /**
