@@ -83,6 +83,51 @@
         </div>
 
 
+        <div>
+            <label class="text-sm">
+                Tratamiento fiscal
+            </label>
+
+            <select
+                name="fiscal_profile_id"
+                class="w-full rounded-lg border px-3 py-2">
+                <option value="">
+                    Usar los datos fiscales de la fila del archivo
+                </option>
+
+                @foreach ($fiscalProfiles as $fiscalProfile)
+                    <option
+                        value="{{ $fiscalProfile->id }}"
+                        @selected(old('fiscal_profile_id') == $fiscalProfile->id)>
+                        {{ $fiscalProfile->name }}
+                    </option>
+                @endforeach
+            </select>
+
+            <p class="mt-1 text-xs text-slate-500">
+                Obligatorio si la fila no trae tasa inequívoca (1, 2, 4 o 13).
+                El 0 y el 8 nunca se infieren. El código CABYS no determina el
+                tratamiento fiscal.
+            </p>
+
+            @if (!empty($sourceItem['tax_rate']))
+                <p class="mt-1 text-xs text-slate-400">
+                    Impuesto de la fila: {{ $sourceItem['tax_rate'] }}%
+                    @if (!empty($sourceItem['tax_code']))
+                        · Código {{ $sourceItem['tax_code'] }}
+                    @endif
+                    @if (!empty($sourceItem['tax_rate_code']))
+                        · Tarifa {{ $sourceItem['tax_rate_code'] }}
+                    @endif
+                </p>
+            @endif
+
+            @error('fiscal_profile_id')
+                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
+
+
         @if(!empty($sourceItem['brand']))
 
             <div class="rounded-lg border bg-slate-50 p-3">

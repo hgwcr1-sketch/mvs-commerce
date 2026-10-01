@@ -142,6 +142,11 @@
         <x-navigation.item route="routeos.index" icon="map" label="RouteOS" :active="request()->routeIs('routeos.*')" />
     @endcan
     </div>
+    @can('fiscal.ver')
+        @can('fiscal.enabled')
+            <x-navigation.item route="fiscal.index" icon="document" label="Facturación Electrónica" :active="request()->routeIs('fiscal.*')" />
+        @endcan
+    @endcan
 
         {{-- PRODUCTOS --}}
     <div class="nav-desktop-group">

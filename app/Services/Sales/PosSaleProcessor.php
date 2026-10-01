@@ -3,20 +3,25 @@
 namespace App\Services\Sales;
 
 use App\Models\Branch;
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\CompanySequence;
 use App\Models\CreditNote;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
 use App\Models\LoyaltySetting;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Models\SuspendedSale;
 use App\Models\User;
 use App\Services\Cash\CashSessionResolver;
+use App\Services\Fiscal\FiscalPreflightService;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Inventory\InventoryPostingService;
 use App\Services\Loyalty\LoyaltyBirthdayService;
 use App\Services\Loyalty\LoyaltyEarningService;
@@ -28,6 +33,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class PosSaleProcessor
@@ -39,7 +45,9 @@ class PosSaleProcessor
     private const BEARER_ATTEMPTS = 10;
 
     private const BEARER_ATTEMPT_WINDOW = 60;
+
     public function __construct(
+        private readonly FiscalTaxService $fiscalTaxService,
         private readonly InventoryPostingService $inventoryPostingService,
         private readonly CashSessionResolver $cashSessionResolver,
         private readonly AccountsReceivableService $accountsReceivableService,
@@ -324,7 +332,12 @@ class PosSaleProcessor
                     }
 
                     $unitCost = (float) $product->cost;
-                    $taxRate = (float) ($product->tax_rate ?? 0);
+                    $fiscalProfile = $this->resolveLineProfile($product);
+                    if ($fiscalProfile === null) {
+                        $taxRate = $product->tax_rate !== null ? (float) $product->tax_rate : 0;
+                    } else {
+                        $taxRate = (float) ($fiscalProfile->rate ?? 0);
+                    }
                     $grossTotal = $this->decimal4($unitPrice * $quantity);
 
                     $lineDiscount = $this->resolveDiscountAmount(
@@ -344,6 +357,7 @@ class PosSaleProcessor
                         'unitPrice' => $unitPrice,
                         'unitCost' => $unitCost,
                         'taxRate' => $taxRate,
+                        'fiscalProfile' => $fiscalProfile,
                         'grossTotal' => $grossTotal,
                         'lineDiscount' => $lineDiscount,
                         'lineBase' => $lineBase,
@@ -353,6 +367,17 @@ class PosSaleProcessor
 
                     $baseAfterLineDiscounts += $lineBase;
                     $lineDiscountTotal += $lineDiscount;
+                }
+
+                app(FiscalPreflightService::class)->validate(
+                    $data['document_type'], $company, $customer, $resolvedLines,
+                );
+
+                if ($quote !== null) {
+                    $this->assertQuoteFiscalUnchanged(
+                        $quote,
+                        $resolvedLines,
+                    );
                 }
 
                 $baseAfterLineDiscounts = $this->decimal4(
@@ -543,8 +568,11 @@ class PosSaleProcessor
 
                 foreach ($resolvedLines as $line) {
                     $product = $line['product'];
+                    /** @var FiscalProfile|null $fiscalProfile */
+                    $fiscalProfile = $line['fiscalProfile'];
+                    $fiscalSnapshot = $fiscalProfile ? $this->fiscalTaxService->snapshotFromProfile($fiscalProfile) : null;
 
-                    SaleItem::create([
+                    $saleItem = SaleItem::create([
                         'sale_id' => $sale->id,
                         'product_id' => $product->id,
                         'product_code' => $product->internal_code,
@@ -559,10 +587,35 @@ class PosSaleProcessor
                         'discount_total' => $line['discountTotal'],
                         'subtotal' => $line['lineSubtotal'],
                         'tax_rate' => $line['taxRate'],
+                        'tax_code' => $fiscalProfile?->tax_code,
+                        'tax_rate_code' => $fiscalProfile?->tax_rate_code,
+                        'tax_treatment' => $fiscalProfile?->treatment,
+                        'fiscal_source' => $fiscalProfile?->catalogVersion?->source,
+                        'fiscal_source_version' => $fiscalProfile?->catalogVersion?->source_version,
+                        'fiscal_snapshot' => $fiscalSnapshot,
                         'tax_total' => $line['lineTax'],
                         'total' => $line['lineTotal'],
                         'unit_cost' => $line['unitCost'],
                     ]);
+
+                    if ($fiscalProfile !== null) {
+                        SaleItemTax::create([
+                            'sale_item_id' => $saleItem->id,
+                            'tax_code' => $fiscalProfile->tax_code,
+                            'tax_rate_code' => $fiscalProfile->tax_rate_code,
+                            'description' => $fiscalProfile->name,
+                            'treatment' => $fiscalProfile->treatment,
+                            'rate' => $fiscalProfile->rate,
+                            'factor_iva' => $fiscalProfile->factor_iva,
+                            'base_amount' => $line['lineSubtotal'],
+                            'tax_amount' => $line['lineTax'],
+                            'specific_tax_data' => null,
+                            'exemption_snapshot' => null,
+                            'source' => $fiscalProfile->catalogVersion?->source,
+                            'source_version' => $fiscalProfile->catalogVersion?->source_version,
+                            'sequence' => 1,
+                        ]);
+                    }
 
                     if ($product->track_inventory) {
                         $this->inventoryPostingService->postSale(
@@ -1086,6 +1139,98 @@ class PosSaleProcessor
         }
     }
 
+    private function resolveLineProfile(Product $product): ?FiscalProfile
+    {
+        if ($product->fiscal_profile_id === null) {
+            return null;
+        }
+
+        $fiscalProfileId = (int) $product->fiscal_profile_id;
+
+        $legacyTaxRate = $product->tax_rate !== null
+            ? (float) $product->tax_rate
+            : null;
+
+        try {
+            $profile = $this->fiscalTaxService->resolveForProduct(
+                $fiscalProfileId,
+                $legacyTaxRate,
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede venderse: requiere un perfil fiscal explícito ({$exception->getMessage()}).",
+            ]);
+        }
+
+        if ($profile->tax_code !== '01' || $profile->rate === null) {
+            throw ValidationException::withMessages([
+                'items' => "El producto {$product->name} no puede venderse: su perfil fiscal no define una tarifa de IVA calculable por el POS.",
+            ]);
+        }
+
+        return $profile;
+    }
+
+    private function assertQuoteFiscalUnchanged(
+        Quote $quote,
+        array $resolvedLines,
+    ): void {
+        $quoteItems = $quote->items()
+            ->get()
+            ->keyBy('product_id');
+
+        foreach ($resolvedLines as $line) {
+            /** @var Product $product */
+            $product = $line['product'];
+            $quoteItem = $quoteItems->get($product->id);
+
+            if ($quoteItem === null) {
+                throw ValidationException::withMessages([
+                    'quote_id' => "El producto {$product->name} no forma parte de la cotización; actualice la cotización antes de convertirla.",
+                ]);
+            }
+
+            $current = $line['fiscalProfile'] !== null ? $this->fiscalTaxService->serializeSnapshot(
+                $this->fiscalTaxService->snapshotFromProfile($line['fiscalProfile']),
+            ) : null;
+
+            $snapshot = is_array($quoteItem->fiscal_snapshot)
+                ? $quoteItem->fiscal_snapshot
+                : null;
+
+            if (is_array($snapshot) && ! empty($snapshot['taxes'])) {
+                try {
+                    $frozen = $this->fiscalTaxService->serializeSnapshot($snapshot);
+                } catch (InvalidArgumentException $exception) {
+                    throw ValidationException::withMessages([
+                        'quote_id' => "La fiscalidad congelada de la cotización para {$product->name} no es válida; actualice la cotización antes de convertirla.",
+                    ]);
+                }
+
+                if ($frozen !== $current) {
+                    throw ValidationException::withMessages([
+                        'quote_id' => "La fiscalidad del producto {$product->name} cambió respecto a la cotización; actualice la cotización antes de convertirla.",
+                    ]);
+                }
+
+                continue;
+            }
+
+            $frozenRate = $quoteItem->tax_rate !== null
+                ? (float) $quoteItem->tax_rate
+                : null;
+
+            if (
+                $frozenRate === null
+                || abs($frozenRate - (float) $line['taxRate']) >= 0.0001
+            ) {
+                throw ValidationException::withMessages([
+                    'quote_id' => "La fiscalidad del producto {$product->name} cambió respecto a la cotización; actualice la cotización antes de convertirla.",
+                ]);
+            }
+        }
+    }
+
     private function canonicalPayments(
         array $payments,
     ): array {
@@ -1222,7 +1367,7 @@ class PosSaleProcessor
      * errores: una NC inexistente produce id nulo e igualmente fallará la
      * autorización plena en requests nuevos.
      *
-     * @param array<int, array{credit_note_number: string, application_code: string, amount: string}> $entries
+     * @param  array<int, array{credit_note_number: string, application_code: string, amount: string}>  $entries
      * @return array<int, array{credit_note_id: int|null, amount: string, bearer: bool}>
      */
     private function resolveBearerIdsForFingerprint(array $entries, int $companyId): array
@@ -1256,7 +1401,7 @@ class PosSaleProcessor
      * El plaintext del código solo vive en memoria durante este request;
      * nunca entra al fingerprint, a logs ni a persistencia.
      *
-     * @param array<int, array{credit_note_number: string, application_code: string, amount: string}> $entries
+     * @param  array<int, array{credit_note_number: string, application_code: string, amount: string}>  $entries
      * @return array<int, array{credit_note_id: int, amount: string, bearer: bool}>
      */
     private function resolveBearerApplications(array $entries, int $companyId, User $user): array
@@ -1321,7 +1466,7 @@ class PosSaleProcessor
         float $total,
         ?float $coverageTarget = null,
         bool $enforceCoverage = true,
-        ?\App\Models\CashSession $cashSession = null,
+        ?CashSession $cashSession = null,
     ): array {
         $creditPayments = array_filter($payments, fn ($payment) => $paymentMethods->get($payment['payment_method_id'])?->type === PaymentMethod::TYPE_CREDIT);
         foreach ($payments as $payment) {
@@ -1446,7 +1591,7 @@ class PosSaleProcessor
         return $resolved;
     }
 
-    private function resolveUsdCash(array $payment, PaymentMethod $method, ?\App\Models\CashSession $session): array
+    private function resolveUsdCash(array $payment, PaymentMethod $method, ?CashSession $session): array
     {
         if ($method->type !== PaymentMethod::TYPE_CASH || ! $method->affects_cash || ! $method->allows_change
             || ! $session?->accepts_usd_snapshot || ! $session->usd_exchange_rate

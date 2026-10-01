@@ -45,6 +45,7 @@ class CompanyCashSettingController extends Controller
             'require_difference_authorization',
             'auto_print_closure',
             'closure_email_recipients',
+            'default_document_type',
         ]);
 
         DB::transaction(function () use ($company, $data, $provisioner): void {

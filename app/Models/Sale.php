@@ -10,9 +10,32 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Sale extends Model
 {
+    /**
+     * Tiquete interno del negocio: comprobante NO fiscal, nunca se envía a
+     * Hacienda. `electronic_ticket` (04) es siempre fiscal; jamás reutilizarlo
+     * para el tiquete interno.
+     */
+    public const DOCUMENT_TICKET = 'ticket';
+
     public const DOCUMENT_ELECTRONIC_TICKET = 'electronic_ticket';
 
     public const DOCUMENT_ELECTRONIC_INVOICE = 'electronic_invoice';
+
+    /**
+     * Etiqueta del comprobante para recibo HTML/PDF (UTF-8 con tildes).
+     * El ticket térmico usa su propio mapeo sin tildes por charset de la
+     * impresora (ver EscPosSaleTicket::documentLabel). Acepta null/legados
+     * (ventas históricas) sin romper el render.
+     */
+    public static function receiptLabel(?string $documentType): string
+    {
+        return match ($documentType) {
+            self::DOCUMENT_TICKET => 'TIQUETE',
+            self::DOCUMENT_ELECTRONIC_TICKET => 'TIQUETE ELECTRÓNICO',
+            self::DOCUMENT_ELECTRONIC_INVOICE => 'FACTURA ELECTRÓNICA',
+            default => 'COMPROBANTE',
+        };
+    }
 
     public const CONDITION_CASH = 'cash';
 

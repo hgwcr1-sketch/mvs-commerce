@@ -37,6 +37,7 @@ use App\Http\Controllers\DataCenterController;
 use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
 use App\Http\Controllers\DevolucionesController;
+use App\Http\Controllers\FiscalPortalController;
 use App\Http\Controllers\InventoryAdjustmentController;
 // Compras
 use App\Http\Controllers\InventoryController;
@@ -270,6 +271,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::patch('/empresas/{company}/backups', [PlatformAdminController::class, 'updateBackups'])->name('backups.update');
     Route::post('/empresas/{company}/backups/run', [PlatformAdminController::class, 'runBackupNow'])->name('backups.run');
     Route::post('/empresas/{company}/backups/restore-test', [PlatformAdminController::class, 'runRestoreTest'])->name('backups.restore-test');
+    Route::get('/fiscal/{company}/proveedor', [FiscalPortalController::class, 'switchForCompany'])->name('fiscal.switch');
 });
 
 Route::middleware(['auth', 'active.company'])->group(function () {
@@ -277,6 +279,55 @@ Route::middleware(['auth', 'active.company'])->group(function () {
 });
 
 Route::middleware(['auth', 'active.company', 'company.licensed'])->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Portal Fiscal MVS (Facturación Electrónica por empresa)
+    |--------------------------------------------------------------------------
+    */
+
+    Route::middleware('fiscal.enabled')->group(function () {
+
+    Route::get('/facturacion-electronica', [FiscalPortalController::class, 'index'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.index');
+    Route::get('/facturacion-electronica/historial', [FiscalPortalController::class, 'history'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.history');
+    Route::get('/facturacion-electronica/conexion/{step}', [FiscalPortalController::class, 'setup'])
+        ->whereIn('step', ['datos', 'conexion', 'verificar', 'preferencias', 'confirmacion'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup');
+    Route::put('/facturacion-electronica/conexion/{step}', [FiscalPortalController::class, 'store'])
+        ->whereIn('step', ['datos', 'conexion', 'preferencias'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup.store');
+    Route::post('/facturacion-electronica/verificar', [FiscalPortalController::class, 'verify'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.verify');
+    Route::post('/facturacion-electronica/conexion/descartar', [FiscalPortalController::class, 'discardPending'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.connection.discard');
+    Route::post('/facturacion-electronica/desconectar', [FiscalPortalController::class, 'disconnect'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.disconnect');
+    Route::post('/facturacion-electronica/finalizar', [FiscalPortalController::class, 'finish'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.setup.finish');
+    Route::get('/facturacion-electronica/historial/{document}', [FiscalPortalController::class, 'showDocument'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.show');
+    Route::get('/facturacion-electronica/series', [FiscalPortalController::class, 'series'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.series');
+    Route::post('/facturacion-electronica/series', [FiscalPortalController::class, 'importSeries'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.series.import');
+    Route::get('/facturacion-electronica/cambio-proveedor', [FiscalPortalController::class, 'switchChecklist'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.switch');
+
+    });
 
     /*
     |--------------------------------------------------------------------------

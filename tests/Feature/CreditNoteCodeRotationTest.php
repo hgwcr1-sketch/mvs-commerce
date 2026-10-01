@@ -10,6 +10,8 @@ use App\Models\CreditNote;
 use App\Models\CreditNoteApplication;
 use App\Models\CreditNoteCodeRotation;
 use App\Models\Customer;
+use App\Models\FiscalProfile;
+use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
@@ -101,7 +103,7 @@ class CreditNoteCodeRotationTest extends TestCase
         $category = ProductCategory::create(['company_id' => $company->id, 'name' => 'Cat '.$suffix, 'slug' => 'cat-'.$suffix, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $company->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u-'.$suffix, 'allows_decimals' => false, 'is_active' => true]);
 
-        return Product::create(array_merge([
+        $product = Product::create(array_merge([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -113,6 +115,13 @@ class CreditNoteCodeRotationTest extends TestCase
             'track_inventory' => true,
             'is_active' => true,
         ], $attributes));
+
+        if ($product->fiscal_profile_id === null && (float) $product->tax_rate === 0.0) {
+            $product->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+            $product->save();
+        }
+
+        return $product;
     }
 
     private function stock(Branch $branch, Product $product, float $stock): void
@@ -283,7 +292,7 @@ class CreditNoteCodeRotationTest extends TestCase
 
     private function paymentMethod(Company $company, string $type)
     {
-        return \App\Models\PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
+        return PaymentMethod::forCompany($company->id)->where('type', $type)->firstOrFail();
     }
 
     private function checkout(User $user, Company $company, Branch $branch, Product $product, array $bearerApps, array $payload = []): TestResponse

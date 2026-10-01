@@ -44,7 +44,7 @@ class ProductImportStyleSizeColorTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->user->companies()->attach($this->company->id);
-        $this->importService = new ProductImportService();
+        $this->importService = new ProductImportService(app(\App\Services\Fiscal\FiscalTaxService::class));
 
         Unit::create([
             'company_id' => $this->company->id,

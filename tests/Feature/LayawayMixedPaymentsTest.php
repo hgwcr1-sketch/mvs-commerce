@@ -2,10 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Branch,CashRegister,CashSession,Company,Customer,Layaway,LayawayPayment,PaymentMethod,Permission,Product,ProductCategory,Role,Unit,User};
+use App\Models\Branch;
+use App\Models\CashRegister;
+use App\Models\CashSession;
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\FiscalProfile;
+use App\Models\Layaway;
+use App\Models\LayawayPayment;
+use App\Models\PaymentMethod;
+use App\Models\Permission;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\Role;
+use App\Models\Unit;
+use App\Models\User;
 use App\Services\Cash\CashPaymentExpectedAmountService;
 use App\Services\PaymentMethodProvisioner;
-use App\Services\Sales\LayawayService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -15,14 +28,23 @@ class LayawayMixedPaymentsTest extends TestCase
     use RefreshDatabase;
 
     private Company $c;
+
     private Branch $b;
+
     private User $u;
+
     private CashSession $s;
+
     private PaymentMethod $cash;
+
     private PaymentMethod $card;
+
     private PaymentMethod $sinpe;
+
     private PaymentMethod $credit;
+
     private Product $p;
+
     private Customer $customer;
 
     protected function setUp(): void
@@ -48,6 +70,8 @@ class LayawayMixedPaymentsTest extends TestCase
         $cat = ProductCategory::create(['company_id' => $this->c->id, 'name' => 'C'.$id, 'slug' => 'c'.$id, 'is_active' => true]);
         $unit = Unit::create(['company_id' => $this->c->id, 'name' => 'Unidad', 'abbreviation' => 'U', 'slug' => 'u'.$id, 'is_active' => true]);
         $this->p = Product::create(['company_id' => $this->c->id, 'category_id' => $cat->id, 'unit_id' => $unit->id, 'name' => 'Producto', 'internal_code' => 'P'.$id, 'cost' => 500, 'sale_price' => 1000, 'tax_rate' => 0, 'track_inventory' => true, 'is_active' => true]);
+        $this->p->fiscal_profile_id = FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $this->p->save();
         DB::table('branch_product')->insert(['branch_id' => $this->b->id, 'product_id' => $this->p->id, 'stock' => 5, 'created_at' => now(), 'updated_at' => now()]);
         $this->customer = Customer::create(['company_id' => $this->c->id, 'name' => 'Cliente Mix', 'is_active' => true]);
     }

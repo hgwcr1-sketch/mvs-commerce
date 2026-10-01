@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SaleItem extends Model
 {
@@ -22,6 +23,12 @@ class SaleItem extends Model
         'discount_total',
         'subtotal',
         'tax_rate',
+        'tax_code',
+        'tax_rate_code',
+        'tax_treatment',
+        'fiscal_source',
+        'fiscal_source_version',
+        'fiscal_snapshot',
         'tax_total',
         'total',
         'unit_cost',
@@ -37,6 +44,7 @@ class SaleItem extends Model
             'discount_total' => 'decimal:4',
             'subtotal' => 'decimal:4',
             'tax_rate' => 'decimal:4',
+            'fiscal_snapshot' => 'array',
             'tax_total' => 'decimal:4',
             'total' => 'decimal:4',
             'unit_cost' => 'decimal:4',
@@ -51,5 +59,10 @@ class SaleItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function taxes(): HasMany
+    {
+        return $this->hasMany(SaleItemTax::class);
     }
 }

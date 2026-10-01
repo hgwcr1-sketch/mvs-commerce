@@ -42,6 +42,20 @@
         </x-card>
 
         <x-card>
+            <x-slot:header><h3 class="text-lg font-semibold text-slate-800">Comprobante predeterminado en POS</h3></x-slot:header>
+            <div>
+                <label for="default_document_type" class="mb-2 block text-sm font-medium text-slate-700">Comprobante seleccionado por defecto</label>
+                <select id="default_document_type" name="default_document_type" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-amber-500 focus:ring-0">
+                    <option value="ticket" @selected(old('default_document_type', $cashSetting->default_document_type ?? 'ticket') === 'ticket')>Tiquete — comprobante interno, no se envía a Hacienda</option>
+                    <option value="electronic_ticket" @selected(old('default_document_type', $cashSetting->default_document_type) === 'electronic_ticket')>Tiquete Electrónico — Hacienda (04)</option>
+                    <option value="electronic_invoice" @selected(old('default_document_type', $cashSetting->default_document_type) === 'electronic_invoice')>Factura Electrónica — Hacienda (01)</option>
+                </select>
+                <p class="mt-2 text-sm text-slate-500">Solo preselecciona el comprobante al abrir el POS; el cajero puede cambiarlo en cada venta. El Tiquete interno nunca se envía a Hacienda. Si no configura nada, se usa Tiquete por seguridad.</p>
+                @error('default_document_type')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </x-card>
+
+        <x-card>
             <x-slot:header><h3 class="text-lg font-semibold text-slate-800">Cierre</h3></x-slot:header>
             <div class="grid gap-5 lg:grid-cols-2">
                 <label class="flex items-start gap-3"><input type="checkbox" name="blind_closing" value="1" @checked(old('blind_closing', $cashSetting->blind_closing)) class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"><span><span class="block font-medium text-slate-700">Cierre ciego</span><span class="text-sm text-slate-500">El empleado siempre cuenta a ciegas. Esta opción también oculta los esperados durante el conteo de usuarios con permisos administrativos de caja.</span></span></label>

@@ -166,6 +166,8 @@ class LoyaltyCashierAuthorizationTest extends TestCase
             'track_inventory' => true,
             'is_active' => true,
         ]);
+        $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $product->save();
         DB::table('branch_product')->insert([
             'branch_id' => $branch->id,
             'product_id' => $product->id,

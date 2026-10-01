@@ -20,6 +20,10 @@ final readonly class PurchaseLineData
         public ?float $discount_percent = null,
         public ?string $lot_number = null,
         public ?string $expires_at = null,
+        public ?int $fiscal_profile_id = null,
+        public ?string $tax_code = null,
+        public ?string $tax_rate_code = null,
+        public ?array $document_taxes = null,
     ) {
     }
 }

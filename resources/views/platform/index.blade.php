@@ -24,14 +24,24 @@
                 $administratorRoleIds = $company->roles->where('name', 'Administrador')->pluck('id');
                 $owner = $company->users->first(fn ($user) => $administratorRoleIds->contains($user->pivot->role_id));
                 $enabledModules = $company->modules->where('is_enabled', true);
+                $contract = $contractSummaries[$company->id] ?? null;
+                $commerce = $contract['commerce'] ?? null;
+                $fiscal = $contract['fiscal'] ?? null;
             @endphp
-            <a href="{{ route('platform.companies.show', $company) }}" class="flex min-h-48 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-amber-400">
+            <a href="{{ route('platform.companies.show', $company) }}" class="flex min-h-48 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-primary">
                 <div class="flex items-start justify-between gap-3"><h2 class="font-bold">{{ $company->trade_name }}</h2><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $company->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }}">{{ $company->is_active ? 'Activa' : 'Inactiva' }}</span></div>
                 <p class="mt-2 text-sm text-slate-500">{{ $company->legal_name ?: 'Sin razón social' }}</p>
                 <p class="mt-3 text-sm font-semibold text-slate-700">Licencia: {{ ucfirst($company->license?->status ?? 'sin configurar') }} · {{ $company->license?->plan ?? 'Sin plan' }}</p>
                 <p class="mt-2 text-sm text-slate-600">Propietario: <strong>{{ $owner?->name ?? 'Sin asignar' }}</strong>@if($owner)<br><span>{{ $owner->email }}</span>@endif</p>
-                <div class="mt-3 flex flex-wrap gap-1.5">@forelse($enabledModules as $contract)<span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{{ $moduleCatalog[$contract->module_key]['label'] ?? $contract->module_key }}</span>@empty<span class="text-xs text-slate-500">Sin contrato explícito</span>@endforelse</div>
-                <dl class="mt-auto grid grid-cols-2 gap-3 pt-6 text-sm"><div><dt class="text-slate-500">Sucursales usadas/límite</dt><dd class="font-bold">{{ $company->branches_count }}/{{ $company->license?->branch_limit ?? '∞' }}</dd></div><div><dt class="text-slate-500">Usuarios</dt><dd class="font-bold">{{ $company->users_count }}</dd></div></dl>
+                <div class="mt-3 flex flex-wrap gap-1.5">@forelse($enabledModules as $contractModule)<span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">{{ $moduleCatalog[$contractModule->module_key]['label'] ?? $contractModule->module_key }}</span>@empty<span class="text-xs text-slate-500">Sin contrato explícito</span>@endforelse</div>
+                <dl class="mt-auto grid grid-cols-2 gap-3 pt-6 text-sm">
+                    <div><dt class="text-slate-500">Sucursales usadas/límite</dt><dd class="font-bold">{{ $company->branches_count }}/{{ $company->license?->branch_limit ?? '∞' }}</dd></div>
+                    <div><dt class="text-slate-500">Usuarios</dt><dd class="font-bold">{{ $company->users_count }}</dd></div>
+                    <div><dt class="text-slate-500">Commerce USD/mes</dt><dd class="font-bold">{{ $commerce ? '$'.number_format((float) $commerce['price_usd'], 2) : $pendingPriceLabel }}</dd></div>
+                    <div><dt class="text-slate-500">Plan FE (CRC/mes)</dt><dd class="font-bold">{{ $fiscal ? ($fiscal['enabled'] ? '₡'.number_format((float) $fiscal['total_crc'], 2) : 'Ninguno') : $pendingPriceLabel }}</dd></div>
+                    <div><dt class="text-slate-500">Consumo FE</dt><dd class="font-bold">{{ $contract && ($contract['fiscal_enabled'] ?? false) ? ($contract['fiscal_used'].' / '.($contract['fiscal_quota'] ?? '∞')) : '—' }}</dd></div>
+                    <div><dt class="text-slate-500">Estado</dt><dd class="font-bold">{{ ucfirst($contract['state'] ?? 'sin configurar') }}</dd></div>
+                </dl>
             </a>
         @empty<p class="rounded-2xl bg-white p-6 text-slate-500">No hay empresas para mostrar.</p>@endforelse
     </section>

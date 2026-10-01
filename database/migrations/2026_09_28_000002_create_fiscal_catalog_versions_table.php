@@ -22,6 +22,17 @@ return new class extends Migration
 {
     public function up(): void
     {
+        /*
+         * Integración prod + FE: en una instalación limpia la tabla ya fue
+         * creada por `2026_09_18_000001_create_fiscal_catalog_versions_table`
+         * (esquema unión). En producción esta migración ya está aplicada, así
+         * que este guard solo evita el error "table already exists" sin
+         * provocar que Laravel la vuelva a ejecutar.
+         */
+        if (Schema::hasTable('fiscal_catalog_versions')) {
+            return;
+        }
+
         Schema::create('fiscal_catalog_versions', function (Blueprint $table) {
             $table->id();
             $table->timestamps();

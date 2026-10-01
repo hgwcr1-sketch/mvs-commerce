@@ -13,9 +13,11 @@ use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
 use App\Services\Cabys\ProductCabysService;
+use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -162,7 +164,7 @@ class ProductController extends Controller
     /**
      * Mostrar formulario.
      */
-    public function create()
+    public function create(FiscalTaxService $fiscalTaxService)
     {
         $companyId = session('active_company_id');
 
@@ -200,6 +202,8 @@ class ProductController extends Controller
         // Alta: todavía no hay asignación CABYS que mostrar.
         $cabysState = null;
 
+        $fiscalProfiles = $fiscalTaxService->productProfiles();
+
         return view('productos.create', compact(
             'categories',
             'brands',
@@ -207,16 +211,17 @@ class ProductController extends Controller
             'styles',
             'sizes',
             'colors',
-            'cabysState'
+            'cabysState',
+            'fiscalProfiles'
         ));
     }
 
     /**
      * Guardar producto.
      */
-    public function store(StoreProductRequest $request)
+    public function store(StoreProductRequest $request, FiscalTaxService $fiscalTaxService)
     {
-        $data = $request->validated();
+        $data = $this->applyFiscalProfile($request->validated(), $fiscalTaxService);
         $data['company_id'] = session('active_company_id');
 
         /*
@@ -301,6 +306,8 @@ class ProductController extends Controller
                 'cost' => (float) $product->cost,
                 'sale_price' => (float) $product->sale_price,
                 'tax_rate' => (float) $product->tax_rate,
+                'fiscal_profile_id' => $product->fiscal_profile_id,
+                'fiscal_treatment' => $product->fiscalProfile?->name,
                 'track_inventory' => (bool) $product->track_inventory,
                 'stock' => (float) $initialStock,
                 'cabys' => $cabysState,
@@ -325,7 +332,7 @@ class ProductController extends Controller
     /**
      * Editar producto.
      */
-    public function edit(Product $producto)
+    public function edit(Product $producto, FiscalTaxService $fiscalTaxService)
     {
         $this->scoped($producto);
         $companyId = session('active_company_id');
@@ -362,6 +369,8 @@ class ProductController extends Controller
             ->orderBy('name')
             ->get();
 
+        $fiscalProfiles = $fiscalTaxService->productProfiles();
+
         $branch = $producto->branches()
             ->where('branches.id', $branchId)
             ->first();
@@ -394,17 +403,23 @@ class ProductController extends Controller
             'styles',
             'sizes',
             'colors',
-            'cabysState'
+            'cabysState',
+            'fiscalProfiles'
         ));
     }
 
     /**
      * Actualizar producto.
      */
-    public function update(UpdateProductRequest $request, Product $producto)
+    public function update(UpdateProductRequest $request, Product $producto, FiscalTaxService $fiscalTaxService)
     {
         $this->scoped($producto);
-        $data = $request->validated();
+        $attributes = $request->validated();
+        if (! array_key_exists('fiscal_profile_id', $attributes) && $producto->fiscal_profile_id !== null) {
+            $attributes['fiscal_profile_id'] = $producto->fiscal_profile_id;
+        }
+        $data = $this->applyFiscalProfile($attributes, $fiscalTaxService);
+        $data['company_id'] = session('active_company_id');
 
         /*
          * MF04: igual que en el alta, la selección CABYS viaja desde el
@@ -593,7 +608,39 @@ class ProductController extends Controller
     }
 
     /**
-     * Buscar productos dinámicamente.
+     * Autoridad fiscal única: resuelve el perfil fiscal del producto y
+     * sincroniza products.tax_rate solo por compatibilidad.
+     */
+    private function applyFiscalProfile(array $data, FiscalTaxService $fiscalTaxService): array
+    {
+        $profileId = isset($data['fiscal_profile_id']) && $data['fiscal_profile_id'] !== null
+            ? (int) $data['fiscal_profile_id']
+            : null;
+
+        if ($profileId === null) {
+            return $data;
+        }
+
+        $legacyRate = isset($data['tax_rate']) && $data['tax_rate'] !== null && $data['tax_rate'] !== ''
+            ? (float) $data['tax_rate']
+            : null;
+
+        try {
+            $profile = $fiscalTaxService->resolveForProduct($profileId, $legacyRate);
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'fiscal_profile_id' => $exception->getMessage(),
+            ]);
+        }
+
+        $data['fiscal_profile_id'] = $profile->id;
+        $data['tax_rate'] = (float) ($profile->rate ?? 0);
+
+        return $data;
+    }
+
+    /**
+     * Buscar productos din�micamente.
      */
     public function search()
     {

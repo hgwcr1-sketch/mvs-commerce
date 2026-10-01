@@ -11,8 +11,10 @@ use App\Models\ProductSupplier;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Imports\ProductImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
@@ -22,10 +24,15 @@ class ProductImportSupplierTest extends TestCase
     use RefreshDatabase;
 
     private Company $company;
+
     private User $user;
+
     private ProductCategory $category;
+
     private Brand $brand;
+
     private Unit $unit;
+
     private ProductImportService $importService;
 
     protected function setUp(): void
@@ -57,7 +64,7 @@ class ProductImportSupplierTest extends TestCase
             'company_id' => $this->company->id, 'name' => 'Unidad', 'abbreviation' => 'UN',
             'slug' => 'unidad-sup-'.$this->company->id, 'allows_decimals' => false, 'is_active' => true,
         ]);
-        $this->importService = new ProductImportService();
+        $this->importService = new ProductImportService(app(FiscalTaxService::class));
     }
 
     private function supplier(array $overrides = []): Supplier
@@ -271,7 +278,7 @@ class ProductImportSupplierTest extends TestCase
             'track_inventory' => true, 'is_active' => true,
         ]);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         ProductSupplier::create([
             'company_id' => $this->company->id,
             'product_id' => $product->id,

@@ -480,7 +480,7 @@ public function test_authorized_manual_price_overrides_customer_price_level(): v
             'is_active' => true,
         ]);
 
-        return Product::create([
+        $product = Product::create([
             'company_id' => $company->id,
             'category_id' => $category->id,
             'unit_id' => $unit->id,
@@ -497,5 +497,9 @@ public function test_authorized_manual_price_overrides_customer_price_level(): v
             'track_inventory' => false,
             'is_active' => true,
         ]);
+        $product->fiscal_profile_id = \App\Models\FiscalProfile::query()->where('tax_code', '01')->where('tax_rate_code', '10')->value('id');
+        $product->save();
+
+        return $product;
     }
 }

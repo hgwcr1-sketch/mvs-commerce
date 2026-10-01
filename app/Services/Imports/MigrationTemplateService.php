@@ -8,6 +8,7 @@ use App\Models\ProductCategory;
 use App\Models\Size;
 use App\Models\Style;
 use App\Models\Unit;
+use App\Services\Fiscal\FiscalTaxService;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -95,6 +96,9 @@ class MigrationTemplateService
             $data->setDataValidation("{$dataColumn}2", $validation);
         }
 
+        if ($type === 'products') {
+            (new FiscalGuideSheet)->attach($spreadsheet, app(FiscalTaxService::class));
+        }
         $spreadsheet->setActiveSheetIndex(0);
 
         return $spreadsheet;
@@ -133,7 +137,10 @@ class MigrationTemplateService
                 'costo' => ['number', 'Monto no negativo, máximo 4 decimales', null, '1000.0000', '#,##0.0000'], 'precio_venta' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1500.0000', '#,##0.0000'],
                 'precio_mayorista' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1400.0000', '#,##0.0000'], 'precio_especial' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1450.0000', '#,##0.0000'],
                 'precio_a' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1480.0000', '#,##0.0000'], 'precio_b' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1470.0000', '#,##0.0000'], 'precio_c' => ['number', 'Monto no negativo, máximo 2 decimales; acepta hasta 4 si los adicionales son ceros', null, '1460.0000', '#,##0.0000'],
-                'impuesto' => ['number', 'Porcentaje 0–100, máximo 2 decimales; no es catálogo cerrado', 'Cualquier tasa entre 0 y 100 admitida por el importador', '13.00', '0.00'],
+                'impuesto' => ['number', 'Porcentaje 0–100, máximo 2 decimales; solo 1, 2, 4 o 13 como tasa inequívoca', '0/8/vacío no se infieren: use código de impuesto + código de tarifa o perfil fiscal', '13.00', '0.00'],
+                'codigo_impuesto' => ['text', 'Texto (conservar ceros). Complementa la tasa', '01 (IVA)', '01'],
+                'codigo_tarifa' => ['text', 'Texto (conservar ceros). Requiere código de impuesto', '02 (1%), 03 (2%), 04 (4%), 08 (13%), 10 (exento), 11 (no sujeto)', '08'],
+                'perfil_fiscal' => ['number', 'ID entero del perfil fiscal de la empresa; tiene prioridad sobre códigos y tasa', null, '1'],
                 'controla_inventario' => ['text', 'Texto', 'Sí, No', 'Sí'], 'permite_stock_negativo' => ['text', 'Texto', 'Sí, No', 'No'], 'imprime_etiqueta' => ['text', 'Texto', 'Sí, No', 'Sí'], 'activo' => ['text', 'Texto', 'Sí, No', 'Sí'],
             ]), 'lists' => [
                 'categoria' => ProductCategory::query()->where('company_id', $companyId)->whereNull('parent_id')->where('is_active', true)->orderBy('name')->pluck('name')->all(),

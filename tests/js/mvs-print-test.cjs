@@ -64,6 +64,7 @@ test('cut false suppresses cut and manual fallback is gated in shared Blade', ()
 function posState(api, { enabled = true, terminal = true, duplicate = false } = {}) {
     const source = fs.readFileSync('resources/views/pos/index.blade.php', 'utf8');
     const methods = source.slice(source.indexOf('        async confirmCheckout()'), source.indexOf('        newSale()'))
+        .replace(/@json\([^\n]*\)/g, "'ticket'")
         .replace(/\{\{[^\n]*\}\}/g, "'/mvs/print/ticket/__SALE_ID__'");
     api.fetchConfig = async () => ({ auto_print: enabled, terminal: terminal ? { printer_name: 'POS-58-Series' } : null });
     const context = {
