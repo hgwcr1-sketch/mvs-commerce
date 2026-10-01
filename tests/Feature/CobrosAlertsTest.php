@@ -23,7 +23,6 @@ use App\Services\Notifications\AlertTypeRegistry;
 use App\Services\Notifications\NotificationPreferenceService;
 use App\Services\PaymentMethodProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -59,7 +58,7 @@ class CobrosAlertsTest extends TestCase
         Notification::assertNotSentTo($collector, MvsAlertNotification::class);
 
         // Reintento idéntico (mismo token/payload): no duplica alerta ni aviso.
-        $receipt = CobrosReceipt::sole();
+        $receipt = CobrosReceipt::query()->forCompany($c->id)->sole();
         $this->actingAs($collector)->withSession(['active_company_id' => $c->id])->post(
             route('cobros.collector.payments.store', $account),
             [
@@ -67,7 +66,7 @@ class CobrosAlertsTest extends TestCase
                 'reference' => null, 'notes' => null, 'client_token' => $receipt->client_token, 'confirm' => '1',
             ]
         )->assertRedirect();
-        $this->assertSame(1, Alert::query()->where('type', 'cobros.payment_registered')->count());
+        $this->assertSame(1, Alert::query()->where('company_id', $c->id)->where('type', 'cobros.payment_registered')->count());
         Notification::assertSentToTimes($owner, MvsAlertNotification::class, 1);
 
         // Anulación: alerta de severidad ATENCION con su reverso.
@@ -77,7 +76,7 @@ class CobrosAlertsTest extends TestCase
             ['reason' => 'Anulación con alerta al dueño', 'client_token' => (string) Str::uuid()]
         )->assertRedirect(route('cobros.collector.payments.receipt', $receipt->receipt_number));
 
-        $annulled = Alert::query()->where('type', 'cobros.payment_annulled')->first();
+        $annulled = Alert::query()->where('company_id', $c->id)->where('type', 'cobros.payment_annulled')->first();
         $this->assertNotNull($annulled);
         $this->assertSame(Alert::SEVERITY_ATTENTION, $annulled->severity);
         $this->assertDatabaseHas('alert_recipients', ['alert_id' => $annulled->id, 'user_id' => $owner->id]);
@@ -96,7 +95,7 @@ class CobrosAlertsTest extends TestCase
         [$collector, , $account] = $this->collectorWithAccount($c, $b, '3000.0000');
         $this->pay($c, $account, $collector, '1000.00');
 
-        $alert = Alert::query()->where('type', 'cobros.payment_registered')->sole();
+        $alert = Alert::query()->where('company_id', $c->id)->where('type', 'cobros.payment_registered')->sole();
         $this->assertDatabaseMissing('alert_recipients', ['alert_id' => $alert->id, 'user_id' => $withoutNotify->id]);
         $this->assertDatabaseMissing('alert_recipients', ['alert_id' => $alert->id, 'user_id' => $notifyOnly->id]);
         Notification::assertNotSentTo($withoutNotify, MvsAlertNotification::class);
@@ -114,7 +113,7 @@ class CobrosAlertsTest extends TestCase
         [$collector, , $account] = $this->collectorWithAccount($c, $b, '1500.0000');
         $this->pay($c, $account, $collector, '500.00');
 
-        $alert = Alert::query()->where('type', 'cobros.payment_registered')->sole();
+        $alert = Alert::query()->where('company_id', $c->id)->where('type', 'cobros.payment_registered')->sole();
         $this->assertDatabaseMissing('alert_recipients', ['alert_id' => $alert->id, 'user_id' => $owner->id]);
         Notification::assertNotSentTo($owner, MvsAlertNotification::class);
         unset($ownerPermission);
@@ -157,8 +156,8 @@ class CobrosAlertsTest extends TestCase
         Notification::assertSentToTimes($owner, MvsAlertNotification::class, 5);
 
         // Sucursal correcta en las alertas con origen en visita/cobro.
-        $this->assertSame($b->id, Alert::query()->where('type', 'cobros.promise_overdue')->sole()->branch_id);
-        $this->assertSame($b->id, Alert::query()->where('type', 'cobros.custody_pending')->sole()->branch_id);
+        $this->assertSame($b->id, Alert::query()->where('company_id', $c->id)->where('type', 'cobros.promise_overdue')->sole()->branch_id);
+        $this->assertSame($b->id, Alert::query()->where('company_id', $c->id)->where('type', 'cobros.custody_pending')->sole()->branch_id);
     }
 
     public function test_evaluator_respects_tenant_and_license_threshold(): void
@@ -204,6 +203,14 @@ class CobrosAlertsTest extends TestCase
             ->get(route('cobros.owner.alerts'))
             ->assertOk()->assertSee('Alertas CobrOS')->assertSee('Cobro registrado (CobrOS)')
             ->assertSee(CobrosReceipt::query()->forCompany($c->id)->sole()->receipt_number);
+
+        // Asegura: el recibo del tenant propio no se resuelve por IDs de otro.
+        $this->assertNotEmpty($foreignReceipt);
+        $this->assertSame($fc->id, $foreignReceipt->company_id);
+
+        // Asegura: el recibo del tenant ajeno no es reexpuesto por sole().
+        $this->assertNotEmpty($foreignReceipt);
+        $this->assertSame($fc->id, $foreignReceipt->company_id);
 
         // La alerta del cobro propio lleva su recibo visible en el historial.
         $this->assertStringContainsString('Recibo '.$foreignReceipt->receipt_number, $ownerResponse->getContent());
@@ -322,7 +329,7 @@ class CobrosAlertsTest extends TestCase
      *
      * @return array{0: Company, 1: Branch, 2?: User}
      */
-    private function context(string $role = 'owner', string $extra = null, ?Company $company = null, ?Branch $branch = null): array
+    private function context(string $role = 'owner', ?string $extra = null, ?Company $company = null, ?Branch $branch = null): array
     {
         $company ??= Company::create(['trade_name' => 'Cobros '.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
         $branch ??= Branch::create(['company_id' => $company->id, 'name' => 'Sucursal '.substr(uniqid(), -5), 'code' => 'A'.random_int(1, 99), 'is_active' => true]);

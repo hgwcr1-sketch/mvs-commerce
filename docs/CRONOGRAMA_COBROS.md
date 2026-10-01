@@ -288,6 +288,13 @@ como siguiente bloque.
 - Dependencia: 4A.
 
 ### 5A — Notificaciones y alertas CobrOS
+**Estado: COMPLETADA LOCALMENTE (2026-09-30).** Centro de Notificaciones
+implementa canal `CobrOS` con los 6 tipos (`payment_registered`,
+`payment_annulled`, `promise_overdue`, `customer_not_found`, `custody_pending`,
+`license_expiring`), permiso `notificaciones.cobros`, ámbito empresa y
+deduplicación. `CobrosAlertController` expone el panel de alertas en sola
+lectura para dueño/supervisor, sin escrituras financieras. Pruebas:
+`CobrosAlertsTest` 9/9 (87 aserciones); `Cobros|CustomerCompanyIsolation` **270/270**.
 - Objetivo: avisos de vencimientos, promesas e incidencias.
 - Funcionalidades: reutilizar Centro de Notificaciones de Commerce con canal
   CobrOS; alcance solo para roles CobrOS.

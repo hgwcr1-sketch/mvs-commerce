@@ -18,7 +18,27 @@ Validación: `CobrosOwnerReportsTest` 8/8 (88 aserciones) y suite focal
 `Cobros|CustomerCompanyIsolation` **261/261, 2022 aserciones**; Pint y
 `git diff --check` correctos. Sin migraciones ni build.
 **Pendiente 4B:** exportación según arquitectura (no autorizada aquí).
-5A pendiente y sin iniciar. Temporales `tmp_*` preservados fuera del commit.
+
+## Worktree CobrOS — Fase 5A COMPLETADA LOCALMENTE (2026-09-30)
+
+Base `feature/cobros-v1`, `6f845d8`. Centro de Notificaciones: canal
+CobrOS con los 6 tipos (`cobros.payment_registered`, `payment_annulled`,
+`promise_overdue`, `customer_not_found`, `custody_pending`,
+`license_expiring`), permiso `notificaciones.cobros`, ámbito empresa y
+deduplicación en `AlertDispatcher`, `AlertTypeRegistry` y
+`NotificationPreferenceService`. Panel de alertas (`CobrosAlertController`,
+`cobros.alerts`) sola lectura para dueño/supervisor, sin escrituras
+financieras (query log y `financialSnapshot` verificados).
+
+- Comando `cobros:evaluate-alerts` para evaluación programada.
+- Pruebas de integración (canal, permisos, preferencias y pantalla).
+
+Validación: `CobrosAlertsTest` 9/9 (87 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **270/270, 2117 aserciones**; Pint y
+`git diff --check` correctos. Sin migraciones ni build.
+
+**Pendiente 5B:** PWA móvil del cobrador y conectividad (según
+`docs/CRONOGRAMA_COBROS.md`).
 
 ## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
 

@@ -901,3 +901,25 @@ exportación de archivos, sin comisiones ni Fase 5.
 
 **Pendiente declarado de 4B:** exportación de resultados (CSV/imprenta)
 según la arquitectura de exportación del proyecto — fuera de este alcance.
+
+## Fase 5A — Notificaciones y alertas CobrOS (2026-09-30) — COMPLETADA LOCALMENTE
+
+Alcance entregado: centro de notificaciones con el canal `CobrOS` y los
+6 tipos (`payment_registered`, `payment_annulled`, `promise_overdue`,
+`customer_not_found`, `custody_pending`, `license_expiring`), permiso
+`notificaciones.cobros`, ámbito empresa y deduplicación en `AlertDispatcher`.
+
+- **Panel de alertas:** `CobrosAlertController` (`cobros.alerts`) en solo
+  lectura para dueño/supervisor, sin escrituras financieras (query log y
+  `financialSnapshot` verificados).
+- **Comando:** `cobros:evaluate-alerts` para evaluación programada.
+- **Reglas:** permiso `notificaciones.cobros` + rol CobrOS; una preferencia
+  nunca concede acceso, solo filtra; enero recibo/alerta no escribe dinero.
+
+**Evidencia:** `CobrosAlertsTest` 9/9 (87 aserciones) y suite focal
+`Cobros|CustomerCompanyIsolation` **270/270, 2117 aserciones (VERDE)**;
+Pint limpio y `git diff --check` correctos. Sin migraciones, sin visual en
+navegador ni build Vite. `tmp_*` fuera del commit.
+
+**Siguiente bloque:** 5B (PWA móvil del cobrador y conectividad), según
+`docs/CRONOGRAMA_COBROS.md`.
