@@ -923,3 +923,44 @@ navegador ni build Vite. `tmp_*` fuera del commit.
 
 **Siguiente bloque:** 5B (PWA móvil del cobrador y conectividad), según
 `docs/CRONOGRAMA_COBROS.md`.
+
+## Fase 5B — PWA móvil del cobrador y conectividad (2026-10-01) — COMPLETADA LOCALMENTE
+
+Alcance entregado: PWA instalable de CobrOS, estado de conexión visible y
+tolerancia a señal deficiente. Sin GPS, sin mapas offline y sin pagos
+offline.
+
+- **Service worker propio** `public/sw-cobros.js`: scope estricto `/cobros`
+  (jamás intercepta rutas de Commerce), caché del shell estático, estado
+  `self.cobrosOnline` y receptáculo de borradores en IndexedDB. El
+  `fetch` NO responde a POST/pagos: las escrituras financieras siguen
+  siendo exclusivas del servidor vía 3A/3B.
+- **Cliente PWA** `resources/js/cobros-pwa.js`: registro del SW solo bajo
+  `/cobros`, `beforeinstallprompt` (botón de instalación oculto hasta que
+  el navegador lo ofrezca) y seguimiento `online`/`offline` con
+  `window.cobrosOnline`.
+- **Banner de conexión** `resources/views/cobros/components/connection.blade.php`
+  incluido en `cobros/layout.blade.php`: aviso móvil-safe "Sin conexión"
+  con la regla explícita de que los cobros se aplican en línea con
+  confirmación del servidor. Nunca muestra éxito sin respuesta del
+  servidor (no se replica ningún `assertRedirect` localmente).
+- **Sin nuevas dependencias ni migraciones**; reutiliza identidad 1B
+  (manifest, iconos, `cobros-shell.css`, navegación fuente) y cierra su
+  pendiente de build/instalación solo en la parte ejecutable en este
+  worktree.
+
+**Evidencia:** suite focal `Cobros|CustomerCompanyIsolation` →
+**270/270, 2117 aserciones (VERDE)**; `CobrosManifestTest` 1/1 (30
+aserciones); `CobrosOwnerDashboardTest` 9/9 (81 aserciones); `php -l` en
+Blade y `node --check` en `cobros-pwa.js`/`sw-cobros.js` limpios;
+`git diff --check` limpio.
+
+**Validaciones pendientes declaradas:** build Vite (el worktree no tiene
+`node_modules` y no se instalan dependencias sin autorización),
+instalación PWA en dispositivo real y revisión visual en navegador 360/
+768/1280. Fallos preexistentes no atribuibles: `CobrosCollectorManagementTest`
+(fatal de proceso PHP) y el logo de `ResponsiveNavigationTest`, ambos
+documentados antes de 5B. `tmp_*` y `output.txt` fuera del commit.
+
+**Siguiente bloque:** 5C (Seguridad endurecida), según
+`docs/CRONOGRAMA_COBROS.md`.

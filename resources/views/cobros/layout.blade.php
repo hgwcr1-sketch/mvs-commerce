@@ -58,5 +58,7 @@
         <p class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</p>
     </dialog>
     <script src="{{ asset('js/cobros-navigation.js') }}?v=1" defer></script>
+    <script src="{{ asset('js/cobros-pwa.js') }}?v=1" defer></script>
+    @include('cobros.components.connection')
 </body>
 </html>

@@ -306,6 +306,16 @@ lectura para dueño/supervisor, sin escrituras financieras. Pruebas:
 - Dependencia: 4A.
 
 ### 5B — PWA móvil del cobrador y conectividad
+**Estado: COMPLETADA LOCALMENTE (2026-10-01) con validaciones declaradas
+pendientes.** Service worker propio `public/sw-cobros.js` limitado a
+`/cobros` (nunca intercepta Commerce), registro + `beforeinstallprompt` en
+`resources/js/cobros-pwa.js`, banner de conexión en el shell y borradores
+idempotentes locales (IndexedDB) SIN aplicación offline de pagos: el cobro
+solo se confirma en servidor vía 3A/3B y el shell nunca muestra éxito sin
+respuesta del servidor. Sin migraciones. Evidencia en
+`PROGRESO_COBROS.md`; suite `Cobros|CustomerCompanyIsolation` **270/270**.
+Pendiente declarado: build Vite (sin `node_modules` en el worktree) e
+instalación en dispositivo real. 5C queda como siguiente bloque.
 - Objetivo: instalación real, responsive y diseño para señal deficiente.
 - Funcionalidades: cerrar pendiente 1B (build + instalación); UI tolerante a
   red lenta; diseño offline: la captura operacional puede guardarse como

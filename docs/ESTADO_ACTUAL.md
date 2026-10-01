@@ -40,6 +40,29 @@ Validación: `CobrosAlertsTest` 9/9 (87 aserciones) y suite focal
 **Pendiente 5B:** PWA móvil del cobrador y conectividad (según
 `docs/CRONOGRAMA_COBROS.md`).
 
+## Worktree CobrOS — Fase 5B COMPLETADA LOCALMENTE (2026-10-01)
+
+Base `feature/cobros-v1`, `390d891`. PWA móvil del cobrador y
+conectividad: service worker propio `public/sw-cobros.js` con scope
+estricto `/cobros` (nunca toca Commerce), registro + `beforeinstallprompt`
+en `resources/js/cobros-pwa.js`, banner de conexión móvil-safe en
+`cobros/layout.blade.php` y borradores idempotentes locales (IndexedDB)
+sin aplicación offline de pagos. El cobro SOLO se confirma en línea vía
+3A/3B; nunca se muestra éxito sin confirmación del servidor. Sin
+migraciones ni dependencias nuevas; reutiliza identidad 1B (manifest,
+iconos, `cobros-shell.css`, navegación fuente).
+
+Validación: suite focal `Cobros|CustomerCompanyIsolation` **270/270, 2117
+aserciones**; `CobrosManifestTest` 1/1; `CobrosOwnerDashboardTest` 9/9;
+`php -l` + `node --check` + `git diff --check` limpios. Pint no disponible
+(binario ausente; composer declara `laravel/pint` sin instalar).
+**Pendientes 5B declarados:** build Vite (worktree sin `node_modules`, no
+se instalan dependencias sin autorización), instalación PWA en dispositivo
+real y revisión visual 360/768/1280. Fallos preexistentes ajenos:
+`CobrosCollectorManagementTest` (fatal de proceso) y logo de
+`ResponsiveNavigationTest`. 5C pendiente y sin iniciar. Temporales
+`tmp_*` y `output.txt` preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
 
 Base `feature/cobros-v1`, `f556650`. Panel operativo del supervisor en solo
