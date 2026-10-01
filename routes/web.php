@@ -22,26 +22,36 @@ use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashSessionHistoryController;
+use App\Http\Controllers\Cobros\CobrosAlertController;
+use App\Http\Controllers\Cobros\CobrosAuditController;
+use App\Http\Controllers\Cobros\CobrosDashboardController;
+use App\Http\Controllers\Cobros\CollectorPaymentController;
+use App\Http\Controllers\Cobros\CollectorPortfolioController;
+use App\Http\Controllers\Cobros\ForceChangePasswordController;
+use App\Http\Controllers\Cobros\OwnerAssignmentController;
+// Inventario
+use App\Http\Controllers\Cobros\OwnerCollectorController;
+use App\Http\Controllers\Cobros\OwnerDashboardController;
+use App\Http\Controllers\Cobros\VisitController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
+// Compras
 use App\Http\Controllers\ControlCenterController;
 use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\CustomerController;
-// Inventario
+// Ventas
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataCenterController;
 use App\Http\Controllers\DataExportController;
 use App\Http\Controllers\DataImportController;
 use App\Http\Controllers\InventoryAdjustmentController;
 use App\Http\Controllers\InventoryController;
-// Compras
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LabelCenterController;
-// Ventas
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
 use App\Http\Controllers\LoyaltyCustomerPortalController;
@@ -50,27 +60,26 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
+// MVS Print
 use App\Http\Controllers\LoyaltyPortalManagementController;
 use App\Http\Controllers\LoyaltyPortalPasskeyController;
 use App\Http\Controllers\LoyaltyPortalSessionController;
+// Finanzas
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
+// Administración
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
 use App\Http\Controllers\MvsPrint\MvsPrintConfigController;
 use App\Http\Controllers\MvsPrint\MvsPrintDownloadController;
-// MVS Print
 use App\Http\Controllers\MvsPrint\MvsPrintTerminalsController;
 use App\Http\Controllers\MvsPrint\MvsPrintTicketController;
 use App\Http\Controllers\NotificationCenterController;
-// Finanzas
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentMethodController;
-// Administración
 use App\Http\Controllers\PlatformAdminController;
 use App\Http\Controllers\PosController;
-use App\Http\Controllers\RouteosController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductSupplierController;
@@ -84,6 +93,7 @@ use App\Http\Controllers\ReportCenterController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\RouteosController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SaleReceiptMailController;
 use App\Http\Controllers\SettingController;
@@ -91,6 +101,9 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
+use App\Http\Middleware\Cobros\Authenticate;
+use App\Http\Middleware\Cobros\EnsureActiveUser;
+use App\Http\Middleware\Cobros\RedirectIfAuthenticated;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -130,82 +143,83 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
-    Route::middleware(App\Http\Middleware\Cobros\RedirectIfAuthenticated::class)->group(function () {
+    Route::middleware(RedirectIfAuthenticated::class)->group(function () {
         Route::get('/login', [App\Http\Controllers\Cobros\LoginController::class, 'create'])->name('login');
         Route::post('/login', [App\Http\Controllers\Cobros\LoginController::class, 'authenticate'])
             ->middleware('throttle:10,1')->name('login.store');
     });
     Route::post('/logout', [App\Http\Controllers\Cobros\LoginController::class, 'destroy'])
-        ->middleware(App\Http\Middleware\Cobros\Authenticate::class)->name('logout');
+        ->middleware(Authenticate::class)->name('logout');
 
     // Forced password change — only requires auth + active user, not full CobrOS permissions.
-    Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, App\Http\Middleware\Cobros\EnsureActiveUser::class])->group(function () {
-        Route::get('/cambiar-contrasena', [App\Http\Controllers\Cobros\ForceChangePasswordController::class, 'show'])->name('password.force');
-        Route::post('/cambiar-contrasena', [App\Http\Controllers\Cobros\ForceChangePasswordController::class, 'store'])->name('password.force.store');
+    Route::middleware([Authenticate::class, EnsureActiveUser::class])->group(function () {
+        Route::get('/cambiar-contrasena', [ForceChangePasswordController::class, 'show'])->name('password.force');
+        Route::post('/cambiar-contrasena', [ForceChangePasswordController::class, 'store'])
+            ->middleware('throttle:10,1')->name('password.force.store');
     });
 });
 
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
 // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
 // Usa 'cobros.active.company' (no redirige a onboarding de Commerce).
-Route::middleware([App\Http\Middleware\Cobros\Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', App\Http\Middleware\Cobros\EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
-    Route::get('/supervisor', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'supervisor'])
+Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
+    Route::get('/supervisor', [CobrosDashboardController::class, 'supervisor'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
-    Route::get('/supervisor/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
+    Route::get('/supervisor/audit', [CobrosAuditController::class, 'index'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.audit');
-    Route::get('/supervisor/alerts', [App\Http\Controllers\Cobros\CobrosAlertController::class, 'index'])
+    Route::get('/supervisor/alerts', [CobrosAlertController::class, 'index'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.alerts');
-    Route::get('/collector', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
+    Route::get('/collector', [CollectorPortfolioController::class, 'index'])
         ->middleware('permission:cobros.cobrar')->name('collector.index');
-    Route::get('/collector/portfolio', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'index'])
+    Route::get('/collector/portfolio', [CollectorPortfolioController::class, 'index'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
-    Route::get('/collector/portfolio/{customer}', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'show'])
+    Route::get('/collector/portfolio/{customer}', [CollectorPortfolioController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
-    Route::post('/collector/portfolio/{customer}/location', [App\Http\Controllers\Cobros\CollectorPortfolioController::class, 'storeLocation'])
+    Route::post('/collector/portfolio/{customer}/location', [CollectorPortfolioController::class, 'storeLocation'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.location');
-    Route::get('/collector/payments/create/{account}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'create'])
+    Route::get('/collector/payments/create/{account}', [CollectorPaymentController::class, 'create'])
         ->middleware('permission:cobros.cobrar')->name('collector.payments.create');
-    Route::post('/collector/payments/{account}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'store'])
-        ->middleware('permission:cobros.cobrar')->name('collector.payments.store');
-    Route::get('/collector/receipts', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'history'])
+    Route::post('/collector/payments/{account}', [CollectorPaymentController::class, 'store'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.payments.store');
+    Route::get('/collector/receipts', [CollectorPaymentController::class, 'history'])
         ->middleware('permission:cobros.cobrar')->name('collector.payments.history');
-    Route::get('/collector/receipts/{receipt}', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'receipt'])
+    Route::get('/collector/receipts/{receipt}', [CollectorPaymentController::class, 'receipt'])
         ->middleware('permission:cobros.acceder')->name('collector.payments.receipt');
-    Route::post('/collector/receipts/{receipt}/annul', [App\Http\Controllers\Cobros\CollectorPaymentController::class, 'annul'])
-        ->middleware('permission:cobros.anular')->name('collector.payments.annul');
-    Route::get('/visits/today', [App\Http\Controllers\Cobros\VisitController::class, 'today'])
+    Route::post('/collector/receipts/{receipt}/annul', [CollectorPaymentController::class, 'annul'])
+        ->middleware(['permission:cobros.anular', 'throttle:10,1'])->name('collector.payments.annul');
+    Route::get('/visits/today', [VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
-    Route::get('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'customerHistory'])
+    Route::get('/visits/customer/{customer}', [VisitController::class, 'customerHistory'])
         ->middleware('permission:cobros.cobrar')->name('visits.customer');
-    Route::post('/visits/customer/{customer}', [App\Http\Controllers\Cobros\VisitController::class, 'store'])
+    Route::post('/visits/customer/{customer}', [VisitController::class, 'store'])
         ->middleware('permission:cobros.cobrar')->name('visits.store');
-    Route::patch('/visits/{visit}', [App\Http\Controllers\Cobros\VisitController::class, 'update'])
+    Route::patch('/visits/{visit}', [VisitController::class, 'update'])
         ->middleware('permission:cobros.cobrar')->name('visits.update');
-    Route::get('/owner', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'index'])
+    Route::get('/owner', [OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
-    Route::get('/owner/audit', [App\Http\Controllers\Cobros\CobrosAuditController::class, 'index'])
+    Route::get('/owner/audit', [CobrosAuditController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.audit');
-    Route::get('/owner/reports', [App\Http\Controllers\Cobros\OwnerDashboardController::class, 'reports'])
+    Route::get('/owner/reports', [OwnerDashboardController::class, 'reports'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.reports');
-    Route::get('/owner/alerts', [App\Http\Controllers\Cobros\CobrosAlertController::class, 'index'])
+    Route::get('/owner/alerts', [CobrosAlertController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.alerts');
-    Route::get('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'index'])
+    Route::get('/owner/collectors', [OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
-    Route::post('/owner/collectors', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'store'])
+    Route::post('/owner/collectors', [OwnerCollectorController::class, 'store'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.store');
-    Route::patch('/owner/collectors/{user}/toggle', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'toggle'])
+    Route::patch('/owner/collectors/{user}/toggle', [OwnerCollectorController::class, 'toggle'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.toggle');
-    Route::put('/owner/collectors/{user}/branches', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'updateBranches'])
+    Route::put('/owner/collectors/{user}/branches', [OwnerCollectorController::class, 'updateBranches'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
-    Route::post('/owner/collectors/{user}/regenerate-access', [App\Http\Controllers\Cobros\OwnerCollectorController::class, 'regenerateAccess'])
+    Route::post('/owner/collectors/{user}/regenerate-access', [OwnerCollectorController::class, 'regenerateAccess'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.regenerate');
-    Route::get('/owner/assignments', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'index'])
+    Route::get('/owner/assignments', [OwnerAssignmentController::class, 'index'])
         ->middleware('permission:cobros.asignar')->name('owner.assignments');
-    Route::post('/owner/assignments', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'store'])
+    Route::post('/owner/assignments', [OwnerAssignmentController::class, 'store'])
         ->middleware('permission:cobros.asignar')->name('owner.assignments.store');
-    Route::delete('/owner/assignments/{customer}', [App\Http\Controllers\Cobros\OwnerAssignmentController::class, 'destroy'])
+    Route::delete('/owner/assignments/{customer}', [OwnerAssignmentController::class, 'destroy'])
         ->middleware('permission:cobros.asignar')->name('owner.assignments.destroy');
-    Route::get('/', [App\Http\Controllers\Cobros\CobrosDashboardController::class, 'index'])
+    Route::get('/', [CobrosDashboardController::class, 'index'])
         ->name('index');
 });
 

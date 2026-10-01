@@ -964,3 +964,54 @@ documentados antes de 5B. `tmp_*` y `output.txt` fuera del commit.
 
 **Siguiente bloque:** 5C (Seguridad endurecida), según
 `docs/CRONOGRAMA_COBROS.md`.
+
+## Fase 5C — Seguridad endurecida (2026-10-01) — COMPLETADA LOCALMENTE (alcance acotado)
+
+Alcance entregado: rate limiting en rutas financieras, revisión
+CSRF/sesión, casos negativos de revocación y endurecimiento de lo
+entregado en 5B. Sin migraciones.
+
+- **Rate limiting (reutiliza `throttle` del stack web):**
+  `cobros.collector.payments.store` → `throttle:30,1`;
+  `cobros.collector.payments.annul` → `throttle:10,1`;
+  `cobros.password.force.store` → `throttle:10,1` (login ya tenía
+  `throttle:10,1`). Las rutas financieras conservan `permission:*` +
+  stack `web` (CSRF/sesión) — verificado por recolección de middleware.
+- **Casos negativos (nuevo `tests/Feature/CobrosSecurityHardeningTest.php`
+  — 6 pruebas, 66 aserciones):** 11.º intento de anulación → 429 sin
+  llegar al controlador y sin reversos; escritura financiera sin token
+  CSRF → 419 con cero pagos y con token → pasa al flujo normal;
+  revocaciones (usuario inactivado, rol desactivado, permiso desprendido,
+  módulo deshabilitado, licencia suspendida) → 403/`license.status` con
+  saldo intacto; sesión con empresa ajena → corrige contexto y cobro
+  contra cuenta ajena → 404 sin escrituras.
+- **Revisión 5B (mismo archivo de pruebas):** `sw-cobros.js` precachea
+  SOLO manifest + iconos públicos (sin HTML autenticado, sin `cache.put`
+  de respuestas dinámicas); borradores con `owner` obligatorio
+  (`usuario:empresa` desde `data-cobros-owner` del layout) y
+  `cobros:clear-drafts` al enviar el logout; scrub de credenciales
+  (`_token`, `password`, `authorization`, `cookie`…) con `client_token`
+  de idempotencia preservado; ni SW ni cliente referencian
+  `payments.store` (cero confirmación offline).
+- **Endurecimiento del SW (corrección sobre 5B):** precache raíz errónea
+  `/cobros/...` sustituida por rutas públicas reales; página honesta
+  "Sin conexión" ante fallo de red en navegación; activación limpia de
+  caches de versiones anteriores.
+
+**Evidencia:** suite focal `Cobros|CustomerCompanyIsolation` →
+**276/276, 2183 aserciones (VERDE)** tras Pint; `CobrosSecurityHardeningTest`
+6/6 (66 aserciones). Dependencias declaradas instaladas desde lockfiles
+(sin actualizar versiones): `composer install` (habilitó Pint) y
+`npm ci` + `npm run build` → **build Vite correcto** (cierra el pendiente
+ declarado de 5B). Pint limpio en archivos cambiados; `git diff --check`
+limpio; `node --check` limpio en `sw-cobros.js`/`cobros-pwa.js`.
+
+**Validaciones pendientes declaradas:** política de dispositivos del
+cobrador y retención/geolocalización (requieren definición de producto;
+sin migración autorizada en 5C), instalación PWA en dispositivo real y
+revisión visual 360/768/1280. Fallo preexistente ajeno:
+`CobrosCollectorManagementTest` (fatal de proceso PHP). `tmp_*` y
+`output.txt` fuera del commit.
+
+**Siguiente bloque:** 6A (Pruebas integrales), según
+`docs/CRONOGRAMA_COBROS.md` — requiere autorización explícita.

@@ -8,17 +8,62 @@
  * - Aviso de "sin conexión" en el shell; nunca confirma cobro offline.
  * - No guarda pagos ni anulaciones locales: solo borradores idempotente
  *   que confirmará el backend bajo 3A/3B.
+ * - 5C: borradores aislados por owner (usuario:empresa), credenciales
+ *   jamás persistidas (solo client_token de idempotencia) y borradores
+ *   eliminados al cerrar sesión.
  */
 
 (function () {
     'use strict';
+
+    // Owner aislado: usuario:empresa de la sesión activa (layout data-*).
+    const body = document.body;
+    const ownerKey = body && body.dataset.cobrosOwner
+        ? body.dataset.cobrosOwner
+        : null;
 
     window.cobrosPwa = {
         online: false,
         installing: false,
         deferredPrompt: null,
         serviceWorker: null,
+        owner: ownerKey,
     };
+
+    // ------------------------------------------- Borradores aislados 5C
+    const CREDENTIAL_KEYS = ['_token', 'password', 'password_confirmation', 'remember', 'authorization', 'cookie', 'csrf', 'session'];
+
+    function scrub(draft) {
+        const clean = {};
+        for (const key of Object.keys(draft)) {
+            if (CREDENTIAL_KEYS.indexOf(key) !== -1) continue;
+            clean[key] = draft[key];
+        }
+        if (!ownerKey) return null;
+        clean.owner = ownerKey;
+        return clean;
+    }
+
+    /** Captura un borrador local aislado por owner. Nunca envía dinero. */
+    window.cobrosPwa.captureDraft = function (draft) {
+        const clean = scrub(draft || {});
+        if (!clean || !navigator.serviceWorker || !navigator.serviceWorker.controller) return false;
+        clean.id = clean.id || String(Date.now());
+        navigator.serviceWorker.controller.postMessage({ type: 'cobros:capture-draft', draft: clean });
+        return true;
+    };
+
+    /** Elimina los borradores del owner actual (logout). */
+    function clearDrafts() {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'cobros:clear-drafts', owner: ownerKey });
+        }
+    }
+
+    // Logout: limpia borradores locales antes de salir (ambos formularios del shell).
+    document.querySelectorAll('form[action*="cobros/logout"]').forEach((form) => {
+        form.addEventListener('submit', clearDrafts, { once: true });
+    });
 
     // --------------------------------------------------------- Estado
     function updateOnline() {
@@ -130,6 +175,15 @@
         if (!el) return;
         el.textContent = label;
         el.className = cls || 'mxs:text-xs';
+    }
+
+    // El SW avisa cuando hay borradores listos para revisar en línea.
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'cobros:sync-ready') {
+                window.dispatchEvent(new CustomEvent('cobros:sync-ready'));
+            }
+        });
     }
 
     // --------------------------------------------------------- Fine-grained

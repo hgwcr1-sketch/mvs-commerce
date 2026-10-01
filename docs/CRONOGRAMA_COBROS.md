@@ -331,6 +331,17 @@ instalación en dispositivo real. 5C queda como siguiente bloque.
 - Dependencia: 3B (obligatoria) + 1B.
 
 ### 5C — Seguridad endurecida
+**Estado: COMPLETADA LOCALMENTE (2026-10-01) con alcance acotado.**
+Rate limiting en rutas financieras CobrOS (`payments.store` 30/min,
+`payments.annul` 10/min, `password.force.store` 10/min), revisión de
+CSRF/sesiones (419 verificado en escritura financiera) y casos negativos
+de revocación (usuario/rol/permiso/módulo/licencia) en
+`CobrosSecurityHardeningTest`. Revisión 5B: caché del SW limitada a
+assets públicos, borradores aislados por owner y borrados al logout,
+credenciales jamás persistidas (client_token conservado). Evidencia:
+suite `Cobros|CustomerCompanyIsolation` **276/276**. Pendientes
+declarados: política de dispositivos del cobrador y retención geográfica
+(definición de producto, sin migración autorizada). 6A pendiente.
 - Objetivo: consolidar seguridad antes de producción.
 - Funcionalidades: revisión multitenancy integral; rate limiting en rutas
   financieras; CSRF/sesiones revisadas; política de dispositivos del

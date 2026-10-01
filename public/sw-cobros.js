@@ -1,30 +1,50 @@
 /* CobrOS-only service worker (scope: /cobros).
- * Fase 5B: cierra 1B con instalación real y conectividad tolerante a red.
+ * Fase 5B + endurecimiento 5C.
  *
- * - Solo captura BORRADOS locales idempotentes, nunca pago/cobro ni
- *   escritura financiera. El cobro solo se aplica en línea vía 3A/3B.
- * - Estado de conexión expuesto como self.cobrosOnline.
- * - No intercepta rutas de Commerce (scope /cobros).
+ * - Caché SOLO de assets estáticos públicos (manifest/iconos). Nunca se
+ *   almacena HTML dinámico ni respuestas autenticadas: sin datos sensibles
+ *   en Cache Storage.
+ * - Borradores locales aislados por `owner` (usuario:empresa) y eliminados
+ *   al cerrar sesión (mensaje cobros:clear-drafts).
+ * - Scrub de credenciales en borradores: se eliminan _token/CSRF/password/
+ *   cookies, pero se PRESERVAN los tokens de idempotencia (client_token).
+ * - El cobro financiero SOLO se aplica en línea vía 3A/3B; este worker
+ *   jamás confirma un pago.
  */
 
 'use strict';
 
-// Corre dentro del scope /cobros; cualquier petición fuera es ignorada.
-const COBrosScope = '/cobros';
+const COBROS_SCOPE = '/cobros';
 
-const VERSION = 'cobros-pwa-v1';
+const VERSION = 'cobros-pwa-v2';
 
 const DB_NAME = 'cobros-offline-v1';
 const STORE_DRAFTS = 'drafts';
-const STORE_WATCH = 'watch';
 
-function isScopeMatch(scriptURL) {
-    return scriptURL.startsWith(COBrosScope);
+// Claves que jamás deben persistirse en un borrador.
+const CREDENTIAL_KEYS = ['_token', 'password', 'password_confirmation', 'remember', 'authorization', 'cookie', 'csrf', 'session'];
+
+function isScopePath(pathname) {
+    return pathname === COBROS_SCOPE || pathname.startsWith(COBROS_SCOPE + '/');
 }
 
-function truncate(str, max = 64) {
-    if (str.length <= max) return str;
-    return str.slice(0, max - 1) + '\u2026';
+/** Elimina credenciales; conserva client_token (idempotencia) y payload_hash. */
+function scrubDraft(draft) {
+    const clean = {};
+    for (const [key, value] of Object.entries(draft)) {
+        if (CREDENTIAL_KEYS.includes(key)) {
+            continue;
+        }
+        if (key === 'owner' && typeof value === 'string') {
+            clean.owner = value;
+            continue;
+        }
+        clean[key] = value;
+    }
+    if (!clean.owner) {
+        return null; // Borrador sin dueño: no se persiste (aislamiento).
+    }
+    return clean;
 }
 
 // --------------------------------------------------------- Database
@@ -36,9 +56,6 @@ function openDb() {
             if (!db.objectStoreNames.contains(STORE_DRAFTS)) {
                 db.createObjectStore(STORE_DRAFTS, { keyPath: 'id' });
             }
-            if (!db.objectStoreNames.contains(STORE_WATCH)) {
-                db.createObjectStore(STORE_WATCH, { keyPath: 'url' });
-            }
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
@@ -46,48 +63,49 @@ function openDb() {
 }
 
 async function putDraft(draft) {
+    const clean = scrubDraft(draft);
+    if (!clean) return false;
     const db = await openDb();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_DRAFTS, 'readwrite');
-        tx.objectStore(STORE_DRAFTS).put(draft);
+        tx.objectStore(STORE_DRAFTS).put(clean);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function clearDrafts(owner) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_DRAFTS, 'readwrite');
+        const store = tx.objectStore(STORE_DRAFTS);
+        if (owner) {
+            // Aislamiento: solo borradores de ese usuario:empresa.
+            const req = store.openCursor();
+            req.onsuccess = () => {
+                const cursor = req.result;
+                if (!cursor) return;
+                if (cursor.value.owner === owner) cursor.delete();
+                cursor.continue();
+            };
+        } else {
+            store.clear();
+        }
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
 }
 
-async function getDrafts() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_DRAFTS, 'readonly');
-        const req = tx.objectStore(STORE_DRAFTS).getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-async function clearDrafts() {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_DRAFTS, 'readwrite');
-        tx.objectStore(STORE_DRAFTS).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-    });
-}
-
-// --------------------------------------------------------- Activation
+// --------------------------------------------------------- Lifecycle
 self.oninstall = async (event) => {
     event.waitUntil(
         (async () => {
-            const db = await openDb();
-            // Foreground cache de recursos estáticos del shell (contenido falso,
-            // reemplaza el dinámico); el shell mismo lo maneja fetch para hits.
+            // Solo assets públicos estáticos: jamás HTML autenticado.
             const staticCache = await caches.open(VERSION + '-static');
             await staticCache.addAll([
-                COBrosScope + '/',
-                COBrosScope + '/manifest-cobros.json',
-                COBrosScope + '/icons/cobros/icon-192x192.png',
-                COBrosScope + '/icons/cobros/icon-512x512.png',
+                '/manifest-cobros.json',
+                '/icons/cobros/icon-192x192.png',
+                '/icons/cobros/icon-512x512.png',
             ]);
             await self.skipWaiting();
             await self.clients.claim();
@@ -98,9 +116,9 @@ self.oninstall = async (event) => {
 self.onactivate = (event) => {
     event.waitUntil(
         (async () => {
-            const keys = await self.indexedDB.databases();
-            const toDelete = keys.filter((k) => k.name !== DB_NAME && k.version < VERSION);
-            await Promise.all(toDelete.map((k) => self.indexedDB.deleteDatabase(k.name)));
+            const keys = await caches.keys();
+            await Promise.all(keys.filter((k) => k !== VERSION + '-static').map((k) => caches.delete(k)));
+            await self.clients.claim();
         })()
     );
 };
@@ -109,125 +127,67 @@ self.onfetch = (event) => {
     const req = event.request;
     if (req.method !== 'GET') return;
 
-    // Solo dentro de /cobros.
-    if (!isScopeMatch(new URL(req.url).pathname)) {
-        return;
-    }
+    const url = new URL(req.url);
+    // Scope estricto: nunca intercepta rutas de Commerce.
+    if (!isScopePath(url.pathname)) return;
 
-    // Lectura: caché primero para recursos estáticos del shell; sino redirige
-    // al servidor local (dev) o al manejador offline.
     event.respondWith(
         (async () => {
+            // Cache-first SOLO para assets estáticos precacheados (públicos).
             const cached = await caches.match(req);
             if (cached) return cached;
 
-            const url = new URL(req.url);
-            // Ventana de edición: recibe el estado online del worker.
-            if (url.pathname.startsWith(COBrosScope + '/online-status')) {
-                return new Response(
-                    JSON.stringify({ online: self.cobrosOnline ?? navigator.onLine, t: Date.now() }),
-                    { headers: { 'Content-Type': 'application/json' } }
-                );
+            // Nunca se hace cache de respuestas dinámicas/autenticadas.
+            try {
+                return await fetch(req);
+            } catch (err) {
+                // Sin red: respuesta honesta, sin fingir éxito operativo.
+                if (req.mode === 'navigate' || req.headers.get('accept')?.includes('text/html')) {
+                    return new Response(
+                        '<!DOCTYPE html><html lang="es"><meta charset="utf-8">' +
+                        '<title>Sin conexión — MVS CobrOS</title>' +
+                        '<body style="font-family:system-ui;padding:24px">' +
+                        '<h1>Sin conexión</h1>' +
+                        '<p>No hay red. Los cobros solo se confirman en línea; ' +
+                        'intente de nuevo cuando vuelva la señal.</p>' +
+                        '<p><a href="' + COBROS_SCOPE + '">Reintentar</a></p></body></html>',
+                        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+                    );
+                }
+                return new Response(JSON.stringify({ offline: true }), {
+                    status: 503,
+                    headers: { 'Content-Type': 'application/json' },
+                });
             }
-
-            // Solo los recursos estáticos del shell se pusieron en cache.
-            if (
-                url.pathname.startsWith(COBrosScope + '/icons/') ||
-                url.pathname.endsWith('.js') ||
-                url.pathname.endsWith('.css') ||
-                url.pathname.endsWith('.json') ||
-                url.pathname === '/' ||
-                url.pathname.endsWith('/manifest-cobros.json')
-            ) {
-                return new Response('{"offline":"capture"}', { headers: { 'Content-Type': 'application/json' } });
-            }
-
-            return breadcrumbRequest(req);
         })()
     );
 };
 
-// --------------------------------------------------------- Offline / sync
-self.cobrosOnline = navigator.onLine;
+// --------------------------------------------------------- Drafts / sync
+self.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
 
-self.addEventListener('online', () => {
-    self.cobrosOnline = true;
-});
+    if (data.type === 'cobros:capture-draft' && data.draft) {
+        event.waitUntil(
+            putDraft({ id: data.draft.id || String(Date.now()), ...data.draft })
+        );
+    }
 
-self.addEventListener('offline', () => {
-    self.cobrosOnline = false;
+    if (data.type === 'cobros:clear-drafts') {
+        // Logout: elimina los borradores del dueño indicado (o todos).
+        event.waitUntil(clearDrafts(data.owner || null));
+    }
 });
 
 self.addEventListener('sync', (event) => {
     if (event.tag === 'cobros-sync') {
-        event.retryCount++;
+        // Reintento de sincronización: solo notifica a las ventanas vivas;
+        // la persistencia real la decide el servidor bajo 3A/3B.
         event.waitUntil(
-            (async () => {
-                const drafts = await getDrafts();
-                // Solo réplica borradores idempotentes, NO pagos ni anulaciones.
-                // El servicio backend confirmará todo lo escrito bajo 3A/3B.
-                const remote = await replayDrafts(drafts);
-                // Remota: nada. El servidor decide el resultado y el cliente
-                // lo vuelve a leer al volver online.
-            })()
+            self.clients.matchAll({ type: 'window' }).then((clients) => {
+                clients.forEach((client) => client.postMessage({ type: 'cobros:sync-ready' }));
+            })
         );
     }
 });
-
-self.addEventListener('message', (event) => {
-    if (event.data?.type === 'cobros:capture-draft') {
-        event.waitUntil(captureDraft(event.data.draft));
-    }
-});
-
-// --- Captura de borrados (idempotente, solo lectura/ingreso local) ---
-async function captureDraft(draft) {
-    const id = draft.id || (draft.indexedId || String(Date.now()));
-    draft.id = id;
-    draft.capturedAt = Date.now();
-    draft.status = 'pending';
-    await putDraft(draft);
-
-    // Despierta al sync periodicamente cuando vuelva online.
-    self.registration?.sync?.register('cobros-sync')?.catch(() => {});
-}
-
-async function replayDrafts(drafts) {
-    const remote = [];
-    for (const d of drafts) {
-        if (d.status === 'completed' || d.status === 'rejected') continue;
-        // Aplica al backend solo si el borrador es de captura de operación
-        // que el front decidió remarcar para sincronización. Aquí se deja
-        // la decisión al endpoint (3A/3B): no se reescribe dinero sin
-        // confirmación del servidor.
-        remote.push({ id: d.id, payloadHash: d.payloadHash || null });
-    }
-    return remote;
-}
-
-// --- Breadcrumb auxiliar (fallback para recursos desconocidos) ---
-function breadcrumbRequest(req) {
-    return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-            resolve(
-                new Response(
-                    JSON.stringify({ offline: true, path: req.url, ts: Date.now() }),
-                    { headers: { 'Content-Type': 'application/json' } }
-                )
-            );
-        }, 6000);
-        // Fallback a fetch normal (servidor). Mantenido para no romper PRG.
-        fetch(req).then((res) => {
-            clearTimeout(timer);
-            if (res.ok) return res;
-            resolve(breadcrumbFallback(req));
-        }).catch(() => resolve(breadcrumbFallback(req)));
-    });
-}
-
-function breadcrumbFallback(req) {
-    return new Response(
-        JSON.stringify({ offline: true, path: req.url, ts: Date.now() }),
-        { headers: { 'Content-Type': 'application/json' } }
-    );
-}

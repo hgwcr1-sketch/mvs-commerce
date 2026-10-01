@@ -63,6 +63,31 @@ real y revisión visual 360/768/1280. Fallos preexistentes ajenos:
 `ResponsiveNavigationTest`. 5C pendiente y sin iniciar. Temporales
 `tmp_*` y `output.txt` preservados fuera del commit.
 
+## Worktree CobrOS — Fase 5C COMPLETADA LOCALMENTE (2026-10-01)
+
+Base `feature/cobros-v1`, `4f4eb03`. Seguridad endurecida con alcance
+acotado: rate limiting en rutas financieras (`payments.store` 30/min,
+`payments.annul` 10/min, `password.force.store` 10/min), CSRF verificado
+en escritura financiera (419 sin token, cero pagos) y casos negativos de
+revocación (usuario/rol/permiso/módulo/licencia → 403 o `license.status`
+sin escrituras) en nuevo `CobrosSecurityHardeningTest` (6/6, 66
+aserciones). Revisión 5B endurecida: SW precachea solo assets públicos
+(cero HTML autenticado/caché de respuestas), borradores aislados por
+owner `usuario:empresa` y borrados al logout, credenciales nunca
+persistidas con `client_token` de idempotencia conservado y ninguna
+referencia offline a `payments.store`.
+
+Validación: suite focal `Cobros|CustomerCompanyIsolation` **276/276,
+2183 aserciones** tras Pint; dependencias declaradas instaladas desde
+lockfiles sin actualizar versiones (`composer install` habilitó Pint;
+`npm ci` + `npm run build` → build Vite correcto, cierra el pendiente
+de build de 5B); Pint, `node --check` y `git diff --check` limpios.
+**Pendientes 5C declarados:** política de dispositivos del cobrador y
+retención geográfica (definición de producto, sin migración autorizada),
+instalación PWA en dispositivo y revisión visual 360/768/1280.
+6A pendiente y sin iniciar. Temporales `tmp_*` y `output.txt`
+preservados fuera del commit.
+
 ## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
 
 Base `feature/cobros-v1`, `f556650`. Panel operativo del supervisor en solo

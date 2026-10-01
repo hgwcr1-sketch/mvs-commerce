@@ -12,7 +12,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=3">
 </head>
-<body class="cobros-app">
+<body class="cobros-app" data-cobros-owner="{{ auth()->id() }}:{{ $company->id }}">
     <a class="cobros-skip" href="#cobros-main">Ir al contenido</a>
     <div class="cobros-workspace">
         <header class="cobros-header">
