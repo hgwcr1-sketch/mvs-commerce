@@ -14,6 +14,8 @@
         "cantons",
         "districts",
         "cabys",
+        "fiscal_catalog_versions",
+        "cabys_catalog_entries",
         "permissions",
         "license_plans",
         "price_lists"
