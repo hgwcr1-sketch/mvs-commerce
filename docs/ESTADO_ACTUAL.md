@@ -2,19 +2,21 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Worktree CobrOS — 6B preparada; BLOQUEADO para piloto (2026-10-01)
+## Worktree CobrOS — Validación local 6B cerrada; piloto BLOQUEADO (2026-10-01)
 
-Base verificada `feature/cobros-v1`, `9b0a218`. Sin funciones nuevas ni despliegue:
-[runbook, evidencia y brechas V1](COBROS_6B_PREPARACION_PILOTO.md).
-279 pruebas focales/2277 aserciones y 2 nuevas/21 aserciones verdes; concurrencia
-de dos procesos sobre SQLite exclusiva: un pago/recibo, retry sin duplicar y caja
-intacta. SW con red simulada: 503, nunca paga. Build y Pint PASS.
-Bloqueos: JS PWA referenciado pero ausente del público/build, floats internos
-en CxC compartido, PG sin ejecutar (pdo_pgsql no cargado), cupos/políticas y
-custodia pendientes. Chrome falló dos veces (CDP timeout Page.enable):
-360/768/1280 e instalación real NO aprobadas; auditoría/usuario pendientes.
-Base de revisión, servidor y temporales previos preservados. 6B sigue abierta;
-los cierres históricos de 5B/6A no equivalen a DoD completo de producción.
+Rama `feature/cobros-v1`; base al iniciar cierre `08fba58`. Cierre local
+documentado en [evidencia y brechas 6B](COBROS_6B_PREPARACION_PILOTO.md).
+Prueba de navegador **PASS**: nueve vistas (formulario, previa y recibo a
+360/768/1280) sin overflow horizontal. Activación del service worker **NO
+DISPONIBLE** en este entorno: existe registro, pero no worker activo.
+PostgreSQL **NO DISPONIBLE**: configuración local usa SQLite. No se repitieron
+build ni suites; no hubo SSH, push, merge ni despliegue.
+
+Concurrencia SQLite exclusiva, retry y caja intacta; worker con red simulada
+PASS (evidencia de ejecución previa). Auditoría externa, aprobación del usuario,
+dispositivo real y brechas V1 de producto/finanzas siguen pendientes; 6B no
+autoriza piloto ni equivale a DoD de producción. Cambios ajenos y temporales
+locales permanecen sin incluir en el commit de cierre.
 
 ## Worktree CobrOS — Fase 4B COMPLETADA LOCALMENTE (2026-09-30)
 

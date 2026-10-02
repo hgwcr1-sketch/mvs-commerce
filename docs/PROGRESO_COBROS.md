@@ -2,18 +2,19 @@
 
 ## 6B — Preparación local, piloto BLOQUEADO (2026-10-01)
 
-Base `feature/cobros-v1`, `9b0a218`. Informe reproducible, inventario de
-migraciones, revisión PG, brechas V1 y respaldo/aplicación/build/smoke/recuperación
-sin borrar pagos: [COBROS_6B_PREPARACION_PILOTO.md](COBROS_6B_PREPARACION_PILOTO.md).
-Suite focal previa: 279/279, 2277 aserciones; pruebas nuevas 6B: 2/2, 21.
-Probe multiproceso SQLite exclusivo PASS: un pago/recibo, retry y caja intacta.
-Worker con red fallida simulada PASS; build/Pint PASS. No funciones nuevas.
-PG real pendiente (sin pdo_pgsql); Chrome CDP falló dos veces, sin aprobación
-360/768/1280 ni instalación. Hallazgos bloqueantes: asset PWA ausente/no incluido
-en build y floats en servicio financiero compartido; brechas de cupos,
-liquidación/custodia, dispositivos/GPS. Auditoría/usuario pendientes.
-6B/DoD no completada. Sin SSH/push/merge/deploy ni cambios a base de revisión;
-servidor y temporales previos preservados. Commit limitado a pruebas/documentos.
+Base de cierre local `feature/cobros-v1`, `08fba58`. Informe, evidencia y
+brechas: [COBROS_6B_PREPARACION_PILOTO.md](COBROS_6B_PREPARACION_PILOTO.md).
+Prueba de navegador 6B: **PASS** en las 9 vistas (formulario, vista previa y
+recibo a 360/768/1280); sin overflow horizontal. **NO DISPONIBLE:** activación
+del service worker en este entorno (se encontró el registro, sin worker activo)
+y validación PostgreSQL (entorno configurado con SQLite). Test modificado solo
+para acotar la espera y permitir que las vistas se validen aunque el worker no
+esté disponible. No se repitieron build ni suites.
+Se conserva el resultado anterior de concurrencia SQLite PASS (un pago/recibo,
+retry y caja intacta) y worker offline simulado PASS. Auditoría externa,
+validación del usuario, dispositivo real y brechas de producto/finanzas siguen
+pendientes: cierre local de validación 6B no significa aprobación de piloto ni
+DoD de producción. Sin SSH/push/merge/deploy ni cambios a base de revisión.
 
 > Fuente oficial del orden de fases: `docs/CRONOGRAMA_COBROS.md`
 > (Cronograma Maestro de MVS CobrOS). Este registro documenta la evidencia

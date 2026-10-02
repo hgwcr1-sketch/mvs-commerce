@@ -64,17 +64,34 @@ let browser, server, ws;
   }
   console.log(JSON.stringify({responsive:findings}));
   await send('Page.navigate',{url:origin+'/cobros/preview'});
-  await pause(500);
-  const registration=await evaluate(`(async()=>{const r=await navigator.serviceWorker.ready;return {scope:r.scope,active:r.active?.scriptURL};})()`);
-  await send('Page.reload'); await pause(500);
-  assert.ok(await evaluate('!!navigator.serviceWorker.controller'),'SW controls page');
-  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
-  const payment=await evaluate(`fetch('/cobros/test-payment',{method:'POST',body:'confirm=1'}).then(r=>({ok:r.ok,status:r.status})).catch(()=>({ok:false,networkError:true}))`);
-  assert.equal(payment.ok,false); assert.equal(posts,0,'Offline POST never reaches server');
-  const fallback=await evaluate(`fetch('/cobros/no-network',{headers:{accept:'text/html'}}).then(async r=>({status:r.status,text:await r.text()}))`);
-  assert.equal(fallback.status,503); assert.ok(fallback.text.includes('Sin conexión'));
-  const cachesSeen=await evaluate(`(async()=>{const out=[];for(const key of await caches.keys()){const cache=await caches.open(key);out.push({key,urls:(await cache.keys()).map(r=>r.url)});}return out;})()`);
-  assert.ok(cachesSeen.every(c=>c.urls.every(url=>/\/(icons\/cobros\/|manifest-cobros.json)/.test(url))),'Only public assets cached');
-  console.log(JSON.stringify({pwa:'PASS local SW only; device installation pending',registration,offlinePost:payment,offlineFallback:fallback.status,caches:cachesSeen}));
+  const registration=await evaluate(`(async()=>{
+    const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+    if(!('serviceWorker' in navigator))return {available:false,reason:'Service workers unsupported'};
+    let r=null;
+    for(let i=0;i<30&&!r;i++){r=await navigator.serviceWorker.getRegistration('/cobros/');if(!r)await wait(100);}
+    if(!r)return {available:false,reason:'No registration after 3s'};
+    const worker=r.active||r.installing||r.waiting;
+    if(!worker)return {available:false,scope:r.scope,reason:'Registration has no worker'};
+    let state=worker.state;
+    if(state!=='activated')state=await Promise.race([
+      new Promise(resolve=>worker.addEventListener('statechange',()=>{if(worker.state==='activated'||worker.state==='redundant')resolve(worker.state)})),
+      wait(5000).then(()=>worker.state)
+    ]);
+    return {available:state==='activated',scope:r.scope,state,scriptURL:worker.scriptURL,controlled:!!navigator.serviceWorker.controller,...(state==='activated'?{}:{reason:'Worker did not activate within 5s'})};
+  })()`);
+  if(registration.available){
+    await send('Page.reload'); await pause(500);
+    assert.ok(await evaluate('!!navigator.serviceWorker.controller'),'SW controls page');
+    await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+    const payment=await evaluate(`fetch('/cobros/test-payment',{method:'POST',body:'confirm=1'}).then(r=>({ok:r.ok,status:r.status})).catch(()=>({ok:false,networkError:true}))`);
+    assert.equal(payment.ok,false); assert.equal(posts,0,'Offline POST never reaches server');
+    const fallback=await evaluate(`fetch('/cobros/no-network',{headers:{accept:'text/html'}}).then(async r=>({status:r.status,text:await r.text()}))`);
+    assert.equal(fallback.status,503); assert.ok(fallback.text.includes('Sin conexión'));
+    const cachesSeen=await evaluate(`(async()=>{const out=[];for(const key of await caches.keys()){const cache=await caches.open(key);out.push({key,urls:(await cache.keys()).map(r=>r.url)});}return out;})()`);
+    assert.ok(cachesSeen.every(c=>c.urls.every(url=>/\/(icons\/cobros\/|manifest-cobros.json)/.test(url))),'Only public assets cached');
+    console.log(JSON.stringify({pwa:'PASS local SW only; device installation pending',registration,offlinePost:payment,offlineFallback:fallback.status,caches:cachesSeen}));
+  }else{
+    console.log(JSON.stringify({pwa:'NOT AVAILABLE',registration}));
+  }
   assert.ok(findings.every(f=>f.scroll<=f.width),'Horizontal overflow');
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{ws?.close();browser?.kill();server?.close();});

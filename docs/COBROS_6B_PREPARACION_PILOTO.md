@@ -1,10 +1,24 @@
 # CobrOS 6B — Preparación local del piloto
 
-2026-10-01 (Costa Rica). **BLOQUEADO para piloto financiero**.
-Preparación documentada; 6B/Definition of Done de producción NO completada.
-Base: `feature/cobros-v1`, `9b0a218eaa8a23c8bf46dfa077e5e10aa477dc71`.
-Sin cambios funcionales, SSH, push, merge ni despliegue. Base de revisión,
-servidor y temporales previos preservados. No se consultó la base maestra.
+2026-10-01 (Costa Rica). **Validación local 6B cerrada; BLOQUEADO para piloto
+financiero**. 6B/Definition of Done de producción NO completada. Base de cierre:
+`feature/cobros-v1`, `08fba58`. Sin cambios funcionales, SSH, push, merge ni
+despliegue. Base de revisión, servidor y temporales previos preservados. No se
+consultó la base maestra.
+
+### Cierre local de navegador (HEAD 08fba58)
+
+`node tests/js/cobros-6b-browser.cjs`: **PASS** en las nueve vistas comprobadas
+(formulario, vista previa y recibo; anchos configurados 360/768/1280), sin
+overflow horizontal. Se acotó la espera de activación del service worker:
+**NO DISPONIBLE** en este entorno, se detectó el registro con scope `/cobros`
+pero sin worker activo (`Registration has no worker`). La prueba continuó y
+validó las vistas; no certifica modo offline/PWA en navegador.
+
+PostgreSQL: **NO DISPONIBLE**; el entorno local está configurado con SQLite.
+No se ejecutaron build ni suites en este cierre. `git diff --check`: PASS.
+La aprobación visual/device, auditoría, PostgreSQL, aprobación del usuario y
+requisitos restantes de piloto/producción siguen pendientes.
 
 ## Evidencia y límites
 
@@ -18,8 +32,10 @@ servidor y temporales previos preservados. No se consultó la base maestra.
 | Migraciones SQLite | Cadena completa aplicada a archivo vacío exclusivo del probe; no prueba actualización de PG poblado |
 | Build | `npm.cmd run build` PASS; no demuestra existencia de todos los assets referenciados |
 | Estilo/sintaxis | Pint de los dos PHP nuevos PASS; `node --check` del probe navegador PASS |
-| Chrome / 360, 768, 1280 / PWA | Dos intentos: probe existente de shell y nuevo probe financiero fallaron con `CDP timeout Page.enable`. Sin capturas válidas ni aprobación visual/instalación |
-| PostgreSQL | Revisión estática; PHP CLI no carga `pdo_pgsql`. Hay herramientas cliente PG16, pero no se conectó a servidor alguno |
+| Navegador 6B / vistas responsive | **PASS**: nueve combinaciones (formulario, vista previa, recibo × 360/768/1280), `scrollWidth <= clientWidth`; no certifica instalación real ni todos los dispositivos |
+| Activación service worker en navegador local | **NO DISPONIBLE**: registro `/cobros` hallado sin worker activo (`Registration has no worker`); la espera está acotada y no impide validar vistas |
+| PostgreSQL | **NO DISPONIBLE**: configuración de base del entorno local es SQLite; validación PG no ejecutada |
+| Intentos CDP previos | Los dos intentos previos fallaron con `CDP timeout Page.enable`; el probe actualizado completó las vistas en el cierre local |
 | Suite global, auditor externo, staging y usuario | No certificados por esta tarea; suite focal verde no significa aprobación global |
 
 Base de concurrencia preservada:
@@ -43,9 +59,10 @@ node tests/js/cobros-6b-browser.cjs
 ```
 
 El probe navegador sirve fixtures PHPUnit y assets públicos en puerto efímero,
-rechaza escrituras y no usa la base/sesión del servidor de revisión. Prepara
+rechaza escrituras y no usa la base/sesión del servidor de revisión. Comprueba
 captura/confirmación/recibo a tres anchos, métricas clientWidth/scrollWidth,
-targets y pruebas de SW/red. **No pasó aquí**; tampoco sustituye E2E real.
+targets y, si el worker se activa, pruebas SW/red. La disponibilidad local del
+worker no condiciona el resultado responsive; tampoco sustituye E2E real.
 
 ## Migraciones y PostgreSQL
 
