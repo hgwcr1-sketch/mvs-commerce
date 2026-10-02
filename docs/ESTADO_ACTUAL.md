@@ -85,8 +85,33 @@ de build de 5B); Pint, `node --check` y `git diff --check` limpios.
 **Pendientes 5C declarados:** política de dispositivos del cobrador y
 retención geográfica (definición de producto, sin migración autorizada),
 instalación PWA en dispositivo y revisión visual 360/768/1280.
-6A pendiente y sin iniciar. Temporales `tmp_*` y `output.txt`
-preservados fuera del commit.
+Temporales `tmp_*` y `output.txt` preservados fuera del commit.
+
+## Worktree CobrOS — Fase 6A COMPLETADA LOCALMENTE (2026-10-01)
+
+Base `feature/cobros-v1`, `0b28ac3`. Cierre técnico sin ampliar
+funcionalidad: nueva prueba integral `CobrosEndToEnd6ATest` (3/3, 94
+aserciones) que recorre login por rol → asignación → cartera → visita →
+pago parcial/total → recibo → anulación → reportes y alertas, con
+idempotencia por `client_token`, aislamiento por empresa/sucursal/rol/
+cartera, permisos por rol, revocaciones con cero escrituras y caja
+intacta (`cash_sessions`/`cash_movements` en cero, custodia pendiente).
+
+Validación: `Cobros|CustomerCompanyIsolation` **279/279, 2277
+aserciones**; `CobrosGeoTest|CobrosManifestTest|CobrosAuthenticationTest`
+28/28; migraciones 3B/3C aplicadas sobre **copia** de la base local
+(6 pendientes → 0, datos intactos, sin `migrate` sobre la base de
+revisión); `npm run build` OK; Pint PASS; `node --check` y
+`git diff --check` limpios. La suite global necesita
+`-d memory_limit=1G` en este entorno.
+
+**Pendientes 6A declarados** (para 6B): auditoría externa/revisión por
+auditor, concurrencia real y doble clic sobre la misma cuenta, pérdida
+de conexión real en dispositivo, instalación PWA en teléfono y revisión
+visual 360/768/1280; más los pendientes heredados de 5B/5C. Servidor
+local de revisión activo en `http://127.0.0.1:8000/cobros/login`.
+6B no iniciado. Temporales `tmp_*` y `output.txt` preservados fuera del
+commit.
 
 ## Worktree CobrOS — Fase 4A COMPLETADA LOCALMENTE (2026-09-30)
 

@@ -1015,3 +1015,52 @@ revisión visual 360/768/1280. Fallo preexistente ajeno:
 
 **Siguiente bloque:** 6A (Pruebas integrales), según
 `docs/CRONOGRAMA_COBROS.md` — requiere autorización explícita.
+
+## Fase 6A — Pruebas integrales / cierre técnico (2026-10-01) — COMPLETADA LOCALMENTE
+
+Alcance: certificar CobrOS de punta a punta antes de 6B, sin ampliar
+funcionalidad y sin tocar producción.
+
+- **Prueba integral nueva** `tests/Feature/CobrosEndToEnd6ATest.php`
+  (3 pruebas, 94 aserciones) que recorre el flujo real por HTTP:
+  login CobrOS de dueño/supervisor/cobrador → asignación de cartera →
+  agenda y visita del día → pago parcial (RCB-00000001) → pago total
+  (RCB-00000002) → recibo → anulación (RVC-00000001) → reportes del
+  dueño y panel del supervisor → alertas.
+- **Idempotencia**: el mismo `client_token` con el mismo payload devuelve
+  el mismo pago y el mismo recibo (1 pago / 1 recibo tras el reintento);
+  la anulación repetida no duplica el reverso.
+- **Aislamiento**: empresa ajena 404 sobre el recibo; cartera ajena 404
+  en ficha y al cobrar (cero escrituras); sucursal inexistente 404 en
+  el panel del supervisor; dueño de otra empresa no alcanza pagos ajenos.
+- **Roles**: dueño ve panel/reportes/auditoría/alertas; supervisor ve
+  panel y alertas; cobrador recibe 403 en funciones de dueño y supervisor.
+- **Caja intacta**: `cash_sessions` y `cash_movements` en cero; cada pago
+  con `cash_session_id` null, `affects_cash_snapshot` false y
+  `cash_effect_amount` 0.0000 (custodia pendiente, sin ingreso a caja).
+- **Sin confirmación no hay dinero**: el envío sin `confirm=1` devuelve la
+  vista de confirmación en servidor y cero pagos/recibos.
+- **Revocaciones**: rol sin `cobros.cobrar` 403 y usuario desactivado 403
+  con cero escrituras; al reactivarlo el flujo normal vuelve a funcionar.
+- **Migraciones**: las 6 pendientes (3B/3C) aplicadas sobre una **copia**
+  de la base local (`tmp_6a_migrate_check.sqlite`), resultado 0
+  pendientes y datos preexistentes intactos (7 usuarios, 4 clientes,
+  2 empresas, permiso `cobros.anular` creado). No se ejecutó
+  `migrate` sobre la base de revisión ni sobre la maestra.
+- **Suite**: `Cobros|CustomerCompanyIsolation` **279/279, 2277
+  aserciones (VERDE)**; `CobrosGeoTest|CobrosManifestTest|CobrosAuthenticationTest`
+  28/28 (272 aserciones) para GPS, manifest y PWA; sin regresiones en la
+  suite global de CobrOS.
+- **Build**: `npm ci`/`npm run build` correctos (5.88 s); `node --check`
+  en `cobros-pwa.js` y `sw-cobros.js`; Pint PASS en el archivo nuevo;
+  `git diff --check` limpio.
+- **No comprobado (declarado)**: doble clic y concurrencia real de varios
+  usuarios en paralelo sobre la misma cuenta; pérdida de conexión real en
+  dispositivo; instalación PWA en teléfono; revisión visual 360/768/1280
+  en navegador real; auditoría externa de 6A.
+- **Fallos preexistentes ajenos** (fuera de CobrOS, no tocados):
+  `InventoryImportHardeningTest` (`InventoryPostingService::postImportMovement`
+  inexistente), `PosAccessAndSearchTest`, bloque de fidelización/ventas y
+  logo de `ResponsiveNavigationTest`; la suite global agota el límite de
+  memoria de 128 MB de PHP y requiere `-d memory_limit=1G`.
+- Temporales `output.txt` y `tmp_*` preservados fuera del commit.

@@ -359,6 +359,13 @@ declarados: política de dispositivos del cobrador y retención geográfica
 - Migración: NO.
 - Aceptación: suite completa verde + revisión por auditor.
 - Dependencia: 5A–5C.
+- Estado 2026-10-01: **COMPLETADA LOCALMENTE** (evidencia en
+  `docs/PROGRESO_COBROS.md`, fase 6A). Suite CobrOS verde
+  (`Cobros|CustomerCompanyIsolation` 279/279, 2277 aserciones) con nueva
+  prueba integral `CobrosEndToEnd6ATest`; migraciones 3B/3C verificadas
+  sobre copia de la base local (6 pendientes, 0 destructivas); build Vite
+  correcto. Pendiente para 6B: auditoría externa/revisión por auditor y
+  los pendientes heredados de 5B/5C.
 
 ### 6B — Preparación producción
 - Objetivo: llegar a PRODUCCIÓN de forma controlada.
