@@ -294,6 +294,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::get('/facturacion-electronica/historial', [FiscalPortalController::class, 'history'])
         ->middleware('permission:fiscal.ver')
         ->name('fiscal.history');
+    Route::get('/facturacion-electronica/contribuyente', [FiscalPortalController::class, 'taxpayerLookup'])
+        ->middleware(['permission:fiscal.editar', 'throttle:30,1'])
+        ->name('fiscal.contribuyente');
     Route::get('/facturacion-electronica/conexion/{step}', [FiscalPortalController::class, 'setup'])
         ->whereIn('step', ['datos', 'conexion', 'verificar', 'preferencias', 'confirmacion'])
         ->middleware('permission:fiscal.editar')

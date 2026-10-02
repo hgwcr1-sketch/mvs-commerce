@@ -47,6 +47,7 @@
                 <div>
                     <label class="text-sm font-bold" for="identification_number">Número de identificación</label>
                     <input id="identification_number" name="identification_number" value="{{ old('identification_number', $company->identification_number) }}" required class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
+                    <p id="fiscal_identification_status" class="mt-1 text-xs text-slate-500" role="status" aria-live="polite"></p>
                 </div>
                 <div>
                     <label class="text-sm font-bold" for="legal_name">Nombre fiscal</label>
@@ -61,6 +62,11 @@
                     <label class="text-sm font-bold" for="economic_activity">Actividad económica (código)</label>
                     <input id="economic_activity" name="economic_activity" value="{{ old('economic_activity', $config->economic_activity) }}" placeholder="Ej. 1071.9" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
                     <p class="mt-1 text-xs text-slate-500">Use la actividad económica registrada por su empresa ante Hacienda. Este campo no es el código CABYS de un producto.</p>
+                    <div id="fiscal_activity_picker" class="mt-2 hidden">
+                        <label class="text-xs font-bold text-slate-600" for="fiscal_activity_select">Actividades económicas registradas ante Hacienda</label>
+                        <select id="fiscal_activity_select" class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]"></select>
+                        <p id="fiscal_activity_hint" class="mt-1 text-xs text-slate-500"></p>
+                    </div>
                 </div>
                 <div>
                     <span class="text-sm font-bold">Ubicación fiscal</span>
@@ -120,6 +126,137 @@
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y continuar</button>
                 <a href="{{ route('fiscal.index') }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Volver al portal</a>
             </form>
+            <script>
+                (function () {
+                    const endpoint = @json(route('fiscal.contribuyente'));
+                    const typeInput = document.getElementById('identification_type');
+                    const numberInput = document.getElementById('identification_number');
+                    const legalNameInput = document.getElementById('legal_name');
+                    const activityInput = document.getElementById('economic_activity');
+                    const status = document.getElementById('fiscal_identification_status');
+                    const picker = document.getElementById('fiscal_activity_picker');
+                    const select = document.getElementById('fiscal_activity_select');
+                    const hint = document.getElementById('fiscal_activity_hint');
+                    const M = window.MvsIdentification;
+
+                    if (!M || !numberInput) return;
+
+                    let timer = null;
+                    let token = 0;
+
+                    function setStatus(text, className) {
+                        status.textContent = text || '';
+                        status.className = 'mt-1 text-xs ' + (className || 'text-slate-500');
+                    }
+
+                    function hidePicker() {
+                        picker.classList.add('hidden');
+                        select.innerHTML = '';
+                        hint.textContent = '';
+                    }
+
+                    // Solo se ofrecen actividades realmente devueltas por Hacienda.
+                    function renderActivities(activities, consulted) {
+                        if (!consulted || !Array.isArray(activities) || activities.length === 0) {
+                            hidePicker();
+                            return;
+                        }
+
+                        const real = activities.filter((a) => a && a.code);
+
+                        if (real.length === 0) {
+                            hidePicker();
+                            return;
+                        }
+
+                        select.innerHTML = '';
+
+                        real.forEach((activity) => {
+                            const option = document.createElement('option');
+                            option.value = activity.code;
+                            option.textContent = activity.code + ' — ' + (activity.description || 'Sin descripción');
+                            option.dataset.description = activity.description || '';
+                            select.appendChild(option);
+                        });
+
+                        if (real.length === 1) {
+                            select.disabled = true;
+                            hint.textContent = 'Hacienda registra una sola actividad; se seleccionó automáticamente.';
+                        } else {
+                            const empty = document.createElement('option');
+                            empty.value = '';
+                            empty.textContent = 'Elegir…';
+                            select.insertBefore(empty, select.firstChild);
+                            select.disabled = false;
+                            hint.textContent = 'Seleccione la actividad económica principal de la empresa.';
+                        }
+
+                        activityInput.value = real[0].code;
+                        picker.classList.remove('hidden');
+                    }
+
+                    select.addEventListener('change', function () {
+                        if (select.value) activityInput.value = select.value;
+                    });
+
+                    function autofill(result) {
+                        const name = result && result.name;
+
+                        if (name && !legalNameInput.value.trim()) legalNameInput.value = name;
+
+                        const activities = (result && result.activities) || [];
+                        const consulted = !!(result && result.activities_queried);
+                        renderActivities(activities, consulted);
+
+                        if (!consulted && result && result.status !== 'not_found') {
+                            hidePicker();
+                        }
+                    }
+
+                    async function lookup() {
+                        const type = M.resolveType(typeInput.value, numberInput.value);
+                        const value = numberInput.value;
+
+                        if (!type || !M.canLookup(type)) {
+                            setStatus('La identificación no está completa para el tipo seleccionado.');
+                            hidePicker();
+                            return;
+                        }
+
+                        if (!M.transform(type, value)) {
+                            setStatus('La identificación no está completa para el tipo seleccionado.');
+                            hidePicker();
+                            return;
+                        }
+
+                        const current = ++token;
+                        setStatus(M.statusText('loading'), 'text-slate-500');
+
+                        try {
+                            const result = await M.consult(type, value, endpoint);
+
+                            if (current !== token) return;
+
+                            setStatus(M.statusText(result.status, result.name), M.statusClass(result.status));
+                            autofill(result);
+                        } catch (error) {
+                            if (current !== token) return;
+
+                            // Fallback manual: nunca se bloquea el paso 1.
+                            setStatus(M.statusText('error'), M.statusClass('error'));
+                            hidePicker();
+                        }
+                    }
+
+                    function schedule() {
+                        window.clearTimeout(timer);
+                        timer = window.setTimeout(lookup, 450);
+                    }
+
+                    numberInput.addEventListener('input', schedule);
+                    typeInput.addEventListener('change', schedule);
+                })();
+            </script>
         @elseif($step === 'conexion')
             @if($config->hasPending())
                 <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">

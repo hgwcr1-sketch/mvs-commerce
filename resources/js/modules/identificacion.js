@@ -153,9 +153,10 @@ function resolveType(type, value) {
     return type ? null : inferType(value);
 }
 
-async function consult(type, value) {
+async function consult(type, value, endpoint) {
     // La máscara con guiones es solo visual: a Hacienda siempre viajan dígitos.
-    const url = '/clientes/contribuyente?tipo=' + encodeURIComponent(type)
+    const base = endpoint || '/clientes/contribuyente';
+    const url = base + '?tipo=' + encodeURIComponent(type)
         + '&identificacion=' + encodeURIComponent(digitsOf(value));
 
     const response = await fetch(url, {
