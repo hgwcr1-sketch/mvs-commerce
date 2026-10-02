@@ -9,6 +9,9 @@ use App\Models\ElectronicDocument;
 use App\Services\CompanyLicenseService;
 use App\Services\Fiscal\CompanyFiscalConfigService;
 use App\Services\Fiscal\FiscalConsumptionService;
+use App\Services\TaxpayerLookupService;
+use App\Support\IdentificationRules;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -51,6 +54,31 @@ class FiscalPortalController extends Controller
     private function company(): Company
     {
         return Company::findOrFail(session('active_company_id'));
+    }
+
+    /**
+     * Consulta de contribuyente para el Paso 1 del wizard.
+     *
+     * Reutiliza exactamente el mismo servicio y las mismas reglas de
+     * identificación que el módulo de Clientes y POS: no hay una segunda fuente
+     * de datos ni una segunda integración con Hacienda.
+     */
+    public function taxpayerLookup(Request $request): JsonResponse
+    {
+        $type = (string) $request->query('tipo', '');
+        $identification = trim((string) $request->query('identificacion', ''));
+
+        if (! IdentificationRules::isComplete($type, $identification)) {
+            return response()->json([
+                'status' => TaxpayerLookupService::STATUS_INVALID,
+                'name' => null,
+                'message' => 'La identificación no está completa para el tipo seleccionado.',
+            ], 422);
+        }
+
+        return response()->json(
+            app(TaxpayerLookupService::class)->lookup($identification)
+        );
     }
 
     public function index(): View
