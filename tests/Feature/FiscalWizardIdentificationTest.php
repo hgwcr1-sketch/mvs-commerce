@@ -133,7 +133,9 @@ class FiscalWizardIdentificationTest extends TestCase
             ->assertOk()
             ->assertSee('fiscal_activity_select')
             ->assertSee('fiscal_identification_status')
+            ->assertSee('Consultar en Hacienda')
             ->assertSee('const endpoint =', false)
+            ->assertSee('DOMContentLoaded', false)
             ->assertSee('nunca se bloquea el paso 1', false);
     }
 }

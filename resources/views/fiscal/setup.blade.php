@@ -47,7 +47,10 @@
                 <div>
                     <label class="text-sm font-bold" for="identification_number">Número de identificación</label>
                     <input id="identification_number" name="identification_number" value="{{ old('identification_number', $company->identification_number) }}" required class="mt-1 w-full rounded-xl border border-slate-300 p-3 min-h-[44px]">
-                    <p id="fiscal_identification_status" class="mt-1 text-xs text-slate-500" role="status" aria-live="polite"></p>
+                    <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <button type="button" id="fiscal_lookup_button" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-300 bg-white px-4 font-bold text-amber-800 hover:bg-amber-50">Consultar en Hacienda</button>
+                        <p id="fiscal_identification_status" class="text-xs text-slate-500" role="status" aria-live="polite"></p>
+                    </div>
                 </div>
                 <div>
                     <label class="text-sm font-bold" for="legal_name">Nombre fiscal</label>
@@ -126,7 +129,11 @@
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y continuar</button>
                 <a href="{{ route('fiscal.index') }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Volver al portal</a>
             </form>
+            @push('scripts')
             <script>
+                // El bundle de Vite entra como módulo (defer), así que el inline
+                // del cuerpo se ejecuta ANTES de que exista window.MvsIdentification.
+                // Por eso la inicialización espera a que el documento esté listo.
                 (function () {
                     const endpoint = @json(route('fiscal.contribuyente'));
                     const typeInput = document.getElementById('identification_type');
@@ -137,16 +144,16 @@
                     const picker = document.getElementById('fiscal_activity_picker');
                     const select = document.getElementById('fiscal_activity_select');
                     const hint = document.getElementById('fiscal_activity_hint');
-                    const M = window.MvsIdentification;
+                    const button = document.getElementById('fiscal_lookup_button');
 
-                    if (!M || !numberInput) return;
+                    if (!numberInput) return;
 
                     let timer = null;
                     let token = 0;
 
                     function setStatus(text, className) {
                         status.textContent = text || '';
-                        status.className = 'mt-1 text-xs ' + (className || 'text-slate-500');
+                        status.className = 'text-xs ' + (className || 'text-slate-500');
                     }
 
                     function hidePicker() {
@@ -214,6 +221,13 @@
                     }
 
                     async function lookup() {
+                        const M = window.MvsIdentification;
+
+                        if (!M) {
+                            setStatus('No fue posible consultar Hacienda. Puede continuar.');
+                            return;
+                        }
+
                         const type = M.resolveType(typeInput.value, numberInput.value);
                         const value = numberInput.value;
 
@@ -253,10 +267,32 @@
                         timer = window.setTimeout(lookup, 450);
                     }
 
-                    numberInput.addEventListener('input', schedule);
-                    typeInput.addEventListener('change', schedule);
+                    function start() {
+                        // El módulo de identificación puede llegar después del DOM.
+                        if (!window.MvsIdentification) {
+                            window.setTimeout(start, 50);
+                            return;
+                        }
+
+                        numberInput.addEventListener('input', schedule);
+                        typeInput.addEventListener('change', schedule);
+
+                        if (button) {
+                            button.addEventListener('click', function () {
+                                window.clearTimeout(timer);
+                                lookup();
+                            });
+                        }
+                    }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', start);
+                    } else {
+                        start();
+                    }
                 })();
             </script>
+            @endpush
         @elseif($step === 'conexion')
             @if($config->hasPending())
                 <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">
