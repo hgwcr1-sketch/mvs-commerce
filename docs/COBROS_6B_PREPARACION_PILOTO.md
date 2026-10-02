@@ -252,15 +252,28 @@ Preparación y PASS local responsive no equivalen a autorización de piloto.
 
 ## Paquete de preparación para staging — `cobros.mvscommerce.com`
 
-Estado al preparar esta checklist: rama `feature/cobros-v1`, HEAD `665eeaa`.
-Usar ese SHA como referencia inmutable solo para revisión; no constituye
-aprobación para publicar. El árbol tiene cambios locales sin commit en
-`AccountsReceivableService.php`, `CobrosPaymentTest.php`, `layout.blade.php` y
-`vite.config.js`: **excluirlos** hasta que sean revisados, probados y aprobados.
-Excluir también `output.txt`, `tmp_*.txt` y `tmp_generate_cobros_icons.php`;
-no copiarlos al release ni borrarlos como parte de esta tarea. Incluir únicamente
-el SHA aprobado y los archivos versionados que pertenezcan a CobrOS; no incluir
-`.env`, respaldos, secretos ni contenido local sin seguimiento.
+Paquete candidato en rama `feature/cobros-v1`, SHA
+`3cfc01ab6dac111ec79fa73d1b73eeb70b461585`
+(`feat(cobros): preparar candidato de release 6B`). El commit contiene únicamente:
+
+- `app/Services/Sales/AccountsReceivableService.php`
+- `tests/Feature/CobrosPaymentTest.php`
+- `resources/views/cobros/layout.blade.php`
+- `vite.config.js`
+
+El build Vite local fue validado para este candidato; el manifest genera la
+entrada `resources/js/cobros-pwa.js` como `assets/cobros-pwa-35ym0p0z.js`.
+El release debe construirse desde el SHA exacto con lockfiles (`npm ci`,
+`npm run build`) y verificar nuevamente manifest y archivos publicados. No
+incluir cambios de worktree ni `output.txt`, `tmp_*.txt` o
+`tmp_generate_cobros_icons.php`; son temporales locales y quedan fuera.
+No incluir `.env`, secretos ni respaldos.
+
+Las migraciones CobrOS versionadas a revisar son las 12 entradas de la tabla
+“Migraciones y PostgreSQL” de este documento. El SHA no implica que deban
+ejecutarse todas: en staging el operador debe revisar `migrate:status`, comparar
+todo lo pendiente con la lista autorizada de ese destino y detenerse ante una
+diferencia.
 
 ### Checklist del operador (staging únicamente)
 
@@ -316,3 +329,42 @@ idempotencia y custodia/caja. Finalmente se comprobará el SW activo/controlando
 `/cobros`, assets, actualización, fallback offline y que POST no registra/repite
 pagos, seguido de smoke en móvil y firma de auditoría/aprobaciones. Todo resultado
 que no pueda evidenciarse queda pendiente; piloto y publicación siguen bloqueados.
+
+### Orden exacto de ejecución en el servidor de staging
+
+1. Confirmar SHA aprobado
+   `3cfc01ab6dac111ec79fa73d1b73eeb70b461585`, hostname/IP de staging,
+   responsables, ventana, DNS esperado y que el destino no es producción.
+2. Preparar release aislado desde ese SHA; configurar PHP-FPM/Nginx, DNS y
+   certificado HTTPS con los valores aprobados. Inyectar `.env` desde el gestor
+   seguro: `APP_ENV=staging`, `APP_DEBUG=false`, `APP_URL`, `APP_KEY` existente,
+   `DB_CONNECTION=pgsql`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`,
+   `DB_PASSWORD`, `DB_SSLMODE`, `CACHE_STORE`, `SESSION_DRIVER`,
+   `QUEUE_CONNECTION`, `FILESYSTEM_DISK`; nunca imprimir secretos. Verificar
+   `pdo_pgsql` y `bcmath`.
+3. Verificar host/base/usuario/permisos; suspender escrituras. Crear backup
+   custom con `pg_dump`, validar checksum y listado, restaurarlo en base aislada
+   desechable con `pg_restore` y conciliar esquema, conteos y sumas. No restaurar
+   sobre staging ni sobre datos con pagos posteriores.
+4. En staging ejecutar `php artisan migrate:status`, comparar toda migración
+   pendiente con la lista aprobada y ensayar en la copia restaurada. Solo con
+   coincidencia, respaldo restaurable y autorización escrita ejecutar
+   `php artisan migrate --force`; repetir status y conciliación. No ejecutar
+   `migrate:fresh`, `refresh`, `reset` ni `rollback`.
+5. Construir assets en el release (`npm ci`, `npm run build`); verificar manifest
+   y assets. Preparar permisos/storage, reiniciar workers de cola de forma
+   controlada y activar un solo scheduler; comprobar HTTPS, health y login.
+6. En una base PostgreSQL vacía, separada y exclusiva para tests, fijar
+   `APP_ENV=testing` y `DB_*` verificados; ejecutar
+   `php artisan test tests/Feature/CobrosPaymentTest.php`. Nunca apuntar
+   `RefreshDatabase` a staging poblado. Verificar idempotencia, DECIMAL, recibo,
+   saldo y custodia sin movimiento de caja.
+7. Por HTTPS comprobar certificado, `/sw-cobros.js`, manifest/assets, scope
+   `/cobros`, worker `activated` y página controlada. Probar actualización,
+   fallback GET offline y que un POST sintético no registra ni repite pagos;
+   verificar que otras rutas no son interceptadas. Guardar evidencia sin datos
+   sensibles.
+8. Ante fallo, suspender escrituras, conservar logs y backup y volver a código/
+   assets compatibles dejando el esquema ampliado. Nunca ejecutar down de 3B/3C
+   ni restaurar sobre pagos posteriores; restaurar solo en base aislada y
+   conciliar antes de cualquier reapertura aprobada.
