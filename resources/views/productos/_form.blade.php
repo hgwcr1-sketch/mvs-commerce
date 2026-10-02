@@ -59,6 +59,34 @@
         {{-- CABYS: se asigna desde el catálogo oficial, nunca como texto libre. --}}
         <x-cabys-search :state="$cabysState ?? null" />
 
+        @if($fiscalRegimeInfo['regime'])
+        <div class="mt-4 p-3 rounded border-l-4">
+            <div class="flex items-center space-x-3">
+                <span class="text-sm font-medium">
+                    Tarifa oficial CABYS:
+                    @if($fiscalRegimeInfo['officialPct'])
+                    {{ number_format($fiscalRegimeInfo['officialPct'], 1, ',', '.') }}%
+                    @else
+                    —
+                    @endif
+                </span>
+                <span class="text-sm text-slate-500">
+                    Impuesto aplicado al producto:
+                    @if($product->tax_rate_official_pct)
+                    {{ number_format($product->tax_rate_official_pct, 1, ',', '.') }}%
+                    @elseif($product->tax_rate)
+                    {{ number_format($product->tax_rate, 1, ',', '.') }}%
+                    @else
+                    —
+                    @endif
+                </span>
+            </div>
+            @if($fiscalRegimeInfo['warning'])
+            <p class="mt-2 text-xs text-amber-600">{{ $fiscalRegimeInfo['warning'] }}</p>
+            @endif>
+        </div>
+        @endif
+
         <x-select
             name="product_type"
             label="Tipo">
@@ -437,7 +465,90 @@ document.addEventListener('DOMContentLoaded', () => {
         filterSubcategories();
     });
     filterSubcategories();
-});
+
+<!-- Fiscal regime CABYS reactive UX -->
+    @php
+    $fiscalRegimeJs = $fiscalRegimeInfo['regime'];
+    $officialPctJs = $fiscalRegimeInfo['officialPct'];
+    $officialRawJs = $fiscalRegimeInfo['officialRaw'];
+    @endphp
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const unit = document.querySelector('[name="unit_id"]');
+        if (!unit) return;
+        const quantities = ['stock', 'minimum_stock', 'maximum_stock']
+            .map(name => document.querySelector(`[name="${name}"]`))
+            .filter(Boolean);
+        const syncQuantityStep = () => {
+            const fractional = unit.selectedOptions[0]?.dataset.allowsDecimals === '1';
+            quantities.forEach(input => {
+                input.min = '0';
+                input.step = fractional ? '0.0001' : '1';
+            });
+        };
+        unit.addEventListener('change', syncQuantityStep);
+        syncQuantityStep();
+
+        const categorySelect = document.querySelector('[name="category_id"]');
+        const subcategorySelect = document.querySelector('[name="subcategory_id"]');
+        if (!categorySelect || !subcategorySelect) return;
+
+        const allSubOptions = Array.from(subcategorySelect.options).slice(1);
+
+        const filterSubcategories = () => {
+            const parentId = categorySelect.value;
+            subcategorySelect.innerHTML = '<option value="">Seleccione...</option>';
+            allSubOptions.forEach(opt => {
+                if (!parentId || opt.dataset.parent === parentId) {
+                    subcategorySelect.appendChild(opt.cloneNode(true));
+                }
+            });
+        };
+
+        categorySelect.addEventListener('change', () => {
+            filterSubcategories();
+        });
+        filterSubcategories();
+
+        // Fiscal regime CABYS reactive UX
+        const regime = '<?= $fiscalRegimeJs ?>';
+        const officialPct = <?= json_encode($officialPctJs) ?>;
+        const officialRaw = <?= json_encode($officialRawJs) ?>;
+
+        if (regime === 'general') {
+            const cabysSearch = document.querySelector('x-cabys-search');
+            if (cabysSearch) {
+                const originalSelect = cabysSearch.querySelector('select');
+                if (originalSelect) {
+                    originalSelect.addEventListener('change', function() {
+                        const selectedCode = this.value;
+                        if (selectedCode && officialPct) {
+                            const taxSelect = document.querySelector('select[name="tax_rate"]');
+                            if (taxSelect) {
+                                const options = taxSelect.options;
+                                for (let i = 0; i < options.length; i++) {
+                                    if (options[i].value === String(officialPct)) {
+                                        taxSelect.selectedIndex = i;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    });
+    </script>
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+}
 </script>
 @endonce
 

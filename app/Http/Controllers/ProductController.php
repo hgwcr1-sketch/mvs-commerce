@@ -199,6 +199,64 @@ class ProductController extends Controller
 
         // Alta: todavía no hay asignación CABYS que mostrar.
         $cabysState = null;
+        $fiscalRegimeInfo = ['officialPct' => null, 'officialRaw' => null, 'regime' => null, 'warning' => null];
+
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        if ($company !== null) {
+            $fiscalConfig = $company->fiscalConfig()->first();
+
+            if ($fiscalConfig !== null) {
+                $regime = $fiscalConfig->tax_regime;
+
+                switch ($regime) {
+                    case 'general':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'general',
+                            'warning' => null,
+                        ];
+                        break;
+
+                    case 'simplified':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'simplified',
+                            'warning' => 'Tarifa oficial CABYS conservada, impuesto de venta sin auto-aplicar',
+                        ];
+                        break;
+
+                    case 'unknown':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'unknown',
+                            'warning' => 'Tarifa oficial CABYS conservada, no auto-aplicar impuesto; mostrar advertencia',
+                        ];
+                        break;
+
+                    case 'manual':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'manual',
+                            'warning' => 'No sobrescribir tarifa manual existente; mantener discrepancy',
+                        ];
+                        break;
+
+                    default:
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'unknown',
+                            'warning' => 'Régimen no reconocido',
+                        ];
+                        break;
+                }
+            }
+        }
 
         return view('productos.create', compact(
             'categories',
@@ -207,7 +265,8 @@ class ProductController extends Controller
             'styles',
             'sizes',
             'colors',
-            'cabysState'
+            'cabysState',
+            'fiscalRegimeInfo'
         ));
     }
 
@@ -251,8 +310,19 @@ class ProductController extends Controller
         $maximumStock = $data['maximum_stock'] ?? null;
 
         $cabysState = null;
+        $fiscalRegime = null;
 
-        $product = DB::transaction(function () use ($data, $initialStock, $minimumStock, $maximumStock, $proposedCabysCode, $request, &$cabysState) {
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        if ($company !== null) {
+            $fiscalConfig = $company->fiscalConfig()->first();
+
+            if ($fiscalConfig !== null) {
+                $fiscalRegime = $fiscalConfig->tax_regime;
+            }
+        }
+
+        $product = DB::transaction(function () use ($data, $initialStock, $minimumStock, $maximumStock, $proposedCabysCode, $request, &$cabysState, $fiscalRegime) {
             $product = Product::create($data);
 
             /*
@@ -281,6 +351,17 @@ class ProductController extends Controller
                     $proposedCabysCode,
                     (int) $request->user()?->id
                 );
+
+                /*
+                 * Aplicar impuesto según régimen fiscal de la empresa.
+                 * - general: auto-aplicar tarifa CABYS al impuesto del producto
+                 * - simplified: conservar tarifa oficial, NO auto-aplicar impuesto de venta
+                 * - unknown: conservar tarifa oficial, NO auto-aplicar, mostrar advertencia
+                 * - manual: no sobrescribir tarifa manual existente
+                 */
+                if ($cabysState['status'] === 'confirmed' && $proposedCabysCode !== '') {
+                    $this->applyTaxAccordingToFiscalRegime($product, $fiscalRegime);
+                }
             }
 
             return $product;
@@ -386,6 +467,63 @@ class ProductController extends Controller
             ? app(ProductCabysService::class)->stateFor($company, $producto)
             : null;
 
+        $fiscalRegimeInfo = ['officialPct' => null, 'officialRaw' => null, 'regime' => null, 'warning' => null];
+
+        if ($company !== null) {
+            $fiscalConfig = $company->fiscalConfig()->first();
+
+            if ($fiscalConfig !== null) {
+                $regime = $fiscalConfig->tax_regime;
+
+                switch ($regime) {
+                    case 'general':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'general',
+                            'warning' => null,
+                        ];
+                        break;
+
+                    case 'simplified':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'simplified',
+                            'warning' => 'Tarifa oficial CABYS conservada, impuesto de venta sin auto-aplicar',
+                        ];
+                        break;
+
+                    case 'unknown':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'unknown',
+                            'warning' => 'Tarifa oficial CABYS conservada, no auto-aplicar impuesto; mostrar advertencia',
+                        ];
+                        break;
+
+                    case 'manual':
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'manual',
+                            'warning' => 'No sobrescribir tarifa manual existente; mantener discrepancy',
+                        ];
+                        break;
+
+                    default:
+                        $fiscalRegimeInfo = [
+                            'officialPct' => null,
+                            'officialRaw' => null,
+                            'regime' => 'unknown',
+                            'warning' => 'Régimen no reconocido',
+                        ];
+                        break;
+                }
+            }
+        }
+
         return view('productos.edit', compact(
             'product',
             'categories',
@@ -487,6 +625,22 @@ class ProductController extends Controller
                 $proposedCabysCode,
                 (int) $request->user()?->id
             );
+
+            /*
+             * Aplicar impuesto según régimen fiscal de la empresa
+             * en edición igual que en alta.
+             */
+            if ($cabysState['status'] === 'confirmed' && $proposedCabysCode !== '') {
+                $company = Company::query()->find((int) session('active_company_id'));
+
+                if ($company !== null) {
+                    $fiscalConfig = $company->fiscalConfig()->first();
+
+                    if ($fiscalConfig !== null) {
+                        $this->applyTaxAccordingToFiscalRegime($producto, $fiscalConfig->tax_regime);
+                    }
+                }
+            }
         }
 
         return redirect()
@@ -572,6 +726,89 @@ class ProductController extends Controller
     private function cabysSuffix(?array $state): string
     {
         return $state === null ? '' : ' '.$state['message'];
+    }
+
+    /**
+     * Aplica el impuesto según el régimen fiscal de la empresa.
+     *
+     * Reglas:
+     * - general: auto-aplicar la tarifa oficial CABYS al tax_rate del producto
+     * - simplified: conservar tax_rate_official_pct/tax_rate_official_raw,
+     *   NO tocar tax_rate (impuesto de venta)
+     * - unknown: igual que simplified, pero con advertencia
+     * - manual: si hay tarifa manual explícita distinta, NO sobrescribirla
+     *
+     * @param  \App\Models\Product  $product
+     * @param  string|null  $fiscalRegime
+     */
+    private function applyTaxAccordingToFiscalRegime(Product $product, ?string $fiscalRegime): void
+    {
+        $company = Company::query()->find((int) session('active_company_id'));
+
+        if ($company === null) {
+            return;
+        }
+
+        $cabysService = app(ProductCabysService::class);
+        $assignment = $cabysService->assignmentFor($company, $product);
+
+        if ($assignment === null) {
+            return;
+        }
+
+        $official = $cabysService->officialRateFor($company, $product);
+
+        if ($official['official_pct'] === null) {
+            return;
+        }
+
+        $officialPct = $official['official_pct'];
+        $officialRaw = $official['official_raw'];
+
+        switch ($fiscalRegime) {
+            case 'general':
+                $product->tax_rate = $officialPct;
+                $product->tax_rate_source = 'cabys_confirmed';
+                $product->tax_rate_official_pct = $officialPct;
+                $product->tax_rate_official_raw = $officialRaw;
+                $product->save();
+                break;
+
+            case 'simplified':
+                $product->tax_rate_official_pct = $officialPct;
+                $product->tax_rate_official_raw = $officialRaw;
+                $product->save();
+                break;
+
+            case 'unknown':
+                $product->tax_rate_official_pct = $officialPct;
+                $product->tax_rate_official_raw = $officialRaw;
+                $product->save();
+                break;
+
+            case 'manual':
+                $existingTaxRate = (float) ($product->tax_rate ?? 0);
+                $existingSource = $product->tax_rate_source ?? 'manual';
+
+                if ($existingSource === 'manual' && $existingTaxRate !== $officialPct) {
+                    /* No sobrescribir tarifa manual; mantener discrepancy */
+                    return;
+                }
+
+                $product->tax_rate = $officialPct;
+                $product->tax_rate_source = 'cabys_confirmed';
+                $product->tax_rate_official_pct = $officialPct;
+                $product->tax_rate_official_raw = $officialRaw;
+                $product->save();
+                break;
+
+            default:
+                /* Unknown or unrecognized: conservar, no auto-aplicar */
+                $product->tax_rate_official_pct = $officialPct;
+                $product->tax_rate_official_raw = $officialRaw;
+                $product->save();
+                break;
+        }
     }
 
     /**
