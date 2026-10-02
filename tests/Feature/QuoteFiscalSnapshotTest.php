@@ -31,7 +31,11 @@ class QuoteFiscalSnapshotTest extends TestCase
     public function test_quote_creation_freezes_fiscal_snapshot_and_child_tax_rows(): void
     {
         [$company, $branch, $user] = $this->context();
-        $product = $this->product($company, ['sale_price' => 1000, 'tax_rate' => 13]);
+        $product = $this->product($company, [
+            'sale_price' => 1000,
+            'tax_rate' => 13,
+            'fiscal_profile_id' => $this->profile('01', '08'),
+        ]);
 
         $this->createQuote($user, $company, $branch, $product, ['quantity' => 1])->assertCreated();
 
@@ -58,19 +62,21 @@ class QuoteFiscalSnapshotTest extends TestCase
         $this->assertNull($tax->exemption_snapshot);
     }
 
-    public function test_ambiguous_legacy_tax_rates_are_blocked_without_creating_quotes(): void
+    public function test_pending_products_can_be_quoted_using_the_operational_tax_rate(): void
     {
-        foreach ([0, 8, null] as $rate) {
+        foreach ([0, 8, 13, null] as $rate) {
             [$company, $branch, $user] = $this->context();
             $product = $this->product($company, ['sale_price' => 1000, 'tax_rate' => $rate]);
 
-            $this->createQuote($user, $company, $branch, $product, ['quantity' => 1])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors('items');
+            $this->createQuote($user, $company, $branch, $product, ['quantity' => 1])->assertCreated();
+
+            $item = Quote::latest('id')->firstOrFail()->items->firstOrFail();
+            $this->assertNull($item->fiscal_snapshot);
+            $this->assertEquals((float) ($rate ?? 0), (float) $item->tax_rate);
         }
 
-        $this->assertDatabaseCount('quotes', 0);
-        $this->assertDatabaseCount('quote_items', 0);
+        $this->assertDatabaseCount('quotes', 4);
+        $this->assertDatabaseCount('quote_items', 4);
         $this->assertDatabaseCount('quote_item_taxes', 0);
     }
 
@@ -141,7 +147,11 @@ class QuoteFiscalSnapshotTest extends TestCase
     public function test_conversion_preserves_the_frozen_snapshot_on_the_generated_sale(): void
     {
         [$company, $branch, $user, $cash] = $this->context();
-        $product = $this->product($company, ['sale_price' => 1000, 'tax_rate' => 13]);
+        $product = $this->product($company, [
+            'sale_price' => 1000,
+            'tax_rate' => 13,
+            'fiscal_profile_id' => $this->profile('01', '08'),
+        ]);
         $this->stock($branch, $product, 10);
         $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 1])->json('quote_id'));
 
@@ -166,6 +176,28 @@ class QuoteFiscalSnapshotTest extends TestCase
 
         $this->assertSame(Quote::STATUS_CONVERTED, $quote->fresh()->status);
         $this->assertSame($saleItem->sale_id, $quote->fresh()->converted_sale_id);
+    }
+
+    public function test_pending_quote_converts_to_an_ordinary_sale_without_fiscal_snapshot(): void
+    {
+        [$company, $branch, $user, $cash] = $this->context();
+        $product = $this->product($company, ['sale_price' => 1000, 'tax_rate' => 8]);
+        $this->stock($branch, $product, 10);
+        $quote = Quote::findOrFail($this->createQuote($user, $company, $branch, $product, ['quantity' => 1])->json('quote_id'));
+
+        $quoteItem = $quote->items()->firstOrFail();
+        $this->assertNull($quoteItem->fiscal_snapshot);
+        $this->assertSame('80.0000', $quoteItem->tax_total);
+
+        $this->checkout($user, $company, $branch, $cash, $quote, [['product_id' => $product->id, 'quantity' => 1]], 1080)
+            ->assertOk();
+
+        $saleItem = Sale::firstOrFail()->items()->firstOrFail();
+        $this->assertSame('8.0000', $saleItem->tax_rate);
+        $this->assertSame('80.0000', $saleItem->tax_total);
+        $this->assertNull($saleItem->fiscal_snapshot);
+        $this->assertDatabaseCount('sale_item_taxes', 0);
+        $this->assertNull($product->fresh()->fiscal_profile_id);
     }
 
     private function context(string $name = 'Empresa', array $permissions = ['pos.acceder', 'ventas.crear', 'cotizaciones.ver', 'cotizaciones.crear', 'cotizaciones.editar', 'pos.cambiar_precio', 'pos.aplicar_descuento']): array

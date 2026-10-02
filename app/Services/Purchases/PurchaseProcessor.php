@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Services\Fiscal\FiscalTaxService;
 use App\Services\Inventory\InventoryPostingService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -68,9 +69,10 @@ class PurchaseProcessor
             foreach ($resolvedLines as $resolvedLine) {
                 $product = $resolvedLine['product'];
                 $line = $resolvedLine['line'];
-                /** @var FiscalProfile $profile */
                 $profile = $resolvedLine['profile'];
-                $snapshot = $this->fiscalTaxService->snapshotFromProfile($profile);
+                $snapshot = $profile !== null
+                    ? $this->fiscalTaxService->snapshotFromProfile($profile)
+                    : [];
                 $documentTaxes = is_array($line->document_taxes) && $line->document_taxes !== []
                     ? array_values($line->document_taxes)
                     : null;
@@ -80,6 +82,7 @@ class PurchaseProcessor
                     // y exoneración). Los cálculos operativos siguen en columnas/filas.
                     $snapshot['document'] = ['impuestos' => $documentTaxes];
                 }
+                $snapshot = $snapshot === [] ? null : $snapshot;
 
                 $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
@@ -93,24 +96,24 @@ class PurchaseProcessor
                     'subtotal' => $resolvedLine['subtotal'],
                     'discount' => $resolvedLine['discount'],
                     'tax_rate' => $resolvedLine['tax_rate'],
-                    'tax_code' => $profile->tax_code,
-                    'tax_rate_code' => $profile->tax_rate_code,
-                    'tax_treatment' => $profile->treatment,
-                    'fiscal_source' => $profile->catalogVersion?->source,
-                    'fiscal_source_version' => $profile->catalogVersion?->source_version,
+                    'tax_code' => $profile?->tax_code ?? $this->nullableValue($line->tax_code),
+                    'tax_rate_code' => $profile?->tax_rate_code ?? $this->nullableValue($line->tax_rate_code),
+                    'tax_treatment' => $profile?->treatment,
+                    'fiscal_source' => $profile?->catalogVersion?->source,
+                    'fiscal_source_version' => $profile?->catalogVersion?->source_version,
                     'fiscal_snapshot' => $snapshot,
                     'tax' => $resolvedLine['tax'],
                     'total' => $resolvedLine['total'],
                 ]);
 
-                if ($documentTaxes !== null) {
+                if ($documentTaxes !== null && $profile !== null) {
                     $this->persistDocumentTaxRows(
                         $purchaseItem,
                         $documentTaxes,
                         $profile,
                         $resolvedLine,
                     );
-                } else {
+                } elseif ($profile !== null) {
                     PurchaseItemTax::create([
                         'purchase_item_id' => $purchaseItem->id,
                         'tax_code' => $profile->tax_code,
@@ -130,13 +133,6 @@ class PurchaseProcessor
                 }
 
                 $product->cost = $resolvedLine['unit_cost'];
-
-                // Solo se completa el perfil del producto cuando la clasificación
-                // es inequívoca y el producto aún no tiene perfil explícito.
-                if ($product->fiscal_profile_id === null && $profile->rate !== null) {
-                    $product->fiscal_profile_id = $profile->id;
-                    $product->tax_rate = (float) $profile->rate;
-                }
 
                 if ($line->new_sale_price !== null) {
                     $product->sale_price = $line->new_sale_price;
@@ -273,8 +269,13 @@ class PurchaseProcessor
 
             $quantity = $line->quantity;
             $unitCost = $line->unit_cost;
-            $profile = $this->resolveLineProfile($line, $product);
-            $taxRate = (float) ($profile->rate ?? 0);
+            $profile = $this->resolveOptionalLineProfile($line, $product);
+            $hasExplicitFiscalData = $line->fiscal_profile_id !== null
+                || ($line->tax_code !== null && $line->tax_rate_code !== null)
+                || ($line->document_taxes !== null && $line->document_taxes !== []);
+            $taxRate = $hasExplicitFiscalData && $profile?->rate !== null
+                ? (float) $profile->rate
+                : (float) ($line->tax_rate ?? $profile?->rate ?? $product->tax_rate ?? 0);
             $discountPercent = $line->discount_percent ?? 0;
 
             $subtotal = $quantity * $unitCost;
@@ -332,39 +333,54 @@ class PurchaseProcessor
     }
 
     /**
-     * Autoridad fiscal única: FiscalTaxService resuelve la línea con la
-     * precedencia perfil explícito > códigos > documento (si existe) >
-     * tasa legada inequívoca (1/2/4/13) > perfil del producto. 0/8/NULL
-     * jamás se infieren; si nada resuelve, la línea se bloquea.
+     * Fiscalidad de compras es trazabilidad opcional; su ausencia o invalidez
+     * no debe impedir registrar la operación ni asignar un perfil al producto.
      */
-    private function resolveLineProfile(
+    private function resolveOptionalLineProfile(
         PurchaseLineData $line,
         Product $product,
-    ): FiscalProfile {
+    ): ?FiscalProfile {
         $lineRate = $line->tax_rate !== null
             ? (float) $line->tax_rate
             : null;
+        $hasLineClassification = $line->fiscal_profile_id !== null
+            || $line->tax_code !== null
+            || $line->tax_rate_code !== null
+            || ($line->document_taxes !== null && $line->document_taxes !== []);
+        $productHasProfile = $product->fiscal_profile_id !== null;
+
+        if (! $hasLineClassification && ! $productHasProfile) {
+            return null;
+        }
 
         try {
             $profile = $this->fiscalTaxService->resolveImportLineProfile(
                 $line->fiscal_profile_id,
                 $line->tax_code,
                 $line->tax_rate_code,
-                $lineRate,
                 $line->document_taxes,
-                $product,
+                $productHasProfile ? $product : null,
             );
 
-            if ($profile->rate === null) {
-                throw new InvalidArgumentException('la tarifa de IVA calculable no está definida.');
+            if (
+                ! $hasLineClassification
+                && $lineRate !== null
+                && $profile->rate !== null
+                && abs($lineRate - (float) $profile->rate) >= 0.0001
+            ) {
+                return null;
             }
-        } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages([
-                'items' => "El producto {$product->name} no puede comprarse: {$exception->getMessage()}",
-            ]);
-        }
 
-        return $profile;
+            return $profile;
+        } catch (InvalidArgumentException $exception) {
+            Log::warning('purchase.fiscal_profile_unresolved', [
+                'company_id' => $product->company_id,
+                'product_id' => $product->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

@@ -61,20 +61,65 @@ class LayawayFiscalSnapshotTest extends TestCase
         $this->assertNull($tax->exemption_snapshot);
     }
 
-    public function test_ambiguous_legacy_tax_rates_are_blocked_without_creating_layaways(): void
+    public function test_pending_profiles_allow_layaway_creation_without_fiscal_snapshot(): void
     {
         foreach ([0, 8, null] as $rate) {
             [$company, $branch, $user, $session, $cash, $product, $customer] = $this->context();
 
-            $this->createLayaway($user, $company, $branch, $session, $cash, $product, $customer, 1000, 2, ['tax_rate' => $rate])
+            $this->createLayaway($user, $company, $branch, $session, $cash, $product, $customer, 1000, 2, [
+                'tax_rate' => $rate,
+                'fiscal_profile_id' => null,
+            ])
                 ->assertRedirect()
-                ->assertSessionHasErrors('items');
+                ->assertSessionHasNoErrors();
+
+            $item = Layaway::latest('id')->firstOrFail()->items()->firstOrFail();
+            $this->assertNull($item->fiscal_snapshot);
+            $this->assertNull($item->tax_code);
+            $this->assertNull($item->tax_rate_code);
+            $this->assertNull($product->fresh()->fiscal_profile_id);
+            $this->assertSame(
+                3,
+                (int) DB::table('branch_product')
+                    ->where('branch_id', $branch->id)
+                    ->where('product_id', $product->id)
+                    ->value('stock'),
+            );
         }
 
-        $this->assertDatabaseCount('layaways', 0);
-        $this->assertDatabaseCount('layaway_items', 0);
+        $this->assertDatabaseCount('layaways', 3);
+        $this->assertDatabaseCount('layaway_items', 3);
         $this->assertDatabaseCount('layaway_item_taxes', 0);
-        $this->assertDatabaseCount('inventory_movements', 0);
+    }
+
+    public function test_pending_layaway_can_be_paid_and_delivered_as_an_ordinary_sale(): void
+    {
+        [$company, $branch, $user, $session, $cash, $product, $customer] = $this->context();
+        $product->update(['tax_rate' => 8, 'fiscal_profile_id' => null]);
+
+        $this->createLayaway($user, $company, $branch, $session, $cash, $product, $customer, 1000, 2)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $layaway = Layaway::firstOrFail();
+        $this->assertSame('2160.0000', $layaway->total);
+        $this->assertSame('1160.0000', $layaway->balance_due);
+
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->post(route('apartados.payments.store', $layaway), [
+                'amount' => 1160,
+                'payment_method_id' => $cash->id,
+                'cash_session_id' => $session->id,
+            ])->assertRedirect();
+
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->post(route('apartados.deliver', $layaway))->assertRedirect();
+
+        $saleItem = Sale::firstOrFail()->items()->firstOrFail();
+        $this->assertNull($saleItem->fiscal_snapshot);
+        $this->assertNull($saleItem->tax_code);
+        $this->assertSame('8.0000', $saleItem->tax_rate);
+        $this->assertDatabaseCount('sale_item_taxes', 0);
     }
 
     public function test_zero_rate_exempt_and_not_subject_profiles_keep_their_own_treatment(): void
@@ -146,7 +191,7 @@ class LayawayFiscalSnapshotTest extends TestCase
         $this->assertNull($tax->exemption_snapshot);
     }
 
-    public function test_delivery_is_blocked_when_product_fiscality_changed_after_creation(): void
+    public function test_delivery_does_not_require_unchanged_fiscality_for_an_ordinary_layaway(): void
     {
         [$company, $branch, $user, $session, $cash, $product, $customer] = $this->context();
 
@@ -157,13 +202,13 @@ class LayawayFiscalSnapshotTest extends TestCase
 
         $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
             ->post(route('apartados.deliver', $layaway))
-            ->assertSessionHasErrors('layaway');
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame(Layaway::STATUS_PAID, $layaway->fresh()->status);
-        $this->assertNull($layaway->fresh()->delivered_sale_id);
-        $this->assertDatabaseCount('sales', 0);
-        $this->assertDatabaseCount('sale_items', 0);
-        $this->assertDatabaseCount('sale_item_taxes', 0);
+        $this->assertSame(Layaway::STATUS_DELIVERED, $layaway->fresh()->status);
+        $this->assertNotNull($layaway->fresh()->delivered_sale_id);
+        $this->assertDatabaseCount('sales', 1);
+        $this->assertDatabaseCount('sale_items', 1);
     }
 
     private function context(array|string $permissions = ['apartados.ver', 'apartados.crear', 'apartados.abonar', 'apartados.cancelar', 'apartados.entregar']): array
@@ -199,6 +244,7 @@ class LayawayFiscalSnapshotTest extends TestCase
             'cost' => 500,
             'sale_price' => 1000,
             'tax_rate' => 13,
+            'fiscal_profile_id' => $this->profile('01', '08'),
             'track_inventory' => true,
             'is_active' => true,
         ]);

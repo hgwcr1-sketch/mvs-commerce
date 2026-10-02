@@ -262,11 +262,9 @@ class FiscalTaxService
     }
 
     /**
-     * Precedencia fiscal única de una línea de compra/importación:
-     * perfil explícito > códigos explícitos > fiscalidad del documento
-     * (si existe, manda el documento y jamás se sustituye por el producto)
-     * > tasa legada inequívoca > perfil del producto. Si nada resuelve,
-     * se bloquea: nunca se inventa tratamiento.
+     * Resuelve datos fiscales explícitos de una línea. La tasa operativa no
+     * permite inferir un perfil; si no hay clasificación explícita ni un
+     * perfil ya confirmado en el producto, la línea queda pendiente.
      *
      * @param  array<int, array<string, mixed>>|null  $documentTaxes
      *
@@ -276,7 +274,6 @@ class FiscalTaxService
         ?int $fiscalProfileId,
         ?string $taxCode,
         ?string $taxRateCode,
-        ?float $legacyRate,
         ?array $documentTaxes,
         ?Product $product,
     ): FiscalProfile {
@@ -295,24 +292,11 @@ class FiscalTaxService
             return $this->profileForDocumentTaxes($documentTaxes);
         }
 
-        if ($taxCode !== null && $legacyRate !== null) {
-            $derived = $this->rateCodeFromTarifa($legacyRate, $taxCode);
-            if ($derived === null) {
-                throw new InvalidArgumentException("la tasa {$legacyRate} no es inequívoca para el código {$taxCode}; use perfil fiscal explícito.");
-            }
-
-            return $this->resolveProfile($taxCode, $derived);
-        }
-
-        if ($legacyRate !== null && $this->isUnequivocalRate($legacyRate)) {
-            return $this->resolveLegacyTaxRate($legacyRate);
-        }
-
         if ($product !== null) {
             return $this->resolveProductProfile($product);
         }
 
-        throw new InvalidArgumentException('la línea no incluye perfil fiscal, códigos ni tasa inequívoca.');
+        throw new InvalidArgumentException('la línea no incluye un perfil fiscal explícito.');
     }
 
     /**

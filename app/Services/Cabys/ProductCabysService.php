@@ -239,7 +239,7 @@ class ProductCabysService
             );
         }
 
-        if ($previousPct === null || $fromCabys) {
+        if (($previousPct === null || $fromCabys) && $product->fiscal_profile_id === null) {
             $this->writeProductTax($company, $product, [
                 'tax_rate' => $officialPct,
                 'tax_rate_source' => self::TAX_SOURCE_CABYS,

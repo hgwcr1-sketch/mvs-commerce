@@ -1,5 +1,14 @@
 # MVS Commerce — Estado actual
 
+## Operaciones no fiscales con perfil pendiente (2026-10-02)
+
+**Rama:** `feat/cabys-regimen-prod-3419e9d`, base `3419e9d`. Cambio local; sin push ni producción.
+- Compras, recepción e importación de compra ya no exigen clasificación fiscal de línea para registrar costo/impuesto operativo. Las líneas documentales conservan su evidencia cuando está disponible; productos nuevos desde compras quedan pendientes salvo selección explícita en formulario.
+- POS ordinario, cotizaciones/conversión y apartados aceptan productos pendientes, calculan con la tasa operativa y no crean snapshots/impuestos fiscales inventados. La entrega de apartado y reserva de inventario continúan normalmente.
+- CABYS confirmado puede actualizar la tasa operativa/evidencia oficial, pero nunca asigna `fiscal_profile_id`. La validación estricta de FE/TE se conserva en `FiscalPreflightService`; POS pendiente sigue rechazando esas emisiones antes de persistir.
+- Auditoría: ajustes, traslados, devoluciones/movimientos internos y las importaciones masivas/CRUD de productos no tenían bloqueo por perfil pendiente; no se alteraron.
+- Pruebas focales: **81 tests / 791 aserciones PASS** en Compras/XML/importación, creación de producto, inventario, POS/emisión, cotización, apartado, productos/CABYS; `git diff --check` PASS.
+
 ## Integración FE: perfil pendiente y reconciliación CABYS (2026-09-30)
 
 **Rama:** `integration/prod-facturacion-electronica`. Validación local; sin producción, SSH, HTTP fiscal ni deploy.

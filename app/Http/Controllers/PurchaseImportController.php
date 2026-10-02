@@ -289,22 +289,16 @@ class PurchaseImportController extends Controller
 
             $productType = $this->resolveProductType($sourceItem['product_type'] ?? null);
 
-            // Normalización fiscal única (FiscalTaxService): perfil explícito del
-            // formulario > perfil/códigos de la fila > tasa inequívoca. 0/8/NULL
-            // jamás se infieren; CABYS no participa.
+            // Solo un perfil elegido expresamente en este formulario clasifica
+            // el producto. Los códigos y tasas de la fila pertenecen a la compra.
             try {
-                $fiscal = app(\App\Services\Fiscal\FiscalTaxService::class)
-                    ->normalizeProductFiscalAttributes([
-                        'fiscal_profile_id' => $this->nullableInt($request->input('fiscal_profile_id'))
-                            ?? $this->nullableInt($sourceItem['fiscal_profile_id'] ?? null),
-                        'tax_code' => $sourceItem['tax_code'] ?? null,
-                        'tax_rate_code' => $sourceItem['tax_rate_code'] ?? null,
-                        'tax_rate' => $sourceItem['tax_rate'] ?? null,
-                    ]);
+                $fiscal = app(\App\Services\Fiscal\FiscalTaxService::class)->normalizeProductFiscalAttributes([
+                    'fiscal_profile_id' => $this->nullableInt($request->input('fiscal_profile_id')),
+                    'tax_rate' => $sourceItem['tax_rate'] ?? null,
+                ]);
             } catch (\InvalidArgumentException $exception) {
                 throw ValidationException::withMessages([
-                    'fiscal_profile_id' => 'Fila '.($sourceItem['_row_key'] ?? '?').': '.$exception->getMessage()
-                        .' Seleccione un tratamiento fiscal explícito.',
+                    'fiscal_profile_id' => $exception->getMessage(),
                 ]);
             }
 

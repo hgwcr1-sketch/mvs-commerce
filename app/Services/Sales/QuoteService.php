@@ -13,6 +13,7 @@ use App\Models\QuoteItemTax;
 use App\Models\User;
 use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -84,7 +85,7 @@ class QuoteService
                 $line['discountTotal'] = $this->decimal($line['discount'] + $share);
                 $line['subtotal'] = $this->decimal($line['gross'] - $line['discountTotal']);
                 $line['profile'] = $this->resolveLineProfile($line['product']);
-                $line['taxRate'] = $this->decimal((float) ($line['profile']->rate ?? 0));
+                $line['taxRate'] = $this->decimal((float) ($line['profile']?->rate ?? $line['product']->tax_rate ?? 0));
                 $line['taxTotal'] = $this->decimal($line['subtotal'] * ($line['taxRate'] / 100));
                 $line['total'] = $this->decimal($line['subtotal'] + $line['taxTotal']);
             }
@@ -200,23 +201,32 @@ class QuoteService
         }, 3);
     }
 
-    private function resolveLineProfile(Product $product): FiscalProfile
+    private function resolveLineProfile(Product $product): ?FiscalProfile
     {
+        if ($product->fiscal_profile_id === null) {
+            return null;
+        }
+
         try {
             return $this->fiscalTaxService->resolveProductProfile($product);
         } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages([
-                'items' => "El producto {$product->name} no puede cotizarse: requiere un perfil fiscal explícito ({$exception->getMessage()}).",
+            Log::warning('quote.fiscal_profile_unresolved', [
+                'company_id' => $product->company_id,
+                'product_id' => $product->id,
+                'error' => $exception->getMessage(),
             ]);
+
+            return null;
         }
     }
 
     private function persistItem(Quote $quote, array $line): void
     {
         $product = $line['product'];
-        /** @var FiscalProfile $profile */
         $profile = $line['profile'];
-        $snapshot = $this->fiscalTaxService->snapshotFromProfile($profile);
+        $snapshot = $profile !== null
+            ? $this->fiscalTaxService->snapshotFromProfile($profile)
+            : null;
 
         $quoteItem = $quote->items()->create([
             'product_id' => $product->id, 'product_code' => $product->internal_code,
@@ -225,14 +235,18 @@ class QuoteService
             'quantity' => $line['quantity'], 'unit_price' => $line['unitPrice'],
             'gross_total' => $line['gross'], 'discount_total' => $line['discountTotal'],
             'subtotal' => $line['subtotal'], 'tax_rate' => $line['taxRate'],
-            'tax_code' => $profile->tax_code,
-            'tax_rate_code' => $profile->tax_rate_code,
-            'tax_treatment' => $profile->treatment,
-            'fiscal_source' => $profile->catalogVersion?->source,
-            'fiscal_source_version' => $profile->catalogVersion?->source_version,
+            'tax_code' => $profile?->tax_code,
+            'tax_rate_code' => $profile?->tax_rate_code,
+            'tax_treatment' => $profile?->treatment,
+            'fiscal_source' => $profile?->catalogVersion?->source,
+            'fiscal_source_version' => $profile?->catalogVersion?->source_version,
             'fiscal_snapshot' => $snapshot,
             'tax_total' => $line['taxTotal'], 'total' => $line['total'], 'unit_cost' => $product->cost,
         ]);
+
+        if ($profile === null) {
+            return;
+        }
 
         QuoteItemTax::create([
             'quote_item_id' => $quoteItem->id,

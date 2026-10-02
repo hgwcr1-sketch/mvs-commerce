@@ -31,6 +31,7 @@ use App\Services\Loyalty\LoyaltyRegistrationIncentiveService;
 use App\Services\Loyalty\LoyaltyReturningCustomerService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -1157,15 +1158,17 @@ class PosSaleProcessor
                 $legacyTaxRate,
             );
         } catch (InvalidArgumentException $exception) {
-            throw ValidationException::withMessages([
-                'items' => "El producto {$product->name} no puede venderse: requiere un perfil fiscal explícito ({$exception->getMessage()}).",
+            Log::warning('pos.fiscal_profile_unresolved', [
+                'company_id' => $product->company_id,
+                'product_id' => $product->id,
+                'error' => $exception->getMessage(),
             ]);
+
+            return null;
         }
 
         if ($profile->tax_code !== '01' || $profile->rate === null) {
-            throw ValidationException::withMessages([
-                'items' => "El producto {$product->name} no puede venderse: su perfil fiscal no define una tarifa de IVA calculable por el POS.",
-            ]);
+            return null;
         }
 
         return $profile;
@@ -1198,7 +1201,7 @@ class PosSaleProcessor
                 ? $quoteItem->fiscal_snapshot
                 : null;
 
-            if (is_array($snapshot) && ! empty($snapshot['taxes'])) {
+            if (is_array($snapshot) && ! empty($snapshot['taxes']) && $current !== null) {
                 try {
                     $frozen = $this->fiscalTaxService->serializeSnapshot($snapshot);
                 } catch (InvalidArgumentException $exception) {

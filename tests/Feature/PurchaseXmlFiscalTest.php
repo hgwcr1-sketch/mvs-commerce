@@ -170,7 +170,7 @@ class PurchaseXmlFiscalTest extends TestCase
         $this->assertNull($primary->exemption_snapshot);
     }
 
-    public function test_document_rate_without_unequivocal_classification_blocks_the_line(): void
+    public function test_unclassified_document_tax_is_preserved_without_blocking_the_purchase(): void
     {
         [$company, $branch, $user, $product] = $this->context();
 
@@ -178,10 +178,17 @@ class PurchaseXmlFiscalTest extends TestCase
             ->post(route('compras.import.xml'), ['file' => $this->uploaded($this->xmlAmbiguous())])
             ->assertRedirect(route('compras.import.review'));
 
-        $this->post(route('compras.import.confirm'))
-            ->assertSessionHasErrors('items');
+        $this->post(route('compras.import.confirm'))->assertRedirect();
 
-        $this->assertDatabaseCount('purchases', 0);
+        $purchase = Purchase::query()->sole();
+        $item = PurchaseItem::query()->sole();
+        $this->assertSame(127.5, (float) $purchase->tax);
+        $this->assertSame(1627.5, (float) $purchase->total);
+        $this->assertSame(127.5, (float) $item->tax);
+        $this->assertSame(1627.5, (float) $item->total);
+        $this->assertCount(1, $item->fiscal_snapshot['document']['impuestos']);
+        $this->assertSame(0, PurchaseItemTax::query()->count());
+        $this->assertSame($this->profile('01', '08')->id, (int) $product->fresh()->fiscal_profile_id);
     }
 
     public function test_document_treatment_wins_over_the_product_profile(): void

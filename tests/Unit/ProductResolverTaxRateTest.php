@@ -11,7 +11,6 @@ use App\Services\Purchases\CompanyPurchaseSettingsResolver;
 use App\Services\Purchases\ProductResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
-use Illuminate\Validation\ValidationException;
 
 class ProductResolverTaxRateTest extends TestCase
 {
@@ -24,54 +23,34 @@ class ProductResolverTaxRateTest extends TestCase
         parent::setUp();
         $this->resolver = new ProductResolver(
             new CompanyPurchaseSettingsResolver(),
-            app(\App\Services\Fiscal\FiscalTaxService::class),
         );
     }
 
-    public function test_missing_tax_rate_fails_explicitly_and_never_defaults_to_13(): void
+    public function test_missing_tax_rate_creates_pending_product(): void
     {
         [$company] = $this->context();
         $this->unit($company);
 
-        try {
-            $this->resolver->resolve($company, new PurchaseLineData(
-                name: 'Producto sin tasa ' . uniqid(),
-                category: 'Categoría ' . uniqid(),
-                unit: 'Unidad U',
-                unit_cost: 100,
-                tax_rate: null,
-            ));
-            $this->fail('Expected ValidationException for tax_rate null');
-        } catch (ValidationException $exception) {
-            $this->assertStringContainsString('no incluye perfil fiscal', $exception->getMessage());
-        }
+        $product = $this->resolver->resolve($company, new PurchaseLineData(
+            name: 'Producto sin tasa ' . uniqid(),
+            category: 'Categoría ' . uniqid(),
+            unit: 'Unidad U',
+            unit_cost: 100,
+        ));
 
-        $this->assertDatabaseCount('products', 0);
+        $this->assertNull($product->fiscal_profile_id);
+        $this->assertNull($product->tax_rate);
+        $this->assertDatabaseCount('products', 1);
     }
 
-    public function test_ambiguous_rates_are_blocked_and_unequivocal_rates_are_kept(): void
+    public function test_purchase_rates_never_assign_a_fiscal_profile(): void
     {
         [$company] = $this->context();
         $this->unit($company);
 
-        foreach ([0.0, 8.0] as $rate) {
-            try {
-                $this->resolver->resolve($company, new PurchaseLineData(
-                    name: 'Producto ambiguo ' . $rate . ' ' . uniqid(),
-                    category: 'Categoría ' . uniqid(),
-                    unit: 'Unidad U',
-                    unit_cost: 100,
-                    tax_rate: $rate,
-                ));
-                $this->fail('Expected ValidationException for ambiguous rate '.$rate);
-            } catch (ValidationException) {
-                $this->assertTrue(true);
-            }
-        }
-
-        foreach ([1.0, 2.0, 4.0, 13.0] as $rate) {
+        foreach ([0.0, 1.0, 2.0, 4.0, 8.0, 13.0] as $rate) {
             $product = $this->resolver->resolve($company, new PurchaseLineData(
-                name: 'Producto con tasa ' . $rate . ' ' . uniqid(),
+                name: 'Producto con tasa '.$rate.' '.uniqid(),
                 category: 'Categoría ' . uniqid(),
                 unit: 'Unidad U',
                 unit_cost: 100,
@@ -79,10 +58,10 @@ class ProductResolverTaxRateTest extends TestCase
             ));
 
             $this->assertSame($rate, (float) $product->tax_rate);
-            $this->assertNotNull($product->fiscal_profile_id);
+            $this->assertNull($product->fiscal_profile_id);
         }
 
-        $this->assertSame(4, Product::query()->where('company_id', $company->id)->count());
+        $this->assertSame(6, Product::query()->where('company_id', $company->id)->count());
         $this->assertSame(1, Product::query()->where('company_id', $company->id)->where('tax_rate', 13)->count());
     }
 
