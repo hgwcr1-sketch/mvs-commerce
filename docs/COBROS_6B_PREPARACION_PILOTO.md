@@ -118,6 +118,55 @@ renumerar fases ni implementar funciones nuevas.
 
 ## Aplicación futura: procedimiento NO ejecutado
 
+### Validación reproducible en staging PostgreSQL + HTTPS
+
+Ejecutar solo por el operador autorizado en staging aislado; no usar producción
+ni la base maestra. Definir en el entorno (sin incluir secretos en comandos,
+archivos, historial o logs): `PGHOST`, `PGPORT`, `PGDATABASE`,
+`PGUSER`, `PGSSLMODE`, `BACKUP_FILE`, `RESTORE_DB`,
+`APP_ENV=testing`, `DB_CONNECTION=pgsql`, `DB_HOST`, `DB_PORT`,
+`DB_DATABASE`, `DB_USERNAME` y `DB_PASSWORD` (inyectado desde el gestor
+aprobado de secretos). Verificar host, base, usuario y permiso antes de cada
+operación; detenerse si el destino no es inequívoco.
+
+1. **Respaldo y restauración:** suspender escrituras de prueba; crear dump
+   custom con `pg_dump --format=custom --file="$BACKUP_FILE" --dbname="$PGDATABASE"`
+   usando la conexión/variables aprobadas. Comprobar archivo, checksum y
+   `pg_restore --list "$BACKUP_FILE"`. Restaurar a una base vacía, aislada y
+   desechable `RESTORE_DB` con `pg_restore --exit-on-error --dbname="$RESTORE_DB"
+   "$BACKUP_FILE"`; comprobar esquema, FK, conteos y sumas de pagos/recibos/
+   reversos/saldos/caja. No probar restauración encima de staging ni de una
+   base con pagos posteriores.
+2. **Migraciones de staging:** respaldar staging antes de migrar y ensayar
+   primero en la restauración aislada. Con el release aprobado y la conexión
+   verificada, ejecutar `php artisan migrate:status`; comparar TODOS los
+   pendientes con la lista autorizada. Solo si coincide y el respaldo es
+   restaurable, ejecutar `php artisan migrate --force`; después repetir status
+   y conciliación. No usar `migrate:fresh`, `refresh`, `reset` ni rollback SQL.
+3. **Pruebas de pago:** crear otra base PostgreSQL vacía y exclusiva para tests,
+   con usuario limitado; `CobrosPaymentTest` usa `RefreshDatabase` y puede
+   reinicializarla. Configurar `APP_ENV=testing` y `DB_*` solo para esa base,
+   verificar el destino y correr
+   `php artisan test tests/Feature/CobrosPaymentTest.php`. No apuntar tests a
+   staging restaurado/poblado. Confirmar idempotencia, importes DECIMAL,
+   recibo único, saldo y cero sesiones/movimientos/efecto de caja en custodia.
+4. **Service Worker HTTPS:** publicar únicamente en staging HTTPS con el asset
+   PWA integrado en Vite. En navegador compatible, abrir `/cobros`, confirmar
+   que `/sw-cobros.js` responde, que Application/Service Workers muestra
+   registro bajo `/cobros` en estado `activated` y que la página queda
+   controlada. Recargar y actualizar el release; validar assets públicos y
+   fallback GET offline. Enviar solo una solicitud POST sintética sin datos ni
+   operación financiera y confirmar que no se almacena/reproduce pago offline;
+   verificar que rutas fuera de `/cobros` no quedan interceptadas. Registrar
+   navegador, versión, URL HTTPS, scope y evidencia sin datos sensibles.
+5. **Rollback:** suspender escrituras y conservar logs/token/recibos y snapshot
+   posterior. Revertir solo código/assets a release compatible, manteniendo el
+   esquema ampliado; jamás ejecutar `migrate:rollback`/`down` de 3B/3C ni
+   restaurar el dump encima de datos posteriores. Si hay discrepancias, mantener
+   cobros suspendidos, restaurar el dump en una base aislada y reconciliar
+   pagos posteriores antes de decidir corrección hacia adelante. Reabrir solo
+   tras conciliación y aprobación documentada.
+
 1. **Precondiciones.** Cerrar bloqueos, revisión de auditor, pruebas focales y
    globales evaluadas separadamente, dispositivo y staging, validación del usuario
    y `APROBADO PARA PRODUCCIÓN`. Registrar SHA exacto nuevo/anterior compatible,
