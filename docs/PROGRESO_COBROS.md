@@ -1,5 +1,20 @@
 # MVS CobrOS — Registro de avance
 
+## 6B — Preparación local, piloto BLOQUEADO (2026-10-01)
+
+Base `feature/cobros-v1`, `9b0a218`. Informe reproducible, inventario de
+migraciones, revisión PG, brechas V1 y respaldo/aplicación/build/smoke/recuperación
+sin borrar pagos: [COBROS_6B_PREPARACION_PILOTO.md](COBROS_6B_PREPARACION_PILOTO.md).
+Suite focal previa: 279/279, 2277 aserciones; pruebas nuevas 6B: 2/2, 21.
+Probe multiproceso SQLite exclusivo PASS: un pago/recibo, retry y caja intacta.
+Worker con red fallida simulada PASS; build/Pint PASS. No funciones nuevas.
+PG real pendiente (sin pdo_pgsql); Chrome CDP falló dos veces, sin aprobación
+360/768/1280 ni instalación. Hallazgos bloqueantes: asset PWA ausente/no incluido
+en build y floats en servicio financiero compartido; brechas de cupos,
+liquidación/custodia, dispositivos/GPS. Auditoría/usuario pendientes.
+6B/DoD no completada. Sin SSH/push/merge/deploy ni cambios a base de revisión;
+servidor y temporales previos preservados. Commit limitado a pruebas/documentos.
+
 > Fuente oficial del orden de fases: `docs/CRONOGRAMA_COBROS.md`
 > (Cronograma Maestro de MVS CobrOS). Este registro documenta la evidencia
 > de avance de cada fase; el cronograma define el orden y el alcance.

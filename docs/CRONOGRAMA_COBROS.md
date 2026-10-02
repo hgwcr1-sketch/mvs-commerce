@@ -368,6 +368,12 @@ declarados: política de dispositivos del cobrador y retención geográfica
   los pendientes heredados de 5B/5C.
 
 ### 6B — Preparación producción
+- Estado 2026-10-01: **PREPARACIÓN LOCAL DOCUMENTADA; BLOQUEADO PARA PILOTO**.
+  Base `9b0a218`; evidencia, revisión PostgreSQL, brechas V1 y recuperación
+  sin borrar pagos en `docs/COBROS_6B_PREPARACION_PILOTO.md`. Concurrencia SQLite
+  multiproceso, retry HTTP y fallo antes de commit PASS; build PASS.
+  Ejecución PG, responsive/PWA real, auditoría y aprobación del usuario pendientes;
+  detectados asset PWA ausente y floats en CxC compartido. DoD NO completada.
 - Objetivo: llegar a PRODUCCIÓN de forma controlada.
 - Funcionalidades: build Vite + PWA real (cierra 1B); staging/validación del
   usuario; migraciones no destructivas con backup; deploy; smoke tests;
