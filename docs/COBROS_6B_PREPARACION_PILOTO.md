@@ -102,15 +102,15 @@ no ejecutarlo sin fijar y verificar base vacía exclusiva y credenciales limitad
 
 | Área | Existente | Brecha / condición de cierre |
 |---|---|---|
-| PWA (5B) | Manifest, worker público y fuente JS | Layout pide `/js/cobros-pwa.js`, archivo público inexistente; Vite entra por app.js/app.css sin importar esa fuente. Build verde no registra el SW. Corregir integración y probar antes del piloto |
+| PWA (5B) | Manifest, worker público y fuente JS | Layout pide `/js/cobros-pwa.js`, archivo público inexistente; Vite entra por app.js/app.css sin importar esa fuente. Build verde no registra el SW. Corregir integración y validar registro/activación en servidor HTTPS antes del piloto |
 | Mala señal | Replay con mismo token; no pago offline | No se encontró consumidor operacional de captureDraft/sync-ready en vistas. Captura nueva genera token nuevo: no certificada recuperación tras cierre/recarga. Banner se incluye online=true y no renderiza aviso por defecto |
 | Precisión | Gate CobrOS usa BCMath, columnas decimal(19,4) | Servicio compartido applyPayment convierte montos/saldos a float y round, contrario a precisión extremo a extremo. Requiere alcance de corrección y tests de límites; no se afirma pérdida concreta con los montos pequeños probados |
 | Liquidación | Custodia, recibos, reversos y reportes netos | No hay entrega/aceptación/conciliación e ingreso a caja. Excluido de 3B/3C, pero arquitectura exige liquidación antes de caja. Definir operación del piloto; nunca registrar otro pago para liquidar |
-| Licencias/cupos | Individual/company_cupo, Platform Admin, altas por dueño según contrato | Contrato por empresa; no evidenciado contrato individual con vigencia propia por cobrador. canCreateCollector cuenta antes de transacción sin lock contractual; toggleCollector reactiva sin revalidar cupo. Falta control/prueba de altas concurrentes/reactivación. admin_license_charged no implica facturación |
+| Licencias/cupos | Individual/company_cupo, Platform Admin, altas por dueño según contrato | **Bloqueador:** contrato por empresa; no evidenciado contrato individual con vigencia propia por cobrador. canCreateCollector cuenta antes de transacción sin lock contractual; toggleCollector reactiva sin revalidar cupo. Falta decisión de contrato, control y prueba de altas concurrentes/reactivación. admin_license_charged no implica facturación |
 | Standalone | Login/navegación propios, User y monolito compartidos según V1 | No significa backend/base separados. Instalación display:standalone, retorno/sesión/actualización en teléfono pendientes; no crear identidad paralela |
 | Dispositivos | Auth/sesión, permisos, revocación y rate limiting | Política de confianza, pérdida/robo, sesiones simultáneas y retiro pendientes; sin certificación Android/iOS/GPS real |
 | GPS | Ubicación cliente y snapshot visita | Falta plazo/finalidad, consentimiento operativo, acceso, backups y purga/anonimización autorizada preservando pagos/auditoría. No borrar GPS/pagos aquí |
-| Responsive | CSS/markup mobile-first, controles 44/48/56px | 360/768/1280 pendientes por CDP; CTA confirmación no persistente en markup inspeccionado. Probar teclado, nombres largos, menú y pantallas financieras |
+| Responsive | CSS/markup mobile-first, controles 44/48/56px | Prueba local 6B PASS en formulario, vista previa y recibo a 360/768/1280 sin overflow horizontal; esto no certifica dispositivo real. Revisar teclado, nombres largos, menú y pantallas financieras en dispositivo real antes del piloto |
 
 La arquitectura inicial menciona licencia por ruta; 1E-A/1E-B documentan después
 individual/company_cupo. Se registra evolución/brechas, sin cambiar contratos,
@@ -173,6 +173,30 @@ renumerar fases ni implementar funciones nuevas.
 5. Pago erróneo: anulación por flujo existente con permiso, motivo y reverso;
    nunca DELETE. Reabrir tras conciliación sin diferencias, smoke y aprobación.
 
-**Decisión:** BLOQUEADO para piloto financiero: asset PWA ausente, floats
-compartidos, PG no ejecutado, cupos/políticas/custodia por cerrar y
-auditoría/usuario/dispositivo pendientes. Preparación no equivale a aprobación.
+## Expediente final y siguiente acción del operador
+
+**Estado: BLOQUEADO para piloto financiero; listo para validación externa.**
+Bloqueadores de salida:
+
+- PostgreSQL: pendiente; ejecutar revisión/migraciones y pruebas autorizadas en
+  una base aislada y verificada, con respaldo restaurable; conciliar pagos,
+  recibos, reversos, saldos y caja. No usar la base maestra para ensayos.
+- Service worker: corregir primero la integración de asset PWA documentada
+  arriba; luego validar registro, activación, alcance `/cobros`, actualización y
+  offline en staging servido por HTTPS.
+- Auditoría externa independiente: revisar seguridad, aislamiento, permisos,
+  idempotencia y trazabilidad; registrar informe y remediar hallazgos bloqueantes.
+- Dispositivo real: completar prueba supervisada en móvil compatible, incluida
+  instalación, sesión, responsive, pérdida/recuperación de conexión y recibo.
+- Cupos/licencias: dueño de producto/Platform Admin define contrato y vigencia;
+  verificar límites, concurrencia de altas y reactivación, con pruebas aprobadas.
+- Custodia: responsable financiero define entrega, aceptación, conciliación y
+  tratamiento de fondos antes de habilitar operación piloto o caja.
+- Resolver además la brecha de precisión monetaria en el servicio CxC compartido;
+  no habilitar pagos de piloto mientras permanezca sin corregir y verificar.
+
+El operador debe coordinar y registrar evidencia de cada validación anterior,
+obtener aprobación del responsable financiero y del usuario, y solicitar
+`APROBADO PARA PRODUCCIÓN` explícito antes de cualquier despliegue. No entregar
+contraseñas al agente ni ejecutar SSH/producción como parte de este expediente.
+Preparación y PASS local responsive no equivalen a autorización de piloto.
