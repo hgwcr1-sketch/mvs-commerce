@@ -70,6 +70,21 @@ class CobrosPaymentTest extends TestCase
         $response->assertRedirect(route('cobros.collector.payments.receipt', 'RCB-00000001'));
     }
 
+    public function test_four_decimal_payment_keeps_the_exact_remaining_balance(): void
+    {
+        [$company, $branch, $collector] = $this->context();
+        [, $account] = $this->customerWithAccount($company, $branch, $collector, '100.0002');
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id])->post(
+            route('cobros.collector.payments.store', $account),
+            $this->confirm($this->payload('0.0001', $this->method($company, 'cash')))
+        )->assertRedirect(route('cobros.collector.payments.receipt', 'RCB-00000001'));
+
+        $this->assertSame('0.0001', (string) AccountReceivablePayment::sole()->amount);
+        $this->assertSame('100.0001', (string) $account->fresh()->balance_due);
+        $this->assertSame('0.0001', (string) CobrosReceipt::sole()->amount);
+    }
+
     public function test_total_payment_marks_account_paid(): void
     {
         [$c, $b, $u] = $this->context();

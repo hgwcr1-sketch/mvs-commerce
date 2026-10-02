@@ -19,17 +19,25 @@ class AccountsReceivableService
     public function createForSale(Sale $sale, Customer $customer): AccountReceivable
     {
         $customer = Customer::query()->whereKey($customer->id)->where('company_id', $sale->company_id)->where('is_active', true)->lockForUpdate()->first();
-        if (!$customer) throw ValidationException::withMessages(['customer_id' => 'Para vender a crédito debe seleccionar un cliente válido.']);
-        if ((float) $customer->credit_limit <= 0) throw ValidationException::withMessages(['credit' => 'Este cliente no tiene crédito autorizado.']);
-        if ((int) $customer->credit_days <= 0) throw ValidationException::withMessages(['credit' => 'El cliente no tiene un plazo de crédito configurado.']);
+        if (! $customer) {
+            throw ValidationException::withMessages(['customer_id' => 'Para vender a crédito debe seleccionar un cliente válido.']);
+        }
+        if (bccomp((string) $customer->credit_limit, '0', 2) <= 0) {
+            throw ValidationException::withMessages(['credit' => 'Este cliente no tiene crédito autorizado.']);
+        }
+        if ((int) $customer->credit_days <= 0) {
+            throw ValidationException::withMessages(['credit' => 'El cliente no tiene un plazo de crédito configurado.']);
+        }
 
-        $used = (float) AccountReceivable::query()->forCompany($sale->company_id)->where('customer_id', $customer->id)
+        $used = (string) AccountReceivable::query()->forCompany($sale->company_id)->where('customer_id', $customer->id)
             ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])->lockForUpdate()->sum('balance_due');
-        if ((float) $sale->total > (float) $customer->credit_limit - $used) {
+        $available = bcsub((string) $customer->credit_limit, bcadd($used, '0', 4), 4);
+        if (bccomp((string) $sale->total, $available, 4) > 0) {
             throw ValidationException::withMessages(['credit' => 'El cliente no tiene crédito disponible suficiente.']);
         }
 
         $issued = ($sale->completed_at ?? now())->copy()->startOfDay();
+
         return AccountReceivable::firstOrCreate(['sale_id' => $sale->id], [
             'company_id' => $sale->company_id, 'branch_id' => $sale->branch_id, 'customer_id' => $customer->id,
             'issued_at' => $issued->toDateString(), 'due_date' => $issued->copy()->addDays((int) $customer->credit_days)->toDateString(),
@@ -59,14 +67,21 @@ class AccountsReceivableService
     {
         return DB::transaction(function () use ($account, $data, $user, $companyId, $branchId, $custody) {
             $account = AccountReceivable::query()->forCompany($companyId)->forBranch($branchId)->whereKey($account->id)->lockForUpdate()->firstOrFail();
-            if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true) || (float) $account->balance_due <= 0) {
+            $balanceDue = bcadd((string) $account->balance_due, '0', 4);
+            if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true) || bccomp($balanceDue, '0', 4) <= 0) {
                 throw ValidationException::withMessages(['account' => 'La cuenta ya no admite abonos.']);
             }
-            $amount = round((float) $data['amount'], 4);
-            if ($amount <= 0 || $amount > (float) $account->balance_due) throw ValidationException::withMessages(['amount' => 'El abono debe ser positivo y no superar el saldo pendiente.']);
+            $amount = $this->roundedAmount($data['amount'] ?? null);
+            if (bccomp($amount, '0', 4) <= 0 || bccomp($amount, $balanceDue, 4) > 0) {
+                throw ValidationException::withMessages(['amount' => 'El abono debe ser positivo y no superar el saldo pendiente.']);
+            }
             $method = PaymentMethod::query()->forCompany($companyId)->active()->whereKey($data['payment_method_id'])->lockForUpdate()->first();
-            if (!$method || in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) throw ValidationException::withMessages(['payment_method_id' => 'La forma de pago no está disponible para abonos.']);
-            if ($method->requires_reference && empty($data['reference'])) throw ValidationException::withMessages(['reference' => "La referencia es obligatoria para {$method->name}."]);
+            if (! $method || in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) {
+                throw ValidationException::withMessages(['payment_method_id' => 'La forma de pago no está disponible para abonos.']);
+            }
+            if ($method->requires_reference && empty($data['reference'])) {
+                throw ValidationException::withMessages(['reference' => "La referencia es obligatoria para {$method->name}."]);
+            }
             $session = $custody ? null : $this->cashSessionResolver->resolve($user, $companyId, $branchId, $data['cash_session_id'] ?? null, true);
             $payment = AccountReceivablePayment::create([
                 'account_receivable_id' => $account->id, 'company_id' => $companyId, 'branch_id' => $branchId, 'customer_id' => $account->customer_id,
@@ -74,10 +89,27 @@ class AccountsReceivableService
                 'affects_cash_snapshot' => $session !== null && $method->affects_cash, 'cash_effect_amount' => $session !== null && $method->affects_cash ? $amount : 0,
                 'reference' => $data['reference'] ?? null, 'notes' => $data['notes'] ?? null, 'paid_at' => now(),
             ]);
-            $balance = round((float) $account->balance_due - $amount, 4);
-            $status = $balance <= 0 ? AccountReceivable::STATUS_PAID : ($account->due_date->isBefore(today()) ? AccountReceivable::STATUS_OVERDUE : AccountReceivable::STATUS_PARTIAL);
-            $account->update(['balance_due' => max(0, $balance), 'status' => $status]);
+            $balance = bcsub($balanceDue, $amount, 4);
+            $isPaid = bccomp($balance, '0', 4) <= 0;
+            $status = $isPaid ? AccountReceivable::STATUS_PAID : ($account->due_date->isBefore(today()) ? AccountReceivable::STATUS_OVERDUE : AccountReceivable::STATUS_PARTIAL);
+            $account->update(['balance_due' => $isPaid ? '0.0000' : $balance, 'status' => $status]);
+
             return $payment;
         }, 3);
+    }
+
+    private function roundedAmount(mixed $value): string
+    {
+        $amount = is_string($value) || is_int($value) ? trim((string) $value) : '';
+        if (! preg_match('/^\d{1,15}(?:\.\d+)?$/D', $amount)) {
+            throw ValidationException::withMessages(['amount' => 'El abono debe ser un monto decimal válido.']);
+        }
+
+        $fraction = explode('.', $amount, 2)[1] ?? '';
+        $rounded = bcadd($amount, '0', 4);
+
+        return isset($fraction[4]) && $fraction[4] >= '5'
+            ? bcadd($rounded, '0.0001', 4)
+            : $rounded;
     }
 }

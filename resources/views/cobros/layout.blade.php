@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('icons/cobros/apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
     <meta name="theme-color" content="#D4AF37">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/cobros-pwa.js'])
     <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=3">
 </head>
 <body class="cobros-app" data-cobros-owner="{{ auth()->id() }}:{{ $company->id }}">
@@ -58,7 +58,6 @@
         <p class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</p>
     </dialog>
     <script src="{{ asset('js/cobros-navigation.js') }}?v=1" defer></script>
-    <script src="{{ asset('js/cobros-pwa.js') }}?v=1" defer></script>
     @include('cobros.components.connection')
 </body>
 </html>
