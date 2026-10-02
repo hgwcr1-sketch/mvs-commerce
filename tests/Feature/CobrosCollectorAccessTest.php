@@ -200,7 +200,7 @@ class CobrosCollectorAccessTest extends TestCase
                 $link = 'href="'.route('cobros.'.$route).'"';
                 if ($route === $selected) {
                     $response->assertSee($link, false);
-                    $this->assertSame(2, substr_count($response->getContent(), $link));
+                    $this->assertSame(1, substr_count($response->getContent(), $link));
                 } else {
                     $response->assertDontSee($link, false);
                 }
@@ -211,10 +211,96 @@ class CobrosCollectorAccessTest extends TestCase
                 $href = $link->getAttribute('href');
                 $this->assertTrue(str_starts_with($href, '#') || str_starts_with($href, url('/cobros')), $href);
             }
+            [$barHrefs, $panelHrefs] = $this->navHrefsBySlot($dom);
+            $this->assertSame([], array_intersect($barHrefs, $panelHrefs), 'barra y Más no deben duplicar enlaces');
+            $this->assertSame(array_unique($barHrefs), $barHrefs, 'la barra no debe repetir enlaces');
+            $this->assertSame(array_unique($panelHrefs), $panelHrefs, 'el panel Más no debe repetir enlaces');
+            $expected = match ($selected) {
+                'owner.dashboard' => ['cobros.owner.dashboard', 'cobros.owner.collectors', 'cobros.owner.audit', 'cobros.owner.reports', 'cobros.owner.alerts'],
+                'supervisor.index' => ['cobros.supervisor.index', 'cobros.supervisor.alerts', 'cobros.supervisor.audit'],
+                'collector.index' => ['cobros.visits.today', 'cobros.collector.index', 'cobros.collector.payments.history'],
+            };
+            $this->assertSame(
+                array_map(fn ($r) => route($r), $expected),
+                array_merge($barHrefs, $panelHrefs),
+                'la barra Más deben cubrir exactamente las opciones autorizadas de la empresa activa'
+            );
+            $response->assertDontSee('Fidelización')->assertDontSee('Fidelization');
             if ($selected === 'supervisor.index') {
                 $response->assertSee('Panel del supervisor')->assertDontSee('Total por cobrar')->assertDontSee('Clientes con saldo');
             }
         }
+    }
+
+    public function test_owner_full_profile_sees_each_authorized_option_exactly_once(): void
+    {
+        [$c, $b, $u] = $this->context([
+            'cobros.acceder',
+            'cobros.portal_dueno',
+            'cobros.supervisar',
+            'cobros.asignar',
+            'cobros.cobrar',
+        ]);
+
+        $response = $this->actingAs($u)->withSession(['active_company_id' => $c->id, 'active_branch_id' => $b->id])
+            ->get(route('cobros.owner.dashboard'))->assertOk();
+        $content = $response->getContent();
+
+        $expected = [
+            'cobros.owner.dashboard',
+            'cobros.owner.collectors',
+            'cobros.owner.assignments',
+            'cobros.supervisor.index',
+            'cobros.owner.audit',
+            'cobros.owner.reports',
+            'cobros.owner.alerts',
+            'cobros.visits.today',
+            'cobros.collector.index',
+            'cobros.collector.payments.history',
+        ];
+        foreach ($expected as $route) {
+            $this->assertSame(1, substr_count($content, 'href="'.route($route).'"'), $route);
+        }
+
+        // Alertas y Auditoría aparecen UNA vez: el dueño no ve las variantes de
+        // supervisión que apuntan al mismo controlador.
+        $this->assertSame(1, substr_count($content, '<span>Alertas</span>'));
+        $this->assertSame(1, substr_count($content, '<span>Auditoría</span>'));
+        $response->assertDontSee(route('cobros.supervisor.alerts'), false)
+            ->assertDontSee(route('cobros.supervisor.audit'), false);
+
+        // Sin filtraciones de navegación Commerce/Fidelización en el shell CobrOS.
+        $response->assertDontSee('MVS Commerce')
+            ->assertDontSee('Fidelización')->assertDontSee('Fidelization');
+
+        $dom = new \DOMDocument;
+        @$dom->loadHTML($content);
+        [$barHrefs, $panelHrefs] = $this->navHrefsBySlot($dom);
+        $this->assertNotEmpty($barHrefs);
+        $this->assertNotEmpty($panelHrefs);
+        $this->assertSame([], array_intersect($barHrefs, $panelHrefs), 'sin duplicación barra vs Más');
+        foreach ($dom->getElementsByTagName('a') as $link) {
+            $href = $link->getAttribute('href');
+            $this->assertTrue(str_starts_with($href, '#') || str_starts_with($href, url('/cobros')), $href);
+        }
+    }
+
+    /** @return array{0: list<string>, 1: list<string>} */
+    private function navHrefsBySlot(\DOMDocument $dom): array
+    {
+        $hrefs = ['cobros-navigation' => [], 'cobros-panel-navigation' => []];
+        foreach ($dom->getElementsByTagName('nav') as $nav) {
+            $classes = preg_split('/\s+/', trim($nav->getAttribute('class'))) ?: [];
+            foreach (array_keys($hrefs) as $slot) {
+                if (in_array($slot, $classes, true)) {
+                    foreach ($nav->getElementsByTagName('a') as $anchor) {
+                        $hrefs[$slot][] = $anchor->getAttribute('href');
+                    }
+                }
+            }
+        }
+
+        return [$hrefs['cobros-navigation'], $hrefs['cobros-panel-navigation']];
     }
 
     private function context(array $permissions = ['cobros.acceder', 'cobros.cobrar'], ?User $user = null): array
