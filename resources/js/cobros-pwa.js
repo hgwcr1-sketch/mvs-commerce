@@ -129,8 +129,9 @@
                 if (window.cobrosPwa.deferredPrompt) {
                     triggerInstall();
                 } else {
-                    // Fallback: abre los ajustes del sistema.
-                    window.open('/', '_blank');
+                    // Fallback sin prompt: jamás salir hacia Commerce; la
+                    // instalación disponible es la del manifest-cobros.json.
+                    window.open('/cobros', '_blank');
                 }
             });
         }

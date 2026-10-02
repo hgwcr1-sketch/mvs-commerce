@@ -108,7 +108,10 @@ self.oninstall = async (event) => {
                 '/icons/cobros/icon-512x512.png',
             ]);
             await self.skipWaiting();
-            await self.clients.claim();
+            // claim() NO se espera en install: sin worker activo aún la promesa
+            // se rechaza (InvalidStateError), el waitUntil falla, el worker pasa
+            // a redundant y el navegador borra el registro. claim() se ejecuta en
+            // activate (más abajo), donde sí hay worker activo.
         })()
     );
 };

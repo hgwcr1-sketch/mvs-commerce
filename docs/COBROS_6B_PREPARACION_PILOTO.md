@@ -1,10 +1,38 @@
 # CobrOS 6B — Preparación local del piloto
 
+2026-10-02: ver **Actualización 2026-10-02 — staging HTTPS** más abajo (fix
+de `sw-cobros.js` + validación SW/manifest en staging; dispositivo real sigue
+pendiente).
+
 2026-10-01 (Costa Rica). **Validación local 6B cerrada; BLOQUEADO para piloto
 financiero**. 6B/Definition of Done de producción NO completada. Base de cierre:
 `feature/cobros-v1`, `08fba58`. Sin cambios funcionales, SSH, push, merge ni
 despliegue. Base de revisión, servidor y temporales previos preservados. No se
 consultó la base maestra.
+
+### Actualización 2026-10-02 — solo staging HTTPS (nada de esto sustituye el móvil físico)
+
+| Validación | Resultado hoy (2026-10-02) |
+|---|---|
+| `public/sw-cobros.js` | **CORREGIDO (hallazgo real) + PROBADO**: `await self.clients.claim()` dentro de `oninstall` se rechazaba porque al primer install no hay worker activo; el `waitUntil` fallaba, el worker pasaba a `redundant` y Chrome **borraba el registro** (era el síntoma “Registration has no worker”). Fix mínimo: `claim()` solo en `activate`. Staging con respaldo `public/sw-cobros.js.bak-sw-20261002-131416`. |
+| Registro/activación/scope en `https://cobros-staging.mvscommerce.com` | **PROBADO**: scope `…/cobros`, estado `activated`, página controlada por `sw-cobros.js`, script responde 200. |
+| Cachés del SW | **PROBADO**: solo `cobros-pwa-v2-static` con `/manifest-cobros.json` + 2 iconos CobrOS; ningún HTML ni respuesta autenticada. |
+| Aislamiento | **PROBADO**: rutas fuera de `/cobros` (p. ej. `/dashboard`) no son interceptables por el SW. |
+| Fallback offline GET | **PROBADO** con emulación de red sobre página + SW: `/cobros/login` devuelve 503 “Sin conexión”. No equivale a pérdida física de señal en un teléfono. |
+| Manifest/CTA/iconos CobrOS | **PROBADO**: toda página `/cobros` declara `manifest-cobros.json` (`id`/`start_url`/`scope` = `/cobros`, 4 iconos), cero referencias a `manifest.json`; `assets/cobros-pwa-DZqbccKS.js` responde 200 y su fallback de instalación abre `/cobros` (antes `/`). `manifest.json` de Commerce **no** se modificó: su `scope` no admite excluir `/cobros` y limitarlo rompería sus rutas. |
+| Integración Vite del asset PWA (brecha “Layout pide `/js/cobros-pwa.js`”) | **CERRADA**: `@vite([... 'resources/js/cobros-pwa.js'])` genera y sirve `assets/cobros-pwa-DZqbccKS.js`. |
+| Página CobrOS sin `Dashboard`/`Fidelización` (móvil emulado 360 px, UA Android) | **PROBADO** en `/cobros/login` (invitado): sin “Dashboard”, sin “Fidelización”, sin overflow horizontal, marca CobrOS presente. `/cobros` y `/cobros/owner` redirigen a `/cobros/login` sin sesión. |
+| Registro automático del SW por la app (`cobros-pwa.js` en el layout) | **NO PROBADO**: el bundle solo se carga en el layout autenticado y no se entregan credenciales al agente; el probe registró con los mismos parámetros (`/sw-cobros.js`, scope `/cobros`). |
+| Ciclo 2 (cerrar sesión y reabrir la PWA) | **NO EJECUTADO**: requiere sesión autenticada y dispositivo. |
+| Dispositivo real: icono → `/cobros` → login → `/cobros/owner` | **NO EJECUTADO**: requiere móvil físico con el PWA instalado. |
+| PostgreSQL, auditoría externa, custodia, licencias/cupos, precisión monetaria, GPS, aprobaciones | **PENDIENTES**, sin cambios hoy. |
+
+Evidencia temporal (no commiteada): `tmp_6b_staging_pwa.cjs/.txt`,
+`tmp_6b_sw_diag2.txt`, `tmp_6b_sw_install_test.cjs/.txt` (experimento A/B:
+original falla en install; sin `claim()` en install queda `activated`).
+Pruebas locales: `CobrosSecurityHardeningTest|CobrosModuleAccessTest|CobrosManifestTest`
+→ 20/20 (173 aserciones) y `node tests/js/cobros-6b-offline.cjs` → PASS.
+No se modificaron roles, BD, `.env`, navegación (`5ddb018`) ni producción.
 
 ### Cierre local de navegador (HEAD 08fba58)
 
@@ -102,7 +130,7 @@ no ejecutarlo sin fijar y verificar base vacía exclusiva y credenciales limitad
 
 | Área | Existente | Brecha / condición de cierre |
 |---|---|---|
-| PWA (5B) | Manifest, worker público y fuente JS | Layout pide `/js/cobros-pwa.js`, archivo público inexistente; Vite entra por app.js/app.css sin importar esa fuente. Build verde no registra el SW. Corregir integración y validar registro/activación en servidor HTTPS antes del piloto |
+| PWA (5B) | Manifest, worker público y fuente JS | ~~Layout pide `/js/cobros-pwa.js`…~~ **Cerrado 2026-10-02:** el layout usa `@vite([…, 'resources/js/cobros-pwa.js'])`, el build publica `assets/cobros-pwa-DZqbccKS.js` (200) y el registro/activación del SW en HTTPS de staging quedó probado (ver Actualización 2026-10-02). Falta: registro automático por la app en layout autenticado y prueba en dispositivo real |
 | Mala señal | Replay con mismo token; no pago offline | No se encontró consumidor operacional de captureDraft/sync-ready en vistas. Captura nueva genera token nuevo: no certificada recuperación tras cierre/recarga. Banner se incluye online=true y no renderiza aviso por defecto |
 | Precisión | Gate CobrOS usa BCMath, columnas decimal(19,4) | Servicio compartido applyPayment convierte montos/saldos a float y round, contrario a precisión extremo a extremo. Requiere alcance de corrección y tests de límites; no se afirma pérdida concreta con los montos pequeños probados |
 | Liquidación | Custodia, recibos, reversos y reportes netos | No hay entrega/aceptación/conciliación e ingreso a caja. Excluido de 3B/3C, pero arquitectura exige liquidación antes de caja. Definir operación del piloto; nunca registrar otro pago para liquidar |
@@ -230,9 +258,11 @@ Bloqueadores de salida:
 - PostgreSQL: pendiente; ejecutar revisión/migraciones y pruebas autorizadas en
   una base aislada y verificada, con respaldo restaurable; conciliar pagos,
   recibos, reversos, saldos y caja. No usar la base maestra para ensayos.
-- Service worker: corregir primero la integración de asset PWA documentada
-  arriba; luego validar registro, activación, alcance `/cobros`, actualización y
-  offline en staging servido por HTTPS.
+- Service worker: **cerrado 2026-10-02** — integración de asset PWA verificada
+  y registro/activación/alcance `/cobros`/fallback offline probados en staging
+  HTTPS tras corregir `clients.claim()` en `install`. Quedan sin probar: la
+  actualización de versión del SW, el registro automático hecho por la app en el
+  layout autenticado y el comportamiento en dispositivo real.
 - Auditoría externa independiente: revisar seguridad, aislamiento, permisos,
   idempotencia y trazabilidad; registrar informe y remediar hallazgos bloqueantes.
 - Dispositivo real: completar prueba supervisada en móvil compatible, incluida
