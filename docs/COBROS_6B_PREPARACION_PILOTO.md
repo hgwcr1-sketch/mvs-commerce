@@ -249,3 +249,70 @@ obtener aprobación del responsable financiero y del usuario, y solicitar
 `APROBADO PARA PRODUCCIÓN` explícito antes de cualquier despliegue. No entregar
 contraseñas al agente ni ejecutar SSH/producción como parte de este expediente.
 Preparación y PASS local responsive no equivalen a autorización de piloto.
+
+## Paquete de preparación para staging — `cobros.mvscommerce.com`
+
+Estado al preparar esta checklist: rama `feature/cobros-v1`, HEAD `665eeaa`.
+Usar ese SHA como referencia inmutable solo para revisión; no constituye
+aprobación para publicar. El árbol tiene cambios locales sin commit en
+`AccountsReceivableService.php`, `CobrosPaymentTest.php`, `layout.blade.php` y
+`vite.config.js`: **excluirlos** hasta que sean revisados, probados y aprobados.
+Excluir también `output.txt`, `tmp_*.txt` y `tmp_generate_cobros_icons.php`;
+no copiarlos al release ni borrarlos como parte de esta tarea. Incluir únicamente
+el SHA aprobado y los archivos versionados que pertenezcan a CobrOS; no incluir
+`.env`, respaldos, secretos ni contenido local sin seguimiento.
+
+### Checklist del operador (staging únicamente)
+
+- [ ] **DNS:** proporcionar proveedor/administrador responsable, registros
+  A/AAAA/CNAME previstos, IP o destino de staging autorizado y TTL; verificar
+  resolución desde fuera antes del corte. No cambiar registros desde esta tarea.
+- [ ] **Nginx:** confirmar host y release root (`public/`), PHP-FPM/socket y
+  versión, `try_files` de Laravel, acceso de escritura limitado, bloqueo de
+  `.env`/archivos ocultos y logs. Revisar configuración antes de recargar.
+- [ ] **SSL:** disponer de certificado válido para `cobros.mvscommerce.com`,
+  cadena completa y renovación automática; verificar HTTPS y redirección HTTP
+  sin habilitar HSTS hasta validar todo el dominio.
+- [ ] **`.env`:** proporcionar solo valores no secretos y referencias del gestor
+  seguro para `APP_ENV`, `APP_URL`, conexión PostgreSQL, cache, session, queue,
+  mail y filesystem. Confirmar `APP_DEBUG=false`, `APP_KEY` existente y
+  extensiones PHP requeridas (`pdo_pgsql`, `bcmath`). No enviar valores secretos.
+- [ ] **PostgreSQL:** host/puerto/nombre de base de staging, versión, TLS,
+  propietario/responsable y usuario de mínimo privilegio; identificar bases
+  separadas para staging, restauración aislada y pruebas destructivas con
+  `RefreshDatabase`. Confirmar retención y destino/custodio del respaldo.
+- [ ] **Storage:** definir volumen persistente, propietario/permisos mínimos,
+  `storage:link` esperado, espacio, backup y restauración de archivos privados;
+  no sincronizar datos reales de clientes a staging sin autorización.
+- [ ] **Colas:** indicar driver, workers/supervisor, límites de memoria/tiempo,
+  política de reintentos y monitoreo. Acordar reinicio controlado tras release;
+  comprobar que no se procesan trabajos duplicados.
+- [ ] **Scheduler:** confirmar mecanismo de scheduler, usuario y zona horaria;
+  programar la ejecución Laravel requerida una vez por minuto con bloqueo de
+  servidor único donde corresponda; revisar logs y evitar duplicar cron.
+- [ ] **Migraciones:** operador compara `migrate:status` con la lista aprobada,
+  revisa lock/DDL en copia PostgreSQL y detiene si aparece cualquier migración
+  inesperada. Ejecutar solo tras respaldo restaurable y autorización.
+- [ ] **Respaldo/rollback:** registrar SHA anterior/nuevo, ventana, responsable,
+  archivo/checksum, restauración aislada probada, RPO/RTO y conciliación.
+  Rollback preferente a código/assets compatibles manteniendo esquema ampliado;
+  nunca ejecutar down/rollback de 3B/3C ni restaurar sobre pagos posteriores.
+
+### Datos que debe aportar el operador y validaciones posteriores
+
+Antes de iniciar staging, el operador entrega: SHA de release aprobado; hostname,
+DNS esperado e IP/destino de staging; responsable de Nginx/PHP-FPM y SSL; versiones
+de PHP/extensiones/PostgreSQL; referencias seguras a configuración/credenciales
+(nunca contraseñas); nombres de bases aisladas y permisos; rutas de storage,
+drivers/administradores de colas, scheduler/zona horaria; política de backup,
+ventana/RPO/RTO; lista autorizada de migraciones; tenant/usuarios de prueba y
+responsables de aprobación financiera, funcional y técnica.
+
+Después, en staging se verificará DNS/TLS/cadena HTTPS, Nginx y health/login,
+permisos y persistencia de storage, worker/scheduler, backup con restore aislado,
+migraciones antes/después y conciliación DECIMAL; luego
+`CobrosPaymentTest` solo contra base de test vacía y exclusiva, incluyendo
+idempotencia y custodia/caja. Finalmente se comprobará el SW activo/controlando
+`/cobros`, assets, actualización, fallback offline y que POST no registra/repite
+pagos, seguido de smoke en móvil y firma de auditoría/aprobaciones. Todo resultado
+que no pueda evidenciarse queda pendiente; piloto y publicación siguen bloqueados.
