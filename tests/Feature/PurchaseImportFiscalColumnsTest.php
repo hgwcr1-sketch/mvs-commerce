@@ -69,7 +69,7 @@ class PurchaseImportFiscalColumnsTest extends TestCase
         $this->assertSame(0.0, (float) $product->tax_rate);
     }
 
-    public function test_new_product_form_blocks_ambiguous_rate_unless_profile_is_chosen(): void
+    public function test_new_product_from_purchase_import_can_remain_fiscally_pending(): void
     {
         [$company, $branch, $user, $supplier] = $this->context();
         $exempt = $this->profile('01', '10');
@@ -96,21 +96,10 @@ class PurchaseImportFiscalColumnsTest extends TestCase
                 'name' => 'Producto nuevo B4',
                 'code' => 'NUEVO-B4',
                 'cost' => '100',
-            ])->assertSessionHasErrors('fiscal_profile_id');
-
-        $this->assertDatabaseMissing('products', ['internal_code' => 'NUEVO-B4']);
-
-        $this->actingAs($user)->withSession($session)
-            ->post(route('compras.import.product.store'), [
-                'row_key' => 'excel-9',
-                'name' => 'Producto nuevo B4',
-                'code' => 'NUEVO-B4',
-                'cost' => '100',
-                'fiscal_profile_id' => (string) $exempt->id,
             ])->assertRedirect(route('compras.import.review'));
 
         $product = Product::query()->where('internal_code', 'NUEVO-B4')->sole();
-        $this->assertSame($exempt->id, (int) $product->fiscal_profile_id);
+        $this->assertNull($product->fiscal_profile_id);
         $this->assertSame(0.0, (float) $product->tax_rate);
     }
 

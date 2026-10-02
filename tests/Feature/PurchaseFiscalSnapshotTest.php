@@ -20,7 +20,6 @@ use App\Services\Purchases\CompanyPurchaseSettingsResolver;
 use App\Services\Purchases\PurchaseProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class PurchaseFiscalSnapshotTest extends TestCase
@@ -29,9 +28,11 @@ class PurchaseFiscalSnapshotTest extends TestCase
 
     public function test_purchase_item_freezes_fiscal_snapshot_and_creates_tax_row(): void
     {
-        [$company, $branch, $user, $supplier, $product] = $this->context();
+        [$company, $branch, $user, $supplier, $product] = $this->context([
+            'fiscal_profile_id' => $this->profileId('08'),
+        ]);
 
-        $purchase = $this->process($company, $branch, $user, $supplier, $product, 13);
+        $purchase = $this->process($company, $branch, $user, $supplier, $product, null);
 
         $item = $purchase->items->firstOrFail();
 
@@ -61,25 +62,22 @@ class PurchaseFiscalSnapshotTest extends TestCase
         $this->assertSame(1130.0, (float) $purchase->total);
     }
 
-    public function test_ambiguous_line_rate_without_explicit_profile_is_blocked(): void
+    public function test_purchase_accepts_pending_profile_and_keeps_operational_tax_rate(): void
     {
         [$company, $branch, $user, $supplier, $product] = $this->context(['tax_rate' => 0]);
 
-        $blocked = false;
+        $purchase = $this->process($company, $branch, $user, $supplier, $product, 8);
+        $item = $purchase->items->firstOrFail();
 
-        try {
-            $this->process($company, $branch, $user, $supplier, $product, 0);
-        } catch (ValidationException $exception) {
-            $blocked = true;
-            $this->assertArrayHasKey('items', $exception->errors());
-        }
-
-        $this->assertTrue($blocked, 'La línea ambigua debió ser bloqueada.');
-        $this->assertSame(0, Purchase::query()->count());
-        $this->assertSame(0, PurchaseItem::query()->count());
+        $this->assertSame(8.0, (float) $item->tax_rate);
+        $this->assertNull($item->tax_code);
+        $this->assertNull($item->fiscal_snapshot);
+        $this->assertSame(80.0, (float) $purchase->tax);
+        $this->assertDatabaseCount('purchase_item_taxes', 0);
+        $this->assertNull($product->fresh()->fiscal_profile_id);
     }
 
-    public function test_unequivocal_line_rate_wins_over_product_exento_profile(): void
+    public function test_operational_line_rate_does_not_infer_or_replace_product_profile(): void
     {
         [$company, $branch, $user, $supplier, $product] = $this->context([
             'tax_rate' => 0,
@@ -90,10 +88,12 @@ class PurchaseFiscalSnapshotTest extends TestCase
         $item = $purchase->items->firstOrFail();
 
         $this->assertSame(13.0, (float) $item->tax_rate);
-        $this->assertSame('08', $item->tax_rate_code);
-        $this->assertSame('taxable', $item->tax_treatment);
+        $this->assertNull($item->tax_code);
+        $this->assertNull($item->tax_rate_code);
+        $this->assertNull($item->tax_treatment);
         $this->assertSame(130.0, (float) $purchase->tax);
-        $this->assertSame(13.0, (float) $item->taxes()->firstOrFail()->rate);
+        $this->assertSame(0, $item->taxes()->count());
+        $this->assertSame($this->profileId('10'), (int) $product->fresh()->fiscal_profile_id);
     }
 
     public function test_explicit_exento_profile_allows_zero_rate_line(): void
@@ -133,7 +133,7 @@ class PurchaseFiscalSnapshotTest extends TestCase
         $this->assertSame(0.0, (float) $purchase->tax);
     }
 
-    public function test_line_without_rate_resolves_product_legacy_13_percent(): void
+    public function test_operational_product_tax_rate_does_not_create_purchase_snapshot(): void
     {
         [$company, $branch, $user, $supplier, $product] = $this->context(['tax_rate' => 13]);
 
@@ -141,8 +141,10 @@ class PurchaseFiscalSnapshotTest extends TestCase
         $item = $purchase->items->firstOrFail();
 
         $this->assertSame(13.0, (float) $item->tax_rate);
-        $this->assertSame('08', $item->tax_rate_code);
+        $this->assertNull($item->tax_rate_code);
+        $this->assertNull($item->fiscal_snapshot);
         $this->assertSame(130.0, (float) $purchase->tax);
+        $this->assertNull($product->fresh()->fiscal_profile_id);
     }
 
     private function process(

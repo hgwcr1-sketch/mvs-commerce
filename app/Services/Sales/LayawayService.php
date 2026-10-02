@@ -23,8 +23,8 @@ use App\Notifications\LayawayUpcomingNotification;
 use App\Services\Fiscal\FiscalTaxService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class LayawayService
@@ -103,7 +103,7 @@ class LayawayService
 
                     $sub = round($unit * $qty, 4);
                     $profile = $this->resolveLineProfile($product);
-                    $taxRate = (float) ($profile->rate ?? 0);
+                    $taxRate = (float) ($profile?->rate ?? $product->tax_rate ?? 0);
                     $tax = round($sub * ($taxRate / 100), 4);
                     $lineTotal = round($sub + $tax, 4);
                     $total += $lineTotal;
@@ -128,40 +128,44 @@ class LayawayService
                 ]);
 
                 foreach ($lines as $line) {
-                    $snapshot = $this->fiscalTaxService->snapshotFromProfile($line['profile']);
+                    $snapshot = $line['profile'] !== null
+                        ? $this->fiscalTaxService->snapshotFromProfile($line['profile'])
+                        : null;
                     $layawayItem = $layaway->items()->create([
                         'product_id' => $line['product']->id,
                         'description' => $line['product']->name,
                         'quantity' => $line['qty'],
                         'unit_price' => $line['unit'],
                         'tax_rate' => $line['taxRate'],
-                        'tax_code' => $line['profile']->tax_code,
-                        'tax_rate_code' => $line['profile']->tax_rate_code,
-                        'tax_treatment' => $line['profile']->treatment,
-                        'fiscal_source' => $line['profile']->catalogVersion?->source,
-                        'fiscal_source_version' => $line['profile']->catalogVersion?->source_version,
+                        'tax_code' => $line['profile']?->tax_code,
+                        'tax_rate_code' => $line['profile']?->tax_rate_code,
+                        'tax_treatment' => $line['profile']?->treatment,
+                        'fiscal_source' => $line['profile']?->catalogVersion?->source,
+                        'fiscal_source_version' => $line['profile']?->catalogVersion?->source_version,
                         'fiscal_snapshot' => $snapshot,
                         'subtotal' => $line['sub'],
                         'tax_total' => $line['tax'],
                         'total' => $line['lineTotal'],
                     ]);
 
-                    LayawayItemTax::create([
-                        'layaway_item_id' => $layawayItem->id,
-                        'tax_code' => $line['profile']->tax_code,
-                        'tax_rate_code' => $line['profile']->tax_rate_code,
-                        'description' => $line['profile']->name,
-                        'treatment' => $line['profile']->treatment,
-                        'rate' => $line['profile']->rate,
-                        'factor_iva' => $line['profile']->factor_iva,
-                        'base_amount' => $line['sub'],
-                        'tax_amount' => $line['tax'],
-                        'specific_tax_data' => null,
-                        'exemption_snapshot' => null,
-                        'source' => $line['profile']->catalogVersion?->source,
-                        'source_version' => $line['profile']->catalogVersion?->source_version,
-                        'sequence' => 1,
-                    ]);
+                    if ($line['profile'] !== null) {
+                        LayawayItemTax::create([
+                            'layaway_item_id' => $layawayItem->id,
+                            'tax_code' => $line['profile']->tax_code,
+                            'tax_rate_code' => $line['profile']->tax_rate_code,
+                            'description' => $line['profile']->name,
+                            'treatment' => $line['profile']->treatment,
+                            'rate' => $line['profile']->rate,
+                            'factor_iva' => $line['profile']->factor_iva,
+                            'base_amount' => $line['sub'],
+                            'tax_amount' => $line['tax'],
+                            'specific_tax_data' => null,
+                            'exemption_snapshot' => null,
+                            'source' => $line['profile']->catalogVersion?->source,
+                            'source_version' => $line['profile']->catalogVersion?->source_version,
+                            'sequence' => 1,
+                        ]);
+                    }
 
                     $new = round((float) $line['stock']->stock - $line['qty'], 4);
                     DB::table('branch_product')->where('id', $line['stock']->id)->update(['stock' => $new, 'updated_at' => now()]);
@@ -439,10 +443,6 @@ class LayawayService
                 throw ValidationException::withMessages(['layaway' => 'El apartado debe estar pagado antes de entregarse.']);
             }
 
-            foreach ($locked->items as $item) {
-                $this->assertFiscalUnchanged($item);
-            }
-
             $sale = Sale::create(['company_id' => $locked->company_id, 'branch_id' => $locked->branch_id, 'user_id' => $user->id, 'customer_id' => $locked->customer_id, 'sale_number' => CompanySequence::nextPosNumber($locked->company_id), 'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET, 'sale_condition' => Sale::CONDITION_CASH, 'status' => Sale::STATUS_COMPLETED, 'currency_code' => $locked->currency_code, 'exchange_rate' => 1, 'subtotal' => $locked->items->sum('subtotal'), 'tax_total' => $locked->items->sum('tax_total'), 'discount_total' => 0, 'rounding_total' => 0, 'total' => $locked->total, 'paid_total' => $locked->total, 'balance_due' => 0, 'notes' => 'Entrega del apartado '.$locked->number, 'completed_at' => now()]);
             foreach ($locked->items as $item) {
                 $saleItem = SaleItem::create(['sale_id' => $sale->id, 'product_id' => $item->product_id, 'product_code' => $item->product->internal_code, 'barcode' => $item->product->barcode, 'description' => $item->description, 'unit_code' => $item->product?->unit?->abbreviation, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'gross_total' => $item->subtotal, 'discount_total' => 0, 'subtotal' => $item->subtotal, 'tax_rate' => $item->tax_rate, 'tax_code' => $item->tax_code, 'tax_rate_code' => $item->tax_rate_code, 'tax_treatment' => $item->tax_treatment, 'fiscal_source' => $item->fiscal_source, 'fiscal_source_version' => $item->fiscal_source_version, 'fiscal_snapshot' => $item->fiscal_snapshot, 'tax_total' => $item->tax_total, 'total' => $item->total, 'unit_cost' => $item->product->cost]);
@@ -534,6 +534,22 @@ class LayawayService
             || in_array($driverCode, ['1062', '19'], true);
     }
 
- private function resolveLineProfile(Product $product):FiscalProfile{try{return $this->fiscalTaxService->resolveProductProfile($product);}catch(InvalidArgumentException $exception){throw ValidationException::withMessages(['items'=>"El producto {$product->name} no puede reservarse: requiere un perfil fiscal explícito ({$exception->getMessage()})."]);}}
- private function assertFiscalUnchanged(LayawayItem $item):void{$product=$item->product;if(!$product)return;try{$profile=$this->fiscalTaxService->resolveProductProfile($product);}catch(InvalidArgumentException $exception){throw ValidationException::withMessages(['layaway'=>"La fiscalidad del producto {$product->name} no puede resolverse ({$exception->getMessage()})."]);}$current=$this->fiscalTaxService->serializeSnapshot($this->fiscalTaxService->snapshotFromProfile($profile));$snapshot=is_array($item->fiscal_snapshot)?$item->fiscal_snapshot:null;if(is_array($snapshot)&&!empty($snapshot['taxes'])){try{$frozen=$this->fiscalTaxService->serializeSnapshot($snapshot);}catch(InvalidArgumentException $exception){throw ValidationException::withMessages(['layaway'=>"La fiscalidad congelada del producto {$product->name} no es válida; revise el apartado antes de entregar."]);}if($frozen!==$current){throw ValidationException::withMessages(['layaway'=>"La fiscalidad del producto {$product->name} cambió desde la creación del apartado; revise el apartado antes de entregar."]);}return;}$rate=$item->tax_rate!==null?(float)$item->tax_rate:null;if($rate===null||abs($rate-(float)($profile->rate??0))>=0.0001){throw ValidationException::withMessages(['layaway'=>"La fiscalidad del producto {$product->name} cambió desde la creación del apartado; revise el apartado antes de entregar."]);}}
+ private function resolveLineProfile(Product $product): ?FiscalProfile
+ {
+     if ($product->fiscal_profile_id === null) {
+         return null;
+     }
+
+     try {
+         return $this->fiscalTaxService->resolveProductProfile($product);
+     } catch (\InvalidArgumentException $exception) {
+         Log::warning('layaway.fiscal_profile_unresolved', [
+             'company_id' => $product->company_id,
+             'product_id' => $product->id,
+             'error' => $exception->getMessage(),
+         ]);
+
+         return null;
+     }
+ }
 }
