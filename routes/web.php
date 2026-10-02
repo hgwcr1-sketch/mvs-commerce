@@ -143,7 +143,7 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
-    Route::middleware(RedirectIfAuthenticated::class)->group(function () {
+    Route::middleware([RedirectIfAuthenticated::class, 'cobros.entry'])->group(function () {
         Route::get('/login', [App\Http\Controllers\Cobros\LoginController::class, 'create'])->name('login');
         Route::post('/login', [App\Http\Controllers\Cobros\LoginController::class, 'authenticate'])
             ->middleware('throttle:10,1')->name('login.store');
@@ -162,7 +162,7 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
 // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
 // Usa 'cobros.active.company' (no redirige a onboarding de Commerce).
-Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class])->prefix('cobros')->name('cobros.')->group(function () {
+Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class, 'cobros.entry'])->prefix('cobros')->name('cobros.')->group(function () {
     Route::get('/supervisor', [CobrosDashboardController::class, 'supervisor'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
     Route::get('/supervisor/audit', [CobrosAuditController::class, 'index'])

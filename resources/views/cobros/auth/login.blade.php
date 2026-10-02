@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="{{ asset('icons/cobros/favicon-32x32.png') }}">
     <link rel="apple-touch-icon" href="{{ asset('icons/cobros/apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ asset('manifest-cobros.json') }}">
-    <link rel="stylesheet" href="{{ asset('css/cobros-auth.css') }}?v=2">
+    <link rel="stylesheet" href="{{ asset('css/cobros-auth.css') }}?v=3">
 </head>
 <body class="cobros-auth">
     <main class="cobros-login-card">
@@ -47,8 +47,15 @@
             </label>
             <button type="submit">Ingresar</button>
         </form>
+        {{-- Instalación explícita del PWA CobrOS (botón oculto hasta que el navegador la ofrece). --}}
+        <div id="cobros-install-root" class="cobros-login-install">
+            <button type="button" id="cobros-install" class="hidden">
+                <span id="cobros-install-label">Instalar CobrOS</span>
+            </button>
+        </div>
         <footer>MVS CobrOS · Cobranza Operativa</footer>
     </main>
+    @vite(['resources/js/cobros-pwa.js'])
     <script>
     (function(){
         var btn=document.querySelector('.cobros-login-toggle');

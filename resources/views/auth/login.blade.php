@@ -21,6 +21,11 @@
     </div>
     <button type="submit" class="min-h-11 w-full rounded-xl bg-slate-950 px-5 py-3 font-bold text-white shadow-lg shadow-slate-950/15 transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-200">Ingresar</button>
 </form>
+{{-- Acceso explícito a CobrOS: sin redirecciones globales ni detección por user-agent. --}}
+<section class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-center" aria-label="Acceso CobrOS">
+    <p class="text-sm font-semibold text-slate-700">¿Opera cobranza con MVS CobrOS?</p>
+    <a href="{{ route('cobros.login') }}" class="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-bold text-amber-800 transition hover:bg-amber-50 focus:outline-none focus:ring-4 focus:ring-amber-200">Acceso CobrOS</a>
+</section>
 @endsection
 
 @push('scripts')

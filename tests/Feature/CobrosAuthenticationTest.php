@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\Cobros\MarkEntry;
 use App\Models\Company;
 use App\Models\Permission;
 use App\Models\Role;
@@ -298,6 +299,39 @@ class CobrosAuthenticationTest extends TestCase
             ->assertDontSee('Dashboard general');
     }
 
+    #[DataProvider('profiles')]
+    public function test_login_from_cobros_never_reaches_commerce_dashboard(string $permission, string $landing): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', $permission]);
+
+        // Cadena real desde /cobros/login con una intención de Commerce previa
+        // (el tipo de url.intended que dejaría un intento de entrar a /dashboard).
+        $this->withSession(['url.intended' => route('dashboard')]);
+
+        $login = $this->post(route('cobros.login.store'), ['email' => $user->email, 'password' => 'Secure123']);
+        $login->assertRedirect(route('cobros.index'));
+        $login->assertSessionMissing('url.intended');
+
+        $entry = $this->get(route('cobros.index'));
+        $entry->assertRedirect(route('cobros.'.$landing));
+
+        // Ningún salto de la cadena sale de /cobros.
+        foreach ([$login, $entry] as $response) {
+            $location = $response->headers->get('Location');
+            $this->assertNotNull($location, 'La cadena de login debe emitir Location.');
+            $this->assertStringStartsWith(url('/cobros'), $location, 'Location fuera de CobrOS: '.$location);
+        }
+
+        // URL final: layout CobrOS, nunca el dashboard/sidebar de Commerce.
+        $this->get(route('cobros.'.$landing))->assertOk()
+            ->assertSee('manifest-cobros.json', false)
+            ->assertSee('MVS CobrOS')
+            ->assertDontSee('Fidelización')
+            ->assertDontSee('MVS Commerce')
+            ->assertDontSee('href="'.route('dashboard').'"', false)
+            ->assertDontSee('href="'.route('login').'"', false);
+    }
+
     public function test_cobros_user_without_company_gets_403_not_commerce_onboarding(): void
     {
         $user = User::factory()->create(['is_active' => true, 'password' => 'Secure123']);
@@ -325,5 +359,66 @@ class CobrosAuthenticationTest extends TestCase
 
         $response = $this->get(route('cobros.index'));
         $response->assertRedirect(route('cobros.owner.dashboard'));
+    }
+
+    /* ------------------------------------------------------------------
+     | ENTRADA CobrOS + puerta Commerce: nunca terminar en /dashboard
+     ------------------------------------------------------------------ */
+
+    public function test_commerce_login_returns_to_cobros_after_an_explicit_cobros_entry(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+        $this->withCookie(MarkEntry::COOKIE, MarkEntry::VALUE);
+
+        $login = $this->post(route('login.store'), ['email' => $user->email, 'password' => 'Secure123']);
+        $login->assertRedirect(route('cobros.index'));
+        $login->assertCookieExpired(MarkEntry::COOKIE);
+
+        $this->get(route('cobros.index'))->assertRedirect(route('cobros.owner.dashboard'));
+        $this->get(route('cobros.owner.dashboard'))->assertOk()
+            ->assertSee('manifest-cobros.json', false)
+            ->assertDontSee('Fidelización');
+    }
+
+    public function test_commerce_login_without_cobros_entry_keeps_the_dashboard(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+
+        $this->post(route('login.store'), ['email' => $user->email, 'password' => 'Secure123'])
+            ->assertRedirect('/dashboard');
+    }
+
+    public function test_commerce_login_stays_on_dashboard_when_the_user_cannot_operate_cobros(): void
+    {
+        [$company, $user] = $this->context([]);
+        $this->withCookie(MarkEntry::COOKIE, MarkEntry::VALUE);
+
+        $this->post(route('login.store'), ['email' => $user->email, 'password' => 'Secure123'])
+            ->assertRedirect('/dashboard');
+    }
+
+    public function test_cobros_entry_does_not_hijack_deep_commerce_destinations(): void
+    {
+        [$company, $user] = $this->context(['cobros.acceder', 'cobros.portal_dueno']);
+        $this->withSession(['url.intended' => '/pos']);
+        $this->withCookie(MarkEntry::COOKIE, MarkEntry::VALUE);
+
+        $this->post(route('login.store'), ['email' => $user->email, 'password' => 'Secure123'])
+            ->assertRedirect('/pos');
+    }
+
+    public function test_commerce_login_page_offers_an_explicit_cobros_access_link(): void
+    {
+        $this->get(route('login'))->assertOk()
+            ->assertSee('Acceso CobrOS')
+            ->assertSee('href="'.route('cobros.login').'"', false)
+            ->assertDontSee('Bienvenido a MVS CobrOS');
+    }
+
+    public function test_cobros_pages_mark_the_entry_for_the_next_login(): void
+    {
+        $this->get(route('cobros.login'))->assertOk()
+            ->assertSee('id="cobros-install"', false)
+            ->assertCookie(MarkEntry::COOKIE, MarkEntry::VALUE);
     }
 }
