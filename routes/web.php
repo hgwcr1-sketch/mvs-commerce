@@ -26,6 +26,7 @@ use App\Http\Controllers\Cobros\CobrosAlertController;
 use App\Http\Controllers\Cobros\CobrosAuditController;
 use App\Http\Controllers\Cobros\CobrosDashboardController;
 use App\Http\Controllers\Cobros\CollectorPaymentController;
+use App\Http\Controllers\Cobros\DailyClosingController;
 use App\Http\Controllers\Cobros\CollectorPortfolioController;
 use App\Http\Controllers\Cobros\ForceChangePasswordController;
 use App\Http\Controllers\Cobros\OwnerAssignmentController;
@@ -195,6 +196,13 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.cobrar')->name('visits.store');
     Route::patch('/visits/{visit}', [VisitController::class, 'update'])
         ->middleware('permission:cobros.cobrar')->name('visits.update');
+    // Cierre del día: declaración por medio de pago + evidencias, enviado al dueño.
+    Route::get('/closing', [DailyClosingController::class, 'show'])
+        ->middleware('permission:cobros.cobrar')->name('closing.show');
+    Route::post('/closing', [DailyClosingController::class, 'store'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('closing.store');
+    Route::get('/closing/{closing}/evidence/{kind}', [DailyClosingController::class, 'evidence'])
+        ->middleware('permission:cobros.acceder')->name('closing.evidence');
     Route::get('/owner', [OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
     Route::get('/owner/audit', [CobrosAuditController::class, 'index'])
@@ -205,6 +213,9 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.alerts');
     Route::get('/owner/collectors', [OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
+    // Fase 6B — drill-down del dueño por cobrador (cartera y métricas del mes).
+    Route::get('/owner/collectors/{user}', [OwnerCollectorController::class, 'show'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.show');
     Route::post('/owner/collectors', [OwnerCollectorController::class, 'store'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.store');
     Route::patch('/owner/collectors/{user}/toggle', [OwnerCollectorController::class, 'toggle'])
@@ -213,6 +224,9 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
     Route::post('/owner/collectors/{user}/regenerate-access', [OwnerCollectorController::class, 'regenerateAccess'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.regenerate');
+    // Revisión del dueño sobre un cierre diario recibido (trazabilidad).
+    Route::post('/owner/closings/{closing}/review', [OwnerCollectorController::class, 'reviewClosing'])
+        ->middleware(['permission:cobros.portal_dueno', 'throttle:30,1'])->name('owner.closings.review');
     Route::get('/owner/assignments', [OwnerAssignmentController::class, 'index'])
         ->middleware('permission:cobros.asignar')->name('owner.assignments');
     Route::post('/owner/assignments', [OwnerAssignmentController::class, 'store'])

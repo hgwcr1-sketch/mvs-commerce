@@ -218,7 +218,7 @@ class CobrosCollectorAccessTest extends TestCase
             $expected = match ($selected) {
                 'owner.dashboard' => ['cobros.owner.dashboard', 'cobros.owner.collectors', 'cobros.owner.audit', 'cobros.owner.reports', 'cobros.owner.alerts'],
                 'supervisor.index' => ['cobros.supervisor.index', 'cobros.supervisor.alerts', 'cobros.supervisor.audit'],
-                'collector.index' => ['cobros.visits.today', 'cobros.collector.index', 'cobros.collector.payments.history'],
+                'collector.index' => ['cobros.visits.today', 'cobros.collector.index', 'cobros.collector.payments.history', 'cobros.closing.show'],
             };
             $this->assertSame(
                 array_map(fn ($r) => route($r), $expected),
@@ -257,6 +257,7 @@ class CobrosCollectorAccessTest extends TestCase
             'cobros.visits.today',
             'cobros.collector.index',
             'cobros.collector.payments.history',
+            'cobros.closing.show',
         ];
         foreach ($expected as $route) {
             $this->assertSame(1, substr_count($content, 'href="'.route($route).'"'), $route);

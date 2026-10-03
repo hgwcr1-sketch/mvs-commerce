@@ -20,6 +20,7 @@
         ['permission' => 'cobros.cobrar', 'route' => 'cobros.visits.today', 'label' => 'Agenda hoy', 'slot' => 'collector', 'icon' => 'M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
         ['permission' => 'cobros.cobrar', 'route' => 'cobros.collector.index', 'label' => 'Mi cartera', 'slot' => 'collector', 'icon' => 'M3 5h16v4H3z M3 9v11h18V9H3 M16 13h5v4h-5z'],
         ['permission' => 'cobros.cobrar', 'route' => 'cobros.collector.payments.history', 'label' => 'Mis recibos', 'slot' => 'collector', 'icon' => 'M6 3h12v18l-3-2-3 2-3-2-3 2Z M9 8h6 M9 12h6'],
+        ['permission' => 'cobros.cobrar', 'route' => 'cobros.closing.show', 'label' => 'Cierre del día', 'slot' => 'collector', 'icon' => 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01'],
     ];
 
     $navigationUser = auth()->user();
