@@ -7,7 +7,22 @@
             <a href="{{ route('cobros.owner.dashboard') }}" class="text-sm font-semibold text-amber-700">← Inicio / Cartera</a>
             <h1 class="mt-2 text-2xl font-bold sm:text-3xl">Cobradores</h1>
             <p class="mt-1 text-sm text-slate-500">
-                @if($contract['license_mode'] === 'individual')
+    @if($errors->any())
+        <div role="alert" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            @foreach($errors->all() as $error)
+                <p>{{ $error }}</p>
+            @endforeach
+        </div>
+    @endif
+
+    @if($contract['license_mode'] === 'company_cupo' && ! $canCreate)
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p class="font-bold">Cupo de cobradores alcanzado ({{ $collectorCount }} / {{ $contract['collector_limit'] }}).</p>
+            <p class="mt-1">No se puede registrar un cobrador nuevo hasta liberar un cupo (desactivar un cobrador) o ampliar el límite de la licencia.</p>
+        </div>
+    @endif
+
+    @if($contract['license_mode'] === 'individual')
                     Licencias individuales — cada cobrador tiene su licencia propia.
                 @else
                     Licencia por empresa + cupo de cobradores.

@@ -2,10 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Branch, Company, Permission, Role, User};
-use App\Services\{CompanyCashSettingsProvisioner, CompanyLicenseService, Cobros\CollectorManagementService};
+use App\Models\Branch;
+use App\Models\Company;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
+use App\Services\Cobros\CollectorManagementService;
+use App\Services\CompanyCashSettingsProvisioner;
+use App\Services\CompanyLicenseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class CobrosCollectorManagementTest extends TestCase
@@ -100,6 +107,42 @@ class CobrosCollectorManagementTest extends TestCase
         $this->assertTrue($service->canCreateCollector($company));
     }
 
+    public function test_cupo_mode_reactivation_is_blocked_when_limit_reached(): void
+    {
+        [$company, $admin, $collector, $owner] = $this->cupoContextWithCollector(['collector_limit' => 1]);
+        $service = app(CollectorManagementService::class);
+
+        $this->actingAs($owner)->withSession(['active_company_id' => $company->id])
+            ->patch(route('cobros.owner.collectors.toggle', $collector))
+            ->assertRedirect();
+        $this->assertFalse($collector->fresh()->is_active);
+
+        $service->createCollector($company, [
+            'name' => 'Segundo Cobrador', 'email' => 'segundo@test.com', 'password' => 'password123',
+        ], $admin);
+        $this->assertFalse($service->canCreateCollector($company));
+
+        $this->patch(route('cobros.owner.collectors.toggle', $collector->fresh()))
+            ->assertSessionHasErrors('collector');
+
+        $this->assertFalse($collector->fresh()->is_active);
+        $this->assertSame(1, $service->getCollectorCount($company));
+    }
+
+    public function test_cupo_mode_reactivation_allowed_while_slots_remain(): void
+    {
+        [$company, $admin, $collector, $owner] = $this->cupoContextWithCollector(['collector_limit' => 3]);
+
+        $this->actingAs($owner)->withSession(['active_company_id' => $company->id])
+            ->patch(route('cobros.owner.collectors.toggle', $collector))
+            ->assertRedirect();
+
+        $this->patch(route('cobros.owner.collectors.toggle', $collector->fresh()))
+            ->assertRedirect();
+
+        $this->assertTrue($collector->fresh()->is_active);
+    }
+
     /* ---------------------------------------------------------------------
      | INDIVIDUAL MODE: Owner is read-only
      | --------------------------------------------------------------------- */
@@ -181,7 +224,7 @@ class CobrosCollectorManagementTest extends TestCase
         $this->assertSame('individual', $module->license_mode);
         $this->assertNull($module->collector_limit);
 
-        $cobrosService = app(\App\Services\CompanyLicenseService::class);
+        $cobrosService = app(CompanyLicenseService::class);
         $contract = $cobrosService->getCobrosContract($company);
         $this->assertNotNull($contract);
         $this->assertSame('individual', $contract['license_mode']);
@@ -338,7 +381,7 @@ class CobrosCollectorManagementTest extends TestCase
 
         $service->createCollector($company, ['name' => 'A', 'email' => 'dup@t.com', 'password' => 'pass1234'], $admin);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $service->createCollector($company, ['name' => 'B', 'email' => 'dup@t.com', 'password' => 'pass1234'], $admin);
     }
 
@@ -369,6 +412,78 @@ class CobrosCollectorManagementTest extends TestCase
         $service->assignBranches($collector, $company, [$foreignBranch->id]);
 
         $this->assertFalse($collector->fresh()->branches->contains($foreignBranch->id));
+    }
+
+    /* ---------------------------------------------------------------------
+     | Concurrencia: revalidación del cupo bajo lock, dentro de la transacción
+     | --------------------------------------------------------------------- */
+
+    public function test_creation_aborts_when_slot_is_taken_between_precheck_and_lock(): void
+    {
+        [$company, $admin] = $this->cupoContext(['collector_limit' => 1]);
+        $service = app(CollectorManagementService::class);
+
+        $armed = true;
+        $filled = false;
+        $sawLockInsideTransaction = false;
+
+        DB::listen(function ($query) use (&$armed, &$filled, &$sawLockInsideTransaction, $service, $company, $admin) {
+            if (! $armed) {
+                return;
+            }
+            if (DB::transactionLevel() < 1 || ! str_contains($query->sql, 'company_modules')) {
+                return;
+            }
+
+            // El lock de company_modules se emite dentro de la transacción.
+            $sawLockInsideTransaction = true;
+
+            if ($filled) {
+                return;
+            }
+
+            // Simula a otro escritor que consume el único cupo después de la
+            // comprobación previa y antes de revalidar bajo lock.
+            $filled = true;
+            $service->createCollector($company, [
+                'name' => 'Rival', 'email' => 'rival@test.com', 'password' => 'password123',
+            ], $admin);
+        });
+
+        try {
+            $service->createCollector($company, [
+                'name' => 'Tardio', 'email' => 'tardio@test.com', 'password' => 'password123',
+            ], $admin);
+            $this->fail('El alta debía abortar: el cupo ya estaba tomado al revalidar.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('collector', $e->errors());
+        } finally {
+            $armed = false;
+        }
+
+        $this->assertTrue($sawLockInsideTransaction, 'El lock de company_modules debe emitirse dentro de la transacción.');
+        $this->assertNull(User::where('email', 'tardio@test.com')->first(), 'No debe crearse el usuario tardío.');
+        $this->assertNotNull(User::where('email', 'rival@test.com')->first());
+        $this->assertSame(1, $service->getCollectorCount($company));
+    }
+
+    public function test_creation_still_works_when_slot_is_free(): void
+    {
+        [$company, $admin] = $this->cupoContext(['collector_limit' => 1]);
+        $service = app(CollectorManagementService::class);
+
+        $result = $service->createCollector($company, [
+            'name' => 'Único', 'email' => 'unico@test.com', 'password' => 'password123',
+        ], $admin);
+
+        $this->assertTrue($result['user']->exists);
+        $this->assertSame(1, $service->getCollectorCount($company));
+        $this->assertFalse($service->canCreateCollector($company));
+
+        $this->expectException(ValidationException::class);
+        $service->createCollector($company, [
+            'name' => 'Excedente', 'email' => 'excedente@test.com', 'password' => 'password123',
+        ], $admin);
     }
 
     /* ---------------------------------------------------------------------

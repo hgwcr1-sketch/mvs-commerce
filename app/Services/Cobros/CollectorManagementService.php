@@ -4,6 +4,7 @@ namespace App\Services\Cobros;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CompanyModule;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -35,9 +36,16 @@ class CollectorManagementService
 
     public function getCollectorCount(Company $company): int
     {
+        // Solo cobradores reales: el dueño/administrador NO consume cupo
+        // ("3 cobradores + 1 dueño/admin = 4 licencias potenciales").
+        // CompanyProvisioner sincroniza todos los permisos activos al rol
+        // Administrador (incluye cobros.cobrar), por lo que sin excluir al
+        // portador de cobros.portal_dueno el propio dueño se contaría como
+        // cobrador y bloquearía el alta de nuevos cobradores.
         $roleIds = Role::where('company_id', $company->id)
             ->where('is_active', true)
             ->whereHas('permissions', fn ($q) => $q->where('permissions.name', 'cobros.cobrar'))
+            ->whereDoesntHave('permissions', fn ($q) => $q->where('permissions.name', 'cobros.portal_dueno'))
             ->pluck('id');
 
         if ($roleIds->isEmpty()) {
@@ -82,6 +90,23 @@ class CollectorManagementService
         }
 
         return max(0, $limit - $this->getCollectorCount($company));
+    }
+
+    /**
+     * Licencias potenciales de la empresa = cobradores + administrador/dueño.
+     *
+     * Regla documentada en docs/PROGRESO_COBROS.md (1E-A): "3 cobradores +
+     * 1 dueño/admin = 4 licencias potenciales". `admin_license_charged` decide
+     * si la licencia del administrador se cobra, pero no altera el recuento
+     * potencial. Devuelve null cuando la empresa no tiene contrato CobrOS.
+     */
+    public function getPotentialLicenses(Company $company): ?int
+    {
+        if (! $this->getContract($company)) {
+            return null;
+        }
+
+        return $this->getCollectorCount($company) + 1;
     }
 
     public function listCollectors(Company $company): array
@@ -142,7 +167,8 @@ class CollectorManagementService
         if ($existingUser) {
             $this->validateUserNotAlreadyCollector($existingUser, $company);
 
-            DB::transaction(function () use ($company, $data, $existingUser, $plainPassword) {
+            DB::transaction(function () use ($company, $data, $existingUser, $plainPassword, $skipLimit) {
+                $this->lockContractAndAssertSlot($company, $skipLimit);
                 $role = $this->ensureCollectorRole($company);
                 $existingUser->companies()->syncWithoutDetaching([
                     $company->id => ['role_id' => $role->id],
@@ -151,6 +177,7 @@ class CollectorManagementService
                 $existingUser->update([
                     'password' => $plainPassword,
                     'must_change_password' => true,
+                    'is_active' => true,
                 ]);
 
                 if (! empty($data['branch_ids'])) {
@@ -164,7 +191,8 @@ class CollectorManagementService
             return ['user' => $existingUser->fresh(), 'plain_password' => $plainPassword];
         }
 
-        return DB::transaction(function () use ($company, $data, $plainPassword) {
+        return DB::transaction(function () use ($company, $data, $plainPassword, $skipLimit) {
+            $this->lockContractAndAssertSlot($company, $skipLimit);
             $role = $this->ensureCollectorRole($company);
 
             $user = User::create([
@@ -192,7 +220,55 @@ class CollectorManagementService
     public function toggleCollector(User $user, Company $company, bool $active): void
     {
         $this->validateUserIsCollector($user, $company);
-        $user->update(['is_active' => $active]);
+
+        // Reactivar un cobrador inactivo vuelve a consumir un cupo: en modalidad
+        // company_cupo el cupo se revalida DENTRO de la transacción y después
+        // del lock de la fila de contrato (los inactivos no cuentan en
+        // getCollectorCount, por eso el chequeo es solo al activar).
+        $requiresSlot = $active && ! $user->is_active && $this->isCupoMode($company);
+
+        if (! $requiresSlot) {
+            $user->update(['is_active' => $active]);
+
+            return;
+        }
+
+        DB::transaction(function () use ($user, $company, $active) {
+            $this->lockContractAndAssertSlot($company);
+            $user->update(['is_active' => $active]);
+        });
+    }
+
+    /**
+     * Bloquea la fila de contrato CobrOS (`company_modules`) y revalida el
+     * cupo DESPUÉS de adquirir el lock, dentro de la misma transacción que
+     * escribe: dos altas/reactivaciones simultáneas no pueden superar ambas
+     * la comprobación previa y saltarse `collector_limit`.
+     *
+     * En PostgreSQL el lock serializa a los escritores concurrentes; la
+     * relectura posterior ve el cupo ya consumido y aborta sin crear ni
+     * reactivar usuario. En SQLite el lock no serializa (grammar sin
+     * `FOR UPDATE`), por lo que la protección real es de staging/producción.
+     */
+    private function lockContractAndAssertSlot(Company $company, bool $skipLimit = false): void
+    {
+        $module = CompanyModule::query()
+            ->where('company_id', $company->id)
+            ->where('module_key', 'cobros')
+            ->lockForUpdate()
+            ->first();
+
+        if ($skipLimit || $module === null || $module->license_mode !== 'company_cupo') {
+            return;
+        }
+
+        $limit = $module->collector_limit;
+
+        if ($limit !== null && $this->getCollectorCount($company) >= $limit) {
+            throw ValidationException::withMessages([
+                'collector' => "Límite de cobradores alcanzado ({$limit}).",
+            ]);
+        }
     }
 
     public function assignBranches(User $user, Company $company, array $branchIds): void
@@ -248,11 +324,10 @@ class CollectorManagementService
             ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
         ];
 
-        $permissionIds = collect($collectorPermissions)->map(fn (array $perm) =>
-            Permission::firstOrCreate(
-                ['name' => $perm['name']],
-                ['label' => $perm['label'], 'module' => $perm['module'], 'is_active' => true]
-            )->id
+        $permissionIds = collect($collectorPermissions)->map(fn (array $perm) => Permission::firstOrCreate(
+            ['name' => $perm['name']],
+            ['label' => $perm['label'], 'module' => $perm['module'], 'is_active' => true]
+        )->id
         );
 
         $role->permissions()->syncWithoutDetaching($permissionIds);
