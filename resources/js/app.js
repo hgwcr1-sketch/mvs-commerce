@@ -4,6 +4,7 @@ import Alpine from 'alpinejs';
 import qz from 'qz-tray';
 
 import './modules/clientes';
+import './modules/monetary-input';
 import './modules/compras';
 import './modules/identificacion';
 import './mvs-print/qz';

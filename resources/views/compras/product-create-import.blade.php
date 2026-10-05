@@ -76,7 +76,7 @@
             </label>
 
             <input
-                name="cost"
+                type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="cost"
                 value="{{ old('cost', $cost) }}"
                 required
                 class="w-full rounded-lg border px-3 py-2">

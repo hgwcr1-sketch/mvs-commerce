@@ -1,3 +1,5 @@
+import { normalizeMoney } from './monetary-input';
+
 document.addEventListener('alpine:init', () => {
 
     Alpine.data('purchaseForm', () => ({
@@ -382,8 +384,8 @@ const data = JSON.parse(text);
                 short_description: null,
                 description: null,
 
-                cost: Number(this.newProduct.cost || 0),
-                sale_price: Number(this.newProduct.sale_price || 0),
+                cost: normalizeMoney(this.newProduct.cost || 0),
+                sale_price: normalizeMoney(this.newProduct.sale_price || 0),
 
                 wholesale_price: null,
                 special_price: null,
@@ -556,12 +558,12 @@ const response = await fetch(url, {
                 items: this.items.map(item => ({
                     product_id: item.product_id ?? item.id,
                     quantity: Number(item.quantity || 0),
-                    unit_cost: Number(item.unit_cost || 0),
+                    unit_cost: normalizeMoney(item.unit_cost || 0),
 
                     new_sale_price:
                         item.new_sale_price !== '' &&
                         item.new_sale_price !== null
-                            ? Number(item.new_sale_price)
+                            ? normalizeMoney(item.new_sale_price)
                             : null
                 }))
             })

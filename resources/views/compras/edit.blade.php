@@ -453,10 +453,10 @@ window.purchaseEdit = {
 
                                 <td class="px-3 py-3">
                                     <input
-                                        type="number"
+                                        type="text" inputmode="decimal" data-money pattern="[0-9]+([.,][0-9]+)?"
                                         min="0"
-                                        step="1"
-                                        x-model.number="item.unit_cost"
+                                        step="0.01"
+                                        x-model="item.unit_cost"
                                         class="w-28 rounded-lg border border-slate-300 px-2 py-2 text-right">
                                 </td>
 
@@ -467,10 +467,10 @@ window.purchaseEdit = {
 
                                 <td class="px-3 py-3">
                                     <input
-                                        type="number"
+                                        type="text" inputmode="decimal" data-money pattern="[0-9]+([.,][0-9]+)?"
                                         min="0"
-                                        step="1"
-                                        x-model.number="item.new_sale_price"
+                                        step="0.01"
+                                        x-model="item.new_sale_price"
                                         placeholder="Opcional"
                                         class="w-28 rounded-lg border border-slate-300 px-2 py-2 text-right">
                                 </td>
@@ -836,10 +836,10 @@ window.purchaseEdit = {
                     </label>
 
                     <input
-                        type="number"
+                        type="text" inputmode="decimal" data-money pattern="[0-9]+([.,][0-9]+)?"
                         min="0"
-                        step="1"
-                        x-model.number="newProduct.cost"
+                        step="0.01"
+                        x-model="newProduct.cost"
                         class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 
@@ -849,10 +849,10 @@ window.purchaseEdit = {
                     </label>
 
                     <input
-                        type="number"
+                        type="text" inputmode="decimal" data-money pattern="[0-9]+([.,][0-9]+)?"
                         min="0"
-                        step="1"
-                        x-model.number="newProduct.sale_price"
+                        step="0.01"
+                        x-model="newProduct.sale_price"
                         class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
 

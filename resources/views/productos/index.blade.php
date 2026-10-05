@@ -234,7 +234,7 @@
                     </div>
                     <div class="text-center">
                         <p class="text-[10px] font-medium uppercase text-slate-400">Precio</p>
-                        <p class="text-sm font-bold text-amber-600">₡ {{ number_format($product->sale_price, 0) }}</p>
+                        <p class="text-sm font-bold text-amber-600">₡ {{ number_format($product->sale_price, 2) }}</p>
                     </div>
                     <div class="text-center">
                         <p class="text-[10px] font-medium uppercase text-slate-400">Stock</p>

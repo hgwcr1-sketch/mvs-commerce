@@ -59,6 +59,50 @@
         {{-- CABYS: se asigna desde el catálogo oficial, nunca como texto libre. --}}
         <x-cabys-search :state="$cabysState ?? null" />
 
+        {{--
+            Impuesto según régimen fiscal: la tarifa oficial del CABYS y el
+            impuesto vigente del producto se muestran SEPARADOS. Con régimen
+            simplified/unknown la oficial solo queda registrada, nunca se
+            autoaplica al impuesto de venta.
+        --}}
+        @isset($fiscalRegimeInfo)
+            @if (!empty($fiscalRegimeInfo['regime']))
+                <div class="md:col-span-2 rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2">
+                    <div class="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <span class="font-medium text-slate-700">
+                            Régimen fiscal:
+                            @switch($fiscalRegimeInfo['regime'])
+                                @case('general') General (normal) @break
+                                @case('simplified') Simplificado @break
+                                @case('unknown') Sin confirmar @break
+                                @default No reconocido
+                            @endswitch
+                        </span>
+                        <span class="text-slate-600">
+                            Tarifa oficial CABYS:
+                            @if (($fiscalRegimeInfo['officialPct'] ?? null) !== null)
+                                {{ rtrim(rtrim(number_format((float) $fiscalRegimeInfo['officialPct'], 2, ',', '.'), '0'), ',') }}%
+                            @else
+                                —
+                            @endif
+                        </span>
+                        <span class="text-slate-600">
+                            Impuesto aplicado al producto:
+                            @if (($product->tax_rate ?? null) !== null)
+                                {{ rtrim(rtrim(number_format((float) $product->tax_rate, 2, ',', '.'), '0'), ',') }}%
+                            @else
+                                —
+                            @endif
+                        </span>
+                    </div>
+
+                    @if (!empty($fiscalRegimeInfo['warning']))
+                        <p class="mt-1 text-xs text-amber-700">{{ $fiscalRegimeInfo['warning'] }}</p>
+                    @endif
+                </div>
+            @endif
+        @endisset
+
         <x-select
             name="product_type"
             label="Tipo">
@@ -235,51 +279,37 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
         <x-input
-            type="number"
-            step="0.0001"
-            name="cost"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="cost"
             label="Costo"
             :value="old('cost', \App\Support\NumberFormatter::trimDecimalZeros($product->cost ?? 0))" />
 
         <x-input
-            type="number"
-            step="1"
-            name="sale_price"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="sale_price"
             label="Precio Venta"
             :value="old('sale_price', $product->sale_price ?? 0)" />
 
         <x-input
-            type="number"
-            step="1"
-            name="wholesale_price"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="wholesale_price"
             label="Precio Mayorista"
             :value="old('wholesale_price', $product->wholesale_price ?? '')" />
 
         <x-input
-            type="number"
-            step="1"
-            name="special_price"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="special_price"
             label="Precio Oferta"
             :value="old('special_price', $product->special_price ?? '')" />
 
         <x-input
-            type="number"
-            step="1"
-            name="price_a"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="price_a"
             label="Precio A"
             :value="old('price_a', $product->price_a ?? '')" />
 
         <x-input
-            type="number"
-            step="1"
-            name="price_b"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="price_b"
             label="Precio B"
             :value="old('price_b', $product->price_b ?? '')" />
 
         <x-input
-            type="number"
-            step="1"
-            name="price_c"
+            type="text" inputmode="decimal" data-money step="0.01" pattern="[0-9]+([.,][0-9]+)?" name="price_c"
             label="Precio C"
             :value="old('price_c', $product->price_c ?? '')" />
 

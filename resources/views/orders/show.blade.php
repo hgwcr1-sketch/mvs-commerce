@@ -75,7 +75,7 @@
                                                 </label>
                                                 @if($canManageSupplierCosts)
                                                     <label class="block text-xs font-semibold">Costo actual
-                                                        <input type="number" name="current_cost" min="0" step="0.0001" class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2">
+                                                        <input type="text" inputmode="decimal" data-money pattern="[0-9]+([.,][0-9]+)?" name="current_cost" min="0" step="0.01" class="mt-1 w-full rounded-lg border-slate-300 px-3 py-2">
                                                     </label>
                                                 @endif
                                                 <label class="block text-xs font-semibold">Notas
