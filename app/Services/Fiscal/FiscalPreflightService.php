@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 
 class FiscalPreflightService
 {
+    public function __construct(private readonly CabysPreflightGate $cabys) {}
+
     /** Local validation only; ordinary POS tickets do not require fiscal data. */
     public function validate(string $documentType, Company $company, ?Customer $customer, array $lines): void
     {
@@ -30,8 +32,17 @@ class FiscalPreflightService
             if ($line['fiscalProfile'] === null) {
                 $errors["items.{$index}.fiscal_profile_id"] = "Confirme el perfil fiscal de {$product->name} antes de emitir FE/TE.";
             }
-            if (! preg_match('/^\d{13}$/', (string) $product->cabys_code)) {
-                $errors["items.{$index}.cabys_code"] = "Complete el CABYS de {$product->name} antes de emitir FE/TE.";
+            $cabysProblem = $this->cabys->problem($product->cabys_code);
+            if ($cabysProblem !== null) {
+                $errors["items.{$index}.cabys_code"] = match ($cabysProblem) {
+                    CabysPreflightGate::REASON_NOT_IN_CATALOG => sprintf(
+                        'El CABYS %s de %s no existe en el catálogo vigente (%s) del BCCR: no se emite ni se corrige automáticamente.',
+                        trim((string) $product->cabys_code),
+                        $product->name,
+                        $this->cabys->activeVersionLabel() ?? 'sin versión activa',
+                    ),
+                    default => "Complete el CABYS de {$product->name} antes de emitir FE/TE.",
+                };
             }
             if (blank($product->unit?->abbreviation)) {
                 $errors["items.{$index}.unit_code"] = "Complete la unidad de {$product->name} antes de emitir FE/TE.";

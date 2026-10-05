@@ -79,6 +79,8 @@ class FiscalManager
      */
     public function emit(FiscalEmissionRequest $request): FiscalEmissionResult
     {
+        $this->assertCabysInActiveCatalog($request);
+
         $consumption = app(FiscalConsumptionService::class);
 
         if ($request->adjustment !== null) {
@@ -112,6 +114,26 @@ class FiscalManager
         }
 
         return $result;
+    }
+
+    /**
+     * Gate CABYS contra la versión activa global del catálogo oficial, para
+     * FE/TE y para NC/ND. El formato ya lo exigen el documento y el mapper;
+     * aquí se valida la EXISTENCIA del código en la versión vigente.
+     *
+     * Sin versión activa no hay contra qué comparar y la emisión continúa: la
+     * ausencia de catálogo es un estado operativo conocido, no un defecto del
+     * comprobante. Nunca se infiere, corrige ni sustituye un código.
+     *
+     * @throws FiscalReferenceException
+     */
+    private function assertCabysInActiveCatalog(FiscalEmissionRequest $request): void
+    {
+        $codes = $request->adjustment !== null
+            ? array_map(static fn ($line): string => (string) $line->cabys, $request->adjustment->lines)
+            : array_map(static fn ($item): string => (string) $item->cabys_code, $request->saleItems);
+
+        app(CabysPreflightGate::class)->assertInCatalog($codes);
     }
 
     /**

@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
 
         $middleware->append(AddSecurityHeaders::class);
+        $middleware->append(\App\Http\Middleware\NormalizeMonetaryInputs::class);
 
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,

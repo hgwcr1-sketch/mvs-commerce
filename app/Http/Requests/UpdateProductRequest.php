@@ -140,6 +140,10 @@ class UpdateProductRequest extends FormRequest
                 'min:0',
             ],
 
+            'price_a' => ['nullable', 'numeric', 'min:0'],
+            'price_b' => ['nullable', 'numeric', 'min:0'],
+            'price_c' => ['nullable', 'numeric', 'min:0'],
+
             'stock' => [
                 'nullable',
                 'numeric',
