@@ -294,6 +294,32 @@
             </script>
             @endpush
         @elseif($step === 'conexion')
+            <section aria-label="Activación fiscal" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="font-bold text-slate-900">Activación fiscal</h3>
+                    <span class="rounded-full px-3 py-1 text-xs font-bold {{ $activation['toneClass'] }}">{{ $activation['label'] }}</span>
+                </div>
+                <p class="mt-2 text-sm text-slate-700">MVS Commerce sigue siendo su sistema principal. El alta del emisor y del certificado se realiza en la pantalla de su proveedor fiscal integrado temporal; este paso solo reutiliza la información que ya guardó en MVS.</p>
+                <dl class="mt-3 grid gap-2 sm:grid-cols-2">
+                    @foreach($activation['rows'] as $row)
+                        <div class="rounded-xl border border-slate-200 bg-white p-3">
+                            <dt class="text-xs font-bold uppercase text-slate-500">{{ $row['label'] }}</dt>
+                            <dd class="mt-1 text-sm {{ $row['value'] !== null ? 'text-slate-900' : 'font-bold text-amber-700' }}">{{ $row['value'] ?? $row['missing'] }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
+                <p class="mt-3 text-xs text-slate-500">Estos datos ya viven en MVS: no se le vuelven a pedir ni se comparten llaves, secretos ni archivos desde esta pantalla.</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <a href="{{ route('fiscal.activation.continue') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Continuar activación fiscal</a>
+                    @if($config->hasCredentials() && $activation['state'] !== 'ready')
+                        <form method="POST" action="{{ route('fiscal.verify') }}">
+                            @csrf
+                            <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-5 font-bold text-slate-700 hover:bg-slate-100">Verificar activación</button>
+                        </form>
+                    @endif
+                </div>
+                <p class="mt-3 text-sm text-slate-700">{{ $activation['hint'] }}</p>
+            </section>
             @if($config->hasPending())
                 <div class="mt-4 rounded-xl bg-amber-100 p-4 text-sm font-bold text-amber-900">
                     Actualización requerida: hay cambios pendientes de verificación. La conexión actual sigue funcionando.

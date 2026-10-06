@@ -311,6 +311,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::post('/facturacion-electronica/conexion/descartar', [FiscalPortalController::class, 'discardPending'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.connection.discard');
+    Route::get('/facturacion-electronica/activacion/continuar', [FiscalPortalController::class, 'continueActivation'])
+        ->middleware('permission:fiscal.editar')
+        ->name('fiscal.activation.continue');
     Route::post('/facturacion-electronica/desconectar', [FiscalPortalController::class, 'disconnect'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.disconnect');

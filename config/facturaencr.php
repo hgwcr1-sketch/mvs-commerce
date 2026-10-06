@@ -20,4 +20,6 @@ return [
 
     'sandbox_emisor' => env('FACTURAENCR_SANDBOX_EMISOR', 'EMISORPRUEBA'),
 
+    'portal_url' => env('FACTURAENCR_PORTAL_URL', 'https://facturaencr.com/portal'),
+
 ];

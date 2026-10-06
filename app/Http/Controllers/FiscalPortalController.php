@@ -203,6 +203,7 @@ class FiscalPortalController extends Controller
                 ? 'Configuración de Facturación Electrónica'
                 : 'Conectar facturación',
             'providers' => $this->providerOptions(),
+            'activation' => $step === 'conexion' ? $this->activationState($company, $config) : null,
             'locationComplete' => $company->province_id !== null && $company->canton_id !== null && $company->district_id !== null,
             'provinces' => \App\Models\Province::orderBy('id')->get(),
             'cantons' => \App\Models\Canton::orderBy('province_id')->orderBy('id')->get(),
@@ -303,6 +304,30 @@ class FiscalPortalController extends Controller
             ->with('status', 'Cambios descartados. La conexión vigente sigue intacta.');
     }
 
+    /**
+     * Acción "Continuar activación fiscal": el alta del emisor y del
+     * certificado ocurre en la pantalla del proveedor fiscal (intervención
+     * manual). MVS solo redirige; nunca lleva llaves, secretos ni archivos
+     * sensibles y jamás emite documentos por este camino.
+     */
+    public function continueActivation(): RedirectResponse
+    {
+        $company = $this->company();
+        $url = (string) config('facturaencr.portal_url', '');
+
+        if ($url === '') {
+            return redirect()->route('fiscal.setup', ['step' => 'conexion'])
+                ->withErrors(['activation' => 'Falta la dirección de la pantalla de activación del proveedor. Pida al administrador que la configure.']);
+        }
+
+        Log::info('fiscal.activation.continue', [
+            'company_id' => $company->id,
+            'user_id' => auth()->id(),
+        ]);
+
+        return redirect()->away($url);
+    }
+
     public function disconnect(Request $request): RedirectResponse
     {
         $request->validate(['disconnect_confirm' => ['accepted']]);
@@ -356,6 +381,77 @@ class FiscalPortalController extends Controller
         }
 
         return $options;
+    }
+
+    /**
+     * Estado humano de la activación fiscal y datos reutilizados de MVS.
+     *
+     * Solo consulta lo que MVS ya conoce: credenciales, cambios pendientes,
+     * última verificación y datos fiscales guardados. No pide al proveedor
+     * nada nuevo ni vuelve a pedir al usuario información ya almacenada.
+     *
+     * @return array{state: string, label: string, hint: string, toneClass: string, rows: array<int, array{label: string, value: ?string, missing: string}>}
+     */
+    private function activationState(Company $company, CompanyFiscalConfig $config): array
+    {
+        if (! $config->hasCredentials()) {
+            $state = [
+                'state' => 'pending',
+                'label' => 'Activación pendiente',
+                'hint' => 'Aún no hay llaves registradas. Complete el alta del emisor y del certificado en la pantalla del proveedor y vuelva aquí con su llave y su secreto.',
+                'toneClass' => 'bg-amber-100 text-amber-900',
+            ];
+        } elseif ($config->last_error_code !== null) {
+            $state = [
+                'state' => 'provider',
+                'label' => 'Continuar en proveedor',
+                'hint' => 'La última comprobación no completó la activación. Revise el emisor y el certificado en la pantalla del proveedor y vuelva a verificar aquí.',
+                'toneClass' => 'bg-rose-100 text-rose-900',
+            ];
+        } elseif ($config->hasPending() || $config->last_verified_at === null) {
+            $state = [
+                'state' => 'verification',
+                'label' => 'Verificación pendiente',
+                'hint' => 'Las llaves ya están registradas en MVS. Verifíquelas para comprobar la conexión sin emitir ningún documento.',
+                'toneClass' => 'bg-sky-100 text-sky-900',
+            ];
+        } else {
+            $state = [
+                'state' => 'ready',
+                'label' => 'Listo para facturar',
+                'hint' => 'La conexión está verificada y la empresa puede emitir facturación electrónica desde MVS.',
+                'toneClass' => 'bg-emerald-100 text-emerald-900',
+            ];
+        }
+
+        $state['rows'] = [
+            ['label' => 'Razón social', 'value' => $this->filled($company->legal_name), 'missing' => 'Falta en Paso 1'],
+            ['label' => 'Identificación', 'value' => $this->filled(trim((string) $company->identification_type.' '.(string) $company->identification_number)), 'missing' => 'Falta en Paso 1'],
+            ['label' => 'Actividad económica', 'value' => $this->filled($config->economic_activity), 'missing' => 'Falta en Paso 1'],
+            ['label' => 'Sucursal', 'value' => $this->filled($config->fiscal_branch_code), 'missing' => 'Falta en Paso 1'],
+            ['label' => 'Terminal', 'value' => $this->filled($config->fiscal_terminal_code), 'missing' => 'Falta en Paso 1'],
+            ['label' => 'Ambiente', 'value' => $config->isProduction() ? 'Producción' : 'Pruebas', 'missing' => ''],
+            ['label' => 'Régimen fiscal', 'value' => $this->taxRegimeLabel($config->tax_regime), 'missing' => 'Sin determinar'],
+        ];
+
+        return $state;
+    }
+
+    private function filled(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function taxRegimeLabel(?string $regime): ?string
+    {
+        return match ($regime) {
+            CompanyFiscalConfig::TAX_REGIME_GENERAL => 'Régimen general',
+            CompanyFiscalConfig::TAX_REGIME_SIMPLIFIED => 'Régimen simplificado',
+            CompanyFiscalConfig::TAX_REGIME_UNKNOWN => 'Sin confirmar',
+            default => null,
+        };
     }
 
     private function statusLabel(string $status): string
