@@ -39,6 +39,16 @@
         <dl class="mt-5 space-y-2 text-sm text-slate-700">
             <div class="flex justify-between gap-3"><dt>Clave (50)</dt><dd class="font-mono text-xs text-right break-all">{{ $document->clave ?: '—' }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Consecutivo (20)</dt><dd class="font-mono text-xs text-right break-all">{{ $document->consecutivo ?: '—' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt>ID proveedor</dt><dd class="font-mono text-xs text-right break-all">{{ $document->provider_document_id ?: '—' }}</dd></div>
+            <div class="flex justify-between gap-3"><dt>Venta POS relacionada</dt>
+                <dd class="text-right">
+                    @if($sale)
+                        <a href="{{ route('pos.receipt', ['sale' => $sale->id]) }}" target="_blank" rel="noopener" class="font-bold text-amber-700 underline">{{ $sale->sale_number }}</a>
+                    @else
+                        <span class="font-bold">—</span>
+                    @endif
+                </dd>
+            </div>
             <div class="flex justify-between gap-3"><dt>Fecha de emisión</dt><dd class="font-bold text-right">{{ $document->created_at->format('d/m/Y H:i') }}</dd></div>
             <div class="flex justify-between gap-3"><dt>Estado MVS</dt><dd class="font-bold text-right">{{ $statusLabels[$document->status] ?? $document->status }}</dd></div>
             <div class="flex justify-between gap-3">
@@ -66,9 +76,10 @@
                     <a href="{{ route('pos.receipt.pdf', ['sale' => $sale->id, 'format' => 'letter']) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-800 px-4 text-sm font-bold text-white">Descargar PDF</a>
                 @endif
                 @if($xmlAvailable)
-                    <a href="{{ route('fiscal.documents.xml', $document) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-200 px-4 text-sm font-bold text-slate-800">Ver XML</a>
+                    <a href="{{ route('fiscal.documents.xml', $document) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-200 px-4 text-sm font-bold text-slate-800">Descargar XML enviado</a>
                     <a href="{{ route('fiscal.documents.xml', $document) }}" download class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-200 px-4 text-sm font-bold text-slate-800">Descargar XML firmado</a>
                 @else
+                    <span class="inline-flex min-h-[44px] cursor-not-allowed items-center rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-400" title="El XML aún no está persistido en MVS">XML enviado: No disponible</span>
                     <span class="inline-flex min-h-[44px] cursor-not-allowed items-center rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-400" title="El XML firmado aún no está persistido en MVS">XML firmado: No disponible</span>
                 @endif
                 @if($responseAvailable)
