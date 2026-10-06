@@ -830,12 +830,25 @@ class FiscalPortalController extends Controller
                 \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET,
             ])
             ->where('status', \App\Models\Sale::STATUS_COMPLETED)
-            ->whereNotExists(function ($sub) use ($company) {
-                $sub->selectRaw('1')
-                    ->from('electronic_documents as ed')
-                    ->whereColumn('ed.sale_id', 'sales.id')
-                    ->where('ed.company_id', $company->id)
-                    ->whereIn('ed.document_type', ['01', '04']);
+            ->where(function ($outer) use ($company) {
+                // Sin electronic_document fiscal (01/04) para esta empresa...
+                $outer->whereNotExists(function ($sub) use ($company) {
+                    $sub->selectRaw('1')
+                        ->from('electronic_documents as ed')
+                        ->whereColumn('ed.sale_id', 'sales.id')
+                        ->where('ed.company_id', $company->id)
+                        ->whereIn('ed.document_type', ['01', '04']);
+                })
+                // ...o con fallo previo al proveedor (error sin acuse del proveedor).
+                ->orWhereExists(function ($sub) use ($company) {
+                    $sub->selectRaw('1')
+                        ->from('electronic_documents as ed')
+                        ->whereColumn('ed.sale_id', 'sales.id')
+                        ->where('ed.company_id', $company->id)
+                        ->whereIn('ed.document_type', ['01', '04'])
+                        ->where('ed.status', 'error')
+                        ->whereNull('ed.provider_document_id');
+                });
             });
 
         if ($cutoff !== null) {
@@ -867,6 +880,20 @@ class FiscalPortalController extends Controller
 
     private function pendingReason(\App\Models\Sale $sale, Company $company): string
     {
+        $failed = ElectronicDocument::query()
+            ->forCompany($company->id)
+            ->where('sale_id', $sale->id)
+            ->whereIn('document_type', ['01', '04'])
+            ->where('status', 'error')
+            ->whereNull('provider_document_id')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($failed !== null) {
+            return 'Fallo previo al proveedor: '
+                . ($failed->last_error_message ?: $failed->last_error_code ?: 'firma/envío fallido');
+        }
+
         $config = CompanyFiscalConfig::query()->where('company_id', $company->id)->first();
 
         if ($config === null || ! $config->hasCredentials()) {
