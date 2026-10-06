@@ -4,15 +4,20 @@ namespace Tests\Feature;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CompanyLicense;
+use App\Models\Customer;
 use App\Models\ElectronicDocument;
+use App\Models\FiscalDocumentCustody;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sale;
 use App\Models\User;
+use App\Services\CompanyLicenseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class FiscalDocumentsPortalTest extends TestCase
@@ -21,8 +26,8 @@ class FiscalDocumentsPortalTest extends TestCase
 
     private function fiscalContext(): array
     {
-        $company = Company::create(['trade_name' => 'FD' . uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
-        $branch = Branch::create(['company_id' => $company->id, 'name' => 'Principal', 'code' => 'P' . uniqid(), 'is_active' => true]);
+        $company = Company::create(['trade_name' => 'FD'.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica', 'is_active' => true]);
+        $branch = Branch::create(['company_id' => $company->id, 'name' => 'Principal', 'code' => 'P'.uniqid(), 'is_active' => true]);
 
         return [$company, $branch];
     }
@@ -30,7 +35,7 @@ class FiscalDocumentsPortalTest extends TestCase
     private function actingUser(Company $company, Branch $branch, array $permissions = ['fiscal.ver']): User
     {
         $user = User::factory()->create(['is_active' => true]);
-        $role = Role::create(['company_id' => $company->id, 'name' => 'R' . uniqid(), 'is_active' => true]);
+        $role = Role::create(['company_id' => $company->id, 'name' => 'R'.uniqid(), 'is_active' => true]);
 
         foreach ($permissions as $name) {
             $permission = Permission::firstOrCreate(
@@ -50,8 +55,8 @@ class FiscalDocumentsPortalTest extends TestCase
 
     private function enableFiscal(Company $company): void
     {
-        app(\App\Services\CompanyLicenseService::class)->ensure($company);
-        \App\Models\CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
+        app(CompanyLicenseService::class)->ensure($company);
+        CompanyLicense::query()->where('company_id', $company->id)->update(['fiscal_enabled' => true]);
     }
 
     private function makeDoc(Company $company, array $attributes = []): ElectronicDocument
@@ -74,7 +79,7 @@ class FiscalDocumentsPortalTest extends TestCase
             'user_id' => User::factory()->create()->id,
             'checkout_token' => (string) Str::uuid(),
             'request_fingerprint' => hash('sha256', uniqid('fd', true)),
-            'sale_number' => 'POS-FD-' . uniqid(),
+            'sale_number' => 'POS-FD-'.uniqid(),
             'document_type' => Sale::DOCUMENT_ELECTRONIC_INVOICE,
             'sale_condition' => 'cash',
             'status' => Sale::STATUS_COMPLETED,
@@ -109,11 +114,32 @@ class FiscalDocumentsPortalTest extends TestCase
         $response->assertSee('Pendientes / Procesando');
         // Filtros
         foreach (['from', 'to', 'type', 'status', 'environment', 'branch', 'q'] as $field) {
-            $response->assertSee('name="' . $field . '"', false);
+            $response->assertSee('name="'.$field.'"', false);
         }
-        // Sin descargas en Fase 2A
-        $response->assertDontSee('Excel del período');
-        $response->assertDontSee('ZIP XML del período');
+        // Descargas del período visibles SOLO en Documentos (Fase 2C)
+        $response->assertSee('Descargar Excel');
+        $response->assertSee('Descargar XML (ZIP)');
+        $response->assertSee(route('fiscal.documents.excel', []), false);
+        $response->assertSee(route('fiscal.documents.zip', []), false);
+    }
+
+    public function test_download_buttons_are_only_in_documents_view(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        foreach (['fiscal.index', 'fiscal.history'] as $routeName) {
+            $this->get(route($routeName))
+                ->assertOk()
+                ->assertDontSee('Descargar Excel')
+                ->assertDontSee('Descargar XML (ZIP)');
+        }
+
+        $this->get(route('fiscal.documents'))
+            ->assertOk()
+            ->assertSee('Descargar Excel')
+            ->assertSee('Descargar XML (ZIP)');
     }
 
     public function test_rejected_document_is_visible_and_distinguishable(): void
@@ -164,7 +190,7 @@ class FiscalDocumentsPortalTest extends TestCase
         // Ticket normal (no FE/TE) → NO pendiente
         $this->makeSale($company, $branch, ['sale_number' => 'POS-FD-TICKET', 'document_type' => Sale::DOCUMENT_TICKET]);
         // Otra empresa → NO aparece
-        $this->makeSale($otherCompany, Branch::create(['company_id' => $otherCompany->id, 'name' => 'Otra', 'code' => 'O' . uniqid(), 'is_active' => true]), ['sale_number' => 'POS-FD-OTHER']);
+        $this->makeSale($otherCompany, Branch::create(['company_id' => $otherCompany->id, 'name' => 'Otra', 'code' => 'O'.uniqid(), 'is_active' => true]), ['sale_number' => 'POS-FD-OTHER']);
 
         $response = $this->get(route('fiscal.documents', ['scope' => 'pendientes']));
 
@@ -208,7 +234,7 @@ class FiscalDocumentsPortalTest extends TestCase
     public function test_filters_by_branch_search_and_type(): void
     {
         [$company, $branchMain] = $this->fiscalContext();
-        $branchOther = Branch::create(['company_id' => $company->id, 'name' => 'Sucursal Norte', 'code' => 'N' . uniqid(), 'is_active' => true]);
+        $branchOther = Branch::create(['company_id' => $company->id, 'name' => 'Sucursal Norte', 'code' => 'N'.uniqid(), 'is_active' => true]);
         $this->enableFiscal($company);
         $this->actingUser($company, $branchMain);
 
@@ -376,5 +402,271 @@ class FiscalDocumentsPortalTest extends TestCase
         $response->assertSee('FE_REC_103');
         $response->assertSee('El receptor no existe en Hacienda.');
         $response->assertSee('5060000000000000000100100000101000000000007654321');
+    }
+
+    public function test_period_excel_exports_only_current_company_documents_with_required_columns(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        [$otherCompany] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $customer = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'name' => 'Cliente Export',
+            'identification_type' => '01',
+            'identification' => '3101000001',
+            'is_active' => true,
+        ]);
+        $sale = $this->makeSale($company, $branch, ['customer_id' => $customer->id]);
+
+        $this->makeDoc($company, [
+            'sale_id' => $sale->id,
+            'consecutivo' => '00100001010000000301',
+            'clave' => '506000000000000000010010000010100000000000301301',
+            'provider_document_id' => 'PE-DOC-901',
+            'status' => 'accepted',
+        ]);
+        $this->makeDoc($otherCompany, [
+            'consecutivo' => '00100001010000000302',
+            'clave' => '506000000000000000010010000010100000000000302302',
+            'provider_document_id' => 'PE-DOC-AJENO',
+        ]);
+
+        $response = $this->get(route('fiscal.documents.excel'));
+        $response->assertOk();
+
+        $rows = $this->excelRows($response);
+
+        $this->assertSame([
+            'Fecha/hora', 'Tipo', 'Consecutivo', 'Clave', 'Receptor', 'Identificación',
+            'Sucursal', 'Ambiente', 'Estado', 'Total', 'IVA', 'Provider document ID',
+        ], $rows[0]);
+        $this->assertCount(2, $rows);
+
+        $row = $rows[1];
+        $this->assertMatchesRegularExpression('/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/', (string) $row[0]);
+        $this->assertSame('FE - Factura electrónica', $row[1]);
+        $this->assertSame('00100001010000000301', $row[2]);
+        $this->assertSame('506000000000000000010010000010100000000000301301', $row[3]);
+        $this->assertSame('Cliente Export', $row[4]);
+        $this->assertSame('3101000001', $row[5]);
+        $this->assertSame('Principal', $row[6]);
+        $this->assertSame('Pruebas', $row[7]);
+        $this->assertSame('Aceptado', $row[8]);
+        $this->assertEquals(1130, $row[9]);
+        $this->assertEquals(130, $row[10]);
+        $this->assertSame('PE-DOC-901', $row[11]);
+
+        $flat = implode('|', array_map('strval', $row));
+        $this->assertStringNotContainsString('PE-DOC-AJENO', $flat);
+        $this->assertStringNotContainsString('00100001010000000302', $flat);
+    }
+
+    public function test_period_excel_reflects_active_filters_and_never_invents_data(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $branchOther = Branch::create(['company_id' => $company->id, 'name' => 'Sucursal Norte', 'code' => 'N'.uniqid(), 'is_active' => true]);
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $saleMain = $this->makeSale($company, $branch);
+        $saleOther = $this->makeSale($company, $branchOther);
+        $this->makeDoc($company, ['sale_id' => $saleMain->id, 'consecutivo' => '00100001010000000321', 'document_type' => '01', 'status' => 'accepted']);
+        $this->makeDoc($company, ['sale_id' => $saleOther->id, 'consecutivo' => '00100001010000000322', 'document_type' => '04', 'status' => 'rejected']);
+        // Sin venta relacionada: los campos dependientes quedan vacíos, nunca inventados.
+        $this->makeDoc($company, ['consecutivo' => '00100001010000000323', 'document_type' => '03', 'status' => 'accepted']);
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', ['type' => '04']))->assertOk());
+        $this->assertCount(2, $rows);
+        $this->assertSame('00100001010000000322', $rows[1][2]);
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', ['branch' => $branchOther->id]))->assertOk());
+        $this->assertCount(2, $rows);
+        $this->assertSame('00100001010000000322', $rows[1][2]);
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', ['status' => 'rejected']))->assertOk());
+        $this->assertCount(2, $rows);
+        $this->assertSame('00100001010000000322', $rows[1][2]);
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', ['q' => '00100001010000000321']))->assertOk());
+        $this->assertCount(2, $rows);
+        $this->assertSame('00100001010000000321', $rows[1][2]);
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', ['q' => '00100001010000000323']))->assertOk());
+        $this->assertSame('', (string) $rows[1][4]);
+        $this->assertSame('', (string) $rows[1][6]);
+        $this->assertSame('', (string) $rows[1][9]);
+        $this->assertSame('', (string) $rows[1][10]);
+
+        // Período: documento anterior a la fecha mínima queda fuera.
+        $old = $this->makeDoc($company, ['consecutivo' => '00100001010000000324']);
+        $old->forceFill(['created_at' => now()->subDays(40)])->save();
+
+        $rows = $this->excelRows($this->get(route('fiscal.documents.excel', [
+            'from' => now()->subDays(10)->toDateString(),
+            'to' => now()->toDateString(),
+        ]))->assertOk());
+        $this->assertNotContains('00100001010000000324', array_column($rows, 2));
+    }
+
+    public function test_period_zip_includes_only_really_persisted_xml_and_counts_excluded_documents(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $clave = '506000000000000000010010000010100000000000311311';
+        $withCustody = $this->makeDoc($company, [
+            'consecutivo' => '00100001010000000311',
+            'clave' => $clave,
+            'provider_document_id' => 'PE-DOC-ZIP',
+        ]);
+        FiscalDocumentCustody::create([
+            'electronic_document_id' => $withCustody->id,
+            'payload' => ['clave' => $clave, 'xml' => '<Factura>ENVIADA</Factura>'],
+            'response' => ['status' => 'accepted', 'xml' => '<Factura>FIRMADA</Factura>'],
+        ]);
+        $withoutCustody = $this->makeDoc($company, [
+            'consecutivo' => '00100001010000000312',
+            'clave' => '506000000000000000010010000010100000000000312312',
+        ]);
+
+        $response = $this->get(route('fiscal.documents.zip'));
+        $response->assertOk()->assertHeader('Content-Type', 'application/zip');
+        $entries = $this->zipEntries($response);
+
+        $base = 'FE_00100001010000000311_'.$clave;
+        $this->assertSame([
+            'resumen_descarga.txt',
+            $base.'_enviado.xml',
+            $base.'_firmado.xml',
+            $base.'_respuesta_hacienda.json',
+        ], array_keys($entries));
+        $this->assertSame('<Factura>ENVIADA</Factura>', $entries[$base.'_enviado.xml']);
+        $this->assertSame('<Factura>FIRMADA</Factura>', $entries[$base.'_firmado.xml']);
+
+        // El documento sin custodia NO recibe ningún archivo inventado.
+        foreach (array_keys($entries) as $name) {
+            $this->assertStringNotContainsString('00100001010000000312', $name);
+        }
+
+        // Todos los .xml son contenido XML real persistido.
+        foreach ($entries as $name => $content) {
+            if (str_ends_with($name, '.xml')) {
+                $this->assertStringContainsString('<', $content);
+            }
+        }
+
+        // Manifiesto: registra y muestra cuántos quedaron fuera por falta de custodia.
+        $this->assertArrayHasKey('resumen_descarga.txt', $entries);
+        $this->assertStringContainsString('Documentos incluidos con XML persistido: 1', $entries['resumen_descarga.txt']);
+        $this->assertStringContainsString('Documentos excluidos por falta de custodia/XML: 1', $entries['resumen_descarga.txt']);
+        $this->assertStringContainsString('00100001010000000312', $entries['resumen_descarga.txt']);
+        $this->assertSame('1', $response->headers->get('X-MVS-Documentos-Excluidos'));
+    }
+
+    public function test_period_zip_excludes_other_company_documents_and_uses_safe_file_names(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        [$otherCompany] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $own = $this->makeDoc($company, [
+            'consecutivo' => '00100001010000000331',
+            'clave' => '../../salida 506',
+        ]);
+        FiscalDocumentCustody::create([
+            'electronic_document_id' => $own->id,
+            'payload' => ['xml' => '<A>1</A>'],
+        ]);
+
+        $foreign = $this->makeDoc($otherCompany, [
+            'consecutivo' => '00100001010000000332',
+            'clave' => '506000000000000000010010000010100000000000332332',
+        ]);
+        FiscalDocumentCustody::create([
+            'electronic_document_id' => $foreign->id,
+            'payload' => ['xml' => '<Ajeno>NO</Ajeno>'],
+        ]);
+
+        $entries = $this->zipEntries($this->get(route('fiscal.documents.zip'))->assertOk());
+
+        foreach (array_keys($entries) as $name) {
+            $this->assertStringNotContainsString('00100001010000000332', $name);
+            $this->assertStringNotContainsString('/', $name);
+            $this->assertStringNotContainsString('\\', $name);
+            $this->assertStringNotContainsString('..', $name);
+            if ($name !== 'resumen_descarga.txt') {
+                $this->assertStringStartsWith('FE_', $name);
+            }
+        }
+        foreach ($entries as $content) {
+            $this->assertStringNotContainsString('<Ajeno>NO</Ajeno>', (string) $content);
+        }
+
+        $this->assertArrayHasKey('FE_00100001010000000331_salida_506_enviado.xml', $entries);
+        $this->assertSame('<A>1</A>', $entries['FE_00100001010000000331_salida_506_enviado.xml']);
+    }
+
+    public function test_period_zip_without_any_persisted_xml_answers_with_notice_and_no_file(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $this->makeDoc($company, ['consecutivo' => '00100001010000000341']);
+
+        $response = $this->get(route('fiscal.documents.zip'));
+
+        $response->assertRedirect(route('fiscal.documents', [
+            'from' => now()->startOfMonth()->toDateString(),
+            'to' => now()->toDateString(),
+        ]))->assertSessionHas('download_notice', fn ($notice) => str_contains((string) $notice, 'No disponible'));
+
+        // El Excel vacío responde igual: nunca fabrica filas.
+        $this->get(route('fiscal.documents.excel', ['q' => 'que-no-existe']))
+            ->assertRedirect()
+            ->assertSessionHas('download_notice');
+    }
+
+    public function test_period_downloads_require_fiscal_ver_permission(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch, []);
+
+        $this->get(route('fiscal.documents.excel'))->assertForbidden();
+        $this->get(route('fiscal.documents.zip'))->assertForbidden();
+    }
+
+    private function excelRows($response): array
+    {
+        $path = tempnam(sys_get_temp_dir(), 'fd-xlsx-');
+        file_put_contents($path, $response->streamedContent());
+        $rows = IOFactory::load($path)->getActiveSheet()->toArray();
+        unlink($path);
+
+        return $rows;
+    }
+
+    private function zipEntries($response): array
+    {
+        $path = tempnam(sys_get_temp_dir(), 'fd-zip-');
+        file_put_contents($path, $response->getContent());
+
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path));
+
+        $entries = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entries[$zip->getNameIndex($i)] = $zip->getFromIndex($i);
+        }
+        $zip->close();
+        unlink($path);
+
+        return $entries;
     }
 }

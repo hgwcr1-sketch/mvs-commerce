@@ -80,11 +80,17 @@
             <label class="text-sm text-slate-600 sm:col-span-2">Buscar
                 <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Receptor, cédula, clave o consecutivo" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5">
             </label>
-            <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+            <div class="flex items-end flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
                 <button type="submit" class="min-h-[44px] rounded-xl bg-[#D4AF37] px-5 font-bold text-black hover:bg-[#B1922D]">Filtrar</button>
                 <a href="{{ route('fiscal.documents', $scope ? ['scope' => $scope] : []) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-100 px-4 font-bold text-slate-700">Limpiar</a>
+                <a href="{{ route('fiscal.documents.excel', $downloadParams) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-[#D4AF37] px-4 font-bold text-black hover:bg-[#B1922D]" title="Exporta los documentos que coinciden con los filtros activos">Descargar Excel</a>
+                <a href="{{ route('fiscal.documents.zip', $downloadParams) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-800 px-4 font-bold text-white hover:bg-slate-700" title="Solo incluye XML realmente persistidos en MVS">Descargar XML (ZIP)</a>
             </div>
         </form>
+
+        @if(session('download_notice'))
+            <div class="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">{{ session('download_notice') }}</div>
+        @endif
     </section>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">

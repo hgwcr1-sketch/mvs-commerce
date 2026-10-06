@@ -2,19 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\Canton;
 use App\Models\Company;
 use App\Models\CompanyFiscalConfig;
 use App\Models\CompanyLicense;
 use App\Models\ElectronicDocument;
+use App\Models\FiscalDocumentCustody;
+use App\Models\FiscalSeries;
+use App\Models\Province;
+use App\Models\Sale;
 use App\Services\CompanyLicenseService;
+use App\Services\Facturaencr\FacturaencrEmissionService;
 use App\Services\Fiscal\CompanyFiscalConfigService;
 use App\Services\Fiscal\FiscalConsumptionService;
+use App\Services\Fiscal\FiscalCutoffService;
+use App\Services\Fiscal\FiscalProviderSwitchService;
+use App\Services\Fiscal\FiscalSeriesService;
 use App\Services\TaxpayerLookupService;
 use App\Support\IdentificationRules;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 /**
  * Portal fiscal MVS del tenant (Facturación Electrónica).
@@ -43,6 +58,17 @@ class FiscalPortalController extends Controller
         'sent' => 'En proceso',
         'polling' => 'En proceso',
     ];
+
+    public const TYPE_ABBREVIATIONS = [
+        '01' => 'FE',
+        '04' => 'TE',
+        '03' => 'NC',
+        '02' => 'ND',
+    ];
+
+    private const REJECTED_STATUSES = ['rejected', 'error'];
+
+    private const PENDING_STATUSES = ['pending', 'queued', 'signing', 'sent', 'polling'];
 
     public function __construct(
         private readonly CompanyFiscalConfigService $configs,
@@ -510,7 +536,7 @@ class FiscalPortalController extends Controller
             ->first();
 
         $sale = $document->sale_id
-            ? \App\Models\Sale::query()->with('branch')->find($document->sale_id)
+            ? Sale::query()->with('branch')->find($document->sale_id)
             : null;
 
         $haciendaStatus = null;
@@ -540,59 +566,16 @@ class FiscalPortalController extends Controller
     public function documents(Request $request): View
     {
         $company = $this->company();
-
-        $scope = in_array($request->query('scope'), ['pendientes', 'rechazados'], true)
-            ? $request->query('scope') : null;
-        $type = in_array($request->query('type'), array_keys(self::TYPE_LABELS), true)
-            ? $request->query('type') : null;
-        $status = in_array($request->query('status'), array_keys(self::STATUS_LABELS), true)
-            ? $request->query('status') : null;
-        $environment = in_array($request->query('environment'), ['sandbox', 'production'], true)
-            ? $request->query('environment') : null;
-        $branchId = $request->filled('branch') ? (int) $request->query('branch') : null;
-        $from = $request->query('from') ?: null;
-        $to = $request->query('to') ?: null;
-        $q = trim((string) $request->query('q'));
-
-        $applyCommon = function ($query) use ($type, $environment, $branchId, $from, $to, $q) {
-            if ($type !== null) {
-                $query->where('document_type', $type);
-            }
-            if ($environment !== null) {
-                $query->where('environment', $environment);
-            }
-            if ($from !== null) {
-                $query->where('created_at', '>=', $from);
-            }
-            if ($to !== null) {
-                $query->where('created_at', '<=', $to . ' 23:59:59');
-            }
-            if ($q !== '') {
-                $query->where(function ($inner) use ($q) {
-                    $inner->where('clave', 'like', "%{$q}%")
-                        ->orWhere('consecutivo', 'like', "%{$q}%")
-                        ->orWhereHas('sale', function ($sale) use ($q) {
-                            $sale->whereHas('customer', function ($customer) use ($q) {
-                                $customer->where('name', 'like', "%{$q}%")
-                                    ->orWhere('identification', 'like', "%{$q}%");
-                            });
-                        });
-                });
-            }
-            if ($branchId !== null) {
-                $query->whereHas('sale', fn ($sale) => $sale->where('branch_id', $branchId));
-            }
-
-            return $query;
-        };
+        $filters = $this->documentFilters($request);
+        $scope = $filters['scope'];
 
         $base = ElectronicDocument::query()->forCompany($company->id);
-        $applyCommon($base);
+        $this->applyDocumentFilters($base, $filters);
 
         $summary = [
             'accepted' => (clone $base)->where('status', 'accepted')->count(),
-            'rejected' => (clone $base)->whereIn('status', ['rejected', 'error'])->count(),
-            'pending' => (clone $base)->whereIn('status', ['pending', 'queued', 'signing', 'sent', 'polling'])->count(),
+            'rejected' => (clone $base)->whereIn('status', self::REJECTED_STATUSES)->count(),
+            'pending' => (clone $base)->whereIn('status', self::PENDING_STATUSES)->count(),
             'iva' => (clone $base)->where('electronic_documents.status', 'accepted')
                 ->selectRaw('COALESCE((SELECT SUM(sales.tax_total) FROM sales WHERE sales.id = electronic_documents.sale_id AND sales.company_id = ?), 0) as iva_sum', [$company->id])
                 ->value('iva_sum'),
@@ -609,13 +592,8 @@ class FiscalPortalController extends Controller
             }
         } else {
             $query = ElectronicDocument::query()->forCompany($company->id);
-            $applyCommon($query);
-
-            if ($scope === 'rechazados') {
-                $query->whereIn('status', ['rejected', 'error']);
-            } elseif ($status !== null) {
-                $query->where('status', $status);
-            }
+            $this->applyDocumentFilters($query, $filters);
+            $this->applyDocumentScope($query, $filters);
 
             $documents = $query->with(['sale.customer', 'sale.branch'])->orderByDesc('id')->paginate(20)->withQueryString();
         }
@@ -627,11 +605,141 @@ class FiscalPortalController extends Controller
             'pendingReasons' => $pendingReasons,
             'summary' => $summary,
             'scope' => $scope,
-            'filters' => compact('type', 'status', 'environment', 'branchId', 'from', 'to', 'q'),
-            'branches' => \App\Models\Branch::query()->where('company_id', $company->id)->orderBy('name')->get(),
+            'filters' => $filters,
+            'downloadParams' => $this->downloadParams($filters),
+            'branches' => Branch::query()->where('company_id', $company->id)->orderBy('name')->get(),
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
         ]);
+    }
+
+    /**
+     * Filtros activos de la pantalla Documentos, validados y reutilizados por
+     * el listado y por las descargas Excel/ZIP: mismos criterios para ambos.
+     *
+     * @return array{scope: ?string, type: ?string, status: ?string, environment: ?string, branchId: ?int, from: ?string, to: ?string, q: string}
+     */
+    private function documentFilters(Request $request): array
+    {
+        return [
+            'scope' => in_array($request->query('scope'), ['pendientes', 'rechazados'], true)
+                ? $request->query('scope') : null,
+            'type' => in_array($request->query('type'), array_keys(self::TYPE_LABELS), true)
+                ? $request->query('type') : null,
+            'status' => in_array($request->query('status'), array_keys(self::STATUS_LABELS), true)
+                ? $request->query('status') : null,
+            'environment' => in_array($request->query('environment'), ['sandbox', 'production'], true)
+                ? $request->query('environment') : null,
+            'branchId' => $request->filled('branch') ? (int) $request->query('branch') : null,
+            'from' => $request->query('from') ?: null,
+            'to' => $request->query('to') ?: null,
+            'q' => trim((string) $request->query('q')),
+        ];
+    }
+
+    /**
+     * Período por defecto de las descargas: mes en curso mientras el usuario
+     * no indique fechas. No se inventan datos, sólo se delimita el rango.
+     *
+     * @return array<string, mixed>
+     */
+    private function periodFilters(Request $request): array
+    {
+        $filters = $this->documentFilters($request);
+        $filters['from'] = $filters['from'] ?: now()->startOfMonth()->toDateString();
+        $filters['to'] = $filters['to'] ?: now()->toDateString();
+
+        return $filters;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyDocumentFilters(Builder $query, array $filters): Builder
+    {
+        if ($filters['type'] !== null) {
+            $query->where('document_type', $filters['type']);
+        }
+        if ($filters['environment'] !== null) {
+            $query->where('environment', $filters['environment']);
+        }
+        if ($filters['from'] !== null) {
+            $query->where('created_at', '>=', $filters['from']);
+        }
+        if ($filters['to'] !== null) {
+            $query->where('created_at', '<=', $filters['to'].' 23:59:59');
+        }
+        if ($filters['q'] !== '') {
+            $q = $filters['q'];
+            $query->where(function ($inner) use ($q) {
+                $inner->where('clave', 'like', "%{$q}%")
+                    ->orWhere('consecutivo', 'like', "%{$q}%")
+                    ->orWhereHas('sale', function ($sale) use ($q) {
+                        $sale->whereHas('customer', function ($customer) use ($q) {
+                            $customer->where('name', 'like', "%{$q}%")
+                                ->orWhere('identification', 'like', "%{$q}%");
+                        });
+                    });
+            });
+        }
+        if ($filters['branchId'] !== null) {
+            $query->whereHas('sale', fn ($sale) => $sale->where('branch_id', $filters['branchId']));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Scope operativo / estado sobre la lista de documentos (no sobre el resumen).
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function applyDocumentScope(Builder $query, array $filters): Builder
+    {
+        if ($filters['scope'] === 'rechazados') {
+            $query->whereIn('status', self::REJECTED_STATUSES);
+        } elseif ($filters['scope'] === 'pendientes') {
+            $query->whereIn('status', self::PENDING_STATUSES);
+        } elseif ($filters['status'] !== null) {
+            $query->where('status', $filters['status']);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Documentos del período con los filtros activos. Consulta SIEMPRE
+     * acotada por company_id: nunca cruza empresas.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    private function periodDocuments(Company $company, array $filters): Builder
+    {
+        $query = ElectronicDocument::query()->forCompany($company->id);
+        $this->applyDocumentFilters($query, $filters);
+        $this->applyDocumentScope($query, $filters);
+
+        return $query->with(['sale.branch', 'sale.customer'])->orderBy('id');
+    }
+
+    /**
+     * Parámetros de las descargas: conservan los filtros activos de la vista.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function downloadParams(array $filters): array
+    {
+        return array_filter([
+            'scope' => $filters['scope'] ?? null,
+            'type' => $filters['type'] ?? null,
+            'status' => $filters['status'] ?? null,
+            'environment' => $filters['environment'] ?? null,
+            'branch' => $filters['branchId'] ?? null,
+            'from' => $filters['from'] ?? null,
+            'to' => $filters['to'] ?? null,
+            'q' => $filters['q'] !== '' ? $filters['q'] : null,
+        ], fn ($value) => $value !== null && $value !== '');
     }
 
     /**
@@ -652,7 +760,7 @@ class FiscalPortalController extends Controller
                 ->with('status', 'Documento en estado final: no requiere consulta (sin re-emisión).');
         }
 
-        $synced = app(\App\Services\Facturaencr\FacturaencrEmissionService::class)
+        $synced = app(FacturaencrEmissionService::class)
             ->syncStatus($document->fresh());
 
         return redirect()
@@ -680,7 +788,7 @@ class FiscalPortalController extends Controller
             200,
             [
                 'Content-Type' => 'application/json; charset=UTF-8',
-                'Content-Disposition' => 'attachment; filename="respuesta-' . ($document->clave ?: $document->id) . '.json"',
+                'Content-Disposition' => 'attachment; filename="respuesta-'.($document->clave ?: $document->id).'.json"',
             ]
         );
     }
@@ -704,48 +812,82 @@ class FiscalPortalController extends Controller
 
         return response($xml, 200, [
             'Content-Type' => 'application/xml; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="xml-' . ($document->clave ?: $document->id) . '.xml"',
+            'Content-Disposition' => 'attachment; filename="xml-'.($document->clave ?: $document->id).'.xml"',
         ]);
     }
 
     /**
-     * ZIP de XML por período: solo con XML realmente persistido; si ningún
-     * documento del período tiene XML custodiado, responde "No disponible".
+     * ZIP de XML por período: SOLO con artefactos realmente persistidos en la
+     * custodia (XML enviado, XML firmado y respuesta de Hacienda cuando existan).
+     * Ningún documento sin custodia genera archivo: se cuentan los excluidos en
+     * el manifiesto del ZIP y en el log.
      */
     public function downloadPeriodXml(Request $request)
     {
         $company = $this->company();
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $filters = $this->periodFilters($request);
 
-        $docs = ElectronicDocument::query()
-            ->forCompany($company->id)
-            ->where('created_at', '>=', $from)
-            ->where('created_at', '<=', $to . ' 23:59:59')
-            ->orderBy('id')
-            ->get();
+        $docs = $this->periodDocuments($company, $filters)->get();
 
-        $xmls = [];
+        $files = [];
+        $included = 0;
+        $excluded = [];
+
         foreach ($docs as $doc) {
             $custody = FiscalDocumentCustody::query()
                 ->where('electronic_document_id', $doc->id)
                 ->first();
-            $xml = $this->findXmlInCustody($custody);
-            if ($xml !== null) {
-                $xmls[($doc->clave ?: 'doc-' . $doc->id) . '.xml'] = $xml;
+
+            $xmls = $this->xmlArtifacts($custody);
+
+            if ($xmls === []) {
+                $excluded[] = $this->documentReference($doc);
+
+                continue;
             }
+
+            foreach ($xmls as $suffix => $xml) {
+                $name = $this->uniqueFileName($files, $this->xmlBaseName($doc).$suffix.'.xml');
+                $files[$name] = $xml;
+            }
+
+            if ($custody->response !== null && $custody->response !== []) {
+                $name = $this->uniqueFileName($files, $this->xmlBaseName($doc).'_respuesta_hacienda.json');
+                $files[$name] = json_encode($custody->response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+
+            $included++;
         }
 
-        if ($xmls === []) {
+        if ($files === []) {
+            Log::info('fiscal.documents.zip.vacio', [
+                'company_id' => $company->id,
+                'from' => $filters['from'],
+                'to' => $filters['to'],
+                'documentos' => $docs->count(),
+            ]);
+
             return redirect()
-                ->route('fiscal.documents', ['from' => $from, 'to' => $to])
-                ->with('download_notice', 'No disponible: ningún documento del período tiene XML firmado persistido. Falta guardar la custodia del XML.');
+                ->route('fiscal.documents', $this->downloadParams($filters))
+                ->with('download_notice', 'No disponible: ningún documento del período con los filtros activos tiene XML persistido. No se genera ningún archivo inventado.');
         }
+
+        Log::info('fiscal.documents.zip', [
+            'company_id' => $company->id,
+            'from' => $filters['from'],
+            'to' => $filters['to'],
+            'documentos' => $docs->count(),
+            'incluidos' => $included,
+            'excluidos_sin_custodia' => count($excluded),
+        ]);
+
+        $manifest = $this->zipManifest($company, $filters, $docs->count(), $included, $excluded);
 
         $tmp = tempnam(sys_get_temp_dir(), 'fxml');
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         $zip->open($tmp, \ZipArchive::OVERWRITE);
-        foreach ($xmls as $name => $content) {
+        $zip->addFromString('resumen_descarga.txt', $manifest);
+        foreach ($files as $name => $content) {
             $zip->addFromString($name, $content);
         }
         $zip->close();
@@ -754,64 +896,197 @@ class FiscalPortalController extends Controller
 
         return response($bytes, 200, [
             'Content-Type' => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="xml-' . $from . '_' . $to . '.zip"',
+            'Content-Disposition' => 'attachment; filename="xml-'.$filters['from'].'_'.$filters['to'].'.zip"',
+            'X-MVS-Documentos-Incluidos' => (string) $included,
+            'X-MVS-Documentos-Excluidos' => (string) count($excluded),
         ]);
     }
 
     /**
-     * Excel (CSV UTF-8 con BOM, abre directo en Excel) por período con los
-     * datos reales persistidos en MVS.
+     * Excel (.xlsx) por período con los filtros activos y las columnas
+     * mínimas del portal. Los datos vacíos quedan vacíos: nunca se inventan.
      */
     public function downloadPeriodExcel(Request $request)
     {
         $company = $this->company();
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $filters = $this->periodFilters($request);
 
-        $docs = ElectronicDocument::query()
-            ->forCompany($company->id)
-            ->with('sale.customer')
-            ->where('created_at', '>=', $from)
-            ->where('created_at', '<=', $to . ' 23:59:59')
-            ->orderBy('id')
-            ->get();
+        $docs = $this->periodDocuments($company, $filters)->get();
 
         if ($docs->isEmpty()) {
             return redirect()
-                ->route('fiscal.documents', ['from' => $from, 'to' => $to])
-                ->with('download_notice', 'No disponible: no hay documentos en el período seleccionado.');
+                ->route('fiscal.documents', $this->downloadParams($filters))
+                ->with('download_notice', 'No disponible: no hay documentos en el período con los filtros activos.');
         }
 
-        $rows = [['Fecha', 'Tipo', 'Consecutivo', 'Clave', 'Receptor', 'Identificación', 'Total', 'IVA', 'Estado', 'Ambiente']];
+        $headers = [
+            'Fecha/hora',
+            'Tipo',
+            'Consecutivo',
+            'Clave',
+            'Receptor',
+            'Identificación',
+            'Sucursal',
+            'Ambiente',
+            'Estado',
+            'Total',
+            'IVA',
+            'Provider document ID',
+        ];
+
+        $rows = [];
         foreach ($docs as $doc) {
             $sale = $doc->sale;
             $rows[] = [
                 $doc->created_at->format('d/m/Y H:i'),
-                self::TYPE_LABELS[$doc->document_type] ?? $doc->document_type,
+                $this->typeLabel($doc->document_type),
                 $doc->consecutivo ?: '',
                 $doc->clave ?: '',
                 $sale?->customer?->name ?? '',
                 $sale?->customer?->identification ?? '',
-                $sale?->total !== null ? number_format((float) $sale->total, 2, '.', '') : '',
-                $sale?->tax_total !== null ? number_format((float) $sale->tax_total, 2, '.', '') : '',
+                $sale?->branch?->name ?? '',
+                $doc->environment === 'production' ? 'Producción' : 'Pruebas',
                 self::STATUS_LABELS[$doc->status] ?? $doc->status,
-                $doc->environment,
+                $sale?->total !== null ? (float) $sale->total : '',
+                $sale?->tax_total !== null ? (float) $sale->tax_total : '',
+                $doc->provider_document_id ?: '',
             ];
         }
 
-        $out = fopen('php://temp', 'r+');
-        fwrite($out, "\xEF\xBB\xBF");
-        foreach ($rows as $row) {
-            fputcsv($out, $row, ';', '"', '\\');
-        }
-        rewind($out);
-        $bytes = stream_get_contents($out);
-        fclose($out);
-
-        return response($bytes, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="documentos-' . $from . '_' . $to . '.csv"',
+        Log::info('fiscal.documents.excel', [
+            'company_id' => $company->id,
+            'from' => $filters['from'],
+            'to' => $filters['to'],
+            'documentos' => $docs->count(),
         ]);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Documentos');
+        $sheet->fromArray(array_merge([$headers], $rows), null, 'A1');
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter($sheet->calculateWorksheetDimension());
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(
+            fn () => $writer->save('php://output'),
+            'documentos-'.$filters['from'].'_'.$filters['to'].'.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    private function typeLabel(string $documentType): string
+    {
+        $abbreviation = self::TYPE_ABBREVIATIONS[$documentType] ?? $documentType;
+        $label = self::TYPE_LABELS[$documentType] ?? '';
+
+        return $label !== '' ? "{$abbreviation} - {$label}" : $abbreviation;
+    }
+
+    private function documentReference(ElectronicDocument $document): string
+    {
+        return $document->consecutivo ?: ($document->clave ?: 'documento '.$document->id);
+    }
+
+    /**
+     * Sufijos de archivo para los XML realmente custodiados, separando el XML
+     * enviado (payload) del XML firmado (respuesta). Sin custodia: nada.
+     *
+     * @return array<string, string>
+     */
+    private function xmlArtifacts(?FiscalDocumentCustody $custody): array
+    {
+        if ($custody === null) {
+            return [];
+        }
+
+        $artifacts = [];
+
+        $sent = is_array($custody->payload) ? $this->walkForXml($custody->payload) : null;
+        if ($sent !== null) {
+            $artifacts['_enviado'] = $sent;
+        }
+
+        $signed = is_array($custody->response) ? $this->walkForXml($custody->response) : null;
+        if ($signed !== null) {
+            $artifacts['_firmado'] = $signed;
+        }
+
+        return $artifacts;
+    }
+
+    /**
+     * TIPO_CONSECUTIVO_CLAVE, saneado a caracteres seguros para un ZIP
+     * (sin separadores de ruta, sin puntos iniciales ni finales).
+     */
+    private function xmlBaseName(ElectronicDocument $document): string
+    {
+        $type = self::TYPE_ABBREVIATIONS[$document->document_type] ?? 'DOC';
+        $reference = $document->consecutivo ?: ($document->clave ?: 'id-'.$document->id);
+        $key = $document->clave ?: '';
+
+        $base = $type.'_'.$reference.($key !== '' ? '_'.$key : '');
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $base) ?? '';
+        $safe = str_replace('..', '_', $safe);
+        $safe = preg_replace('/_+/', '_', $safe) ?? '';
+        $safe = trim($safe, '._-');
+        $safe = substr($safe, 0, 120);
+        $safe = $safe !== '' ? $safe : 'documento-'.$document->id;
+
+        return $safe;
+    }
+
+    /**
+     * @param  array<string, string>  $files
+     */
+    private function uniqueFileName(array $files, string $name): string
+    {
+        if (! isset($files[$name])) {
+            return $name;
+        }
+
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $stem = substr($name, 0, strlen($name) - strlen($extension) - 1);
+        $suffix = $extension !== '' ? '.'.$extension : '';
+        $attempt = 2;
+
+        while (isset($files[$stem.'-'.$attempt.$suffix])) {
+            $attempt++;
+        }
+
+        return $stem.'-'.$attempt.$suffix;
+    }
+
+    /**
+     * Manifiesto del ZIP: registra y muestra cuántos documentos quedaron
+     * fuera por falta de custodia y cuáles son.
+     *
+     * @param  array<string, mixed>  $filters
+     * @param  array<int, string>  $excluded
+     */
+    private function zipManifest(Company $company, array $filters, int $total, int $included, array $excluded): string
+    {
+        $lines = [
+            'MVS Commerce — Descarga de XML por período',
+            'Empresa: '.$company->trade_name,
+            'Período: '.$filters['from'].' al '.$filters['to'],
+            'Documentos en el período con los filtros activos: '.$total,
+            'Documentos incluidos con XML persistido: '.$included,
+            'Documentos excluidos por falta de custodia/XML: '.count($excluded),
+        ];
+
+        if ($excluded !== []) {
+            $lines[] = '';
+            $lines[] = 'Excluidos (sin XML persistido, no se genera archivo):';
+            foreach (array_slice($excluded, 0, 100) as $reference) {
+                $lines[] = '- '.$reference;
+            }
+            if (count($excluded) > 100) {
+                $lines[] = '- … y '.(count($excluded) - 100).' más';
+            }
+        }
+
+        return implode(PHP_EOL, $lines).PHP_EOL;
     }
 
     /**
@@ -821,15 +1096,15 @@ class FiscalPortalController extends Controller
      */
     private function pendingSalesQuery(Company $company, Request $request)
     {
-        $cutoff = app(\App\Services\Fiscal\FiscalCutoffService::class)->cutoffFor($company->id);
+        $cutoff = app(FiscalCutoffService::class)->cutoffFor($company->id);
 
-        $query = \App\Models\Sale::query()
+        $query = Sale::query()
             ->where('company_id', $company->id)
             ->whereIn('document_type', [
-                \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE,
-                \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET,
+                Sale::DOCUMENT_ELECTRONIC_INVOICE,
+                Sale::DOCUMENT_ELECTRONIC_TICKET,
             ])
-            ->where('status', \App\Models\Sale::STATUS_COMPLETED)
+            ->where('status', Sale::STATUS_COMPLETED)
             ->where(function ($outer) use ($company) {
                 // Sin electronic_document fiscal (01/04) para esta empresa...
                 $outer->whereNotExists(function ($sub) use ($company) {
@@ -840,15 +1115,15 @@ class FiscalPortalController extends Controller
                         ->whereIn('ed.document_type', ['01', '04']);
                 })
                 // ...o con fallo previo al proveedor (error sin acuse del proveedor).
-                ->orWhereExists(function ($sub) use ($company) {
-                    $sub->selectRaw('1')
-                        ->from('electronic_documents as ed')
-                        ->whereColumn('ed.sale_id', 'sales.id')
-                        ->where('ed.company_id', $company->id)
-                        ->whereIn('ed.document_type', ['01', '04'])
-                        ->where('ed.status', 'error')
-                        ->whereNull('ed.provider_document_id');
-                });
+                    ->orWhereExists(function ($sub) use ($company) {
+                        $sub->selectRaw('1')
+                            ->from('electronic_documents as ed')
+                            ->whereColumn('ed.sale_id', 'sales.id')
+                            ->where('ed.company_id', $company->id)
+                            ->whereIn('ed.document_type', ['01', '04'])
+                            ->where('ed.status', 'error')
+                            ->whereNull('ed.provider_document_id');
+                    });
             });
 
         if ($cutoff !== null) {
@@ -865,7 +1140,7 @@ class FiscalPortalController extends Controller
             $query->where('created_at', '>=', $request->query('from'));
         }
         if ($request->filled('to')) {
-            $query->where('created_at', '<=', $request->query('to') . ' 23:59:59');
+            $query->where('created_at', '<=', $request->query('to').' 23:59:59');
         }
         if ($request->filled('q')) {
             $q = trim((string) $request->query('q'));
@@ -878,7 +1153,7 @@ class FiscalPortalController extends Controller
         return $query->with(['customer', 'branch'])->orderByDesc('id');
     }
 
-    private function pendingReason(\App\Models\Sale $sale, Company $company): string
+    private function pendingReason(Sale $sale, Company $company): string
     {
         $failed = ElectronicDocument::query()
             ->forCompany($company->id)
@@ -891,7 +1166,7 @@ class FiscalPortalController extends Controller
 
         if ($failed !== null) {
             return 'Fallo previo al proveedor: '
-                . ($failed->last_error_message ?: $failed->last_error_code ?: 'firma/envío fallido');
+                .($failed->last_error_message ?: $failed->last_error_code ?: 'firma/envío fallido');
         }
 
         $config = CompanyFiscalConfig::query()->where('company_id', $company->id)->first();
@@ -904,7 +1179,7 @@ class FiscalPortalController extends Controller
             return 'auto_emit desactivado: la venta no entra al flujo automático.';
         }
 
-        if ($sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE && ! $sale->customer_id) {
+        if ($sale->document_type === Sale::DOCUMENT_ELECTRONIC_INVOICE && ! $sale->customer_id) {
             return 'Preflight: receptor sin identificación.';
         }
 
