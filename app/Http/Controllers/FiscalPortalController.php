@@ -300,6 +300,7 @@ class FiscalPortalController extends Controller
             'default_document' => ['required', 'string', 'in:01,04'],
             'auto_emit_enabled' => ['nullable', 'boolean'],
             'notify_receptor_email' => ['nullable', 'boolean'],
+            'fiscal_start_at' => ['nullable', 'date'],
         ]);
 
         $validated['auto_emit_enabled'] = $request->boolean('auto_emit_enabled');

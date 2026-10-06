@@ -10,8 +10,14 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\CashSession;
 use App\Models\CashRegister;
+use App\Models\CompanyFiscalConfig;
+use App\Models\ElectronicDocument;
 use App\Models\User;
 use App\Models\CreditNoteApplication;
+use chillerlan\QRCode\Common\EccLevel;
+use chillerlan\QRCode\Output\QRMarkupSVG;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 
 /**
  * DTO inmutable que contiene todos los datos normalizados para renderizar un comprobante.
@@ -60,6 +66,7 @@ readonly class SaleReceiptData
         /** @var list<array{
          *     description: string,
          *     product_code: string|null,
+         *     cabys: string|null,
          *     quantity: string,
          *     unit_price: string,
          *     discount_total: string,
@@ -111,6 +118,24 @@ readonly class SaleReceiptData
          * }|null */
         public ?array $cash_session,
         public string $footer_message,
+        /**
+         * Identidad fiscal del comprobante electrónico (null si la venta no
+         * tiene electronic_document con clave firmada).
+         *
+         * @var array{
+         *     clave: string,
+         *     consecutivo: string|null,
+         *     status: string,
+         *     status_label: string,
+         *     is_accepted: bool,
+         *     environment: string,
+         *     branch_code: string|null,
+         *     terminal_code: string|null,
+         *     condition: string,
+         *     qr_image: string|null,
+         * }|null
+         */
+        public ?array $fiscal = null,
     ) {}
 
     /**
@@ -149,6 +174,8 @@ readonly class SaleReceiptData
                 'identification_number' => $company->identification_number ?? null,
                 'address' => $company->address ?? null,
                 'timezone' => $company->timezone ?? 'America/Costa_Rica',
+                'email' => $company->email ?? null,
+                'phone' => $company->phone ?? null,
             ],
             branch: [
                 'name' => $branch->name ?? '',
@@ -166,16 +193,20 @@ readonly class SaleReceiptData
             customer: $customer ? [
                 'name' => $customer->taxpayer_name ?? $customer->name,
                 'identification' => $customer->identification ?? null,
+                'email' => $customer->email ?? null,
                 'is_final_consumer' => $customer->id === null || $customer->name === 'Consumidor Final',
             ] : [
                 'name' => 'Consumidor Final',
                 'identification' => null,
+                'email' => null,
                 'is_final_consumer' => true,
             ],
             items: $sale->items->map(function (SaleItem $item) {
                 return [
                     'description' => $item->product?->name ?? $item->description,
                     'product_code' => $item->product_code ?? null,
+                    'cabys' => $item->cabys_code ?? null,
+                    'tax_rate' => $item->tax_rate ?? null,
                     'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','),
                     'unit_price' => number_format((float) $item->unit_price, 0, ',', '.'),
                     'discount_total' => number_format((float) $item->discount_total, 0, ',', '.'),
@@ -219,7 +250,84 @@ readonly class SaleReceiptData
                 'cash_register_name' => $sale->cashSession->cashRegister->name ?? null,
             ] : null,
             footer_message: 'Gracias por su compra',
+            fiscal: self::fiscalFor($sale),
         );
+    }
+
+    /**
+     * Identidad fiscal de la venta: intento aceptado preferido, si no el más
+     * reciente con clave firmada. Devuelve null cuando no hay documento
+     * electrónico con clave (ventas normales / aún no emitidas).
+     */
+    private static function fiscalFor(Sale $sale): ?array
+    {
+        $docs = ElectronicDocument::query()
+            ->where('company_id', (int) $sale->company_id)
+            ->where('sale_id', $sale->id)
+            ->orderByDesc('attempt_number')
+            ->get();
+
+        if ($docs->isEmpty()) {
+            return null;
+        }
+
+        $doc = $docs->firstWhere('status', 'accepted')
+            ?? $docs->first(fn (ElectronicDocument $candidate) => $candidate->clave !== null);
+
+        if (! $doc || ! $doc->clave) {
+            return null;
+        }
+
+        $config = CompanyFiscalConfig::query()->where('company_id', $sale->company_id)->first();
+
+        return [
+            'clave' => $doc->clave,
+            'consecutivo' => $doc->consecutivo,
+            'status' => $doc->status,
+            'status_label' => self::fiscalStatusLabel($doc->status),
+            'is_accepted' => $doc->status === 'accepted',
+            'environment' => $doc->environment === 'production' ? 'Producción' : 'Pruebas',
+            'branch_code' => $config?->fiscal_branch_code,
+            'terminal_code' => $config?->fiscal_terminal_code,
+            'economic_activity' => $config?->economic_activity,
+            'condition' => $sale->sale_condition === Sale::CONDITION_CREDIT ? 'Crédito' : 'Contado',
+            'qr_image' => self::fiscalQr($doc->clave),
+        ];
+    }
+
+    private static function fiscalStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'accepted' => 'Aceptado',
+            'rejected' => 'Rechazado',
+            'error' => 'Envío fallido',
+            default => 'En proceso',
+        };
+    }
+
+    /**
+     * QR de representación (clave de 50 dígitos en el endpoint público de
+     * Hacienda). SVG embebido: funciona en navegador y en DomPDF.
+     */
+    private static function fiscalQr(string $clave): ?string
+    {
+        if (! class_exists(QRCode::class)) {
+            return null;
+        }
+
+        try {
+            $svg = (new QRCode(new QROptions([
+                'outputInterface' => QRMarkupSVG::class,
+                'eccLevel' => EccLevel::H,
+                'scale' => 6,
+                'svgAddXmlHeader' => false,
+                'outputBase64' => false,
+            ])))->render('https://api.comprobanteselectronicos.go.cr/recepcion/v1/comprobantes/'.$clave);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($svg) ? 'data:image/svg+xml;base64,'.base64_encode($svg) : null;
     }
 
     private static function documentLabel(string $documentType): string

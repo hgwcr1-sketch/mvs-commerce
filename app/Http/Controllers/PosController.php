@@ -19,15 +19,15 @@ use App\Models\SuspendedSale;
 use App\Services\Cash\CashSessionResolver;
 use App\Services\CompanyCashSettingsProvisioner;
 use App\Services\CustomerTaxpayerActivityService;
+use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\Fiscal\PosEmissionDispatcher;
 use App\Services\Loyalty\LoyaltyPortalDeliveryService;
 use App\Services\Loyalty\LoyaltyPosSummaryService;
-use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\PaymentMethodProvisioner;
 use App\Services\PhoneNumberService;
+use App\Services\PosDefaultDocumentType;
 use App\Services\Sales\CreditNoteService;
 use App\Services\Sales\LayawayService;
-use App\Services\PosDefaultDocumentType;
 use App\Services\Sales\PosSaleProcessor;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
@@ -157,6 +157,7 @@ class PosController extends Controller
                 'products.price_b',
                 'products.price_c',
                 'products.tax_rate',
+                'products.tax_rate_official_pct',
                 'products.track_inventory',
             ])
             ->addSelect([
@@ -233,7 +234,11 @@ class PosController extends Controller
                 'price_c' => $product->price_c !== null
                     ? (float) $product->price_c
                     : null,
-                'tax_rate' => (float) ($product->tax_rate ?? 0), 'controls_inventory' => (bool) $product->track_inventory,
+                'tax_rate' => (float) ($product->tax_rate ?? 0),
+                'tax_rate_official_pct' => $product->tax_rate_official_pct !== null
+                    ? (float) $product->tax_rate_official_pct
+                    : null,
+                'controls_inventory' => (bool) $product->track_inventory,
                 'available_stock' => $availableStock,
                 'unit' => $product->unit?->abbreviation,
                 'allows_decimals' => (bool) $product->unit?->allows_decimals,
@@ -811,8 +816,9 @@ class PosController extends Controller
         $autoPrint = $request->boolean('print') || $sale->branch->receipt_auto_print;
         $loyalty = $receipts->loyaltySummary($sale);
         $receiptData = $receipts->buildReceiptData($sale);
+        $view = ($format === 'letter' && $receiptData->fiscal !== null) ? 'pos.fiscal-invoice' : 'pos.receipt';
 
-        return view('pos.receipt', compact('sale', 'company', 'format', 'autoPrint', 'loyalty', 'receiptData'));
+        return view($view, compact('sale', 'company', 'format', 'autoPrint', 'loyalty', 'receiptData'));
     }
 
     public function receiptPdf(Request $request, Sale $sale, SaleReceiptService $receipts)

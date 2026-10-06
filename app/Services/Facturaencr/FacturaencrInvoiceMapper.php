@@ -10,6 +10,7 @@ use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Services\Fiscal\FiscalTaxService;
+use App\Support\IdentificationRules;
 use Throwable;
 
 class FacturaencrInvoiceMapper
@@ -135,6 +136,12 @@ class FacturaencrInvoiceMapper
 
         if (empty($company->identification_number)) {
             $errors['emisor'] = 'El emisor no tiene identificación fiscal (companies.identification_number vacío)';
+        } elseif (! isset($errors['emisor'])
+            && ($this->environment ?? config('facturaencr.environment', 'sandbox')) !== 'sandbox'
+            && filled($company->identification_type)
+            && ! IdentificationRules::isValidForFiscal($company->identification_type, $company->identification_number)) {
+            $errors['emisor'] = 'La identificación del emisor no cumple el formato fiscal: '
+                . IdentificationRules::message($company->identification_type, $company->identification_number);
         }
 
         if (empty($company->legal_name)) {
@@ -147,6 +154,11 @@ class FacturaencrInvoiceMapper
 
         if (empty($customer->identification)) {
             $errors['receptor_identificacion'] = 'El receptor no tiene número de identificación (customers.identification vacío)';
+        } elseif (! isset($errors['receptor_tipo_identificacion'])
+            && ! IdentificationRules::isValidForFiscal($customer->identification_type, $customer->identification)) {
+            $errors['receptor_identificacion'] = 'La identificación del receptor no cumple el formato fiscal ('
+                . IdentificationRules::label($customer->identification_type) . '): '
+                . IdentificationRules::message($customer->identification_type, $customer->identification);
         }
 
         if (empty($sale->sale_condition)) {
@@ -268,7 +280,7 @@ class FacturaencrInvoiceMapper
             return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
         }
 
-        return (string) $company->identification_number;
+        return IdentificationRules::forProvider($company->identification_type, (string) $company->identification_number);
     }
 
     private function mapMedioPago(Sale $sale, ?SalePayment $salePayment): array
@@ -294,7 +306,7 @@ class FacturaencrInvoiceMapper
     {
         $receptor = [
             'tipoIdentificacion' => $customer->identification_type,
-            'numeroIdentificacion' => $customer->identification,
+            'numeroIdentificacion' => IdentificationRules::forProvider($customer->identification_type, $customer->identification),
             'nombre' => $customer->name,
         ];
 

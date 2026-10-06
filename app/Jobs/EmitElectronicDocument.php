@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\DTOs\Fiscal\FiscalEmissionRequest;
 use App\Models\ElectronicDocument;
 use App\Models\Sale;
+use App\Services\Fiscal\FiscalCutoffService;
 use App\Services\Fiscal\FiscalManager;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,7 +22,7 @@ use Throwable;
  * transacción de la venta: si el fiscal falla, la venta, la caja y el
  * inventario quedan exactamente como se confirmaron.
  */
-class EmitElectronicDocument implements ShouldQueue, ShouldBeUnique
+class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -34,8 +35,7 @@ class EmitElectronicDocument implements ShouldQueue, ShouldBeUnique
     public function __construct(
         public readonly int $saleId,
         public readonly string $documentType,
-    ) {
-    }
+    ) {}
 
     public function uniqueId(): string
     {
@@ -85,7 +85,7 @@ class EmitElectronicDocument implements ShouldQueue, ShouldBeUnique
             Log::warning('fiscal.emission.failed', [
                 'sale_id' => $this->saleId,
                 'document_type' => $this->documentType,
-                'error' => $exception::class . ': ' . $exception->getMessage(),
+                'error' => $exception::class.': '.$exception->getMessage(),
             ]);
         }
     }
@@ -124,6 +124,20 @@ class EmitElectronicDocument implements ShouldQueue, ShouldBeUnique
                 'reason' => 'sale_not_emittable',
                 'status' => $sale->status,
                 'is_historical' => $sale->is_historical,
+            ]);
+
+            return null;
+        }
+
+        $cutoff = app(FiscalCutoffService::class);
+
+        if ($cutoff->isBeforeCutoff($sale)) {
+            Log::info('fiscal.emission.skipped', [
+                'sale_id' => $sale->id,
+                'document_type' => $this->documentType,
+                'reason' => 'before_fiscal_cutoff',
+                'fiscal_start_at' => $cutoff->cutoffFor((int) $sale->company_id)?->toIso8601String(),
+                'completed_at' => $sale->completed_at?->toIso8601String(),
             ]);
 
             return null;

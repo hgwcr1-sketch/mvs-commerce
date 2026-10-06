@@ -3,6 +3,7 @@
 namespace App\Services\Fiscal;
 
 use App\Jobs\EmitElectronicDocument;
+use App\Models\CompanyFiscalConfig;
 use App\Models\Sale;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -42,7 +43,7 @@ class PosEmissionDispatcher
             Log::warning('fiscal.emission.dispatch_failed', [
                 'sale_id' => $sale->id,
                 'document_type' => $sale->document_type,
-                'error' => $exception::class . ': ' . $exception->getMessage(),
+                'error' => $exception::class.': '.$exception->getMessage(),
             ]);
 
             return false;
@@ -55,7 +56,7 @@ class PosEmissionDispatcher
      */
     private function autoEmitEnabled(int $companyId): bool
     {
-        $config = \App\Models\CompanyFiscalConfig::query()->where('company_id', $companyId)->first();
+        $config = CompanyFiscalConfig::query()->where('company_id', $companyId)->first();
 
         if ($config !== null) {
             return (bool) $config->auto_emit_enabled;
@@ -70,6 +71,24 @@ class PosEmissionDispatcher
             return false;
         }
 
-        return ! $sale->is_historical && $sale->status === Sale::STATUS_COMPLETED;
+        if ($sale->is_historical || $sale->status !== Sale::STATUS_COMPLETED) {
+            return false;
+        }
+
+        $cutoff = app(FiscalCutoffService::class);
+
+        if ($cutoff->isBeforeCutoff($sale)) {
+            Log::info('fiscal.emission.skipped', [
+                'sale_id' => $sale->id,
+                'document_type' => $sale->document_type,
+                'reason' => 'before_fiscal_cutoff',
+                'fiscal_start_at' => $cutoff->cutoffFor((int) $sale->company_id)?->toIso8601String(),
+                'completed_at' => $sale->completed_at?->toIso8601String(),
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 }

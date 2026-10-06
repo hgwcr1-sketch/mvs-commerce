@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\CompanyFiscalConfig;
 use App\Models\CompanyLicense;
 use App\Models\FiscalConfigAudit;
+use Carbon\Carbon;
 
 /**
  * Configuración fiscal operativa del tenant (multiempresa).
@@ -203,6 +204,11 @@ class CompanyFiscalConfigService
             $config->notify_receptor_email = (bool) $attributes['notify_receptor_email'];
         }
 
+        if (array_key_exists('fiscal_start_at', $attributes)) {
+            $value = $attributes['fiscal_start_at'];
+            $config->fiscal_start_at = ($value === null || $value === '') ? null : Carbon::parse($value);
+        }
+
         $config->save();
         $this->audit($company, $actorId, $config->environment, FiscalConfigAudit::TYPE_PREFERENCES, FiscalConfigAudit::RESULT_OK);
 
@@ -239,7 +245,7 @@ class CompanyFiscalConfigService
             return $this->recordFailure($config, $actorId, 'unknown_provider', 'Proveedor fiscal no configurado.');
         }
 
-        $class = config('fiscal.providers.' . $providerCode);
+        $class = config('fiscal.providers.'.$providerCode);
 
         if (! is_string($class) || ! class_exists($class)) {
             return $this->recordFailure($config, $actorId, 'unknown_provider', 'Proveedor fiscal no configurado.');

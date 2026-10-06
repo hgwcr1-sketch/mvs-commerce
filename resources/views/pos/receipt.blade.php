@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comprobante {{ $sale->sale_number }}</title>
     <style>
-        *{box-sizing:border-box}html,body{height:auto}body{margin:0;background:#e2e8f0;color:#111827;font-family:Arial,Helvetica,sans-serif;line-height:1.35}
+        *{box-sizing:border-box}html,body{height:auto}body{margin:0;background:#e2e8f0;color:#111827;font-family:'DejaVu Sans',Arial,Helvetica,sans-serif;line-height:1.35}
         .receipt{max-width:100%;margin:24px auto;background:#fff;padding:5mm;box-shadow:0 8px 30px #0002;height:auto;min-height:0}
         .format-80mm{width:80mm}
         .format-58mm{width:58mm;padding:1mm 3mm 1mm 3mm;font-size:12.5px}
@@ -20,6 +20,16 @@
         .loyalty-qr{display:block;width:25mm;height:25mm;max-width:100%;margin:2px auto}
         .muted{color:#475569;font-size:11px}
         .warning{margin:8px 0;border:1px dashed #92400e;padding:7px;color:#92400e;font-size:11px;font-weight:bold;text-align:center}
+        .fiscal{margin:8px 0;border:1px solid #cbd5e1;padding:7px}
+        .fiscal-head{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:5px;font-size:11px}
+        .fiscal-state{font-weight:800;padding:2px 6px;border:1px solid currentColor;white-space:nowrap}
+        .fiscal-state.ok{color:#15803d}
+        .fiscal-state.warn{color:#b45309}
+        .fiscal-state.bad{color:#b91c1c}
+        .fiscal-grid{display:grid;grid-template-columns:1fr;gap:3px;font-size:11px}
+        .fiscal-key{font-family:'DejaVu Sans Mono',monospace;font-size:10.5px;word-break:break-all}
+        .fiscal-qr{display:block;width:26mm;height:26mm;max-width:100%;margin:6px auto 2px}
+        .fiscal-legal{font-size:9.5px;color:#475569;text-align:center;margin:6px 0 0;line-height:1.35;overflow-wrap:anywhere}
         .rule{border-top:1px dashed #64748b;margin:8px 0}
         .details{display:grid;grid-template-columns:1fr;gap:3px;font-size:12px}
         table{width:100%;border-collapse:collapse;font-size:11px}
@@ -41,8 +51,8 @@
         .format-58mm .warning{font-size:11px;padding:6px}
         .format-58mm .rule{margin:4px 0}
         .format-58mm .totals{max-width:100%;margin:0}
-        .format-58mm .totals td{font-size:12.5px;padding:3px 0}
-        .format-58mm .grand td{font-size:23px}
+        .format-58mm .totals td{font-size:12.5px;padding:3px 0;overflow-wrap:anywhere}
+        .format-58mm .grand td{font-size:18px}
         /* items 58mm : 2 líneas - ancho completo */
         .items58{border-top:1px solid #e2e8f0}
         .item58{padding:5px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
@@ -57,6 +67,9 @@
         .format-58mm .thanks + .cut-tail{height:4mm}
         .format-80mm .thanks + .cut-tail{height:4mm}
         .format-letter .details{grid-template-columns:repeat(2,1fr);gap:6px}
+        .format-letter .fiscal-grid{grid-template-columns:1fr 1fr}
+        .format-58mm .fiscal{padding:5px}
+        .format-58mm .fiscal-grid{font-size:11.5px}
         .format-letter table{font-size:13px}
         .format-letter th,.format-letter td{padding:9px 6px}
         .format-letter h1{font-size:26px}
@@ -81,7 +94,7 @@
     $documentData = $data?->document ?? ['type' => \App\Models\Sale::receiptLabel($sale->document_type), 'sale_number' => $sale->sale_number, 'completed_at' => $sale->completed_at?->timezone($company->timezone)->format('d/m/Y H:i') ?? $sale->created_at->timezone($company->timezone)->format('d/m/Y H:i'), 'is_voided' => $sale->status === \App\Models\Sale::STATUS_VOIDED];
     $cashierData = $data?->cashier ?? ['name' => $sale->user->name ?? ''];
     $customerData = $data?->customer ?? ['name' => $sale->customer?->name ?? 'Consumidor Final', 'identification' => $sale->customer?->identification ?? null];
-    $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 2, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 2, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 2, ',', '.'), 'total' => number_format((float) $item->total, 2, ',', '.')])->toArray();
+    $itemsData = $data?->items ?? $sale->items->map(fn($item) => ['description' => $item->description, 'product_code' => $item->product_code, 'cabys' => $item->cabys_code ?? null, 'quantity' => rtrim(rtrim(number_format((float) $item->quantity, 4, ',', '.'), '0'), ','), 'unit_price' => number_format((float) $item->unit_price, 2, ',', '.'), 'discount_total' => number_format((float) $item->discount_total, 2, ',', '.'), 'tax_total' => number_format((float) $item->tax_total, 2, ',', '.'), 'total' => number_format((float) $item->total, 2, ',', '.')])->toArray();
     $totalsData = $data?->totals ?? ['subtotal' => number_format((float) $sale->subtotal, 2, ',', '.'), 'discount_total' => number_format((float) $sale->discount_total, 2, ',', '.'), 'tax_total' => number_format((float) $sale->tax_total, 2, ',', '.'), 'rounding_total' => number_format((float) $sale->rounding_total, 2, ',', '.'), 'total' => number_format((float) $sale->total, 2, ',', '.')];
     $paymentsData = $data?->payments ?? $sale->payments->map(fn($payment) => ['method' => $payment->paymentMethod->name ?? 'Pago', 'amount' => number_format((float) $payment->amount, 2, ',', '.'), 'reference' => $payment->reference ?? null, 'received_amount' => (float) $payment->received_amount > 0 ? number_format((float) $payment->received_amount, 2, ',', '.') : null, 'change_amount' => (float) $payment->change_amount > 0 ? number_format((float) $payment->change_amount, 2, ',', '.') : null, 'allows_change' => (bool) $payment->paymentMethod->allows_change ?? false])->toArray();
     $creditNotesData = $data?->credit_note_applications ?? $sale->creditNoteApplicationsAsDestination->map(fn($app) => ['credit_note_number' => $app->creditNote->credit_note_number ?? 'NC', 'amount' => number_format((float) $app->amount, 2, ',', '.')])->toArray();
@@ -90,6 +103,8 @@
     $loyaltyData = $data?->loyalty ?? $loyalty;
     $cashSessionData = $data?->cash_session ?? ($sale->cashSession ? ['session_number' => $sale->cashSession->session_number, 'cash_register_name' => $sale->cashSession->cashRegister->name] : null);
     $footerMessage = $data?->footer_message ?? 'Gracias por su compra';
+    $fiscalData = $data?->fiscal ?? null;
+    $fiscalStateClass = ($fiscalData['status'] ?? '') === 'accepted' ? 'ok' : (in_array($fiscalData['status'] ?? '', ['rejected', 'error'], true) ? 'bad' : 'warn');
     $companyLogo = ! empty($company->logo) ? (($pdfMode ?? false) ? 'file://'.public_path('storage/'.$company->logo) : asset('storage/'.$company->logo)) : null;
 @endphp
 <main class="receipt format-{{ $format }}" data-receipt-format="{{ $format }}">
@@ -102,6 +117,24 @@
     <div class="center" style="margin:4px 0 3px;font-size:11px;font-weight:800;letter-spacing:.08em;border:1px solid #111827;padding:5px 6px;">{{ $documentData['type'] }}</div>
     @if($documentData['is_voided'])
         <div class="warning">VENTA ANULADA</div>
+    @endif
+    @if($fiscalData)
+        <section class="fiscal" aria-label="Datos del comprobante electrónico">
+            <div class="fiscal-head">
+                <strong>Comprobante electrónico</strong>
+                <span class="fiscal-state {{ $fiscalStateClass }}">Estado: {{ $fiscalData['status_label'] }}</span>
+            </div>
+            <div class="fiscal-grid">
+                <span><strong>Clave electrónica:</strong> <span class="fiscal-key">{{ $fiscalData['clave'] }}</span></span>
+                <span><strong>Consecutivo:</strong> <span class="fiscal-key">{{ $fiscalData['consecutivo'] ?: '—' }}</span></span>
+                <span><strong>Sucursal / Terminal:</strong> {{ ($fiscalData['branch_code'] ?: '—') . ' / ' . ($fiscalData['terminal_code'] ?: '—') }}</span>
+                <span><strong>Condición de venta:</strong> {{ $fiscalData['condition'] }}</span>
+                <span><strong>Ambiente:</strong> {{ $fiscalData['environment'] }}</span>
+            </div>
+            @if($fiscalData['qr_image'])
+                <img class="fiscal-qr" src="{{ $fiscalData['qr_image'] }}" alt="QR del comprobante electrónico">
+            @endif
+        </section>
     @endif
     <section class="details">
         <span><strong>Comprobante:</strong> {{ $documentData['sale_number'] }}</span>
@@ -117,7 +150,7 @@
         <div class="items58">
         @foreach($itemsData as $item)
             <div class="item58">
-                <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="muted">{{ $item['product_code'] }}</span>@endif</div>
+                <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="muted">{{ $item['product_code'] }}</span>@endif @if($item['cabys'] ?? null)<span class="muted">CABYS {{ $item['cabys'] }}</span>@endif</div>
                 <div class="item58-line">
                     <span class="left">{{ $item['quantity'] }} x ₡{{ $money($item['unit_price']) }}@if((float) $item['discount_total'] > 0) -₡{{ $money($item['discount_total']) }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $money($item['tax_total']) }}@endif</span>
                     <span class="right">₡{{ $money($item['total']) }}</span>
@@ -131,7 +164,7 @@
             <tbody>
             @foreach($itemsData as $item)
                 <tr>
-                    <td>{{ $item['description'] }}<br><span class="muted">{{ $item['product_code'] }}</span></td>
+                    <td>{{ $item['description'] }}@if($item['product_code'] || ($item['cabys'] ?? null))<br><span class="muted">{{ $item['product_code'] }}@if($item['cabys'] ?? null) · CABYS {{ $item['cabys'] }}@endif</span>@endif</td>
                     <td>{{ $item['quantity'] }}</td>
                     <td>₡{{ $money($item['unit_price']) }}</td>
                     <td>₡{{ $money($item['discount_total']) }}</td>
@@ -202,6 +235,9 @@
     </table>
     <div class="rule"></div>
     <p class="center"><strong>{{ $cashSessionData ? $cashSessionData['session_number'].' — '.$cashSessionData['cash_register_name'] : 'Sin sesión de caja' }}</strong></p>
+    @if($fiscalData)
+        <p class="fiscal-legal">Representación gráfica de un comprobante electrónico. Verifique su validez en el Portal de Hacienda utilizando la clave electrónica.</p>
+    @endif
     <p class="center muted thanks">{{ $footerMessage }}</p>
     @if(in_array($format, ['58mm','80mm'], true))<div class="cut-tail"></div>@endif
 </main>

@@ -62,7 +62,8 @@ class SaleReceiptService
         ];
 
         if ($format === 'letter') {
-            $pdf = Pdf::loadView('pos.receipt', $viewData);
+            $view = $receiptData->fiscal !== null ? 'pos.fiscal-invoice' : 'pos.receipt';
+            $pdf = Pdf::loadView($view, $viewData);
             $pdf->setPaper('letter');
 
             return $pdf;

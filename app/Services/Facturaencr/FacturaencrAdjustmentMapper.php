@@ -8,6 +8,7 @@ use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Models\Company;
 use App\Models\ElectronicDocument;
 use App\Services\Fiscal\FiscalTaxService;
+use App\Support\IdentificationRules;
 use Carbon\Carbon;
 
 /**
@@ -177,12 +178,25 @@ class FacturaencrAdjustmentMapper
 
     /**
      * @param array<string, string|null> $receptor
+     * @throws FacturaencrValidationException
      */
     private function mapReceptor(array $receptor): array
     {
+        $type = $receptor['identification_type'] ?? null;
+        $number = $receptor['identification_number'] ?? null;
+
+        if (filled($type) || filled($number)) {
+            if (! IdentificationRules::isValidForFiscal($type, $number)) {
+                throw new FacturaencrValidationException([
+                    'receptor.numeroIdentificacion' => 'La identificación del receptor no cumple el formato fiscal: '
+                        . IdentificationRules::message($type, $number),
+                ]);
+            }
+        }
+
         $mapped = [
-            'tipoIdentificacion' => $receptor['identification_type'],
-            'numeroIdentificacion' => $receptor['identification_number'],
+            'tipoIdentificacion' => $type,
+            'numeroIdentificacion' => IdentificationRules::forProvider($type, $number),
             'nombre' => $receptor['name'],
         ];
 
@@ -247,6 +261,6 @@ class FacturaencrAdjustmentMapper
             return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
         }
 
-        return (string) $company->identification_number;
+        return IdentificationRules::forProvider($company->identification_type, (string) $company->identification_number);
     }
 }

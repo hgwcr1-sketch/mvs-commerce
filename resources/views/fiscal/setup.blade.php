@@ -383,6 +383,11 @@
                 <label class="flex min-h-[44px] items-center gap-2 text-sm">
                     <input type="checkbox" name="notify_receptor_email" value="1" @checked(old('notify_receptor_email', $config->notify_receptor_email)) class="h-5 w-5"> Avisar por correo al receptor cuando esté disponible
                 </label>
+                <div>
+                    <label for="fiscal_start_at" class="text-sm font-bold">Inicio de emisión fiscal</label>
+                    <input type="date" name="fiscal_start_at" id="fiscal_start_at" value="{{ old('fiscal_start_at', optional($config->fiscal_start_at)->format('Y-m-d')) }}" class="mt-2 min-h-[44px] w-full rounded-xl border border-slate-300 p-3">
+                    <p class="mt-2 text-xs text-slate-500">Solo se emiten ventas completadas desde esta fecha; las anteriores quedan fuera del flujo automático. En blanco: sin corte.</p>
+                </div>
                 <p class="text-xs text-slate-500">El tiquete interno nunca sale a Hacienda ni consume cuota.</p>
                 <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#D4AF37] px-5 font-bold text-black shadow-md hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black">Guardar y continuar</button>
                 <a href="{{ route('fiscal.setup', ['step' => 'verificar']) }}" class="ml-2 inline-flex min-h-[44px] items-center text-sm font-bold text-amber-700">Anterior</a>
@@ -397,7 +402,8 @@
                 <div class="flex justify-between gap-3"><dt>Ambiente</dt><dd class="font-bold text-right">{{ $config->isProduction() ? 'Producción' : 'Pruebas' }} <a href="{{ route('fiscal.setup', ['step' => 'conexion']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
                 <div class="flex justify-between gap-3"><dt>Conexión fiscal</dt><dd class="font-bold text-right">{{ $config->last_error_code !== null ? 'Requiere atención' : (($config->last_verified_at && ! $config->hasPending()) ? 'Verificada' : ($config->hasCredentials() ? 'Credenciales registradas' : 'Pendiente')) }}</dd></div>
                 <div class="flex justify-between gap-3"><dt>Verificación</dt><dd class="font-bold text-right">{{ $config->last_verified_at && !$config->hasPending() ? $config->last_verified_at->format('d/m/Y H:i') : 'Pendiente' }}</dd></div>
-                <div class="flex justify-between gap-3"><dt>Documento</dt><dd class="font-bold text-right">{{ $config->default_document === '04' ? 'Tiquete electrónico' : 'Factura electrónica' }} <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
+                <div class="flex justify-between gap-3"><dt>Documento</dt>                <div class="flex justify-between gap-3"><dt>Inicio fiscal</dt><dd class="font-bold text-right">{{ $config->fiscal_start_at ? $config->fiscal_start_at->format('d/m/Y') : 'Sin corte' }} <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
+<dd class="font-bold text-right">{{ $config->default_document === '04' ? 'Tiquete electrónico' : 'Factura electrónica' }} <a href="{{ route('fiscal.setup', ['step' => 'preferencias']) }}" class="font-bold text-amber-700">Editar</a></dd></div>
                 <div class="flex justify-between gap-3"><dt>Estado</dt><dd class="font-bold text-right">{{ $statusLabel }}</dd></div>
             </dl>
             <form method="POST" action="{{ route('fiscal.setup.finish') }}" class="mt-5">

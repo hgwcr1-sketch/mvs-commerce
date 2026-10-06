@@ -205,4 +205,52 @@ final class IdentificationRules
 
         return in_array($length, $counts, true);
     }
+
+    /**
+     * Valor exacto que se envía a un proveedor fiscal/Hacienda: los tipos
+     * numéricos (01-04) viajan SOLO dígitos — la máscara visual con guiones
+     * es exclusiva de la UI y nunca se transmite—. El tipo 05 (extranjero)
+     * conserva su valor alfanumérico. No altera el valor almacenado.
+     */
+    public static function forProvider(?string $type, ?string $value): string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (self::digitCounts($type) !== null) {
+            return self::digits($value);
+        }
+
+        if ($type === null && self::isNumeric($value)) {
+            return self::digits($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Validez ESTRICTA para emisión (pre-HTTP): a diferencia de isValid(),
+     * aquí no se conceden datos heredados no numéricos; un formato que el
+     * proveedor/Hacienda rechaza debe bloquearse antes de cualquier POST.
+     */
+    public static function isValidForFiscal(?string $type, ?string $value): bool
+    {
+        $value = trim((string) $value);
+
+        if ($value === '' || ! isset(self::TYPES[$type])) {
+            return false;
+        }
+
+        $counts = self::digitCounts($type);
+
+        if ($counts === null) {
+            return mb_strlen($value) <= self::maxLength($type);
+        }
+
+        return self::isNumeric($value)
+            && in_array(strlen(self::digits($value)), $counts, true);
+    }
 }

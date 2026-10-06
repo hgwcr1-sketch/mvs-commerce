@@ -24,6 +24,7 @@ class CompanyFiscalConfig extends Model
         'fiscal_terminal_code',
         'default_document',
         'auto_emit_enabled',
+        'fiscal_start_at',
         'notify_receptor_email',
         'last_verified_at',
         'last_error_code',
@@ -40,6 +41,7 @@ class CompanyFiscalConfig extends Model
             'auto_emit_enabled' => 'boolean',
             'notify_receptor_email' => 'boolean',
             'last_verified_at' => 'datetime',
+            'fiscal_start_at' => 'datetime',
         ];
     }
 

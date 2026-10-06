@@ -5,6 +5,7 @@ namespace App\Services\Fiscal;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Sale;
+use App\Support\IdentificationRules;
 use Illuminate\Validation\ValidationException;
 
 class FiscalPreflightService
@@ -21,10 +22,21 @@ class FiscalPreflightService
         $errors = [];
         if (blank($company->identification_number) || blank($company->legal_name)) {
             $errors['document_type'] = 'Complete la identificación y el nombre legal del emisor antes de emitir FE/TE.';
+        } elseif (config('facturaencr.environment', 'sandbox') !== 'sandbox'
+            && filled($company->identification_type)
+            && ! IdentificationRules::isValidForFiscal($company->identification_type, $company->identification_number)) {
+            $errors['document_type'] = 'La identificación del emisor no cumple el formato fiscal: '
+                .IdentificationRules::message($company->identification_type, $company->identification_number);
         }
         if ($documentType === Sale::DOCUMENT_ELECTRONIC_INVOICE
             && ($customer === null || blank($customer->identification_type) || blank($customer->identification))) {
             $errors['customer_id'] = 'La factura electrónica requiere un receptor con identificación fiscal.';
+        } elseif ($customer !== null
+            && filled($customer->identification_type)
+            && ! IdentificationRules::isValidForFiscal($customer->identification_type, $customer->identification)) {
+            $errors['customer_identification'] = 'La identificación del receptor no cumple el formato fiscal ('
+                .IdentificationRules::label($customer->identification_type).'): '
+                .IdentificationRules::message($customer->identification_type, $customer->identification);
         }
 
         foreach ($lines as $index => $line) {
