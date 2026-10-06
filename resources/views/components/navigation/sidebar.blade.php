@@ -142,11 +142,25 @@
         <x-navigation.item route="routeos.index" icon="map" label="RouteOS" :active="request()->routeIs('routeos.*')" />
     @endcan
     </div>
+    {{-- FACTURACIÓN ELECTRÓNICA --}}
+    <div class="nav-desktop-group">
     @can('fiscal.ver')
         @can('fiscal.enabled')
-            <x-navigation.item route="fiscal.index" icon="document" label="Facturación Electrónica" :active="request()->routeIs('fiscal.*')" />
+            <x-navigation.dropdown
+                icon="document"
+                label="Facturación Electrónica"
+                :active="request()->routeIs('fiscal.*')">
+                <x-navigation.submenu route="fiscal.index" label="Resumen" />
+                <x-navigation.submenu route="fiscal.documents" label="Documentos" />
+                <x-navigation.submenu route="fiscal.documents" label="Pendientes / No enviados" :parameters="['scope' => 'pendientes']" />
+                <x-navigation.submenu route="fiscal.documents" label="Rechazados / Errores" :parameters="['scope' => 'rechazados']" />
+                <x-navigation.submenu route="fiscal.setup" label="Configuración / Activación" :parameters="['step' => 'datos']" />
+                <x-navigation.submenu route="fiscal.series" label="Series / consecutivos" />
+                <x-navigation.submenu route="fiscal.setup" label="Diagnóstico" :parameters="['step' => 'verificar']" />
+            </x-navigation.dropdown>
         @endcan
     @endcan
+    </div>
 
         {{-- PRODUCTOS --}}
     <div class="nav-desktop-group">

@@ -511,7 +511,8 @@ class FiscalPortalTest extends TestCase
 
     public function test_permission_seeder_registers_fiscal_permissions(): void
     {
-        $this->assertFalse(Permission::where('name', 'fiscal.ver')->exists());
+        // La migración 2026_10_01_000001 garantiza fiscal.ver/fiscal.editar en toda base.
+        $this->assertSame(1, Permission::where('name', 'fiscal.ver')->count());
 
         (new \Database\Seeders\PermissionSeeder())->run();
 
@@ -962,7 +963,16 @@ class FiscalPortalTest extends TestCase
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
         $html = $this->get(route('fiscal.index'))->getContent();
-        $this->assertSame(1, substr_count($html, route('fiscal.series')));
+
+        // Excluye los bloques de navegación (el menú lateral ya enlaza Series
+        // desde el dropdown de Facturación Electrónica): el contenido de la
+        // página debe ofrecer UN solo acceso en su interior.
+        $withoutNav = preg_replace(
+            ['#<aside id="app-sidebar".*?</aside>#s', '#<aside[^>]*aria-label="Navegación".*?</aside>#s'],
+            '',
+            $html,
+        );
+        $this->assertSame(1, substr_count($withoutNav, route('fiscal.series')));
         $this->assertStringNotContainsString('>Series<', $html);
         $this->assertStringContainsString('Series fiscales', $html);
     }

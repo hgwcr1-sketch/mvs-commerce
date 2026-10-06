@@ -323,9 +323,27 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     Route::get('/facturacion-electronica/series', [FiscalPortalController::class, 'series'])
         ->middleware('permission:fiscal.ver')
         ->name('fiscal.series');
-    Route::post('/facturacion-electronica/series', [FiscalPortalController::class, 'importSeries'])
+    Route::post('/facturacion-electronica/series/import', [FiscalPortalController::class, 'importSeries'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.series.import');
+    Route::get('/facturacion-electronica/documentos', [FiscalPortalController::class, 'documents'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents');
+    Route::post('/facturacion-electronica/documentos/{document}/refrescar', [FiscalPortalController::class, 'refreshDocument'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.refresh');
+    Route::get('/facturacion-electronica/documentos/{document}/xml', [FiscalPortalController::class, 'downloadXml'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.xml');
+    Route::get('/facturacion-electronica/documentos/{document}/respuesta', [FiscalPortalController::class, 'downloadResponse'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.response');
+    Route::get('/facturacion-electronica/descargas/xml', [FiscalPortalController::class, 'downloadPeriodXml'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.zip');
+    Route::get('/facturacion-electronica/descargas/excel', [FiscalPortalController::class, 'downloadPeriodExcel'])
+        ->middleware('permission:fiscal.ver')
+        ->name('fiscal.documents.excel');
     Route::get('/facturacion-electronica/cambio-proveedor', [FiscalPortalController::class, 'switchChecklist'])
         ->middleware('permission:fiscal.editar')
         ->name('fiscal.switch');

@@ -505,15 +505,419 @@ class FiscalPortalController extends Controller
 
         abort_unless((int) $document->company_id === (int) $company->id, 404);
 
+        $custody = FiscalDocumentCustody::query()
+            ->where('electronic_document_id', $document->id)
+            ->first();
+
+        $sale = $document->sale_id
+            ? \App\Models\Sale::query()->with('branch')->find($document->sale_id)
+            : null;
+
+        $haciendaStatus = null;
+        if ($custody && is_array($custody->response)) {
+            $haciendaStatus = $custody->response['status'] ?? $custody->response['estado'] ?? null;
+        }
+
         return view('fiscal.document', [
             'company' => $company,
             'document' => $document,
+            'sale' => $sale,
+            'branchName' => $sale?->branch?->name,
+            'haciendaStatus' => $haciendaStatus,
+            'xmlAvailable' => $this->findXmlInCustody($custody) !== null,
+            'responseAvailable' => $custody && $custody->response !== null,
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
-            'custody' => \App\Models\FiscalDocumentCustody::query()
-                ->where('electronic_document_id', $document->id)
-                ->first(),
+            'custody' => $custody,
         ]);
+    }
+
+    /**
+     * Listado profesional de documentos fiscales con filtros, resumen y
+     * soporte de scopes operativos (pendientes / rechazados). Todo consultado
+     * SIEMPRE con aislamiento por company_id.
+     */
+    public function documents(Request $request): View
+    {
+        $company = $this->company();
+
+        $scope = in_array($request->query('scope'), ['pendientes', 'rechazados'], true)
+            ? $request->query('scope') : null;
+        $type = in_array($request->query('type'), array_keys(self::TYPE_LABELS), true)
+            ? $request->query('type') : null;
+        $status = in_array($request->query('status'), array_keys(self::STATUS_LABELS), true)
+            ? $request->query('status') : null;
+        $environment = in_array($request->query('environment'), ['sandbox', 'production'], true)
+            ? $request->query('environment') : null;
+        $branchId = $request->filled('branch') ? (int) $request->query('branch') : null;
+        $from = $request->query('from') ?: null;
+        $to = $request->query('to') ?: null;
+        $q = trim((string) $request->query('q'));
+
+        $applyCommon = function ($query) use ($type, $environment, $branchId, $from, $to, $q) {
+            if ($type !== null) {
+                $query->where('document_type', $type);
+            }
+            if ($environment !== null) {
+                $query->where('environment', $environment);
+            }
+            if ($from !== null) {
+                $query->where('created_at', '>=', $from);
+            }
+            if ($to !== null) {
+                $query->where('created_at', '<=', $to . ' 23:59:59');
+            }
+            if ($q !== '') {
+                $query->where(function ($inner) use ($q) {
+                    $inner->where('clave', 'like', "%{$q}%")
+                        ->orWhere('consecutivo', 'like', "%{$q}%")
+                        ->orWhereHas('sale', function ($sale) use ($q) {
+                            $sale->whereHas('customer', function ($customer) use ($q) {
+                                $customer->where('name', 'like', "%{$q}%")
+                                    ->orWhere('identification', 'like', "%{$q}%");
+                            });
+                        });
+                });
+            }
+            if ($branchId !== null) {
+                $query->whereHas('sale', fn ($sale) => $sale->where('branch_id', $branchId));
+            }
+
+            return $query;
+        };
+
+        $base = ElectronicDocument::query()->forCompany($company->id);
+        $applyCommon($base);
+
+        $summary = [
+            'accepted' => (clone $base)->where('status', 'accepted')->count(),
+            'rejected' => (clone $base)->whereIn('status', ['rejected', 'error'])->count(),
+            'pending' => (clone $base)->whereIn('status', ['pending', 'queued', 'signing', 'sent', 'polling'])->count(),
+            'iva' => (clone $base)->where('electronic_documents.status', 'accepted')
+                ->selectRaw('COALESCE((SELECT SUM(sales.tax_total) FROM sales WHERE sales.id = electronic_documents.sale_id AND sales.company_id = ?), 0) as iva_sum', [$company->id])
+                ->value('iva_sum'),
+        ];
+
+        $pendingSales = collect();
+        $pendingReasons = [];
+        $documents = collect();
+
+        if ($scope === 'pendientes') {
+            $pendingSales = $this->pendingSalesQuery($company, $request)->paginate(20)->withQueryString();
+            foreach ($pendingSales->items() as $pendingSale) {
+                $pendingReasons[$pendingSale->id] = $this->pendingReason($pendingSale, $company);
+            }
+        } else {
+            $query = ElectronicDocument::query()->forCompany($company->id);
+            $applyCommon($query);
+
+            if ($scope === 'rechazados') {
+                $query->whereIn('status', ['rejected', 'error']);
+            } elseif ($status !== null) {
+                $query->where('status', $status);
+            }
+
+            $documents = $query->with(['sale.customer', 'sale.branch'])->orderByDesc('id')->paginate(20)->withQueryString();
+        }
+
+        return view('fiscal.documents', [
+            'company' => $company,
+            'documents' => $documents,
+            'pendingSales' => $pendingSales,
+            'pendingReasons' => $pendingReasons,
+            'summary' => $summary,
+            'scope' => $scope,
+            'filters' => compact('type', 'status', 'environment', 'branchId', 'from', 'to', 'q'),
+            'branches' => \App\Models\Branch::query()->where('company_id', $company->id)->orderBy('name')->get(),
+            'typeLabels' => self::TYPE_LABELS,
+            'statusLabels' => self::STATUS_LABELS,
+        ]);
+    }
+
+    /**
+     * Refrescar estado = ÚNICAMENTE consulta/polling al proveedor vía
+     * FacturaencrEmissionService::syncStatus (GET). Nunca emite ni crea
+     * documentos nuevos: solo actualiza estado del existente.
+     */
+    public function refreshDocument(ElectronicDocument $document): RedirectResponse
+    {
+        $company = $this->company();
+        abort_unless((int) $document->company_id === (int) $company->id, 404);
+
+        $final = in_array($document->status, ['accepted', 'rejected'], true);
+
+        if ($final) {
+            return redirect()
+                ->route('fiscal.documents.show', $document)
+                ->with('status', 'Documento en estado final: no requiere consulta (sin re-emisión).');
+        }
+
+        $synced = app(\App\Services\Facturaencr\FacturaencrEmissionService::class)
+            ->syncStatus($document->fresh());
+
+        return redirect()
+            ->route('fiscal.documents.show', $synced)
+            ->with('status', 'Estado refrescado por consulta. No se emitió ningún comprobante nuevo.');
+    }
+
+    public function downloadResponse(ElectronicDocument $document)
+    {
+        $company = $this->company();
+        abort_unless((int) $document->company_id === (int) $company->id, 404);
+
+        $custody = FiscalDocumentCustody::query()
+            ->where('electronic_document_id', $document->id)
+            ->first();
+
+        if (! $custody || $custody->response === null) {
+            return redirect()
+                ->route('fiscal.documents.show', $document)
+                ->with('download_notice', 'No disponible: la respuesta de Hacienda aún no está persistida para este documento.');
+        }
+
+        return response(
+            json_encode($custody->response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            200,
+            [
+                'Content-Type' => 'application/json; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="respuesta-' . ($document->clave ?: $document->id) . '.json"',
+            ]
+        );
+    }
+
+    public function downloadXml(ElectronicDocument $document)
+    {
+        $company = $this->company();
+        abort_unless((int) $document->company_id === (int) $company->id, 404);
+
+        $custody = FiscalDocumentCustody::query()
+            ->where('electronic_document_id', $document->id)
+            ->first();
+
+        $xml = $this->findXmlInCustody($custody);
+
+        if ($xml === null) {
+            return redirect()
+                ->route('fiscal.documents.show', $document)
+                ->with('download_notice', 'No disponible: el XML firmado aún no está persistido para este documento.');
+        }
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="xml-' . ($document->clave ?: $document->id) . '.xml"',
+        ]);
+    }
+
+    /**
+     * ZIP de XML por período: solo con XML realmente persistido; si ningún
+     * documento del período tiene XML custodiado, responde "No disponible".
+     */
+    public function downloadPeriodXml(Request $request)
+    {
+        $company = $this->company();
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        $docs = ElectronicDocument::query()
+            ->forCompany($company->id)
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<=', $to . ' 23:59:59')
+            ->orderBy('id')
+            ->get();
+
+        $xmls = [];
+        foreach ($docs as $doc) {
+            $custody = FiscalDocumentCustody::query()
+                ->where('electronic_document_id', $doc->id)
+                ->first();
+            $xml = $this->findXmlInCustody($custody);
+            if ($xml !== null) {
+                $xmls[($doc->clave ?: 'doc-' . $doc->id) . '.xml'] = $xml;
+            }
+        }
+
+        if ($xmls === []) {
+            return redirect()
+                ->route('fiscal.documents', ['from' => $from, 'to' => $to])
+                ->with('download_notice', 'No disponible: ningún documento del período tiene XML firmado persistido. Falta guardar la custodia del XML.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'fxml');
+        $zip = new \ZipArchive();
+        $zip->open($tmp, \ZipArchive::OVERWRITE);
+        foreach ($xmls as $name => $content) {
+            $zip->addFromString($name, $content);
+        }
+        $zip->close();
+        $bytes = file_get_contents($tmp);
+        @unlink($tmp);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="xml-' . $from . '_' . $to . '.zip"',
+        ]);
+    }
+
+    /**
+     * Excel (CSV UTF-8 con BOM, abre directo en Excel) por período con los
+     * datos reales persistidos en MVS.
+     */
+    public function downloadPeriodExcel(Request $request)
+    {
+        $company = $this->company();
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        $docs = ElectronicDocument::query()
+            ->forCompany($company->id)
+            ->with('sale.customer')
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<=', $to . ' 23:59:59')
+            ->orderBy('id')
+            ->get();
+
+        if ($docs->isEmpty()) {
+            return redirect()
+                ->route('fiscal.documents', ['from' => $from, 'to' => $to])
+                ->with('download_notice', 'No disponible: no hay documentos en el período seleccionado.');
+        }
+
+        $rows = [['Fecha', 'Tipo', 'Consecutivo', 'Clave', 'Receptor', 'Identificación', 'Total', 'IVA', 'Estado', 'Ambiente']];
+        foreach ($docs as $doc) {
+            $sale = $doc->sale;
+            $rows[] = [
+                $doc->created_at->format('d/m/Y H:i'),
+                self::TYPE_LABELS[$doc->document_type] ?? $doc->document_type,
+                $doc->consecutivo ?: '',
+                $doc->clave ?: '',
+                $sale?->customer?->name ?? '',
+                $sale?->customer?->identification ?? '',
+                $sale?->total !== null ? number_format((float) $sale->total, 2, '.', '') : '',
+                $sale?->tax_total !== null ? number_format((float) $sale->tax_total, 2, '.', '') : '',
+                self::STATUS_LABELS[$doc->status] ?? $doc->status,
+                $doc->environment,
+            ];
+        }
+
+        $out = fopen('php://temp', 'r+');
+        fwrite($out, "\xEF\xBB\xBF");
+        foreach ($rows as $row) {
+            fputcsv($out, $row, ';', '"', '\\');
+        }
+        rewind($out);
+        $bytes = stream_get_contents($out);
+        fclose($out);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="documentos-' . $from . '_' . $to . '.csv"',
+        ]);
+    }
+
+    /**
+     * Ventas seleccionadas como FE/TE sin electronic_document, excluyendo
+     * siempre las protegidas por fiscal_start_at (históricos) y con razón
+     * determinable cuando los datos lo permiten.
+     */
+    private function pendingSalesQuery(Company $company, Request $request)
+    {
+        $cutoff = app(\App\Services\Fiscal\FiscalCutoffService::class)->cutoffFor($company->id);
+
+        $query = \App\Models\Sale::query()
+            ->where('company_id', $company->id)
+            ->whereIn('document_type', [
+                \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE,
+                \App\Models\Sale::DOCUMENT_ELECTRONIC_TICKET,
+            ])
+            ->where('status', \App\Models\Sale::STATUS_COMPLETED)
+            ->whereNotExists(function ($sub) use ($company) {
+                $sub->selectRaw('1')
+                    ->from('electronic_documents as ed')
+                    ->whereColumn('ed.sale_id', 'sales.id')
+                    ->where('ed.company_id', $company->id)
+                    ->whereIn('ed.document_type', ['01', '04']);
+            });
+
+        if ($cutoff !== null) {
+            $query->where(function ($q) use ($cutoff) {
+                $q->where('completed_at', '>=', $cutoff)
+                    ->orWhereNull('completed_at');
+            });
+        }
+
+        if ($request->filled('branch')) {
+            $query->where('branch_id', (int) $request->query('branch'));
+        }
+        if ($request->filled('from')) {
+            $query->where('created_at', '>=', $request->query('from'));
+        }
+        if ($request->filled('to')) {
+            $query->where('created_at', '<=', $request->query('to') . ' 23:59:59');
+        }
+        if ($request->filled('q')) {
+            $q = trim((string) $request->query('q'));
+            $query->whereHas('customer', function ($customer) use ($q) {
+                $customer->where('name', 'like', "%{$q}%")
+                    ->orWhere('identification', 'like', "%{$q}%");
+            });
+        }
+
+        return $query->with(['customer', 'branch'])->orderByDesc('id');
+    }
+
+    private function pendingReason(\App\Models\Sale $sale, Company $company): string
+    {
+        $config = CompanyFiscalConfig::query()->where('company_id', $company->id)->first();
+
+        if ($config === null || ! $config->hasCredentials()) {
+            return 'Configuración incompleta: faltan credenciales del proveedor.';
+        }
+
+        if (! $config->auto_emit_enabled) {
+            return 'auto_emit desactivado: la venta no entra al flujo automático.';
+        }
+
+        if ($sale->document_type === \App\Models\Sale::DOCUMENT_ELECTRONIC_INVOICE && ! $sale->customer_id) {
+            return 'Preflight: receptor sin identificación.';
+        }
+
+        return 'Aún no procesado por el flujo de emisión.';
+    }
+
+    private function findXmlInCustody(?FiscalDocumentCustody $custody): ?string
+    {
+        if ($custody === null) {
+            return null;
+        }
+
+        foreach ([$custody->payload, $custody->response] as $source) {
+            if (! is_array($source)) {
+                continue;
+            }
+            $found = $this->walkForXml($source);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return null;
+    }
+
+    private function walkForXml(array $data): ?string
+    {
+        foreach ($data as $key => $value) {
+            if (is_string($value) && stripos((string) $key, 'xml') !== false && str_contains($value, '<')) {
+                return $value;
+            }
+            if (is_array($value)) {
+                $found = $this->walkForXml($value);
+                if ($found !== null) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
