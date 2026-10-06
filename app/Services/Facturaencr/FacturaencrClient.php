@@ -2,6 +2,9 @@
 
 namespace App\Services\Facturaencr;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -9,8 +12,11 @@ use Illuminate\Support\Facades\Log;
 class FacturaencrClient
 {
     private string $baseUrl;
+
     private string $apiKey;
+
     private string $apiSecret;
+
     private int $timeout;
 
     public function __construct(
@@ -56,15 +62,21 @@ class FacturaencrClient
         });
     }
 
-    public function get(string $endpoint, array $queryParams = []): FacturaencrResponse
+    /**
+     * Consulta de solo lectura. $extraHeaders admite cabeceras de alcance
+     * como X-Emisor, sin exponer nunca el secreto fuera de este cliente.
+     *
+     * @param  array<string, string>  $extraHeaders
+     */
+    public function get(string $endpoint, array $queryParams = [], array $extraHeaders = []): FacturaencrResponse
     {
         $url = $this->url($endpoint);
 
-        $headers = [
+        $headers = array_merge([
             'X-API-Key' => $this->apiKey,
             'X-API-Secret' => $this->apiSecret,
             'Accept' => 'application/json',
-        ];
+        ], $extraHeaders);
 
         return $this->sendWithRetries($endpoint, function () use ($url, $headers, $queryParams) {
             return Http::timeout($this->timeout)
@@ -90,7 +102,7 @@ class FacturaencrClient
                 $response = $attempt();
                 $retryAfter = $response->header('Retry-After');
                 $result = $this->buildResponse($response);
-            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            } catch (ConnectionException $e) {
                 $result = new FacturaencrResponse(
                     status: 'error',
                     errorCode: 'CONNECTION_TIMEOUT',
@@ -98,7 +110,7 @@ class FacturaencrClient
                     retryable: true,
                     httpStatusCode: null,
                 );
-            } catch (\Illuminate\Http\Client\RequestException $e) {
+            } catch (RequestException $e) {
                 if ($e->response) {
                     $retryAfter = $e->response->header('Retry-After');
                     $result = $this->buildResponse($e->response);
@@ -127,7 +139,7 @@ class FacturaencrClient
                 );
             }
 
-            if ($result->isSuccess() || !$result->isRetryable() || $attemptNumber >= $maxRetries) {
+            if ($result->isSuccess() || ! $result->isRetryable() || $attemptNumber >= $maxRetries) {
                 return $result;
             }
 
@@ -157,7 +169,7 @@ class FacturaencrClient
         return min($baseDelay * (2 ** max(0, $attemptNumber)), $maxDelay);
     }
 
-    private function buildResponse(\Illuminate\Http\Client\Response $response): FacturaencrResponse
+    private function buildResponse(Response $response): FacturaencrResponse
     {
         $statusCode = $response->status();
         $body = $response->json();
@@ -171,7 +183,7 @@ class FacturaencrClient
             );
         }
 
-        $errorCode = $body['error'] ?? 'HTTP_' . $statusCode;
+        $errorCode = $body['error'] ?? 'HTTP_'.$statusCode;
         $errorMessage = $body['message'] ?? $body['error'] ?? 'Unknown error';
 
         $classification = $this->classifyError($statusCode);
@@ -202,7 +214,7 @@ class FacturaencrClient
 
     private function url(string $endpoint): string
     {
-        return rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+        return rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
     }
 
     public function getApiKey(): string

@@ -15,6 +15,7 @@ use App\Models\Sale;
 use App\Services\CompanyLicenseService;
 use App\Services\Facturaencr\FacturaencrEmissionService;
 use App\Services\Fiscal\CompanyFiscalConfigService;
+use App\Services\Fiscal\FiscalActivationService;
 use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\Fiscal\FiscalCutoffService;
 use App\Services\Fiscal\FiscalProviderSwitchService;
@@ -70,12 +71,23 @@ class FiscalPortalController extends Controller
 
     private const PENDING_STATUSES = ['pending', 'queued', 'signing', 'sent', 'polling'];
 
+    /** Segundos que se reutiliza el resultado de verificación en sesión. */
+    private const ACTIVATION_REPORT_TTL = 120;
+
+    private const ACTIVATION_TONES = [
+        FiscalActivationService::STATE_PENDING_ACTIVATION => 'bg-amber-100 text-amber-900',
+        FiscalActivationService::STATE_PENDING_CERTIFICATE => 'bg-rose-100 text-rose-900',
+        FiscalActivationService::STATE_INCOMPLETE => 'bg-orange-100 text-orange-900',
+        FiscalActivationService::STATE_PENDING_VERIFICATION => 'bg-sky-100 text-sky-900',
+        FiscalActivationService::STATE_READY => 'bg-emerald-100 text-emerald-900',
+    ];
+
     public function __construct(
         private readonly CompanyFiscalConfigService $configs,
         private readonly FiscalConsumptionService $consumption,
         private readonly CompanyLicenseService $licenses,
-    ) {
-    }
+        private readonly FiscalActivationService $activation,
+    ) {}
 
     private function company(): Company
     {
@@ -325,7 +337,42 @@ class FiscalPortalController extends Controller
             'user_id' => auth()->id(),
         ]);
 
+        // Al salir a la pantalla del proveedor se descarta el resultado
+        // guardado para que el regreso verifique de nuevo automáticamente.
+        session()->forget('fiscal_activation_report_'.$company->id);
+
         return redirect()->away($url);
+    }
+
+    /**
+     * Acción "Verificar activación": consulta de solo lectura (llaves,
+     * ambiente, emisor, certificado y datos fiscales de esta empresa) sin
+     * emitir documentos, sin consumir cuota y sin tocar consecutivos.
+     */
+    public function verifyActivation(): RedirectResponse
+    {
+        $company = $this->company();
+        $config = $this->configs->ensure($company);
+        $report = null;
+
+        try {
+            $report = $this->activation->report($company, $config);
+        } catch (\Throwable $e) {
+            Log::warning('fiscal.activation.verify_failed', [
+                'company_id' => $company->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if ($report === null) {
+            return redirect()->route('fiscal.setup', ['step' => 'conexion'])
+                ->withErrors(['activation' => 'No se pudo verificar la activación en este momento. Inténtelo de nuevo.']);
+        }
+
+        session(['fiscal_activation_report_'.$company->id => $report]);
+
+        return redirect()->route('fiscal.setup', ['step' => 'conexion'])
+            ->with('status', 'Verificación de activación: '.$report['label'].'. '.$report['hint']);
     }
 
     public function disconnect(Request $request): RedirectResponse
@@ -384,47 +431,20 @@ class FiscalPortalController extends Controller
     }
 
     /**
-     * Estado humano de la activación fiscal y datos reutilizados de MVS.
+     * Panel de activación fiscal del Paso 2.
      *
-     * Solo consulta lo que MVS ya conoce: credenciales, cambios pendientes,
-     * última verificación y datos fiscales guardados. No pide al proveedor
-     * nada nuevo ni vuelve a pedir al usuario información ya almacenada.
+     * Reutiliza los datos ya guardados en MVS y añade el resultado de la
+     * verificación automática de activación (solo lectura, sin emitir). El
+     * resultado se guarda en sesión por empresa: una empresa nunca ve la
+     * verificación de otra.
      *
-     * @return array{state: string, label: string, hint: string, toneClass: string, rows: array<int, array{label: string, value: ?string, missing: string}>}
+     * @return array{state: string, label: string, hint: string, toneClass: string, checks: array<int, array{key: string, label: string, status: string, detail: string}>, ready: bool, verifiedAt: string, rows: array<int, array{label: string, value: ?string, missing: string}>}
      */
     private function activationState(Company $company, CompanyFiscalConfig $config): array
     {
-        if (! $config->hasCredentials()) {
-            $state = [
-                'state' => 'pending',
-                'label' => 'Activación pendiente',
-                'hint' => 'Aún no hay llaves registradas. Complete el alta del emisor y del certificado en la pantalla del proveedor y vuelva aquí con su llave y su secreto.',
-                'toneClass' => 'bg-amber-100 text-amber-900',
-            ];
-        } elseif ($config->last_error_code !== null) {
-            $state = [
-                'state' => 'provider',
-                'label' => 'Continuar en proveedor',
-                'hint' => 'La última comprobación no completó la activación. Revise el emisor y el certificado en la pantalla del proveedor y vuelva a verificar aquí.',
-                'toneClass' => 'bg-rose-100 text-rose-900',
-            ];
-        } elseif ($config->hasPending() || $config->last_verified_at === null) {
-            $state = [
-                'state' => 'verification',
-                'label' => 'Verificación pendiente',
-                'hint' => 'Las llaves ya están registradas en MVS. Verifíquelas para comprobar la conexión sin emitir ningún documento.',
-                'toneClass' => 'bg-sky-100 text-sky-900',
-            ];
-        } else {
-            $state = [
-                'state' => 'ready',
-                'label' => 'Listo para facturar',
-                'hint' => 'La conexión está verificada y la empresa puede emitir facturación electrónica desde MVS.',
-                'toneClass' => 'bg-emerald-100 text-emerald-900',
-            ];
-        }
+        $report = $this->activationReport($company, $config);
 
-        $state['rows'] = [
+        $rows = [
             ['label' => 'Razón social', 'value' => $this->filled($company->legal_name), 'missing' => 'Falta en Paso 1'],
             ['label' => 'Identificación', 'value' => $this->filled(trim((string) $company->identification_type.' '.(string) $company->identification_number)), 'missing' => 'Falta en Paso 1'],
             ['label' => 'Actividad económica', 'value' => $this->filled($config->economic_activity), 'missing' => 'Falta en Paso 1'],
@@ -434,7 +454,66 @@ class FiscalPortalController extends Controller
             ['label' => 'Régimen fiscal', 'value' => $this->taxRegimeLabel($config->tax_regime), 'missing' => 'Sin determinar'],
         ];
 
-        return $state;
+        if ($report['state'] === FiscalActivationService::STATE_READY) {
+            $rows[] = ['label' => 'Certificado activo', 'value' => $config->isProduction() ? 'Sí' : 'No requerido en pruebas', 'missing' => ''];
+            $rows[] = ['label' => 'Última verificación', 'value' => $report['verified_at'], 'missing' => ''];
+        }
+
+        return [
+            'state' => $report['state'],
+            'label' => $report['label'],
+            'hint' => $report['hint'],
+            'toneClass' => self::ACTIVATION_TONES[$report['state']] ?? self::ACTIVATION_TONES[FiscalActivationService::STATE_PENDING_VERIFICATION],
+            'checks' => $report['checks'],
+            'ready' => $report['state'] === FiscalActivationService::STATE_READY,
+            'verifiedAt' => $report['verified_at'],
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Verificación de activación por empresa: se reutiliza el resultado de la
+     * sesión si es reciente y, si no existe, MVS verifica automáticamente al
+     * volver al paso. Sin llaves registradas no se llama a ningún servicio.
+     *
+     * @return array{state: string, label: string, hint: string, checks: array<int, array{key: string, label: string, status: string, detail: string}>, generated_at: int, verified_at: string}
+     */
+    private function activationReport(Company $company, CompanyFiscalConfig $config): array
+    {
+        $key = 'fiscal_activation_report_'.$company->id;
+        $stored = session($key);
+
+        if (is_array($stored)
+            && isset($stored['state'], $stored['generated_at'], $stored['verified_at'])
+            && (int) $stored['generated_at'] >= now()->getTimestamp() - self::ACTIVATION_REPORT_TTL) {
+            return $stored;
+        }
+
+        $report = null;
+
+        try {
+            $report = $this->activation->report($company, $config);
+        } catch (\Throwable $e) {
+            Log::warning('fiscal.activation.verify_failed', [
+                'company_id' => $company->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if ($report === null) {
+            $report = [
+                'state' => FiscalActivationService::STATE_PENDING_VERIFICATION,
+                'label' => FiscalActivationService::LABELS[FiscalActivationService::STATE_PENDING_VERIFICATION],
+                'hint' => FiscalActivationService::HINTS[FiscalActivationService::STATE_PENDING_VERIFICATION],
+                'checks' => [],
+                'generated_at' => now()->getTimestamp(),
+                'verified_at' => now()->format('d/m/Y H:i'),
+            ];
+        }
+
+        session([$key => $report]);
+
+        return $report;
     }
 
     private function filled(?string $value): ?string

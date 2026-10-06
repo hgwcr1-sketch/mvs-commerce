@@ -113,7 +113,7 @@ class FiscalActivationPortalTest extends TestCase
         $response->assertDontSee('facturaencr', false);
     }
 
-    public function test_activation_states_follow_credentials_and_verification(): void
+    public function test_activation_states_follow_credentials_and_checks(): void
     {
         [$company, $branch] = $this->fiscalContext();
         $this->enableFiscal($company);
@@ -121,33 +121,64 @@ class FiscalActivationPortalTest extends TestCase
 
         $this->get(route('fiscal.setup', ['step' => 'conexion']))
             ->assertOk()
-            ->assertSee('Activación pendiente');
+            ->assertSee('Activación pendiente')
+            ->assertDontSee('>Verificar activación<', false);
 
+        $company->update([
+            'identification_type' => '02',
+            'identification_number' => '3101678166',
+            'legal_name' => 'PANADERIA UNDAMO S.A.',
+        ]);
+        app(CompanyFiscalConfigService::class)->updateFiscalData($company, [
+            'economic_activity' => '56120',
+            'fiscal_branch_code' => '001',
+            'fiscal_terminal_code' => '00001',
+        ]);
         CompanyFiscalConfig::query()->where('company_id', $company->id)->update([
             'provider_api_key' => encrypt('efk_READY', false),
             'provider_api_secret' => encrypt('efs_READY', false),
         ]);
 
-        $this->get(route('fiscal.setup', ['step' => 'conexion']))
-            ->assertOk()
-            ->assertSee('Verificación pendiente')
-            ->assertSee('Verificar activación');
+        $credentialsOk = true;
+        Http::fake(function ($request) use (&$credentialsOk) {
+            if (str_contains($request->url(), 'auth/verify')) {
+                return $credentialsOk
+                    ? Http::response(['ok' => true, 'apiKey' => ['environment' => 'sandbox']], 200)
+                    : Http::response(['error' => 'unauthorized'], 401);
+            }
 
-        CompanyFiscalConfig::query()->where('company_id', $company->id)->update(['last_verified_at' => now()]);
+            if (str_contains($request->url(), 'sucursales')) {
+                return Http::response(['items' => []], 200);
+            }
 
-        $this->get(route('fiscal.setup', ['step' => 'conexion']))
+            return Http::response(['error' => 'not_found'], 404);
+        });
+
+        $fresh = ['fiscal_activation_report_'.$company->id => null];
+
+        // Al volver al paso MVS verifica solo: todo presente = listo.
+        $this->withSession($fresh)->get(route('fiscal.setup', ['step' => 'conexion']))
             ->assertOk()
             ->assertSee('Listo para facturar')
-            ->assertDontSee('>Verificar activación<', false);
+            ->assertSee('Facturación electrónica lista')
+            ->assertSee('Verificar activación')
+            ->assertDontSee('>Verificar conexión<', false);
 
-        $service = app(CompanyFiscalConfigService::class);
-        $service->stageConnection($company, ['api_key' => 'efk_NEW', 'api_secret' => 'efs_NEW']);
-        Http::fake(['auth/verify' => Http::response(['error' => 'unauthorized'], 401)]);
-        $this->post(route('fiscal.verify'))->assertRedirect(route('fiscal.setup', ['step' => 'verificar']));
+        // Sin sucursal registrada: configuración incompleta.
+        CompanyFiscalConfig::query()->where('company_id', $company->id)->update(['fiscal_branch_code' => null]);
 
-        $this->get(route('fiscal.setup', ['step' => 'conexion']))
+        $this->withSession($fresh)->get(route('fiscal.setup', ['step' => 'conexion']))
             ->assertOk()
-            ->assertSee('Continuar en proveedor');
+            ->assertSee('Configuración incompleta')
+            ->assertSee('Falta la sucursal');
+
+        // Llaves rechazadas: la empresa vuelve a estar en activación pendiente.
+        $credentialsOk = false;
+
+        $this->withSession($fresh)->get(route('fiscal.setup', ['step' => 'conexion']))
+            ->assertOk()
+            ->assertSee('Activación pendiente')
+            ->assertSee('no fueron aceptadas');
     }
 
     public function test_activation_action_requires_editing_permission(): void
@@ -161,6 +192,7 @@ class FiscalActivationPortalTest extends TestCase
 
         $this->get(route('fiscal.setup', ['step' => 'conexion']))->assertForbidden();
         $this->get(route('fiscal.activation.continue'))->assertForbidden();
+        $this->post(route('fiscal.activation.verify'))->assertForbidden();
     }
 
     public function test_activation_action_redirects_to_provider_portal_and_hides_secrets(): void
