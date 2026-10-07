@@ -467,7 +467,6 @@ class FiscalPortalController extends Controller
             ['label' => 'Sucursal', 'value' => $this->filled($config->fiscal_branch_code), 'missing' => 'Falta en Paso 1'],
             ['label' => 'Terminal', 'value' => $this->filled($config->fiscal_terminal_code), 'missing' => 'Falta en Paso 1'],
             ['label' => 'Ambiente', 'value' => $config->isProduction() ? 'Producción' : 'Pruebas', 'missing' => ''],
-            ['label' => 'Régimen fiscal', 'value' => $this->taxRegimeLabel($config->tax_regime), 'missing' => 'Sin determinar'],
         ];
 
         if ($report['state'] === FiscalActivationService::STATE_READY) {
@@ -537,16 +536,6 @@ class FiscalPortalController extends Controller
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
-    }
-
-    private function taxRegimeLabel(?string $regime): ?string
-    {
-        return match ($regime) {
-            CompanyFiscalConfig::TAX_REGIME_GENERAL => 'Régimen general',
-            CompanyFiscalConfig::TAX_REGIME_SIMPLIFIED => 'Régimen simplificado',
-            CompanyFiscalConfig::TAX_REGIME_UNKNOWN => 'Sin confirmar',
-            default => null,
-        };
     }
 
     private function statusLabel(string $status): string

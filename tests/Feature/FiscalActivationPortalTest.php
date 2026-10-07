@@ -85,7 +85,6 @@ class FiscalActivationPortalTest extends TestCase
             'fiscal_branch_code' => '001',
             'fiscal_terminal_code' => '00001',
         ]);
-        CompanyFiscalConfig::query()->where('company_id', $company->id)->update(['tax_regime' => 'general']);
 
         $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
 
@@ -100,8 +99,7 @@ class FiscalActivationPortalTest extends TestCase
             ->assertSee('02 3101678166')
             ->assertSee('56120')
             ->assertSee('001')
-            ->assertSee('00001')
-            ->assertSee('Régimen general');
+            ->assertSee('00001');
 
         $response->assertDontSee('name="legal_name"', false);
         $response->assertDontSee('name="identification_number"', false);
