@@ -2,18 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Canton;
 use App\Models\Company;
 use App\Models\CompanyFiscalConfig;
 use App\Models\CompanyLicense;
+use App\Models\District;
 use App\Models\ElectronicDocument;
+use App\Models\ElectronicDocumentMailDelivery;
+use App\Models\FiscalDocumentCustody;
+use App\Models\FiscalSeries;
+use App\Models\Province;
+use App\Models\Sale;
 use App\Services\CompanyLicenseService;
 use App\Services\Fiscal\CompanyFiscalConfigService;
+use App\Services\Fiscal\ElectronicDocumentMailDispatcher;
 use App\Services\Fiscal\FiscalConsumptionService;
+use App\Services\Fiscal\FiscalProviderSwitchService;
+use App\Services\Fiscal\FiscalSeriesService;
 use App\Services\TaxpayerLookupService;
 use App\Support\IdentificationRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -44,12 +55,24 @@ class FiscalPortalController extends Controller
         'polling' => 'En proceso',
     ];
 
+    public const DELIVERY_STATUS_LABELS = [
+        'sent' => 'Enviado',
+        'failed' => 'Falló',
+        'skipped' => 'Sin correo',
+        'pending' => 'Pendiente',
+        'processing' => 'Pendiente',
+    ];
+
+    public const DELIVERY_TYPE_LABELS = [
+        'automatic' => 'Automático',
+        'manual' => 'Manual',
+    ];
+
     public function __construct(
         private readonly CompanyFiscalConfigService $configs,
         private readonly FiscalConsumptionService $consumption,
         private readonly CompanyLicenseService $licenses,
-    ) {
-    }
+    ) {}
 
     private function company(): Company
     {
@@ -108,7 +131,7 @@ class FiscalPortalController extends Controller
             'pending' => ElectronicDocument::query()->where('company_id', $company->id)->whereIn('status', ['pending', 'queued', 'signing', 'sent', 'polling'])->where('created_at', '>=', $period)->count(),
         ];
 
-        $series = \App\Models\FiscalSeries::query()
+        $series = FiscalSeries::query()
             ->where('company_id', $company->id)
             ->orderBy('environment')->orderBy('document_type')
             ->limit(6)
@@ -178,9 +201,9 @@ class FiscalPortalController extends Controller
                 : 'Conectar facturación',
             'providers' => $this->providerOptions(),
             'locationComplete' => $company->province_id !== null && $company->canton_id !== null && $company->district_id !== null,
-            'provinces' => \App\Models\Province::orderBy('id')->get(),
-            'cantons' => \App\Models\Canton::orderBy('province_id')->orderBy('id')->get(),
-            'districts' => \App\Models\District::orderBy('canton_id')->orderBy('id')->get(),
+            'provinces' => Province::orderBy('id')->get(),
+            'cantons' => Canton::orderBy('province_id')->orderBy('id')->get(),
+            'districts' => District::orderBy('canton_id')->orderBy('id')->get(),
         ]);
     }
 
@@ -249,7 +272,7 @@ class FiscalPortalController extends Controller
         $requiresCredentials = ! $this->configs->ensure($company)->hasCredentials();
 
         $validated = $request->validate([
-            'provider' => ['nullable', 'string', 'in:' . implode(',', $allowedProviders)],
+            'provider' => ['nullable', 'string', 'in:'.implode(',', $allowedProviders)],
             'environment' => ['required', 'string', 'in:sandbox,production'],
             'api_key' => [$requiresCredentials ? 'required' : 'nullable', 'string', 'max:255'],
             'api_secret' => [$requiresCredentials ? 'required' : 'nullable', 'string', 'max:255'],
@@ -260,7 +283,7 @@ class FiscalPortalController extends Controller
         ]);
 
         if ($validated['environment'] === 'production' && ! $request->boolean('production_confirm')) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'production_confirm' => 'Confirme explícitamente que usará producción con validez fiscal.',
             ]);
         }
@@ -372,7 +395,7 @@ class FiscalPortalController extends Controller
      */
     private function diagnostic(Company $company, CompanyLicense $license, CompanyFiscalConfig $config, ?ElectronicDocument $latest): array
     {
-        $seriesCount = \App\Models\FiscalSeries::query()->where('company_id', $company->id)->count();
+        $seriesCount = FiscalSeries::query()->where('company_id', $company->id)->count();
 
         $configState = $this->configurationState($company, $config);
 
@@ -462,7 +485,7 @@ class FiscalPortalController extends Controller
 
         return view('fiscal.series', [
             'company' => $company,
-            'series' => \App\Models\FiscalSeries::query()
+            'series' => FiscalSeries::query()
                 ->where('company_id', $company->id)
                 ->orderBy('environment')->orderBy('document_type')
                 ->orderBy('branch_code')->orderBy('terminal_code')
@@ -484,7 +507,7 @@ class FiscalPortalController extends Controller
         ]);
 
         try {
-            app(\App\Services\Fiscal\FiscalSeriesService::class)->import(
+            app(FiscalSeriesService::class)->import(
                 $company->id,
                 $validated['environment'],
                 $validated['branch_code'],
@@ -505,15 +528,79 @@ class FiscalPortalController extends Controller
 
         abort_unless((int) $document->company_id === (int) $company->id, 404);
 
+        $deliveries = ElectronicDocumentMailDelivery::query()
+            ->where('company_id', $company->id)
+            ->where('electronic_document_id', $document->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        $receiverEmail = null;
+        if ($document->sale_id !== null) {
+            $receiverEmail = Sale::query()
+                ->where('company_id', $company->id)
+                ->find($document->sale_id)?->customer?->email;
+        }
+
         return view('fiscal.document', [
             'company' => $company,
             'document' => $document,
             'typeLabels' => self::TYPE_LABELS,
             'statusLabels' => self::STATUS_LABELS,
-            'custody' => \App\Models\FiscalDocumentCustody::query()
+            'custody' => FiscalDocumentCustody::query()
                 ->where('electronic_document_id', $document->id)
                 ->first(),
+            'deliveries' => $deliveries,
+            'receiverEmail' => $receiverEmail,
+            'deliveryStatusLabels' => self::DELIVERY_STATUS_LABELS,
+            'deliveryTypeLabels' => self::DELIVERY_TYPE_LABELS,
         ]);
+    }
+
+    /**
+     * Envío/reenvío manual del comprobante al correo indicado (CE-MAIL 2).
+     *
+     * Solo registra la entrega y encola el job existente: no emite, no
+     * reemite, no crea ElectronicDocument, no consume cuota y no toca
+     * consecutivo/clave/estado. El correo alternativo es solo para ESTE
+     * envío; el email maestro del cliente no se modifica.
+     */
+    public function sendDocumentMail(Request $request, ElectronicDocument $document): RedirectResponse
+    {
+        $company = $this->company();
+
+        abort_unless((int) $document->company_id === (int) $company->id, 404);
+
+        $validated = $request->validate([
+            'recipient' => ['required', 'string', 'email', 'max:150'],
+        ], [
+            'recipient.required' => 'Indique el correo que recibirá el comprobante.',
+            'recipient.email' => 'El correo indicado no es válido.',
+            'recipient.max' => 'El correo no puede exceder 150 caracteres.',
+        ]);
+
+        if ($document->status !== 'accepted') {
+            return back()->withErrors([
+                'recipient' => 'Solo se pueden enviar comprobantes con estado Aceptado.',
+            ]);
+        }
+
+        $delivery = app(ElectronicDocumentMailDispatcher::class)->dispatchManual(
+            $document,
+            (string) $validated['recipient'],
+            auth()->id(),
+        );
+
+        if ($delivery === null) {
+            return back()->withErrors([
+                'recipient' => 'No se pudo registrar el envío. Verifique el correo indicado.',
+            ]);
+        }
+
+        return redirect()
+            ->route('fiscal.documents.show', $document)
+            ->with('status', 'Envío del comprobante en cola para '.$delivery->recipient.'.');
     }
 
     /**
@@ -539,7 +626,7 @@ class FiscalPortalController extends Controller
     private function switchView(Company $company, string $target): View
     {
         $check = $target !== ''
-            ? app(\App\Services\Fiscal\FiscalProviderSwitchService::class)->canSwitch($company, $target)
+            ? app(FiscalProviderSwitchService::class)->canSwitch($company, $target)
             : null;
 
         return view('fiscal.switch', [

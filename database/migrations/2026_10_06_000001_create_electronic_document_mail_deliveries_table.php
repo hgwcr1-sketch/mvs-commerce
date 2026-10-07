@@ -23,9 +23,9 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 
-            $table->unique(
+            $table->index(
                 ['electronic_document_id', 'delivery_type'],
-                'edmd_doc_type_unique'
+                'edmd_doc_type_index'
             );
             $table->index(['company_id', 'status']);
         });
