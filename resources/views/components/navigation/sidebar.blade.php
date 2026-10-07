@@ -217,7 +217,9 @@
     'inventario.conteo.ver',
     'inventario.conteo.iniciar',
     'inventario.kardex',
-    'inventario.transferir'
+    'inventario.transferir',
+    'inventario.transferencias.ver',
+    'inventario.transferencias.recibir'
 ])
 
     <x-navigation.dropdown
@@ -254,11 +256,11 @@
                 label="Kardex" />
         @endcan
 
-        @can('inventario.transferir')
+        @canany(['inventario.transferir', 'inventario.transferencias.ver', 'inventario.transferencias.recibir'])
             <x-navigation.submenu
                 route="transferencias.index"
                 label="Transferencias" />
-        @endcan
+        @endcanany
 
     </x-navigation.dropdown>
 

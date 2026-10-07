@@ -8,7 +8,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PermissionMiddleware
 {
-    public function handle(Request $request, Closure $next, string $permission): Response
+    /**
+     * Acepta uno o varios permisos separados por coma (ej. permission:a,b):
+     * basta con poseer AL MENOS UNO. Con un solo permiso se comporta igual
+     * que antes.
+     */
+    public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
         $user = auth()->user();
 
@@ -24,7 +29,15 @@ class PermissionMiddleware
             abort(403, 'Empresa no encontrada.');
         }
 
-        if (!$user->hasPermission($permission, $companyModel)) {
+        $authorized = false;
+        foreach ($permissions as $permission) {
+            if ($user->hasPermission($permission, $companyModel)) {
+                $authorized = true;
+                break;
+            }
+        }
+
+        if (!$authorized) {
             abort(403, 'No tiene permiso para acceder a este módulo.');
         }
 
