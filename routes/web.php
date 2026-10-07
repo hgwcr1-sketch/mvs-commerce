@@ -761,8 +761,12 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware(['active.branch', 'permission:inventario.transferir'])
         ->name('transferencias.products.search');
 
+    Route::get('/transferencias', [TransferController::class, 'index'])
+        ->middleware(['active.branch', 'permission:inventario.transferencias.ver,inventario.transferir'])
+        ->name('transferencias.index');
+
     Route::resource('transferencias', TransferController::class)
-        ->only(['index', 'create', 'store'])
+        ->only(['create', 'store'])
         ->middleware(['active.branch', 'permission:inventario.transferir']);
 
     Route::post('/transferencias/{transfer}/prepare', [TransferController::class, 'prepare'])
@@ -772,16 +776,16 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         ->middleware(['active.branch', 'permission:inventario.transferir'])
         ->name('transferencias.dispatch');
     Route::post('/transferencias/{transfer}/review', [TransferController::class, 'review'])
-        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->middleware(['active.branch', 'permission:inventario.transferencias.recibir,inventario.transferir'])
         ->name('transferencias.review');
     Route::post('/transferencias/{transfer}/receive', [TransferController::class, 'receive'])
-        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->middleware(['active.branch', 'permission:inventario.transferencias.recibir,inventario.transferir'])
         ->name('transferencias.receive');
     Route::post('/transferencias/{transfer}/cancel', [TransferController::class, 'cancel'])
         ->middleware(['active.branch', 'permission:inventario.transferir'])
         ->name('transferencias.cancel');
     Route::get('/transferencias/{transfer}/show', [TransferController::class, 'show'])
-        ->middleware(['active.branch', 'permission:inventario.transferir'])
+        ->middleware(['active.branch', 'permission:inventario.transferencias.ver,inventario.transferencias.recibir,inventario.transferir'])
         ->name('transferencias.show');
 
     /*

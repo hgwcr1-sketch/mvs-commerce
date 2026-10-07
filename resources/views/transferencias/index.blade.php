@@ -7,7 +7,9 @@
             <h1 class="text-xl font-bold text-slate-800 sm:text-2xl">Traslados de Inventario</h1>
             <p class="mt-1 text-sm text-slate-500">Productos en movimiento entre sucursales.</p>
         </div>
-        <a href="{{ route('transferencias.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-600">Nuevo traslado</a>
+        @can('inventario.transferir')
+            <a href="{{ route('transferencias.create') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-amber-600">Nuevo traslado</a>
+        @endcan
     </header>
     @include('transferencias._messages')
     <form method="GET" action="{{ route('transferencias.index') }}" class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:p-5">

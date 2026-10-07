@@ -73,6 +73,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'inventario.conteo.cancelar', 'label' => 'Cancelar tomas de inventario', 'module' => 'Inventario'],
             ['name' => 'inventario.kardex', 'label' => 'Ver Kardex', 'module' => 'Inventario'],
             ['name' => 'inventario.transferir', 'label' => 'Realizar transferencias', 'module' => 'Inventario'],
+            ['name' => 'inventario.transferencias.ver', 'label' => 'Ver transferencias', 'module' => 'Inventario'],
+            ['name' => 'inventario.transferencias.recibir', 'label' => 'Recibir/Aceptar transferencias', 'module' => 'Inventario'],
 
             // Compras
             ['name' => 'compras.ver', 'label' => 'Ver compras', 'module' => 'Compras'],
