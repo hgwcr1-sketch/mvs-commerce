@@ -305,5 +305,43 @@ class PermissionSeeder extends Seeder
                     $role->permissions()->syncWithoutDetaching([$cashierApplyId]);
                 }
             });
+
+        // Transferencias de inventario: los roles que ya gestionan inventario
+        // o traslados (ajustes, tomas de inventario, transferencias) reciben
+        // por defecto inventario.transferencias.ver e
+        // inventario.transferencias.recibir, para poder ver y recibir traslados
+        // en su sucursal sin heredar inventario.transferir (crear/despachar).
+        // Los roles sin funciones de gestión de inventario (p. ej. Cajero o
+        // Vendedor) NO los reciben: su asignación queda a criterio del
+        // administrador de la empresa. Los super_admin ya reciben ambos con la
+        // sincronización global anterior.
+        $transferPermissionIds = Permission::query()
+            ->where('is_active', true)
+            ->whereIn('name', [
+                'inventario.transferencias.ver',
+                'inventario.transferencias.recibir',
+            ])
+            ->pluck('id')
+            ->all();
+
+        if ($transferPermissionIds !== []) {
+            Role::query()
+                ->where('is_active', true)
+                ->whereHas('permissions', function ($query) {
+                    $query->where('permissions.is_active', true)
+                        ->whereIn('permissions.name', [
+                            'inventario.transferir',
+                            'inventario.ajustar',
+                            'inventario.conteo.iniciar',
+                            'inventario.conteo.contar',
+                            'inventario.conteo.revisar',
+                            'inventario.conteo.confirmar',
+                            'inventario.conteo.cancelar',
+                        ]);
+                })
+                ->each(function (Role $role) use ($transferPermissionIds) {
+                    $role->permissions()->syncWithoutDetaching($transferPermissionIds);
+                });
+        }
     }
 }

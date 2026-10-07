@@ -54,6 +54,7 @@ return [
             'permissions' => [
                 'dashboard.ver', 'inventario.ver', 'inventario.ver_otras_sucursales',
                 'inventario.ajustar', 'inventario.kardex', 'inventario.conteo.ver',
+                'inventario.transferencias.ver', 'inventario.transferencias.recibir',
                 'productos.ver', 'productos.crear', 'productos.editar',
                 'categorias.ver', 'marcas.ver', 'proveedores.ver',
             ],
