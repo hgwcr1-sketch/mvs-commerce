@@ -15,13 +15,13 @@ use App\Models\FiscalSeries;
 use App\Models\Province;
 use App\Models\Sale;
 use App\Services\CompanyLicenseService;
-use App\Services\Facturaencr\FacturaencrEmissionService;
 use App\Services\Facturaencr\FacturaencrUnitMapper;
 use App\Services\Fiscal\CompanyFiscalConfigService;
 use App\Services\Fiscal\ElectronicDocumentMailDispatcher;
 use App\Services\Fiscal\FiscalActivationService;
 use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\Fiscal\FiscalCutoffService;
+use App\Services\Fiscal\FiscalManager;
 use App\Services\Fiscal\FiscalProviderSwitchService;
 use App\Services\Fiscal\FiscalSeriesService;
 use App\Services\TaxpayerLookupService;
@@ -944,8 +944,11 @@ class FiscalPortalController extends Controller
 
     /**
      * Refrescar estado = ÚNICAMENTE consulta/polling al proveedor vía
-     * FacturaencrEmissionService::syncStatus (GET). Nunca emite ni crea
-     * documentos nuevos: solo actualiza estado del existente.
+     * FiscalManager::fetchStatus: el mismo provider/client autenticado del
+     * polling automático (credenciales de la empresa, no config global).
+     * Nunca emite, nunca hace POST ni consume cuota: solo actualiza estado
+     * del documento existente y, si pasa a accepted, completa custodia y
+     * CE-MAIL con la misma vía idempotente.
      */
     public function refreshDocument(ElectronicDocument $document): RedirectResponse
     {
@@ -960,11 +963,10 @@ class FiscalPortalController extends Controller
                 ->with('status', 'Documento en estado final: no requiere consulta (sin re-emisión).');
         }
 
-        $synced = app(FacturaencrEmissionService::class)
-            ->syncStatus($document->fresh());
+        app(FiscalManager::class)->fetchStatus($document->fresh());
 
         return redirect()
-            ->route('fiscal.documents.show', $synced)
+            ->route('fiscal.documents.show', $document->fresh())
             ->with('status', 'Estado refrescado por consulta. No se emitió ningún comprobante nuevo.');
     }
 

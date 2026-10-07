@@ -89,6 +89,14 @@ class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
                 Log::warning('fiscal.emission.error', $logContext);
             } else {
                 Log::info('fiscal.emission.result', $logContext);
+
+                // Documento no final tras el POST: programa el polling
+                // automático (solo GET de estado con el client autenticado
+                // de la emisión; nunca reemite ni crea documentos).
+                if (! $result->isFinal() && $result->electronicDocumentId !== null) {
+                    PollElectronicDocumentStatus::dispatch($result->electronicDocumentId)
+                        ->delay(now()->addSeconds(PollElectronicDocumentStatus::RETRY_DELAY_SECONDS));
+                }
             }
         } catch (Throwable $exception) {
             Log::warning('fiscal.emission.failed', [
