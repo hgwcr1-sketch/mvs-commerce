@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\ElectronicDocument;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -80,14 +81,29 @@ class ComprobanteElectronicoAceptadoMail extends Mailable
     }
 
     /**
-     * @return array<int, array{name: string, content: string, mime: string}>
+     * Adjuntos como partes de datos (nombre + mime separados), nunca rutas.
+     * Las entradas incompletas o vacías se omiten sin bloquear el envío.
+     *
+     * @return array<int, Attachment>
      */
     public function attachments(): array
     {
-        return array_map(fn (array $file) => [
-            'name' => $file['name'],
-            'content' => $file['content'],
-            'mime' => $file['mime'],
-        ], $this->files);
+        $attachments = [];
+
+        foreach ($this->files as $file) {
+            $name = is_array($file) ? (string) ($file['name'] ?? '') : '';
+            $content = is_array($file) ? ($file['content'] ?? null) : null;
+
+            if ($name === '' || ! is_string($content) || $content === '') {
+                continue;
+            }
+
+            $attachments[] = Attachment::fromData(fn () => $content, $name)
+                ->withMime(is_array($file) && isset($file['mime']) && is_string($file['mime'])
+                    ? $file['mime']
+                    : 'application/octet-stream');
+        }
+
+        return $attachments;
     }
 }

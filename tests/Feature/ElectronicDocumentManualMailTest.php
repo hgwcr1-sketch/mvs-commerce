@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendElectronicDocumentMail;
 use App\Mail\ComprobanteElectronicoAceptadoMail;
 use App\Models\Branch;
 use App\Models\Company;
@@ -20,6 +21,8 @@ use App\Models\User;
 use App\Services\CompanyLicenseService;
 use App\Services\Fiscal\FiscalCustodyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Tests\TestCase;
@@ -307,6 +310,148 @@ class ElectronicDocumentManualMailTest extends TestCase
         $this->assertSame($consecutivo, $fresh->consecutivo);
         $this->assertTrue($fresh->created_at->equalTo($createdAt));
         $this->assertSame(1, ElectronicDocumentMailDelivery::query()->count());
+    }
+
+    public function test_real_mailer_attaches_pdf_only(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $mailable = new ComprobanteElectronicoAceptadoMail($document, $company, [
+            ['name' => 'unico.pdf', 'mime' => 'application/pdf', 'content' => '%PDF-1.4 unico'],
+        ]);
+
+        $event = $this->sendViaRealArrayMailer(fn () => Mail::to('receptor@example.com')->send($mailable));
+
+        $this->assertSame(['unico.pdf'], $this->attachmentFilenames($event));
+    }
+
+    public function test_real_mailer_attaches_pdf_and_both_xmls(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $mailable = new ComprobanteElectronicoAceptadoMail($document, $company, [
+            ['name' => 'a.pdf', 'mime' => 'application/pdf', 'content' => '%PDF-1.4 a'],
+            ['name' => 'a-xml-enviado.xml', 'mime' => 'application/xml', 'content' => '<DocumentoEnviado/>'],
+            ['name' => 'a-xml-firmado.xml', 'mime' => 'application/xml', 'content' => '<RespuestaStatu/>'],
+        ]);
+
+        $event = $this->sendViaRealArrayMailer(fn () => Mail::to('receptor@example.com')->send($mailable));
+
+        $this->assertSame(['a.pdf', 'a-xml-enviado.xml', 'a-xml-firmado.xml'], $this->attachmentFilenames($event));
+    }
+
+    public function test_real_mailer_attaches_pdf_and_json_response(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $mailable = new ComprobanteElectronicoAceptadoMail($document, $company, [
+            ['name' => 'b.pdf', 'mime' => 'application/pdf', 'content' => '%PDF-1.4 b'],
+            ['name' => 'b-respuesta.json', 'mime' => 'application/json', 'content' => '{"status":"accepted"}'],
+        ]);
+
+        $event = $this->sendViaRealArrayMailer(fn () => Mail::to('receptor@example.com')->send($mailable));
+
+        $this->assertSame(['b.pdf', 'b-respuesta.json'], $this->attachmentFilenames($event));
+    }
+
+    public function test_missing_or_empty_attachment_entries_are_omitted(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $mailable = new ComprobanteElectronicoAceptadoMail($document, $company, [
+            ['name' => 'ok.pdf', 'mime' => 'application/pdf', 'content' => '%PDF-1.4 ok'],
+            ['name' => 'vacio.xml', 'mime' => 'application/xml', 'content' => ''],
+            ['mime' => 'application/xml', 'content' => '<SinNombre/>'],
+            ['name' => 'sin-contenido.pdf', 'mime' => 'application/pdf'],
+        ]);
+
+        $event = $this->sendViaRealArrayMailer(fn () => Mail::to('receptor@example.com')->send($mailable));
+
+        $this->assertSame(['ok.pdf'], $this->attachmentFilenames($event));
+    }
+
+    public function test_manual_send_with_real_mailer_builds_attachments_without_new_document(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
+        $document = $this->acceptedDocument($company, $branch);
+
+        $event = $this->sendViaRealArrayMailer(function () use ($document) {
+            $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
+                ->assertRedirect(route('fiscal.documents.show', $document));
+        });
+
+        $delivery = ElectronicDocumentMailDelivery::query()->sole();
+        $this->assertSame(ElectronicDocumentMailDelivery::STATUS_SENT, $delivery->status);
+        $this->assertContains($document->consecutivo.'.pdf', $delivery->attachments);
+        $this->assertContains($document->consecutivo.'.pdf', $this->attachmentFilenames($event));
+
+        $this->assertSame(1, ElectronicDocument::count());
+        $this->assertSame(0, FiscalConsumption::count());
+    }
+
+    public function test_automatic_job_uses_same_attachment_logic(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $delivery = ElectronicDocumentMailDelivery::create([
+            'company_id' => $company->id,
+            'electronic_document_id' => $document->id,
+            'recipient' => 'receptor@example.com',
+            'delivery_type' => ElectronicDocumentMailDelivery::TYPE_AUTOMATIC,
+            'status' => ElectronicDocumentMailDelivery::STATUS_PENDING,
+        ]);
+
+        $event = $this->sendViaRealArrayMailer(fn () => (new SendElectronicDocumentMail($delivery->id))->handle());
+
+        $delivery->refresh();
+        $this->assertSame(ElectronicDocumentMailDelivery::STATUS_SENT, $delivery->status);
+        $this->assertNull($delivery->user_id);
+        $this->assertNotNull($delivery->sent_at);
+
+        $names = $this->attachmentFilenames($event);
+        $this->assertContains($document->consecutivo.'.pdf', $names);
+        $this->assertContains($document->consecutivo.'-xml-enviado.xml', $names);
+        $this->assertContains($document->consecutivo.'-xml-firmado.xml', $names);
+        $this->assertContains($document->consecutivo.'-respuesta-hacienda.json', $names);
+
+        $this->assertSame(1, ElectronicDocument::count());
+        $this->assertSame(0, FiscalConsumption::count());
+    }
+
+    private function sendViaRealArrayMailer(callable $send): MessageSent
+    {
+        config(['mail.default' => 'array']);
+        Event::fake([MessageSent::class]);
+
+        $send();
+
+        $captured = null;
+        Event::assertDispatched(MessageSent::class, function (MessageSent $event) use (&$captured) {
+            $captured = $event;
+
+            return true;
+        });
+
+        $this->assertNotNull($captured, 'El envío real no produjo MessageSent');
+
+        return $captured;
+    }
+
+    /**
+     * @return array<int, string|null>
+     */
+    private function attachmentFilenames(MessageSent $event): array
+    {
+        return array_map(
+            static fn ($part) => $part->getFilename(),
+            $event->message->getAttachments()
+        );
     }
 
     /**
