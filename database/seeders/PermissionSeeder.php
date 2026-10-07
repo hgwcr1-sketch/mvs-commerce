@@ -173,6 +173,7 @@ class PermissionSeeder extends Seeder
             // Facturación Electrónica (portal fiscal del tenant)
             ['name' => 'fiscal.ver', 'label' => 'Ver portal fiscal', 'module' => 'Facturación Electrónica'],
             ['name' => 'fiscal.editar', 'label' => 'Configurar conexión fiscal', 'module' => 'Facturación Electrónica'],
+            ['name' => 'fiscal.enviar_comprobante', 'label' => 'Enviar/reenviar comprobantes', 'module' => 'Facturación Electrónica'],
 
             // Agenda
             ['name' => 'agenda.ver', 'label' => 'Ver agenda', 'module' => 'Agenda'],

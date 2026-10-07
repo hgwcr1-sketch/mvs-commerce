@@ -34,7 +34,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $user = $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $user = $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
@@ -72,7 +72,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $clave = $document->clave;
@@ -100,7 +100,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'otro@example.com'])
@@ -120,7 +120,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $this->from(route('fiscal.documents.show', $document))
@@ -136,7 +136,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$companyA, $branchA] = $this->fiscalContext();
-        $this->actingUser($companyA, $branchA, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($companyA, $branchA, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $documentA = $this->acceptedDocument($companyA, $branchA);
 
         [$companyB, $branchB] = $this->fiscalContext();
@@ -177,12 +177,67 @@ class ElectronicDocumentManualMailTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_admin_with_super_admin_role_sees_and_sends_by_default(): void
+    {
+        Mail::fake();
+        [$company, $branch] = $this->fiscalContext();
+        $document = $this->acceptedDocument($company, $branch);
+
+        $user = User::factory()->create(['is_active' => true]);
+        $role = Role::create([
+            'company_id' => $company->id,
+            'name' => 'Administrador',
+            'is_active' => true,
+            'is_super_admin' => true,
+        ]);
+        Permission::firstOrCreate(
+            ['name' => 'fiscal.enviar_comprobante'],
+            ['label' => 'Enviar/reenviar comprobantes', 'module' => 'Facturación Electrónica', 'is_active' => true],
+        );
+        $user->companies()->attach($company->id, ['role_id' => $role->id]);
+        $user->branches()->attach($branch->id);
+
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id]);
+
+        $this->get(route('fiscal.documents.show', $document))
+            ->assertOk()
+            ->assertSee('Enviar comprobante');
+
+        $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
+            ->assertRedirect(route('fiscal.documents.show', $document));
+
+        $this->assertSame(1, ElectronicDocumentMailDelivery::query()->count());
+        Mail::assertSent(ComprobanteElectronicoAceptadoMail::class, 1);
+        $this->assertSame(1, ElectronicDocument::count());
+        $this->assertSame(0, FiscalConsumption::query()->count());
+    }
+
+    public function test_vendor_with_send_permission_sees_and_sends_without_fiscal_editar(): void
+    {
+        Mail::fake();
+        [$company, $branch] = $this->fiscalContext();
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
+        $document = $this->acceptedDocument($company, $branch);
+
+        $this->get(route('fiscal.documents.show', $document))
+            ->assertOk()
+            ->assertSee('Enviar comprobante');
+
+        $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
+            ->assertRedirect(route('fiscal.documents.show', $document));
+
+        $this->assertSame(1, ElectronicDocumentMailDelivery::query()->count());
+        Mail::assertSent(ComprobanteElectronicoAceptadoMail::class, 1);
+        $this->assertSame(1, ElectronicDocument::count());
+        $this->assertSame(0, FiscalConsumption::query()->count());
+    }
+
     public function test_smtp_failure_is_visible_and_document_stays_accepted(): void
     {
         Mail::shouldReceive('to')->andThrow(new RuntimeException('SMTP down'));
 
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
@@ -204,7 +259,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
 
         $jsonOnly = $this->acceptedDocument($company, $branch, 'receptor@example.com', false, false);
         $this->post(route('fiscal.documents.mail', $jsonOnly), ['recipient' => 'receptor@example.com']);
@@ -235,7 +290,7 @@ class ElectronicDocumentManualMailTest extends TestCase
     {
         Mail::fake();
         [$company, $branch] = $this->fiscalContext();
-        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.editar']);
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
         $document = $this->acceptedDocument($company, $branch);
 
         $clave = $document->clave;

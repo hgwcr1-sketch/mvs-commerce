@@ -136,7 +136,7 @@
             <p class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700" role="alert">{{ $message }}</p>
         @enderror
 
-        @can('fiscal.editar')
+        @can('fiscal.enviar_comprobante')
             @if($document->status === 'accepted')
                 <button type="button" x-on:click="open = true"
                         class="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover sm:w-auto">
@@ -168,7 +168,7 @@
             <p class="mt-3 text-sm text-slate-500">Sin entregas registradas para este comprobante.</p>
         @endforelse
 
-        @can('fiscal.editar')
+        @can('fiscal.enviar_comprobante')
             @if($document->status === 'accepted')
                 <button type="button" x-on:click="open = true"
                         class="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover sm:w-auto">
