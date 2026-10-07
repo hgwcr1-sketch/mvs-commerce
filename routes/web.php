@@ -326,6 +326,9 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
         Route::get('/facturacion-electronica/historial/{document}', [FiscalPortalController::class, 'showDocument'])
             ->middleware('permission:fiscal.ver')
             ->name('fiscal.documents.show');
+        Route::post('/facturacion-electronica/historial/{document}/enviar', [FiscalPortalController::class, 'sendDocumentMail'])
+            ->middleware('permission:fiscal.editar')
+            ->name('fiscal.documents.mail');
         Route::get('/facturacion-electronica/series', [FiscalPortalController::class, 'series'])
             ->middleware('permission:fiscal.ver')
             ->name('fiscal.series');
