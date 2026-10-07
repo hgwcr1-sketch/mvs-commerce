@@ -36,6 +36,9 @@ class FacturaencrUnitMapper
         'und' => 'Unid',
         'unidad' => 'Unid',
         'unidades' => 'Unid',
+        // units.id=1 "GENERAL" (unidad comercial genérica heredada de
+        // importación): equivale a unidad, nunca se envía literal.
+        'general' => 'Unid',
         'servicio' => 'Sp',
         'servicios' => 'Sp',
         'kgs' => 'kg',

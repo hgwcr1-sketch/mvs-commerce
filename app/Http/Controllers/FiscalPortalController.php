@@ -16,6 +16,7 @@ use App\Models\Province;
 use App\Models\Sale;
 use App\Services\CompanyLicenseService;
 use App\Services\Facturaencr\FacturaencrEmissionService;
+use App\Services\Facturaencr\FacturaencrUnitMapper;
 use App\Services\Fiscal\CompanyFiscalConfigService;
 use App\Services\Fiscal\ElectronicDocumentMailDispatcher;
 use App\Services\Fiscal\FiscalActivationService;
@@ -1380,6 +1381,20 @@ class FiscalPortalController extends Controller
 
         if ($sale->document_type === Sale::DOCUMENT_ELECTRONIC_INVOICE && ! $sale->customer_id) {
             return 'Preflight: receptor sin identificación.';
+        }
+
+        $unitMapper = new FacturaencrUnitMapper;
+
+        foreach ($sale->items as $item) {
+            $unitCode = trim((string) $item->unit_code);
+
+            if ($unitCode === '') {
+                return 'Preflight: unidad de medida no especificada en la venta.';
+            }
+
+            if (! $unitMapper->isSupported($unitCode)) {
+                return "Preflight: unidad «{$unitCode}» no convertible a unidad fiscal.";
+            }
         }
 
         return 'Aún no procesado por el flujo de emisión.';

@@ -11,6 +11,7 @@ use App\Models\FiscalDocumentCustody;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -202,6 +203,58 @@ class FiscalDocumentsPortalTest extends TestCase
         $response->assertDontSee('POS-FD-EMITTED');
         $response->assertDontSee('POS-FD-TICKET');
         $response->assertDontSee('POS-FD-OTHER');
+    }
+
+    public function test_pending_sale_with_unconvertible_unit_shows_human_reason(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        DB::table('company_fiscal_configs')->insert([
+            'company_id' => $company->id,
+            'provider' => 'facturaencr',
+            'environment' => 'sandbox',
+            'provider_api_key' => encrypt('efk_TESTKEY', false),
+            'provider_api_secret' => encrypt('efk_TESTSECRET', false),
+            'auto_emit_enabled' => true,
+            'fiscal_start_at' => now()->subDay(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $customer = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '109880401',
+            'name' => 'Cliente',
+        ]);
+
+        $sale = $this->makeSale($company, $branch, ['customer_id' => $customer->id]);
+        SaleItem::create([
+            'sale_id' => $sale->id,
+            'product_code' => 'P01',
+            'cabys_code' => '3532306030100',
+            'description' => 'Producto',
+            'unit_code' => 'PIEZA',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'gross_total' => 1000,
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'tax_rate' => 13,
+            'tax_total' => 130,
+            'total' => 1130,
+            'unit_cost' => 500,
+        ]);
+
+        $response = $this->get(route('fiscal.documents', ['scope' => 'pendientes']));
+
+        $response->assertOk();
+        $response->assertSee('Preflight: unidad');
+        $response->assertSee('no convertible a unidad fiscal');
+        $response->assertDontSee('Aún no procesado por el flujo de emisión.');
     }
 
     public function test_historic_sales_are_excluded_by_fiscal_cutoff(): void

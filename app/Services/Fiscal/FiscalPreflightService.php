@@ -5,6 +5,7 @@ namespace App\Services\Fiscal;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Sale;
+use App\Services\Facturaencr\FacturaencrUnitMapper;
 use App\Support\IdentificationRules;
 use Illuminate\Validation\ValidationException;
 
@@ -58,6 +59,9 @@ class FiscalPreflightService
             }
             if (blank($product->unit?->abbreviation)) {
                 $errors["items.{$index}.unit_code"] = "Complete la unidad de {$product->name} antes de emitir FE/TE.";
+            } elseif (! (new FacturaencrUnitMapper)->isSupported((string) $product->unit->abbreviation)) {
+                $errors["items.{$index}.unit_code"] = "La unidad «{$product->unit->abbreviation}» de {$product->name}"
+                    .' no es convertible a una unidad fiscal: ajuste la unidad del producto antes de emitir FE/TE.';
             }
         }
 

@@ -177,6 +177,57 @@ class FiscalManagerTest extends TestCase
         $this->assertFalse($result->error->retryable);
     }
 
+    public function test_unsupported_unit_fails_before_post_and_creates_no_document(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $item->unit_code = 'PIEZA';
+
+        $result = (new FiscalManager())->emit(
+            new FiscalEmissionRequest($sale, $company, $customer, [$item], $sale->payments->first())
+        );
+
+        $this->assertTrue($result->isError());
+        $this->assertSame('validation', $result->error->category);
+        $this->assertStringContainsString('PIEZA', (string) $result->error->message);
+        $this->assertStringContainsString('unidad', mb_strtolower((string) $result->error->message));
+        $this->assertNull($result->electronicDocumentId);
+        $this->assertSame(0, ElectronicDocument::query()->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_general_unit_emits_with_unidad_fiscal_normalization(): void
+    {
+        [$company, , $sale] = $this->prepareData();
+        $customer = Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '109880401',
+            'name' => 'Cliente Fiscal',
+        ]);
+        $item = $this->createItem($sale);
+        $item->unit_code = 'GENERAL';
+
+        Http::fake([
+            'api.facturaencr.com/v2/efactura/documents/factura' => Http::response([
+                'status' => 'accepted',
+                'documentId' => 'doc-general',
+                'clave' => '506010100000000000010000000000000000000',
+            ], 200),
+        ]);
+
+        $result = (new FiscalManager())->emit(
+            new FiscalEmissionRequest($sale, $company, $customer, [$item], $sale->payments->first())
+        );
+
+        $this->assertSame(FiscalEmissionResult::STATE_ACCEPTED, $result->state);
+        $this->assertSame('doc-general', $result->providerReference);
+        $this->assertSame(1, ElectronicDocument::query()->count());
+        Http::assertSentCount(1);
+        Http::assertSent(static fn ($request): bool => ($request['detalle'][0]['unidadMedida'] ?? null) === 'Unid');
+    }
+
     public function test_existing_facturaencr_document_remains_compatible(): void
     {
         [$company, , $sale] = $this->prepareData();

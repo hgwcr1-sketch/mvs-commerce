@@ -72,7 +72,7 @@ class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
                 $sale->payments->first(),
             ));
 
-            Log::info($result->isError() ? 'fiscal.emission.error' : 'fiscal.emission.result', [
+            $logContext = [
                 'sale_id' => $sale->id,
                 'document_type' => $this->documentType,
                 'provider' => $providerCode,
@@ -80,7 +80,16 @@ class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
                 'electronic_document_id' => $result->electronicDocumentId,
                 'error_code' => $result->error?->code,
                 'error_message' => $result->error?->message,
-            ]);
+            ];
+
+            // Errores a nivel warning: con LOG_LEVEL=warning el fallo de
+            // emisión (incluido el previo a ElectronicDocument) queda en el
+            // log diario en lugar de desaparecer silenciosamente.
+            if ($result->isError()) {
+                Log::warning('fiscal.emission.error', $logContext);
+            } else {
+                Log::info('fiscal.emission.result', $logContext);
+            }
         } catch (Throwable $exception) {
             Log::warning('fiscal.emission.failed', [
                 'sale_id' => $this->saleId,

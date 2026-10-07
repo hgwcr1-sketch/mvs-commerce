@@ -603,6 +603,49 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertFalse($unitMapper->isSupported('CAJA'));
     }
 
+    public function test_unit_general_maps_to_unid_and_keeps_valid_units_unchanged(): void
+    {
+        $unitMapper = new FacturaencrUnitMapper;
+
+        $this->assertSame('Unid', $unitMapper->map('GENERAL'));
+        $this->assertSame('Unid', $unitMapper->map('general'));
+        $this->assertTrue($unitMapper->isSupported('GENERAL'));
+
+        $this->assertSame('kg', $unitMapper->map('kg'));
+        $this->assertSame('Unid', $unitMapper->map('UNIDAD'));
+        $this->assertSame('Unid', $unitMapper->map('UN'));
+        $this->assertSame('L', $unitMapper->map('LT'));
+    }
+
+    public function test_unit_general_normalization_is_shared_by_fe_and_te(): void
+    {
+        Http::preventStrayRequests();
+
+        foreach ([Sale::DOCUMENT_ELECTRONIC_INVOICE, Sale::DOCUMENT_ELECTRONIC_TICKET] as $type) {
+            [$company, , $sale] = $this->prepareData();
+            $sale->document_type = $type;
+
+            $customer = Customer::create([
+                'company_id' => $company->id,
+                'customer_type' => 'individual',
+                'identification_type' => '01',
+                'identification' => '109880401',
+                'name' => 'Cliente Fiscal',
+            ]);
+
+            $item = $this->createItem($sale);
+            $item->unit_code = 'GENERAL';
+
+            $payload = (new FacturaencrInvoiceMapper)->map(
+                $sale, [$item], $customer, $company, $sale->payments->first()
+            );
+
+            $this->assertSame('Unid', $payload['detalle'][0]['unidadMedida']);
+        }
+
+        Http::assertNothingSent();
+    }
+
     public function test_payload_uses_official_unit_code_for_mvs_abbreviation(): void
     {
         [$company, $customer, $sale] = $this->prepareData();
