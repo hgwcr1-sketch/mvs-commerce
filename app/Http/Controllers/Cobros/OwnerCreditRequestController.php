@@ -51,7 +51,7 @@ class OwnerCreditRequestController extends Controller
             // 12A: semáforo por lote (3 consultas fijas, sin N+1 por cliente).
             'riskLevels' => app(\App\Services\Cobros\CreditRiskService::class)
                 ->classifyMany($company, $requests->pluck('customer')->filter()),
-            // 9C: estado REAL del cr�dito por solicitud (badge "Pr�stamo entregado").
+            // 9C: estado REAL del crédito por solicitud (badge "Préstamo entregado").
             'creditStatus' => \App\Models\CobrosCredit::whereIn('credit_request_id', $requests->pluck('id'))
                 ->pluck('status', 'credit_request_id'),
         ]);

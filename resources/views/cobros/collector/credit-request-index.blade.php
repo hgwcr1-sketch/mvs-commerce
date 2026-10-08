@@ -40,11 +40,11 @@
                         @php
                             $log = $item->latestLog();
                             $motivo = in_array($item->status, ['requiere_correccion', 'rechazada'], true) ? ($log?->notes ?? null) : null;
-                            // 9C: estado humano seg�n el cr�dito REAL (no exponer DISBURSED).
+                            // 9C: estado humano según el crédito REAL (no exponer DISBURSED).
                             $creditRow = $credits[$item->id] ?? null;
                             $creditDisbursed = $creditRow !== null && $creditRow->status === \App\Models\CobrosCredit::STATUS_DISBURSED;
                             $badgeLabel = $creditDisbursed
-                                ? 'Pr�stamo entregado'
+                                ? 'Préstamo entregado'
                                 : (($item->status === 'pendiente' && ($canSelfVerify ?? false))
                                     ? 'Lista para verificar'
                                     : $item->statusLabel());
@@ -89,7 +89,7 @@
                 @endif
                 @if($item->status === 'aprobada' && isset($creditIds[$item->id]))
                     @if(($credits[$item->id]->status ?? null) === \App\Models\CobrosCredit::STATUS_DISBURSED)
-                        {{-- 9C: ya desembolsado — sin "Entregar pr�stamo"; CTA a la vista existente. --}}
+                        {{-- 9C: ya desembolsado — sin "Entregar préstamo"; CTA a la vista existente. --}}
                         <a href="{{ route('cobros.collector.creditos.comprobante', $creditIds[$item->id]) }}"
                            class="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-primary bg-white px-5 text-sm font-bold text-slate-900 hover:bg-primary/10 sm:w-auto">VER PRÉSTAMO</a>
                     @else

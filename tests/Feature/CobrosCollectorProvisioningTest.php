@@ -13,12 +13,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * DiagnÃ³stico 1 â€” provisiÃ³n real de un cobrador creado por el dueÃ±o.
+ * Diagnóstico 1 — provisión real de un cobrador creado por el dueño.
  *
- * Reproduce el flujo completo sin asumir IDs: el dueÃ±o crea el cobrador por la
- * ruta HTTP real, el cobrador entra por el login CobrOS, cambia la contraseÃ±a
- * temporal y debe aterrizar en su portal. Cada eslabÃ³n se verifica aparte para
- * localizar exactamente dÃ³nde se rompe la entrada.
+ * Reproduce el flujo completo sin asumir IDs: el dueño crea el cobrador por la
+ * ruta HTTP real, el cobrador entra por el login CobrOS, cambia la contraseña
+ * temporal y debe aterrizar en su portal. Cada eslabón se verifica aparte para
+ * localizar exactamente dónde se rompe la entrada.
  */
 class CobrosCollectorProvisioningTest extends TestCase
 {
@@ -43,7 +43,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         ]);
 
         $owner = User::factory()->create(['password' => 'Secure123', 'is_active' => true]);
-        $role = Role::create(['company_id' => $company->id, 'name' => 'DueÃ±o', 'is_active' => true]);
+        $role = Role::create(['company_id' => $company->id, 'name' => 'Dueño', 'is_active' => true]);
         foreach (array_merge(['cobros.acceder', 'cobros.portal_dueno', 'cobros.asignar'], $extraOwnerPermissions) as $name) {
             $permission = Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'CobrOS', 'is_active' => true]);
             $role->permissions()->attach($permission);
@@ -59,7 +59,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         [$company, $branch, $owner] = $this->provision();
         $email = 'cob'.uniqid().'@test.test';
 
-        // 1) El dueÃ±o crea el cobrador por la ruta real.
+        // 1) El dueño crea el cobrador por la ruta real.
         $response = $this->actingAs($owner)->withSession(['active_company_id' => $company->id])
             ->post(route('cobros.owner.collectors.store'), [
                 'name' => 'Cobrador Nuevo',
@@ -74,11 +74,11 @@ class CobrosCollectorProvisioningTest extends TestCase
         $response->assertRedirect();
 
         $plain = session('collector_plain_password');
-        $this->assertNotNull($plain, 'El dueÃ±o debe recibir la contraseÃ±a temporal.');
+        $this->assertNotNull($plain, 'El dueño debe recibir la contraseña temporal.');
 
         $collector = User::query()->where('email', $email)->firstOrFail();
 
-        // 2) Aislamiento de provisiÃ³n: usuario, rol, permisos, empresa, sucursal, mÃ³dulo.
+        // 2) Aislamiento de provisión: usuario, rol, permisos, empresa, sucursal, módulo.
         $this->assertTrue($collector->is_active, 'El cobrador debe quedar activo.');
         $this->assertTrue($collector->must_change_password);
         $this->assertFalse($collector->is_platform_admin);
@@ -86,13 +86,13 @@ class CobrosCollectorProvisioningTest extends TestCase
         $this->assertSame('Cobrador CobrOS', $collector->roleInCompany($company)->name);
         $this->assertTrue($collector->hasPermission('cobros.acceder', $company), 'Falta permission_role cobros.acceder.');
         $this->assertTrue($collector->hasPermission('cobros.cobrar', $company), 'Falta permission_role cobros.cobrar.');
-        $this->assertTrue($company->fresh()->isModuleEnabled('cobros'), 'MÃ³dulo cobros deshabilitado.');
+        $this->assertTrue($company->fresh()->isModuleEnabled('cobros'), 'Módulo cobros deshabilitado.');
         $this->assertNotNull(app(\App\Services\Cobros\CollectorManagementService::class)->getContract($company), 'Falta contrato CobrOS.');
         $this->assertTrue($collector->companies()->where('companies.id', $company->id)->exists(), 'Sin empresa asignada.');
         $this->assertSame([$branch->id], $collector->branches()->where('branches.company_id', $company->id)->get()->pluck('id')->all(), 'Sin sucursal asignada.');
 
-        // 3) El dueÃ±o cierra sesiÃ³n en el equipo y el cobrador entra con su
-        //    contraseÃ±a temporal (mismo guard web compartido por ambos portales).
+        // 3) El dueño cierra sesión en el equipo y el cobrador entra con su
+        //    contraseña temporal (mismo guard web compartido por ambos portales).
         $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
 
         $login = $this->post(route('cobros.login.store'), ['email' => $email, 'password' => $plain]);
@@ -100,7 +100,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         $this->assertTrue((bool) auth()->user()->must_change_password, 'El flag must_change_password debe seguir activo tras el login.');
         $login->assertRedirect(route('cobros.password.force'));
 
-        // 4) Cambio forzado de contraseÃ±a.
+        // 4) Cambio forzado de contraseña.
         $this->post(route('cobros.password.force.store'), [
             'password' => 'NuevaClave7',
             'password_confirmation' => 'NuevaClave7',
@@ -141,7 +141,7 @@ class CobrosCollectorProvisioningTest extends TestCase
     }
 
     /**
-     * Un equipo con sesiÃ³n abierta (el dueÃ±o probando en el telÃ©fono del
+     * Un equipo con sesión abierta (el dueño probando en el teléfono del
      * cobrador, u otro usuario de Commerce) nunca llega al formulario de
      * login CobrOS: RedirectIfAuthenticated lo manda directo a /cobros.
      */
@@ -156,7 +156,7 @@ class CobrosCollectorProvisioningTest extends TestCase
     }
 
     /**
-     * SesiÃ³n abierta de un usuario SIN permiso CobrOS: tampoco puede ver el
+     * Sesión abierta de un usuario SIN permiso CobrOS: tampoco puede ver el
      * formulario de login y recibe un muro 403 dentro de CobrOS.
      */
     public function test_authenticated_user_without_cobros_permission_hits_a_403_wall(): void
@@ -179,7 +179,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         $service = app(CollectorManagementService::class);
 
         $this->assertTrue($owner->hasPermission('cobros.cobrar', $company));
-        $this->assertSame(0, $service->getCollectorCount($company), 'El dueÃ±o/administrador no debe consumir cupo.');
+        $this->assertSame(0, $service->getCollectorCount($company), 'El dueño/administrador no debe consumir cupo.');
         $this->assertTrue($service->canCreateCollector($company));
 
         for ($i = 1; $i <= 3; $i++) {
@@ -191,7 +191,7 @@ class CobrosCollectorProvisioningTest extends TestCase
 
         $this->assertSame(3, $service->getCollectorCount($company), 'Solo los cobradores reales cuentan.');
         $this->assertFalse($service->canCreateCollector($company));
-        $this->assertSame(4, $service->getPotentialLicenses($company), '3 cobradores + 1 dueÃ±o/admin.');
+        $this->assertSame(4, $service->getPotentialLicenses($company), '3 cobradores + 1 dueño/admin.');
     }
 
     public function test_existing_inactive_user_is_reactivated_when_registered_by_the_owner(): void
@@ -207,7 +207,7 @@ class CobrosCollectorProvisioningTest extends TestCase
             ])->assertSessionHasNoErrors()->assertRedirect();
 
         $plain = session('collector_plain_password');
-        $this->assertNotNull($plain, 'El dueÃ±o debe recibir la contraseÃ±a temporal.');
+        $this->assertNotNull($plain, 'El dueño debe recibir la contraseña temporal.');
 
         $existing->refresh();
         $this->assertTrue($existing->is_active, 'El alta debe reactivar al usuario inactivo.');
