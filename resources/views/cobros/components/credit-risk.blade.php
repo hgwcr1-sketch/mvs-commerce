@@ -13,7 +13,7 @@
     $labels = ['verde' => 'Al día', 'amarillo' => '1 cuota vencida', 'rojo' => '2 o más vencidas'];
     $text = $label ?? $labels[$level];
     $stroke = ['verde' => '#00B84A', 'amarillo' => '#EAB308', 'rojo' => '#DC2626'][$level];
-    $svgClass = $size === 'lg' ? 'h-6 w-6' : 'h-[22px] w-[22px]';
+    $svgClass = 'h-6 w-6'; // 24px: clase ya presente en el CSS compilado (evita depender de rebuild de Vite)
 @endphp
 <span class="inline-flex min-w-0 items-center gap-1.5" role="img" aria-label="Estado de crédito: {{ $text }}" title="Estado de crédito: {{ $text }}">
     {{-- Icono outline tipo usuario: cabeza circular + hombros curvos, trazo 2px, color entero del riesgo. --}}
