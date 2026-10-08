@@ -16,6 +16,22 @@ public const HEADERS = [
         'dias_credito', 'nivel_precio', 'fecha_nacimiento', 'activo', 'puntos_iniciales',
     ];
 
+    /** Plantilla simplificada CobrOS: sin tipo_cliente, nombre_comercial, nivel_precio ni puntos. */
+    public const COBROS_HEADERS = [
+        'tipo_identificacion', 'identificacion', 'nombre*', 'telefono', 'direccion', 'ruta', 'latitud', 'longitud',
+    ];
+
+    private const COBROS_HEADER_MAP = [
+        'tipo_identificacion' => 'identification_type',
+        'identificacion' => 'identification',
+        'nombre' => 'name',
+        'telefono' => 'phone',
+        'direccion' => 'address',
+        'ruta' => 'route_name',
+        'latitud' => 'latitude',
+        'longitud' => 'longitude',
+    ];
+
     private const HEADER_MAP = [
         'tipo_cliente' => 'customer_type',
         'tipo_identificacion' => 'identification_type',
@@ -43,14 +59,15 @@ public const HEADERS = [
         'email' => 'correo', 'address' => 'direccion', 'credit_limit' => 'limite_credito',
         'credit_days' => 'dias_credito', 'price_level' => 'nivel_precio',
         'birth_date' => 'fecha_nacimiento', 'is_active' => 'activo', 'initial_points' => 'puntos_iniciales',
+        'route_name' => 'ruta', 'latitude' => 'latitud', 'longitude' => 'longitud',
     ];
 
     public function __construct(private readonly PhoneNumberService $phones) {}
 
-    public function readChunk(string $path, Company $company, int $start, int $size): array
+    public function readChunk(string $path, Company $company, int $start, int $size, string $variant = 'commerce'): array
     {
         $chunk = app(CustomerImportChunkReader::class)->read($path, $start, $size);
-        $headers = $this->resolveHeaders($chunk['headers']);
+        $headers = $this->resolveHeaders($chunk['headers'], $variant);
         $rows = [];
         foreach ($chunk['rows'] as $offset => $values) {
             if (collect($values)->every(fn ($value) => trim((string) $value) === '')) {
@@ -62,22 +79,25 @@ public const HEADERS = [
                     $data[$field] = $values[$column] ?? null;
                 }
             }
-            $rows[] = $this->normalizeRow($data, $start + $offset, $company);
+            $rows[] = $this->normalizeRow($data, $start + $offset, $company, $variant);
         }
         return ['rows' => $rows, 'end' => $chunk['end'], 'last_row' => $chunk['last_row']];
     }
-    private function resolveHeaders(array $headers): array
+    private function resolveHeaders(array $headers, string $variant = 'commerce'): array
     {
+        $map = $variant === 'cobros' ? self::COBROS_HEADER_MAP : self::HEADER_MAP;
+        $required = $variant === 'cobros' ? ['name'] : ['customer_type', 'name'];
         $resolved = [];
         foreach ($headers as $column => $header) {
             $key = trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
-            $resolved[$column] = self::HEADER_MAP[$key] ?? null;
+            $resolved[$column] = $map[$key] ?? null;
         }
 
-        foreach (['customer_type', 'name'] as $required) {
-            if (! in_array($required, $resolved, true)) {
+        foreach ($required as $field) {
+            if (! in_array($field, $resolved, true)) {
+                $label = array_search($field, $map, true);
                 throw ValidationException::withMessages([
-                    'customer_file' => 'Falta la columna obligatoria '.array_search($required, self::HEADER_MAP, true).'. Descargue la plantilla vigente.',
+                    'customer_file' => 'Falta la columna obligatoria '.($label === false ? $field : $label).'. Descargue la plantilla vigente.',
                 ]);
             }
         }
@@ -85,7 +105,7 @@ public const HEADERS = [
         return $resolved;
     }
 
-    private function normalizeRow(array $data, int $rowNumber, Company $company): array
+    private function normalizeRow(array $data, int $rowNumber, Company $company, string $variant = 'commerce'): array
     {
         $companyCode = $company->default_phone_country_code;
         $countryCode = $this->phones->normalizeCountryCode($this->nullable($data['phone_country_code'] ?? null));
@@ -97,10 +117,13 @@ public const HEADERS = [
         [$name, $nameWarning] = $this->normalizeLegacyText(trim((string) ($data['name'] ?? '')), 'nombre');
         [$commercialName, $commercialNameWarning] = $this->normalizeLegacyText($this->nullable($data['commercial_name'] ?? null), 'nombre_comercial');
         [$address, $addressWarning] = $this->normalizeLegacyText($this->nullable($data['address'] ?? null), 'direccion');
+        $isCobros = $variant === 'cobros';
 
 return [
             'row_number' => $rowNumber,
-            'customer_type' => Str::lower(trim((string) ($data['customer_type'] ?? ''))),
+            'customer_type' => $isCobros
+                ? 'individual'
+                : Str::lower(trim((string) ($data['customer_type'] ?? ''))),
             'identification_type' => $this->normalizeIdentificationType($data['identification_type'] ?? null),
             'identification' => $this->nullable($data['identification'] ?? null),
             'name' => $name,
@@ -119,6 +142,9 @@ return [
             'birth_date' => $birthDate,
             'is_active' => $this->booleanValue($data['is_active'] ?? null),
             'initial_points' => $this->nullable($data['initial_points'] ?? null) ?? '0',
+            'route_name' => $isCobros ? $this->nullable($data['route_name'] ?? null) : null,
+            'latitude' => $isCobros ? $this->nullable($data['latitude'] ?? null) : null,
+            'longitude' => $isCobros ? $this->nullable($data['longitude'] ?? null) : null,
             'warnings' => array_values(array_filter([
                 $phoneWarning, $mobileWarning, $birthDateWarning, $emailWarning,
                 $nameWarning, $commercialNameWarning, $addressWarning,
@@ -126,9 +152,9 @@ return [
         ];
     }
 
-public function errors(array $row): array
+    public function errors(array $row, string $variant = 'commerce'): array
     {
-            $validator = Validator::make($row, [
+            $rules = [
                 'customer_type' => ['required', 'in:individual,company'],
                 'identification_type' => ['nullable', 'in:01,02,03,04,05'],
                 'identification' => ['nullable', 'string', 'max:50'],
@@ -146,8 +172,13 @@ public function errors(array $row): array
                 'birth_date' => ['nullable', 'date_format:Y-m-d'],
                 'is_active' => ['required', 'boolean'],
                 'initial_points' => ['required', 'regex:/^\d{1,15}(\.\d{1,4})?$/'],
-            ], [], self::FIELD_LABELS);
-
+            ];
+            if ($variant === 'cobros') {
+                $rules['route_name'] = ['nullable', 'string', 'max:100'];
+                $rules['latitude'] = ['nullable', 'numeric', 'between:-90,90'];
+                $rules['longitude'] = ['nullable', 'numeric', 'between:-180,180'];
+            }
+            $validator = Validator::make($row, $rules, [], self::FIELD_LABELS);
 
         $errors = [];
         foreach ($validator->errors()->messages() as $field => $messages) {
@@ -158,10 +189,19 @@ public function errors(array $row): array
         return $errors;
     }
 
-    public function attributes(array $row): array
+    public function attributes(array $row, string $variant = 'commerce'): array
     {
-        return collect($row)->only(array_diff(array_values(self::HEADER_MAP), ['initial_points']))->all()
+        $attributes = collect($row)->only(array_diff(array_values(self::HEADER_MAP), ['initial_points']))->all()
             + ['accepts_email_invoice' => true, 'points' => 0];
+        if ($variant === 'cobros') {
+            foreach (['latitude', 'longitude'] as $gpsField) {
+                if (($row[$gpsField] ?? null) !== null) {
+                    $attributes[$gpsField] = $row[$gpsField];
+                }
+            }
+        }
+
+        return $attributes;
     }
     private function nullable(mixed $value): ?string
     {

@@ -24,7 +24,7 @@
 
     <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <h2 class="font-bold">1. Cargar archivo</h2>
-        <p class="mt-1 text-sm text-slate-600">Formatos: .xlsx, .xls o .csv. Identificación 01–05, fechas AAAA-MM-DD. Los clientes existentes y los duplicados se ignoran sin modificar datos.</p>
+        <p class="mt-1 text-sm text-slate-600">Formatos: .xlsx, .xls o .csv. Identificación: 01 Cédula Física, 02 Cédula Jurídica, 03 DIMEX, 04 NITE. Ruta y GPS opcionales. Los clientes existentes y los duplicados se ignoran sin modificar datos.</p>
         <form action="{{ route('cobros.owner.customers.import.preview') }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
             @csrf
             <div>

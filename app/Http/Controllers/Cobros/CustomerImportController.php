@@ -27,7 +27,7 @@ class CustomerImportController extends Controller
 
     public function template(MigrationTemplateService $templates)
     {
-        $spreadsheet = $templates->make('customers', $this->activeCompany()->id);
+        $spreadsheet = $templates->make('customers', $this->activeCompany()->id, 'cobros');
         $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(
@@ -49,7 +49,7 @@ class CustomerImportController extends Controller
             'customer_file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
         ]);
         $companyId = $this->activeCompany()->id;
-        $run = $import->upload($request->file('customer_file'), $companyId, (int) $request->user()->id);
+        $run = $import->upload($request->file('customer_file'), $companyId, (int) $request->user()->id, 'cobros');
         session(['cobros_customer_import_preview' => ['company_id' => $companyId, 'run_id' => $run->id]]);
 
         return $this->status($request, $run->id);

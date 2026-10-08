@@ -18,9 +18,9 @@ class MigrationTemplateService
 {
     private const LAST_INPUT_ROW = 251;
 
-    public function make(string $type, int $companyId): Spreadsheet
+    public function make(string $type, int $companyId, ?string $variant = null): Spreadsheet
     {
-        $definition = $this->definition($type, $companyId);
+        $definition = $this->definition($type, $companyId, $variant);
         $spreadsheet = new Spreadsheet;
         $data = $spreadsheet->getActiveSheet();
         $data->setTitle($definition['title']);
@@ -54,8 +54,13 @@ class MigrationTemplateService
         }
         $instructions->freezePane('A2');
         if ($type === 'customers') {
-            $instructions->setCellValue('A20', 'Modo seguro: Crear solo clientes nuevos. Existentes y duplicados se ignoran sin modificar datos ni puntos.');
-            $instructions->setCellValue('A21', 'Las 250 filas preparadas no son un límite. Agregue las filas necesarias; puntos_iniciales es opcional y vale 0 por defecto.');
+            if ($variant === 'cobros') {
+                $instructions->setCellValue('A20', 'Modo seguro: Solo se crean clientes nuevos. Identificación: 01 Cédula Física, 02 Cédula Jurídica, 03 DIMEX, 04 NITE.');
+                $instructions->setCellValue('A21', 'La ruta es opcional y debe corresponder a una ruta activa (se valida al importar); la asignación del cliente a un cobrador se realiza en Cartera. Latitud/longitud GPS son opcionales.');
+            } else {
+                $instructions->setCellValue('A20', 'Modo seguro: Crear solo clientes nuevos. Existentes y duplicados se ignoran sin modificar datos ni puntos.');
+                $instructions->setCellValue('A21', 'Las 250 filas preparadas no son un límite. Agregue las filas necesarias; puntos_iniciales es opcional y vale 0 por defecto.');
+            }
         }
         $instructions->setAutoFilter('A1:E'.(count($definition['fields']) + 1));
         $instructions->getStyle('A1:E1')->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
@@ -100,9 +105,26 @@ class MigrationTemplateService
         return $spreadsheet;
     }
 
-    private function definition(string $type, int $companyId): array
+    private function definition(string $type, int $companyId, ?string $variant = null): array
     {
         $yesNo = ['Sí', 'No'];
+        if ($type === 'customers' && $variant === 'cobros') {
+            return [
+                'title' => 'Clientes CobrOS',
+                'headers' => CustomerImportService::COBROS_HEADERS,
+                'fields' => $this->fields(CustomerImportService::COBROS_HEADERS, [
+                    'tipo_identificacion' => ['text', 'Texto (conservar ceros)', '01 = Cédula Física; 02 = Cédula Jurídica; 03 = DIMEX; 04 = NITE', '01'],
+                    'identificacion' => ['text', 'Texto (no usar notación científica)', null, '001234567'],
+                    'nombre' => ['text', 'Texto', null, 'María Rodríguez'],
+                    'telefono' => ['text', 'Texto de 4 a 15 dígitos', null, '22220000'],
+                    'direccion' => ['text', 'Texto', null, 'San José, Costa Rica'],
+                    'ruta' => ['text', 'Nombre exacto de una ruta activa de la empresa; la asignación a un cobrador se realiza en Cartera', null, 'Ruta Norte'],
+                    'latitud' => ['number', 'Decimal entre -90 y 90 (opcional)', null, '9.93141000', '0.00000000'],
+                    'longitud' => ['number', 'Decimal entre -180 y 180 (opcional)', null, '-84.07794000', '0.00000000'],
+                ]),
+                'lists' => ['tipo_identificacion' => ['01', '02', '03', '04']],
+            ];
+        }
         $definitions = [
             'customers' => ['title' => 'Clientes', 'headers' => CustomerImportService::HEADERS, 'fields' => $this->fields(CustomerImportService::HEADERS, [
                 'tipo_cliente' => ['text', 'Texto', 'individual, company', 'individual'],

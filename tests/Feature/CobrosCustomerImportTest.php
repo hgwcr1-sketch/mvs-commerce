@@ -134,6 +134,92 @@ class CobrosCustomerImportTest extends TestCase
         );
     }
 
+    public function test_simplified_template_hides_core_only_columns_and_shows_identification_codes(): void
+    {
+        [$company] = $this->context(['cobros.acceder', 'cobros.portal_dueno', 'clientes.crear']);
+
+        $template = app(\App\Services\Imports\MigrationTemplateService::class)->make('customers', $company->id, 'cobros');
+        $headers = $template->getActiveSheet()->toArray(null, true, false, false);
+        $this->assertSame(CustomerImportService::COBROS_HEADERS, $headers[0]);
+        foreach (['tipo_cliente', 'nombre_comercial', 'nivel_precio', 'puntos_iniciales'] as $removed) {
+            $this->assertNotContains($removed, $headers[0]);
+        }
+
+        $instructions = $template->getSheetByName('INSTRUCCIONES')->toArray(null, true, false, false);
+        $allowed = collect($instructions)->flatten(1)->implode(' ');
+        $this->assertStringContainsString('01 = Cédula Física; 02 = Cédula Jurídica; 03 = DIMEX; 04 = NITE', $allowed);
+        $this->assertStringNotContainsString('05', $allowed);
+
+        // Commerce sigue recibiendo la plantilla completa por defecto.
+        $commerce = app(\App\Services\Imports\MigrationTemplateService::class)->make('customers', $company->id);
+        $this->assertSame(
+            array_map(fn ($h) => rtrim($h, '*'), CustomerImportService::HEADERS),
+            array_map(fn ($h) => rtrim($h, '*'), $commerce->getActiveSheet()->toArray(null, true, false, false)[0])
+        );
+    }
+
+    public function test_simplified_csv_imports_with_defaults_gps_and_active_route(): void
+    {
+        [$company, $branch, $owner] = $this->context(['cobros.acceder', 'cobros.portal_dueno', 'clientes.crear']);
+        $session = ['active_company_id' => $company->id, 'active_branch_id' => $branch->id];
+        \App\Models\CobrosRoute::create(['company_id' => $company->id, 'name' => 'Ruta Norte', 'active' => true]);
+
+        $file = $this->cobrosCsv([
+            ['01', '2'.random_int(100000000, 999999999), 'María José Núñez', '88881234', 'Alajuela, CR', 'Ruta Norte', '9.93141000', '-84.07794000'],
+            ['02', '3'.random_int(100000000, 999999999), 'Empresa Ñandú S.A.', '22223333', 'San José, CR', '', '', ''],
+        ]);
+
+        $this->actingAs($owner)->withSession($session)
+            ->post(route('cobros.owner.customers.import.preview'), ['customer_file' => $this->uploaded($file, 'cobros.csv', 'text/csv')])
+            ->assertOk()
+            ->assertSee('María José Núñez')
+            ->assertSee('Listo para revisar');
+
+        $run = CustomerImportRun::where('company_id', $company->id)->firstOrFail();
+        $this->assertSame('cobros', $run->variant);
+        $this->post(route('cobros.owner.customers.import.confirm'), ['run_id' => $run->id])
+            ->assertRedirect(route('cobros.owner.customers.import.status', $run->id));
+
+        $first = Customer::where('company_id', $company->id)->where('identification_type', '01')->firstOrFail();
+        $this->assertSame('María José Núñez', $first->name);
+        $this->assertSame('individual', $first->customer_type);
+        $this->assertEquals(0, (float) $first->credit_limit);
+        $this->assertEqualsWithDelta(9.93141, (float) $first->latitude, 0.000001);
+        $this->assertEqualsWithDelta(-84.07794, (float) $first->longitude, 0.000001);
+        $second = Customer::where('company_id', $company->id)->where('identification_type', '02')->firstOrFail();
+        $this->assertSame('Empresa Ñandú S.A.', $second->name);
+        $this->assertNull($second->latitude);
+        $this->assertSame(2, Customer::where('company_id', $company->id)->count());
+        $this->assertSame(0, Customer::where('company_id', \App\Models\Company::create([
+            'trade_name' => 'Ajena '.uniqid(), 'currency' => 'CRC', 'timezone' => 'America/Costa_Rica',
+            'default_phone_country_code' => '+506', 'is_active' => true,
+        ])->id)->count());
+    }
+
+    public function test_invalid_gps_and_unknown_route_become_row_errors_without_creating_customers(): void
+    {
+        [$company, $branch, $owner] = $this->context(['cobros.acceder', 'cobros.portal_dueno', 'clientes.crear']);
+        $session = ['active_company_id' => $company->id, 'active_branch_id' => $branch->id];
+
+        $file = $this->cobrosCsv([
+            ['01', '4'.random_int(100000000, 999999999), 'Cliente GPS Malo', '88880001', '', '', '200', ''],
+            ['01', '4'.random_int(100000000, 999999999), 'Cliente Ruta Mal', '88880002', '', 'Ruta Inexistente '.uniqid(), '', ''],
+        ]);
+
+        $this->actingAs($owner)->withSession($session)
+            ->post(route('cobros.owner.customers.import.preview'), ['customer_file' => $this->uploaded($file, 'cobros-errores.csv', 'text/csv')])
+            ->assertOk()
+            ->assertSee('Cliente GPS Malo')
+            ->assertSee('Cliente Ruta Mal');
+
+        $run = CustomerImportRun::where('company_id', $company->id)->firstOrFail();
+        $run->refresh();
+        $this->assertSame(2, $run->error_count);
+        $this->post(route('cobros.owner.customers.import.confirm'), ['run_id' => $run->id])
+            ->assertRedirect(route('cobros.owner.customers.import.status', $run->id));
+        $this->assertSame(0, Customer::where('company_id', $company->id)->count());
+    }
+
     private function context(array $permissions): array
     {
         $company = Company::create([
@@ -179,9 +265,21 @@ class CobrosCustomerImportTest extends TestCase
         return $path;
     }
 
-    private function uploaded(string $path): UploadedFile
+    private function cobrosCsv(array $dataRows): string
     {
-        return new UploadedFile($path, 'clientes.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+        $path = tempnam(sys_get_temp_dir(), 'cobros-customers-simple-').'.csv';
+        $lines = [implode(',', array_map(fn ($h) => rtrim($h, '*'), CustomerImportService::COBROS_HEADERS))];
+        foreach ($dataRows as $row) {
+            $lines[] = implode(',', array_map(fn ($v) => '"'.str_replace('"', '""', (string) $v).'"', $row));
+        }
+        file_put_contents($path, implode("\n", $lines));
+
+        return $path;
+    }
+
+    private function uploaded(string $path, string $name = 'clientes.xlsx', string $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'): UploadedFile
+    {
+        return new UploadedFile($path, $name, $mime, null, true);
     }
 }
 
