@@ -40,7 +40,7 @@ class CustomerImportRunService
             'fingerprint' => hash_file('sha256', $file->getRealPath()),
             'original_filename' => mb_substr(basename($file->getClientOriginalName()), 0, 255),
             'private_file_path' => $path, 'status' => 'uploaded',
-            'variant' => $variant === 'cobros' ? 'cobros' : null,
+            'variant' => in_array($variant, ['cobros', 'cobros_ruta'], true) ? $variant : null,
         ]);
         ProcessCustomerImport::dispatch($run->id, $companyId)->afterCommit();
 
@@ -113,7 +113,7 @@ class CustomerImportRunService
         if (! file_exists($path)) {
             throw ValidationException::withMessages(['customer_file' => 'El archivo temporal no existe. Vuelva a cargar el archivo.']);
         }
-        $variant = $run->variant === 'cobros' ? 'cobros' : 'commerce';
+        $variant = in_array($run->variant, ['cobros', 'cobros_ruta'], true) ? $run->variant : 'commerce';
         $chunk = $this->import->readChunk($path, $company, max(2, $run->current_row + 1), self::CHUNK_SIZE, $variant);
         $code = $company->default_phone_country_code;
         $existing = $this->identities->customers($chunk['rows'], $company->id, $code);
@@ -129,7 +129,7 @@ class CustomerImportRunService
             }
             $classification = $this->classify($data, $matches, $this->identities->matches($fileIndex, $keys), $variant);
             if ($classification['kind'] === 'new') {
-                $classification = $this->classifyRoute($company, $data, $classification, $variant);
+                $classification = $this->classifyRoute($company, $data, $classification, $variant, (int) $run->user_id);
             }
             if ($classification['kind'] === 'new') {
                 $this->identities->add($fileIndex, $keys, $data['row_number']);
@@ -176,22 +176,39 @@ class CustomerImportRunService
         return $result;
     }
 
-    /** Variante CobrOS: la columna ruta debe nombrar una ruta activa de la empresa si se indica. */
-    private function classifyRoute(Company $company, array $data, array $classification, string $variant): array
+    /** Variantes CobrOS: la ruta debe nombrar una ruta activa; en cobros_ruta solo del miembro (run user). */
+    private function classifyRoute(Company $company, array $data, array $classification, string $variant, int $collectorUserId = 0): array
     {
         $routeName = trim((string) ($data['route_name'] ?? ''));
-        if ($variant !== 'cobros' || $routeName === '') {
+        if (! in_array($variant, ['cobros', 'cobros_ruta'], true) || $routeName === '') {
             return $classification;
         }
-        $exists = \App\Models\CobrosRoute::query()
+        $query = \App\Models\CobrosRoute::query()
             ->where('company_id', $company->id)->where('active', true)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($routeName)])
-            ->exists();
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($routeName)]);
+        $route = $query->first();
+        if ($route === null) {
+            return array_replace($classification, [
+                'kind' => 'error',
+                'reason' => 'ruta: La ruta indicada no existe o no está activa en esta empresa.',
+            ]);
+        }
+        if ($variant === 'cobros_ruta') {
+            $member = \App\Models\CobrosRouteUser::query()
+                ->where('company_id', $company->id)
+                ->where('cobros_route_id', $route->id)
+                ->where('user_id', $collectorUserId)
+                ->where('active', true)
+                ->exists();
+            if (! $member) {
+                return array_replace($classification, [
+                    'kind' => 'error',
+                    'reason' => 'ruta: La ruta no está autorizada para el cobrador.',
+                ]);
+            }
+        }
 
-        return $exists ? $classification : array_replace($classification, [
-            'kind' => 'error',
-            'reason' => 'ruta: La ruta indicada no existe o no está activa en esta empresa.',
-        ]);
+        return $classification;
     }
 
     private function fileIndex(CustomerImportRun $run, array $dataRows, ?string $code): array
@@ -239,7 +256,7 @@ class CustomerImportRunService
         $existing = $this->identities->customers($candidates->pluck('data')->all(), $company->id, $company->default_phone_country_code);
         $prior = $this->priorCreatedRows($run, $candidates->pluck('source_row')->all());
         $codes = $this->publicCodes($company->id, $candidates->count());
-        $variant = $run->variant === 'cobros' ? 'cobros' : 'commerce';
+        $variant = in_array($run->variant, ['cobros', 'cobros_ruta'], true) ? $run->variant : 'commerce';
         $pointEntries = [];
         foreach ($rows as $row) {
             if ($row->kind === 'new') {

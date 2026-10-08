@@ -272,6 +272,25 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.cobrar')->name('collector.creditos.comprobante');
     Route::get('/collector/creditos/{credit}/comprobante.pdf', [CollectorCreditDeliveryController::class, 'pdf'])
         ->middleware('permission:cobros.cobrar')->name('collector.creditos.comprobante_pdf');
+    // 13-1A - importación DIRECTA del cobrador (solo sus rutas; aviso al prestamista).
+    Route::get('/collector/customers/importar', [App\Http\Controllers\Cobros\CollectorCustomerImportController::class, 'index'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.import');
+    Route::get('/collector/customers/importar/plantilla', [App\Http\Controllers\Cobros\CollectorCustomerImportController::class, 'template'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.import.template');
+    Route::post('/collector/customers/importar/vista-previa', [App\Http\Controllers\Cobros\CollectorCustomerImportController::class, 'preview'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.customers.import.preview');
+    Route::post('/collector/customers/importar/confirmar', [App\Http\Controllers\Cobros\CollectorCustomerImportController::class, 'confirm'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.customers.import.confirm');
+    Route::get('/collector/customers/importar/ejecuciones/{run}', [App\Http\Controllers\Cobros\CollectorCustomerImportController::class, 'status'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.import.status');
+    Route::get('/collector/credits/importar', [App\Http\Controllers\Cobros\CollectorCreditImportController::class, 'index'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credits.import');
+    Route::get('/collector/credits/importar/plantilla', [App\Http\Controllers\Cobros\CollectorCreditImportController::class, 'template'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credits.import.template');
+    Route::post('/collector/credits/importar/vista-previa', [App\Http\Controllers\Cobros\CollectorCreditImportController::class, 'preview'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credits.import.preview');
+    Route::post('/collector/credits/importar/confirmar', [App\Http\Controllers\Cobros\CollectorCreditImportController::class, 'confirm'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credits.import.confirm');
     Route::get('/visits/today', [VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
     Route::get('/visits/customer/{customer}', [VisitController::class, 'customerHistory'])
@@ -337,6 +356,11 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.reports');
     Route::get('/owner/alerts', [CobrosAlertController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.alerts');
+    // 13-1A - aviso «Migración pendiente de revisar» (importaciones directas de cobradores).
+    Route::get('/owner/migraciones', [App\Http\Controllers\Cobros\MigrationNoticeController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.migrations.notices');
+    Route::post('/owner/migraciones/{notice}/revisada', [App\Http\Controllers\Cobros\MigrationNoticeController::class, 'review'])
+        ->middleware(['permission:cobros.portal_dueno', 'throttle:30,1'])->name('owner.migrations.notices.review');
     // BLOQUE 8 - verificacion de solicitudes de credito del dueno/prestamista.
     Route::middleware('permission:cobros.portal_dueno')->prefix('owner/solicitudes')->name('owner.solicitudes')->group(function () {
         Route::get('/', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'index'])->name('.index');

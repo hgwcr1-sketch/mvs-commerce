@@ -8,6 +8,7 @@
         <div>
             <a href="{{ route('cobros.owner.customers') }}" class="inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-700">← Clientes</a>
             <h1 class="mt-1 text-2xl font-bold sm:text-3xl">Importar créditos históricos</h1>
+            <a href="{{ route('cobros.owner.migrations.notices') }}" class="inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-700">Migración pendiente de revisar</a>
             <p class="mt-1 text-sm text-slate-500">Carga desde Excel o CSV para {{ $company->trade_name }}. Cada fila crea su propia CxC; las reimportaciones no duplican registros.</p>
         </div>
         <a href="{{ route('cobros.owner.credits.import.template') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold hover:bg-slate-50">Descargar plantilla</a>

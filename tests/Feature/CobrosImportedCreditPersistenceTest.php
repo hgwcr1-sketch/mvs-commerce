@@ -21,8 +21,10 @@ use Tests\TestCase;
 
 /**
  * 12B — persistencia de créditos históricos importados por el PRESTAMISTA:
- * - Importa SIN migración 5A/5B abierta (solo con cobros.portal_dueno).
- * - Cobrador sin autorización => 403; empresa activa debe coincidir.
+ * - Importa SIN migración 5A/5B abierta (dueño con portal_dueno, o 13-1A: un
+ *   cobrador con cobros.cobrar + ruta activa en sesión + miembro activo).
+ * - Cobrador sin autorización (sin cobrar, sin ruta en sesión, o no miembro) => 403;
+ *   la empresa activa debe coincidir.
  * - Varios créditos por cliente => UNA CxC independiente por referencia.
  * - Idempotencia por (empresa, external_reference); datos distintos => conflicto.
  * - Conserva monto original, saldo, cuota, frecuencia y vencimiento.
@@ -115,14 +117,46 @@ class CobrosImportedCreditPersistenceTest extends TestCase
         ]);
     }
 
-    public function test_collector_without_owner_permission_cannot_import(): void
+    public function test_collector_import_requires_cobrar_route_session_and_membership(): void
     {
         [$company, , $collector, $route] = $this->context();
+
+        // Cobrador con cobros.cobrar PERO sin ruta activa en sesión => 403.
+        $this->session(['active_company_id' => $company->id, 'active_cobros_route_id' => null]);
+        try {
+            $this->import($company, $collector, $this->payload());
+            $this->fail('Se esperaba 403 para cobrador sin ruta activa en sesión.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        // Ruta activa en sesión pero el cobrador NO es miembro de esa ruta => 403.
+        $otherRoute = CobrosRoute::create(['company_id' => $company->id, 'name' => 'Ajena '.uniqid(), 'active' => true]);
+        $this->sessionFor($company, $otherRoute);
+        try {
+            $this->import($company, $collector, $this->payload());
+            $this->fail('Se esperaba 403 para cobrador no miembro de la ruta activa.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        // Miembro activo con ruta en sesión => AHORA autorizado (13-1A) e importa.
+        $this->sessionFor($company, $route);
+        $record = $this->import($company, $collector, $this->payload());
+        $this->assertNotNull($record->id);
+        $this->assertDatabaseCount('cobros_initial_portfolio_records', 1);
+        $this->assertDatabaseCount('accounts_receivable', 1);
+    }
+
+    public function test_user_without_cobrar_or_owner_permission_cannot_import(): void
+    {
+        [$company, , , $route] = $this->context();
+        $plain = $this->userIn($company, ['cobros.acceder']); // sin cobrar ni portal_dueno
         $this->sessionFor($company, $route);
 
         try {
-            $this->import($company, $collector, $this->payload());
-            $this->fail('Se esperaba 403 para el cobrador sin portal_dueno.');
+            $this->import($company, $plain, $this->payload());
+            $this->fail('Se esperaba 403 para usuario sin derecho de cobrar.');
         } catch (HttpException $e) {
             $this->assertSame(403, $e->getStatusCode());
         }

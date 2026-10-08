@@ -126,6 +126,28 @@ class CreditImportController extends Controller
             if ($mapped === null) {
                 continue; // Fila completamente vacía.
             }
+            if ($this->routeRequired() && trim((string) ($mapped['route_name'] ?? '')) === '') {
+                $results[] = [
+                    'line' => $index + 2,
+                    'data' => $mapped,
+                    'status' => 'invalid',
+                    'errors' => ['ruta: La ruta es obligatoria para el cobrador.'],
+                ];
+                continue;
+            }
+            if ($this->validateRoutesInPreview()) {
+                try {
+                    $this->applyRoute($company, $request, $mapped);
+                } catch (ValidationException $e) {
+                    $results[] = [
+                        'line' => $index + 2,
+                        'data' => $mapped,
+                        'status' => 'invalid',
+                        'errors' => collect($e->errors())->flatten()->all(),
+                    ];
+                    continue;
+                }
+            }
             $check = $engine->inspectImportRow($company, $mapped);
             $results[] = [
                 'line' => $index + 2,
@@ -174,6 +196,15 @@ class CreditImportController extends Controller
             if ($mapped === null) {
                 continue;
             }
+            if ($this->routeRequired() && trim((string) ($mapped['route_name'] ?? '')) === '') {
+                $results[] = [
+                    'line' => $index + 2,
+                    'data' => $mapped,
+                    'status' => 'invalid',
+                    'errors' => ['ruta: La ruta es obligatoria para el cobrador.'],
+                ];
+                continue;
+            }
 
             try {
                 $this->applyRoute($company, $request, $mapped);
@@ -205,6 +236,7 @@ class CreditImportController extends Controller
 
         Storage::disk('local')->delete($state['path']);
         session()->forget('cobros_credit_import');
+        $this->afterConfirm($request, $results);
 
         return view('cobros.owner.credit-import-results', [
             'company' => $company,
@@ -213,8 +245,25 @@ class CreditImportController extends Controller
         ]);
     }
 
+    /** 13-1A: el dueño no exige ruta; el cobrador sí (ver CollectorCreditImportController). */
+    protected function routeRequired(): bool
+    {
+        return false;
+    }
+
+    /** 13-1A: el cobrador valida la pertenencia de la ruta ya en la vista previa. */
+    protected function validateRoutesInPreview(): bool
+    {
+        return false;
+    }
+
+    /** Gancho 13-1A para avisos posteriores a la confirmación (no usado por el dueño). */
+    protected function afterConfirm(Request $request, array $results): void
+    {
+    }
+
     /** @return array{headers: array<int, mixed>, rows: array<int, array<int, mixed>>, last_row: int} */
-    private function readRows(CustomerImportChunkReader $reader, string $path): array
+    protected function readRows(CustomerImportChunkReader $reader, string $path): array
     {
         try {
             $data = $reader->read($path, 2, self::MAX_ROWS);
@@ -236,7 +285,7 @@ class CreditImportController extends Controller
      * @param  array<int, mixed>  $raw
      * @return array<string, mixed>|null null si la fila está vacía
      */
-    private function mapRow(array $headers, array $raw): ?array
+    protected function mapRow(array $headers, array $raw): ?array
     {
         $mapped = [];
         foreach ($headers as $column => $header) {
@@ -260,7 +309,7 @@ class CreditImportController extends Controller
      *
      * @param  array<string, mixed>  $data
      */
-    private function applyRoute(Company $company, Request $request, array $data): void
+    protected function applyRoute(Company $company, Request $request, array $data): void
     {
         $name = trim((string) ($data['route_name'] ?? ''));
         if ($name === '') {
@@ -283,7 +332,7 @@ class CreditImportController extends Controller
     }
 
     /** @param  array<int, array<string, mixed>>  $results */
-    private function totals(array $results): array
+    protected function totals(array $results): array
     {
         $totals = ['ready' => 0, 'imported' => 0, 'duplicate' => 0, 'conflict' => 0, 'invalid' => 0, 'error' => 0];
         foreach ($results as $row) {
@@ -293,7 +342,7 @@ class CreditImportController extends Controller
         return $totals;
     }
 
-    private function activeCompany(): Company
+    protected function activeCompany(): Company
     {
         $company = Company::find((int) session('active_company_id', 0));
         abort_if($company === null, 403, 'Seleccione una empresa activa.');

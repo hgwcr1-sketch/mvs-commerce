@@ -67,8 +67,7 @@ public const HEADERS = [
     public function readChunk(string $path, Company $company, int $start, int $size, string $variant = 'commerce'): array
     {
         $chunk = app(CustomerImportChunkReader::class)->read($path, $start, $size);
-        $headers = $this->resolveHeaders($chunk['headers'], $variant);
-        $rows = [];
+        $headers = $this->resolveHeaders($chunk['headers'], $variant);        $rows = [];
         foreach ($chunk['rows'] as $offset => $values) {
             if (collect($values)->every(fn ($value) => trim((string) $value) === '')) {
                 continue;
@@ -85,8 +84,8 @@ public const HEADERS = [
     }
     private function resolveHeaders(array $headers, string $variant = 'commerce'): array
     {
-        $map = $variant === 'cobros' ? self::COBROS_HEADER_MAP : self::HEADER_MAP;
-        $required = $variant === 'cobros' ? ['name'] : ['customer_type', 'name'];
+        $map = in_array($variant, ['cobros', 'cobros_ruta'], true) ? self::COBROS_HEADER_MAP : self::HEADER_MAP;
+        $required = $variant === 'cobros' || $variant === 'cobros_ruta' ? ['name'] : ['customer_type', 'name'];
         $resolved = [];
         foreach ($headers as $column => $header) {
             $key = trim(Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '*'], ['_', '_', ''])->toString(), '_');
@@ -117,7 +116,7 @@ public const HEADERS = [
         [$name, $nameWarning] = $this->normalizeLegacyText(trim((string) ($data['name'] ?? '')), 'nombre');
         [$commercialName, $commercialNameWarning] = $this->normalizeLegacyText($this->nullable($data['commercial_name'] ?? null), 'nombre_comercial');
         [$address, $addressWarning] = $this->normalizeLegacyText($this->nullable($data['address'] ?? null), 'direccion');
-        $isCobros = $variant === 'cobros';
+        $isCobros = in_array($variant, ['cobros', 'cobros_ruta'], true);
 
 return [
             'row_number' => $rowNumber,
@@ -173,8 +172,10 @@ return [
                 'is_active' => ['required', 'boolean'],
                 'initial_points' => ['required', 'regex:/^\d{1,15}(\.\d{1,4})?$/'],
             ];
-            if ($variant === 'cobros') {
-                $rules['route_name'] = ['nullable', 'string', 'max:100'];
+            if (in_array($variant, ['cobros', 'cobros_ruta'], true)) {
+                $rules['route_name'] = $variant === 'cobros_ruta'
+                    ? ['required', 'string', 'max:100']
+                    : ['nullable', 'string', 'max:100'];
                 $rules['latitude'] = ['nullable', 'numeric', 'between:-90,90'];
                 $rules['longitude'] = ['nullable', 'numeric', 'between:-180,180'];
             }
@@ -193,7 +194,7 @@ return [
     {
         $attributes = collect($row)->only(array_diff(array_values(self::HEADER_MAP), ['initial_points']))->all()
             + ['accepts_email_invoice' => true, 'points' => 0];
-        if ($variant === 'cobros') {
+        if (in_array($variant, ['cobros', 'cobros_ruta'], true)) {
             foreach (['latitude', 'longitude'] as $gpsField) {
                 if (($row[$gpsField] ?? null) !== null) {
                     $attributes[$gpsField] = $row[$gpsField];

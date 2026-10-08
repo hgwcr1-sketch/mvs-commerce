@@ -139,8 +139,21 @@ class InitialPortfolioRecordService
         if ((int) session('active_company_id', 0) !== (int) $company->id) {
             abort(403, 'La empresa activa no corresponde a la importación.');
         }
-        if (! $user->hasPermission('cobros.portal_dueno', $company)) {
-            abort(403, 'Solo el prestamista puede importar créditos históricos.');
+        // 13-1A: el prestamista (portal_dueno) importa directo; un cobrador solo
+        // con ruta propia validada en sesión (active_cobros_route_id + miembro activo).
+        $isOwner = $user->hasPermission('cobros.portal_dueno', $company);
+        $routeId = (int) session('active_cobros_route_id', 0);
+        $collectorAuthorized = ! $isOwner
+            && $user->hasPermission('cobros.cobrar', $company)
+            && $routeId > 0
+            && \App\Models\CobrosRouteUser::query()
+                ->where('company_id', $company->id)
+                ->where('cobros_route_id', $routeId)
+                ->where('user_id', $user->id)
+                ->where('active', true)
+                ->exists();
+        if (! $isOwner && ! $collectorAuthorized) {
+            abort(403, 'Solo el prestamista o un cobrador autorizado puede importar créditos históricos.');
         }
 
         $reference = $this->validateImport($data);
