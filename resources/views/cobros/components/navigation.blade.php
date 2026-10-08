@@ -49,26 +49,37 @@
         fn (array $item) => $item['slot'] === 'bar'
     )) > 0;
 
-    // Barra inferior: gestión = solo 'bar'; cobrador puro = sus items
-    // 'collector' (Agenda hoy, Mi cartera, Mis clientes, Cierre del día).
-    // Panel "Más": lo demás autorizado (Mis recibos, Mis solicitudes,
-    // Mis préstamos, etc.). Sin duplicados gracias a alternativeOf.
-    $navQuickBar = [];
-    if (! $panel && ! $navigationHasManagement) {
-        try { $navQuickBar = app(\App\Services\Cobros\CobrosQuickNavService::class)->barRoutes($navigationUser, array_column(array_filter($navigationAllowed, fn (array $x) => $x['slot'] === 'collector'), 'route')); } catch (\Throwable $e) { $navQuickBar = []; }
-        if ($navQuickBar !== []) {
-            $navByRoute = []; foreach ($navigationAllowed as $ni) { $navByRoute[$ni['route']] = $ni; }
-            $navigationAllowed = array_values(array_filter(array_map(fn (string $r) => $navByRoute[$r] ?? null, array_slice($navQuickBar, 0, 4))));
-        } else {
-            $navigationAllowed = array_slice(array_values(array_filter($navigationAllowed, fn (array $x) => $x['slot'] === 'collector')), 0, 4);
+    // Barra inferior: gestión = solo 'bar'; cobrador puro = sus 4 accesos
+    // rápidos configurables. Panel "Más": lo demás autorizado, nunca lo que
+    // ya está en la barra (sin duplicados barra/Más).
+    $navigationBarItems = [];
+    $navigationPanelItems = [];
+    if ($navigationHasManagement) {
+        $navigationBarItems = array_values(array_filter($navigationAllowed, fn (array $x) => $x['slot'] === 'bar'));
+        $navigationPanelItems = array_values(array_filter($navigationAllowed, fn (array $x) => $x['slot'] !== 'bar'));
+    } else {
+        $navigationCollectorItems = array_values(array_filter($navigationAllowed, fn (array $x) => $x['slot'] === 'collector'));
+        $navigationQuickRoutes = [];
+        try {
+            $navigationQuickRoutes = app(\App\Services\Cobros\CobrosQuickNavService::class)
+                ->barRoutes($navigationUser, array_column($navigationCollectorItems, 'route'));
+        } catch (\Throwable $e) {
+            $navigationQuickRoutes = [];
         }
+        if ($navigationQuickRoutes === []) {
+            $navigationQuickRoutes = array_slice(array_column($navigationCollectorItems, 'route'), 0, 4);
+        }
+        $navigationByRoute = [];
+        foreach ($navigationCollectorItems as $navigationCollectorItem) {
+            $navigationByRoute[$navigationCollectorItem['route']] = $navigationCollectorItem;
+        }
+        $navigationBarItems = array_values(array_filter(array_map(fn (string $r) => $navigationByRoute[$r] ?? null, $navigationQuickRoutes)));
+        $navigationPanelItems = array_values(array_filter(
+            $navigationCollectorItems,
+            fn (array $x) => ! in_array($x['route'], $navigationQuickRoutes, true)
+        ));
     }
-    $navigationVisible = array_values(array_filter(
-        $navigationAllowed,
-        fn (array $item) => $panel
-            ? ($navigationHasManagement ? $item['slot'] !== 'bar' : true)
-            : ($navigationHasManagement ? $item['slot'] === 'bar' : $item['slot'] === 'collector')
-    ));
+    $navigationVisible = $panel ? $navigationPanelItems : $navigationBarItems;
 @endphp
 <nav class="{{ $panel ? 'cobros-panel-navigation' : 'cobros-navigation' }}" aria-label="{{ $panel ? 'Menú completo CobrOS' : 'Navegación CobrOS' }}">
     @foreach($navigationVisible as $item)
