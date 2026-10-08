@@ -21,10 +21,12 @@ use App\Services\Fiscal\ElectronicDocumentMailDispatcher;
 use App\Services\Fiscal\FiscalActivationService;
 use App\Services\Fiscal\FiscalConsumptionService;
 use App\Services\Fiscal\FiscalCutoffService;
+use App\Services\Fiscal\FiscalCustodyService;
 use App\Services\Fiscal\FiscalManager;
 use App\Services\Fiscal\FiscalProviderSwitchService;
 use App\Services\Fiscal\FiscalSeriesService;
 use App\Services\TaxpayerLookupService;
+use App\Support\FiscalCustodyArtifacts;
 use App\Support\IdentificationRules;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -948,7 +950,9 @@ class FiscalPortalController extends Controller
      * polling automático (credenciales de la empresa, no config global).
      * Nunca emite, nunca hace POST ni consume cuota: solo actualiza estado
      * del documento existente y, si pasa a accepted, completa custodia y
-     * CE-MAIL con la misma vía idempotente.
+     * CE-MAIL con la misma vía idempotente. En estado final aceptado con
+     * XML pendientes de custodiar, completa SOLO la descarga de artefactos
+     * (mismos GET autenticados) sin volver a consultar estado.
      */
     public function refreshDocument(ElectronicDocument $document): RedirectResponse
     {
@@ -958,6 +962,13 @@ class FiscalPortalController extends Controller
         $final = in_array($document->status, ['accepted', 'rejected'], true);
 
         if ($final) {
+            if ($document->status === 'accepted'
+                && app(FiscalCustodyService::class)->harvestArtifacts($document->fresh())) {
+                return redirect()
+                    ->route('fiscal.documents.show', $document)
+                    ->with('status', 'XML del comprobante descargado y custodiado desde el proveedor. No se emitió ningún comprobante nuevo.');
+            }
+
             return redirect()
                 ->route('fiscal.documents.show', $document)
                 ->with('status', 'Documento en estado final: no requiere consulta (sin re-emisión).');
@@ -1191,30 +1202,14 @@ class FiscalPortalController extends Controller
     }
 
     /**
-     * Sufijos de archivo para los XML realmente custodiados, separando el XML
-     * enviado (payload) del XML firmado (respuesta). Sin custodia: nada.
+     * Sufijos de archivo para los XML realmente custodiados, con la misma
+     * fuente única que CE-MAIL (FiscalCustodyArtifacts). Sin custodia: nada.
      *
      * @return array<string, string>
      */
     private function xmlArtifacts(?FiscalDocumentCustody $custody): array
     {
-        if ($custody === null) {
-            return [];
-        }
-
-        $artifacts = [];
-
-        $sent = is_array($custody->payload) ? $this->walkForXml($custody->payload) : null;
-        if ($sent !== null) {
-            $artifacts['_enviado'] = $sent;
-        }
-
-        $signed = is_array($custody->response) ? $this->walkForXml($custody->response) : null;
-        if ($signed !== null) {
-            $artifacts['_firmado'] = $signed;
-        }
-
-        return $artifacts;
+        return FiscalCustodyArtifacts::xmls($custody);
     }
 
     /**
@@ -1404,38 +1399,7 @@ class FiscalPortalController extends Controller
 
     private function findXmlInCustody(?FiscalDocumentCustody $custody): ?string
     {
-        if ($custody === null) {
-            return null;
-        }
-
-        foreach ([$custody->payload, $custody->response] as $source) {
-            if (! is_array($source)) {
-                continue;
-            }
-            $found = $this->walkForXml($source);
-            if ($found !== null) {
-                return $found;
-            }
-        }
-
-        return null;
-    }
-
-    private function walkForXml(array $data): ?string
-    {
-        foreach ($data as $key => $value) {
-            if (is_string($value) && stripos((string) $key, 'xml') !== false && str_contains($value, '<')) {
-                return $value;
-            }
-            if (is_array($value)) {
-                $found = $this->walkForXml($value);
-                if ($found !== null) {
-                    return $found;
-                }
-            }
-        }
-
-        return null;
+        return FiscalCustodyArtifacts::firstXml($custody);
     }
 
     /**

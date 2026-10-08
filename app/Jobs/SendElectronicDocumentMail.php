@@ -159,6 +159,14 @@ class SendElectronicDocumentMail implements ShouldQueue
             ];
         }
 
+        if (isset($xmls['_respuesta_hacienda'])) {
+            $files[] = [
+                'name' => $base.'-respuesta-hacienda.xml',
+                'mime' => 'application/xml',
+                'content' => $xmls['_respuesta_hacienda'],
+            ];
+        }
+
         if ($custody !== null && is_array($custody->response) && $custody->response !== []) {
             $files[] = [
                 'name' => $base.'-respuesta-hacienda.json',

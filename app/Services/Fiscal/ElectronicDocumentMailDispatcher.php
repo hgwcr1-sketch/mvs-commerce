@@ -6,6 +6,7 @@ use App\Jobs\SendElectronicDocumentMail;
 use App\Models\ElectronicDocument;
 use App\Models\ElectronicDocumentMailDelivery;
 use App\Models\Sale;
+use App\Services\Fiscal\FiscalCustodyService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -98,6 +99,10 @@ class ElectronicDocumentMailDispatcher
         if ($recipient === '' || filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
             return null;
         }
+
+        // Completar custodia de artefactos XML reales (GET only, idempotente)
+        // antes de construir el correo: cero POST, cero consumo, misma clave/consecutivo.
+        app(FiscalCustodyService::class)->harvestArtifacts($document);
 
         $delivery = ElectronicDocumentMailDelivery::create([
             'company_id' => $document->company_id,

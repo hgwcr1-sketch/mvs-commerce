@@ -3,6 +3,7 @@
 namespace App\Services\Facturaencr;
 
 use App\Contracts\Fiscal\FiscalProviderInterface;
+use App\Contracts\Fiscal\FiscalArtifactRetrievable;
 use App\Contracts\Fiscal\FiscalConnectionVerifiable;
 use App\Contracts\Fiscal\FiscalTaxpayerLookupInterface;
 use App\DTOs\Fiscal\FiscalConnectionResult;
@@ -21,7 +22,7 @@ use App\Models\ElectronicDocument;
  * unidades, reintentos, códigos de error) y expone únicamente tipos
  * MVS: cualquier detalle FacturaEnCR sale traducido antes de devolver.
  */
-class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLookupInterface, FiscalConnectionVerifiable
+class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLookupInterface, FiscalConnectionVerifiable, FiscalArtifactRetrievable
 {
     private readonly FacturaencrEmissionService $emissionService;
 
@@ -386,6 +387,68 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
             fiscalReference: $document->clave,
             message: $document->last_error_message,
         );
+    }
+
+    /**
+     * Descarga de artefactos XML reales por GET autenticado (documents:read):
+     * XML firmado y MensajeHacienda. El proveedor no expone un "XML enviado"
+     * separado del firmado, por lo que esa clave no se devuelve ni se fabrica.
+     * Cualquier fallo se reporta como ausencia: jamás inventa contenido.
+     *
+     * @return array{xml_signed: ?string, hacienda_response_xml: ?string}
+     */
+    public function downloadArtifacts(ElectronicDocument $document): array
+    {
+        $empty = ['xml_signed' => null, 'hacienda_response_xml' => null];
+
+        if ($document->provider_document_id === null) {
+            return $empty;
+        }
+
+        $company = $document->company;
+
+        if ($company === null) {
+            return $empty;
+        }
+
+        $credentials = $this->clientCredentials($company);
+
+        if (trim($credentials[0]) === '' || trim($credentials[1]) === '') {
+            return $empty;
+        }
+
+        $client = new FacturaencrClient(...$credentials);
+        $base = 'documents/' . $document->provider_document_id;
+
+        return [
+            'xml_signed' => $this->fetchXmlArtifact($client, $base . '/xml'),
+            'hacienda_response_xml' => $this->fetchXmlArtifact($client, $base . '/xml-respuesta'),
+        ];
+    }
+
+    /**
+     * Solo devuelve cuerpos que son XML real (comienzan con '<'): un JSON,
+     * un error o un cuerpo vacío se reportan como ausencia.
+     */
+    private function fetchXmlArtifact(FacturaencrClient $client, string $endpoint): ?string
+    {
+        try {
+            $response = $client->get($endpoint, [], ['Accept' => 'application/xml, */*']);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $response->isSuccess()) {
+            return null;
+        }
+
+        $body = trim((string) $response->rawBody);
+
+        if ($body === '' || ! str_starts_with($body, '<')) {
+            return null;
+        }
+
+        return $body;
     }
 
     /**

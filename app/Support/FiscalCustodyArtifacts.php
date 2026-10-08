@@ -6,13 +6,16 @@ use App\Models\FiscalDocumentCustody;
 
 /**
  * Extracción de artefactos XML realmente custodiados de un comprobante
- * electrónico. Sin custodia: nada; nunca fabrica XML.
+ * electrónico. Sin custodia: nada; nunca fabrica XML. Fuente única para
+ * CE-MAIL, descarga individual y ZIP del portal.
  */
 final class FiscalCustodyArtifacts
 {
     /**
-     * XML disponibles en la custodia: '_enviado' desde el payload y
-     * '_firmado' desde la respuesta del proveedor/Hacienda.
+     * XML disponibles en la custodia: columnas reales descargadas del
+     * proveedor (xml_signed, hacienda_response_xml) con respaldo a XML
+     * embebidos legacy en payload/respuesta. '_enviado' solo existe si el
+     * payload lo contiene: el proveedor no expone un XML enviado separado.
      *
      * @return array<string, string>
      */
@@ -24,14 +27,21 @@ final class FiscalCustodyArtifacts
 
         $artifacts = [];
 
+        $signed = self::nonEmptyString($custody->xml_signed)
+            ?? (is_array($custody->response) ? self::walkForXml($custody->response) : null);
+
+        if ($signed !== null) {
+            $artifacts['_firmado'] = $signed;
+        }
+
+        $hacienda = self::nonEmptyString($custody->hacienda_response_xml);
+        if ($hacienda !== null) {
+            $artifacts['_respuesta_hacienda'] = $hacienda;
+        }
+
         $sent = is_array($custody->payload) ? self::walkForXml($custody->payload) : null;
         if ($sent !== null) {
             $artifacts['_enviado'] = $sent;
-        }
-
-        $signed = is_array($custody->response) ? self::walkForXml($custody->response) : null;
-        if ($signed !== null) {
-            $artifacts['_firmado'] = $signed;
         }
 
         return $artifacts;
@@ -41,7 +51,7 @@ final class FiscalCustodyArtifacts
     {
         $xmls = self::xmls($custody);
 
-        return $xmls['_enviado'] ?? $xmls['_firmado'] ?? null;
+        return $xmls['_firmado'] ?? $xmls['_enviado'] ?? null;
     }
 
     public static function walkForXml(array $data): ?string
@@ -59,5 +69,16 @@ final class FiscalCustodyArtifacts
         }
 
         return null;
+    }
+
+    private static function nonEmptyString(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value !== '' && str_contains($value, '<') ? $value : null;
     }
 }

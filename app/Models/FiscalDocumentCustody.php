@@ -12,6 +12,8 @@ class FiscalDocumentCustody extends Model
         'electronic_document_id',
         'payload',
         'response',
+        'xml_signed',
+        'hacienda_response_xml',
     ];
 
     protected function casts(): array

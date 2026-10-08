@@ -11,6 +11,7 @@ class FacturaencrResponse
         public readonly ?string $errorMessage = null,
         public readonly ?int $httpStatusCode = null,
         public readonly bool $retryable = false,
+        public readonly ?string $rawBody = null,
     ) {
     }
 

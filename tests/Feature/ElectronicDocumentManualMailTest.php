@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\ElectronicDocument;
 use App\Models\ElectronicDocumentMailDelivery;
 use App\Models\FiscalConsumption;
+use App\Models\FiscalDocumentCustody;
 use App\Models\PaymentMethod;
 use App\Models\Permission;
 use App\Models\Role;
@@ -22,7 +23,9 @@ use App\Services\CompanyLicenseService;
 use App\Services\Fiscal\FiscalCustodyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Tests\TestCase;
@@ -310,6 +313,139 @@ class ElectronicDocumentManualMailTest extends TestCase
         $this->assertSame($consecutivo, $fresh->consecutivo);
         $this->assertTrue($fresh->created_at->equalTo($createdAt));
         $this->assertSame(1, ElectronicDocumentMailDelivery::query()->count());
+    }
+
+    public function test_historical_accepted_without_xml_recover_via_harvest_on_manual_resend(): void
+    {
+        Mail::fake();
+        Http::fake([
+            'https://api.facturaencr.com/v2/efactura/documents/doc-history-114/xml' => Http::response(
+                '<FacturaElectronica><Clave>506010100000000000010000000000000000114</Clave></FacturaElectronica>',
+                200,
+                ['Content-Type' => 'application/xml']
+            ),
+            'https://api.facturaencr.com/v2/efactura/documents/doc-history-114/xml-respuesta' => Http::response(
+                '<MensajeHacienda><Respuesta>ACEPTADO</Respuesta></MensajeHacienda>',
+                200,
+                ['Content-Type' => 'application/xml']
+            ),
+        ]);
+
+        [$company, $branch] = $this->fiscalContext();
+        
+        // Insert fiscal config with credentials for harvestArtifacts to work
+        DB::table('company_fiscal_configs')->insert([
+            'company_id' => $company->id,
+            'provider' => 'facturaencr',
+            'environment' => 'sandbox',
+            'provider_api_key' => encrypt('efk_TESTKEY', false),
+            'provider_api_secret' => encrypt('efk_TESTSECRET', false),
+            'auto_emit_enabled' => true,
+            'fiscal_start_at' => now()->subDay(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
+
+        // Documento histórico accepted SIN xml_signed ni hacienda_response_xml en custodia
+        // (legacy: solo payload/response con JSON, sin artefactos descargados)
+        $document = ElectronicDocument::create([
+            'company_id' => $company->id,
+            'sale_id' => $this->makeSale($company, $branch)->id,
+            'provider' => 'facturaencr',
+            'document_type' => '01',
+            'environment' => 'sandbox',
+            'idempotency_key' => 'history-114',
+            'provider_document_id' => 'doc-history-114',
+            'clave' => '506010100000000000010000000000000000114',
+            'consecutivo' => '001-001-000114',
+            'status' => 'accepted',
+        ]);
+
+        // Custodia SOLO con payload/response JSON legacy, SIN columnas xml_signed/hacienda_response_xml
+        FiscalDocumentCustody::create([
+            'electronic_document_id' => $document->id,
+            'payload' => ['clave' => $document->clave, 'detalle' => []],
+            'response' => ['status' => 'accepted'],
+        ]);
+
+        $consumptionsBefore = \App\Models\FiscalConsumption::count();
+
+        $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
+            ->assertRedirect(route('fiscal.documents.show', $document))
+            ->assertSessionHas('status');
+
+        // Verificar que NO se hizo POST (solo GET para artefactos)
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->method() === 'GET'
+            && str_contains($request->url(), '/xml'));
+        Http::assertSent(fn ($request) => $request->method() === 'GET'
+            && str_contains($request->url(), '/xml-respuesta'));
+        Http::assertNotSent(fn ($request) => $request->method() === 'POST');
+
+        $delivery = ElectronicDocumentMailDelivery::query()->sole();
+        $this->assertSame('sent', $delivery->status);
+
+        // Verificar que se adjuntaron los XML recuperados por harvestArtifacts
+        $base = $document->consecutivo;
+        $this->assertContains($base.'-xml-firmado.xml', $delivery->attachments);
+        $this->assertContains($base.'-respuesta-hacienda.xml', $delivery->attachments);
+
+        // Verificar cero consumo
+        $this->assertSame($consumptionsBefore, \App\Models\FiscalConsumption::count());
+
+        // Verificar que la custodia ahora tiene los artefactos
+        $custody = \App\Models\FiscalDocumentCustody::query()
+            ->where('electronic_document_id', $document->id)
+            ->sole();
+        $this->assertStringContainsString('<FacturaElectronica>', $custody->xml_signed);
+        $this->assertStringContainsString('<MensajeHacienda>', $custody->hacienda_response_xml);
+
+        // Misma clave/consecutivo/estado
+        $fresh = $document->fresh();
+        $this->assertSame('accepted', $fresh->status);
+        $this->assertSame($document->clave, $fresh->clave);
+        $this->assertSame($document->consecutivo, $fresh->consecutivo);
+        $this->assertSame(1, ElectronicDocument::count());
+    }
+
+    public function test_historical_accepted_without_provider_doc_id_skips_harvest_but_sends_available(): void
+    {
+        Mail::fake();
+        [$company, $branch] = $this->fiscalContext();
+        $this->actingUser($company, $branch, ['fiscal.ver', 'fiscal.enviar_comprobante']);
+
+        // Documento accepted SIN provider_document_id (no se puede harvest)
+        $document = ElectronicDocument::create([
+            'company_id' => $company->id,
+            'sale_id' => $this->makeSale($company, $branch)->id,
+            'provider' => 'facturaencr',
+            'document_type' => '01',
+            'environment' => 'sandbox',
+            'idempotency_key' => 'history-no-id',
+            'provider_document_id' => null,
+            'clave' => '506010100000000000010000000000000000115',
+            'consecutivo' => '001-001-000115',
+            'status' => 'accepted',
+        ]);
+
+        FiscalDocumentCustody::create([
+            'electronic_document_id' => $document->id,
+            'payload' => ['clave' => $document->clave],
+            'response' => ['status' => 'accepted'],
+        ]);
+
+        $this->post(route('fiscal.documents.mail', $document), ['recipient' => 'receptor@example.com'])
+            ->assertRedirect();
+
+        $delivery = ElectronicDocumentMailDelivery::query()->sole();
+        $this->assertSame('sent', $delivery->status);
+        $this->assertContains($document->consecutivo.'.pdf', $delivery->attachments);
+        $this->assertFalse(collect($delivery->attachments)->contains(fn (string $n) => str_contains($n, '.xml')));
+
+        // Sin HTTP hacia proveedor (no hay provider_document_id)
+        Http::assertNothingSent();
     }
 
     public function test_real_mailer_attaches_pdf_only(): void
@@ -620,5 +756,55 @@ class ElectronicDocumentManualMailTest extends TestCase
         $document->update(['status' => 'accepted']);
 
         return $document->fresh();
+    }
+
+    private function makeSale(Company $company, Branch $branch): \App\Models\Sale
+    {
+        $customer = \App\Models\Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification_type' => '01',
+            'identification' => '109880401',
+            'name' => 'Juan Pérez',
+            'email' => 'receptor@example.com',
+        ]);
+
+        $paymentMethod = \App\Models\PaymentMethod::query()->firstOrCreate(
+            ['company_id' => $company->id, 'code' => 'cash'],
+            [
+                'name' => 'Efectivo',
+                'type' => 'cash',
+                'is_system' => true,
+                'is_active' => true,
+                'affects_cash' => true,
+                'requires_reference' => false,
+                'allows_change' => true,
+            ],
+        );
+
+        $user = \App\Models\User::factory()->create(['is_active' => true]);
+        $user->companies()->attach($company->id);
+        $user->branches()->attach($branch->id);
+
+        return \App\Models\Sale::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'user_id' => $user->id,
+            'customer_id' => $customer->id,
+            'sale_number' => 'POS-HIST-'.$company->id.'-'.uniqid(),
+            'document_type' => 'electronic_invoice',
+            'sale_condition' => 'cash',
+            'status' => 'completed',
+            'currency_code' => 'CRC',
+            'exchange_rate' => 1,
+            'subtotal' => 1000,
+            'discount_total' => 100,
+            'tax_total' => 117,
+            'rounding_total' => 0,
+            'total' => 1017,
+            'paid_total' => 1017,
+            'balance_due' => 0,
+            'completed_at' => now(),
+        ]);
     }
 }

@@ -180,6 +180,7 @@ class FacturaencrClient
                 data: $body,
                 httpStatusCode: $statusCode,
                 retryable: false,
+                rawBody: $response->body(),
             );
         }
 
