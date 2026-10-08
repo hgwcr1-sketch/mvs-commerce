@@ -75,15 +75,20 @@ class PosPostSaleModalTest extends TestCase
             ->getContent();
 
         foreach ([
-            'Resumen del comprobante',
+            'Vista previa del comprobante',
+            'receiptSrc()',
+            'setReceiptFormat(\'58mm\')',
+            '80 mm',
+            '58 mm',
+            'Carta',
+            'embed=1',
             'Correo del cliente',
             'Enviar comprobante por correo',
             'Imprimir comprobante',
             'Reimprimir',
-            'Descargar PDF',
+            'Carta/PDF',
             'Imprimir comprobante fiscal',
             'Nueva venta',
-            'Comprobante electrónico en proceso',
             'x-model="checkout.receiptEmail"',
             'checkout.result.receipt_pdf_url',
             "checkout.result.electronic_status === 'accepted'",

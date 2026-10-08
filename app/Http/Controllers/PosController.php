@@ -836,12 +836,14 @@ class PosController extends Controller
         $company = Company::query()->findOrFail($companyId);
         $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
         $format = $receipts->format($sale, $request->query('format'));
-        $autoPrint = $request->boolean('print') || $sale->branch->receipt_auto_print;
+        // embed=1: la vista se muestra dentro del POS como vista previa; nunca auto-imprime.
+        $embed = $request->boolean('embed');
+        $autoPrint = ! $embed && ($request->boolean('print') || $sale->branch->receipt_auto_print);
         $loyalty = $receipts->loyaltySummary($sale);
         $receiptData = $receipts->buildReceiptData($sale);
         $view = ($format === 'letter' && $receiptData->fiscal !== null) ? 'pos.fiscal-invoice' : 'pos.receipt';
 
-        return view($view, compact('sale', 'company', 'format', 'autoPrint', 'loyalty', 'receiptData'));
+        return view($view, compact('sale', 'company', 'format', 'autoPrint', 'loyalty', 'receiptData', 'embed'));
     }
 
     public function receiptPdf(Request $request, Sale $sale, SaleReceiptService $receipts)

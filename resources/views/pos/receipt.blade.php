@@ -248,7 +248,7 @@
     <p class="center muted thanks">{{ $footerMessage }}</p>
     @if(in_array($format, ['58mm','80mm'], true))<div class="cut-tail"></div>@endif
 </main>
-@unless($pdfMode ?? false)
+@unless(($pdfMode ?? false) || ($embed ?? false))
     @if(session('success'))
         <p class="center">{{ session('success') }}</p>
     @endif

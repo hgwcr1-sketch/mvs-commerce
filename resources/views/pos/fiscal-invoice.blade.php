@@ -260,7 +260,7 @@
         <span>MVS Commerce — plataforma comercial</span>
     </div>
 
-    @unless($pdfMode ?? false)
+    @unless(($pdfMode ?? false) || ($embed ?? false))
         <div class="actions">
             <button type="button" onclick="window.print()">Imprimir</button>
             <a href="{{ route('pos.receipt.pdf', $sale) }}?format=letter">Descargar PDF</a>

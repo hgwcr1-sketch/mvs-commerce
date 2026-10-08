@@ -941,50 +941,37 @@
                     </header>
 
                     <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" data-post-sale>
-                        <section class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4 sm:p-5" aria-label="Resumen del comprobante">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <span class="rounded-lg bg-[#111111] px-3 py-1 text-xs font-black uppercase tracking-widest text-white" x-text="checkout.result.sale_number"></span>
-                                <a :href="checkout.result.receipt_url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] bg-white px-4 py-2 text-xs font-bold text-[#806817]">Ver comprobante</a>
+                        <section class="rounded-2xl border border-[#B9BDC2] bg-white" aria-label="Vista previa del comprobante">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#B9BDC2]/60 bg-slate-50 px-3 py-2 sm:px-4">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="rounded-lg bg-[#111111] px-3 py-1 text-xs font-black uppercase tracking-widest text-white" x-text="checkout.result.sale_number"></span>
+                                    <span class="text-sm font-black text-[#111111]" x-text="money(checkout.result.total)"></span>
+                                    <span class="text-xs font-bold text-slate-500" x-text="checkout.result.customer_name || 'Consumidor Final'"></span>
+                                </div>
+                                <div class="flex items-center gap-1 rounded-xl border border-[#B9BDC2] bg-white p-1" role="group" aria-label="Formato del comprobante">
+                                    @foreach(\App\Services\Sales\SaleReceiptService::FORMAT_LABELS as $value => $label)
+                                        <button type="button"
+                                                @click="setReceiptFormat('{{ $value }}')"
+                                                :aria-pressed="checkout.receiptFormat === '{{ $value }}'"
+                                                :class="checkout.receiptFormat === '{{ $value }}' ? 'bg-[#D4AF37] text-black' : 'text-slate-600 hover:bg-slate-100'"
+                                                class="min-h-11 rounded-lg px-3 py-2 text-xs font-black">{{ $label }}</button>
+                                    @endforeach
+                                </div>
                             </div>
-                            <dl class="mt-3 space-y-2 text-sm">
-                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Cliente</dt><dd class="text-right font-bold" x-text="checkout.result.customer_name || 'Consumidor Final'"></dd></div>
-                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Subtotal</dt><dd class="text-right font-bold" x-text="money(checkout.result.subtotal)"></dd></div>
-                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Impuesto</dt><dd class="text-right font-bold" x-text="money(checkout.result.tax_total)"></dd></div>
-                                <div class="flex items-center justify-between gap-3 border-t border-[#B9BDC2] pt-2"><dt class="font-black">Total</dt><dd class="text-right text-xl font-black text-[#111111]" x-text="money(checkout.result.total)"></dd></div>
-                                <div class="flex items-center justify-between gap-3" x-show="Number(checkout.result.total_change) > 0"><dt class="text-slate-500">Vuelto total</dt><dd class="text-right font-bold" x-text="money(checkout.result.total_change)"></dd></div>
-                            </dl>
-                            <div class="mt-3 space-y-1 text-sm">
-                                <template x-for="payment in checkout.result.payments">
-                                    <p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p>
-                                </template>
+                            <div class="bg-slate-200 p-2 sm:p-4">
+                                <iframe :src="receiptSrc()"
+                                        title="Vista previa del comprobante"
+                                        data-post-sale
+                                        class="mx-auto h-[45vh] min-h-[240px] w-full max-w-[420px] rounded-xl border border-[#B9BDC2] bg-white sm:h-[52vh] sm:max-w-[480px]"></iframe>
                             </div>
-                            <div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)">
-                                <template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)">
-                                    <p x-text="usdPaymentLabel(payment)"></p>
-                                </template>
-                            </div>
-                            <p x-show="checkout.result.duplicate" class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p>
                         </section>
 
-                        <section x-show="checkout.result.fiscal" class="mt-4 rounded-2xl border border-[#B9BDC2] bg-white p-4" aria-label="Estado del comprobante electrónico">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h3 class="font-black">Comprobante electrónico</h3>
-                                <span class="rounded-full px-3 py-1 text-xs font-black" :class="checkout.result.fiscal && checkout.result.fiscal.is_accepted ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'" x-text="checkout.result.fiscal ? checkout.result.fiscal.status_label : ''"></span>
-                            </div>
-                            <template x-if="checkout.result.fiscal && checkout.result.fiscal.is_accepted">
-                                <div class="mt-3 space-y-2 text-sm">
-                                    <p class="break-all"><span class="text-slate-500">Clave electrónica:</span> <strong class="font-mono" x-text="checkout.result.fiscal.clave"></strong></p>
-                                    <p class="break-all" x-show="checkout.result.fiscal.consecutivo"><span class="text-slate-500">Consecutivo:</span> <strong class="font-mono" x-text="checkout.result.fiscal.consecutivo"></strong></p>
-                                    <img x-show="checkout.result.fiscal.qr_image" :src="checkout.result.fiscal.qr_image" alt="QR del comprobante electrónico" class="h-28 w-28">
-                                </div>
+                        <p x-show="checkout.result.duplicate" class="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Esta venta ya había sido procesada.</p>
+                        <div class="mt-3 space-y-1 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)">
+                            <template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)">
+                                <p x-text="usdPaymentLabel(payment)"></p>
                             </template>
-                            <template x-if="checkout.result.fiscal && !checkout.result.fiscal.is_accepted">
-                                <div class="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-                                    <span x-text="['rejected', 'error'].includes(checkout.result.fiscal.status) ? `Comprobante electrónico ${checkout.result.fiscal.status_label}` : 'Comprobante electrónico en proceso'"></span>
-                                    <p class="mt-1 text-xs font-normal">La clave, el consecutivo y el QR se muestran una vez que el comprobante sea aceptado.</p>
-                                </div>
-                            </template>
-                        </section>
+                        </div>
 
                         <section class="mt-4 rounded-2xl border border-[#B9BDC2] bg-white p-4" aria-label="Correo del comprobante">
                             <label for="post-sale-email" class="text-sm font-black">Correo del cliente</label>
@@ -1004,7 +991,7 @@
                     <footer class="flex flex-wrap gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:justify-end sm:px-6" data-post-sale>
                         <button type="button" @click="printCompletedSale(checkout.result.sale_id, false)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl bg-[#111111] px-4 py-3 font-normal text-white disabled:opacity-50">Imprimir comprobante</button>
                         <button type="button" @click="printCompletedSale(checkout.result.sale_id, true)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold disabled:opacity-50">Reimprimir</button>
-                        <a :href="checkout.result.receipt_pdf_url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold">Descargar PDF</a>
+                        <a :href="checkout.result.receipt_pdf_url + '?format=letter'" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold">Carta/PDF</a>
                         <button type="button" x-show="checkout.result.electronic_status === 'accepted'" x-cloak @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B1922D] px-4 py-3 font-semibold text-[#806817] disabled:opacity-50">Imprimir comprobante fiscal</button>
                         <button type="button" @click="newSale" class="min-h-11 rounded-xl bg-primary px-5 py-3 font-normal text-black hover:bg-primary-hover">Nueva venta</button>
                     </footer>
@@ -1337,7 +1324,7 @@ document.addEventListener('alpine:init', () => {
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->where('type', '!=', 'loyalty_points')->values()),
-        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', mail: { sending: false, message: '', error: '' } },
+        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', receiptFormat: '80mm', mail: { sending: false, message: '', error: '' } },
         quickCustomer: {
             open: false,
             saving: false,
@@ -2138,6 +2125,16 @@ document.addEventListener('alpine:init', () => {
         },
         // Reutiliza la ruta y el controlador ya existentes (pos.receipt.mail)
         // sin duplicar la lógica de envío del comprobante.
+        setReceiptFormat(format) {
+            if (['80mm', '58mm', 'letter'].includes(format)) {
+                this.checkout.receiptFormat = format;
+            }
+        },
+        receiptSrc() {
+            const base = this.checkout.result?.receipt_url || '';
+            if (!base) return '';
+            return `${base}${base.includes('?') ? '&' : '?'}format=${encodeURIComponent(this.checkout.receiptFormat)}&embed=1`;
+        },
         async sendReceiptMail() {
             const checkout = this.checkout;
             if (!checkout.result || checkout.mail.sending) return;
@@ -2176,7 +2173,7 @@ document.addEventListener('alpine:init', () => {
         },
         newSale() {
             this.checkoutToken = generateUUID();
-            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', mail: { sending: false, message: '', error: '' } };
+            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', receiptFormat: '80mm', mail: { sending: false, message: '', error: '' } };
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
             this.successMessage = '';
