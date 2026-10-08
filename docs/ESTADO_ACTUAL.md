@@ -1,5 +1,11 @@
 # MVS Commerce — Estado actual
 
+## POS efectivo: foco y moneda exclusiva (2026-10-08)
+
+- En `release/fiscal-portal-prod-20261006`, el bloque CRC/USD enfoca y selecciona el CRC visible al activar efectivo. Cada entrada positiva limpia la otra moneda; un estado residual con ambas positivas bloquea agregar el pago.
+- Tipo de cambio, equivalente, cubierto, restante y cambio se presentan con dos decimales; el cálculo BigInt conserva cuatro decimales. Diseño responsive existente preservado (revisión estructural 360/768/1280).
+- Validación local: `PosUsdCashTest` 11/11 (126 aserciones), incluyendo JS sobre vista renderizada; `pos-close-enter-real.cjs`, PHP lint, Pint focal y diff-check PASS. Prueba visual de foco en navegador pendiente. Sin push ni producción.
+
 ## Operaciones no fiscales con perfil pendiente (2026-10-02)
 
 **Rama:** `feat/cabys-regimen-prod-3419e9d`, base `3419e9d`. Cambio local; sin push ni producción.

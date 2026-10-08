@@ -902,22 +902,22 @@
                                     <div x-show="selectedPaymentMethod?.allows_change && !usdCashEnabled" class="mt-3"><label for="checkout-received" class="text-sm font-bold">Monto recibido</label><input id="checkout-received" x-ref="receivedAmount" x-model="checkout.draft.receivedAmount" @focus="$event.target.select()" @keydown.enter.prevent="addPayment" inputmode="numeric" pattern="[0-9]*" :disabled="checkout.processing" class="mt-1 w-full rounded-xl border border-[#B9BDC2] px-4 py-3 text-right text-2xl font-black focus:border-[#B1922D] focus:ring-[#B1922D]"><div class="mt-2 flex flex-wrap gap-2"><template x-for="amount in suggestedAmounts" :key="amount"><button type="button" @click="checkout.draft.receivedAmount = String(amount)" class="rounded-lg border border-[#B9BDC2] bg-white px-3 py-2 text-sm font-bold hover:border-[#B1922D]" x-text="money(amount)"></button></template></div><div class="mt-3 rounded-xl bg-[#111111] px-4 py-3 text-white"><span class="text-sm font-bold text-[#B9BDC2]">Vuelto</span><strong class="mt-1 block text-right text-2xl font-extrabold text-emerald-400 sm:text-3xl" x-text="money(Math.max(0, Number(checkout.draft.receivedAmount) - Number(checkout.draft.amount)))"></strong></div></div>
                                     <template x-if="usdCashEnabled">
                                         <div class="mt-3 space-y-3 rounded-xl border border-slate-400 bg-white p-3">
-                                            <p class="text-sm">Tipo de cambio de la sesión: US$ 1 = ₡<strong x-text="usdSession.rate"></strong></p>
+                                            <p class="text-sm">Tipo de cambio de la sesión: US$ 1 = <strong x-text="money(usdSession.rate)"></strong></p>
                                             <div class="grid gap-3 sm:grid-cols-2">
-                                                <label class="text-sm font-semibold">Monto recibido CRC<input x-model="checkout.draft.receivedAmount" inputmode="numeric" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
-                                                <label class="text-sm font-semibold">Monto recibido USD<input x-model="checkout.draft.receivedUsd" inputmode="decimal" placeholder="0.00" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
+                                                <label class="text-sm font-semibold">Monto recibido CRC<input x-ref="receivedCrc" :value="checkout.draft.receivedAmount" @input="updateCashReceived('CRC', $event.target.value)" @focus="$event.target.select()" inputmode="decimal" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
+                                                <label class="text-sm font-semibold">Monto recibido USD<input :value="checkout.draft.receivedUsd" @input="updateCashReceived('USD', $event.target.value)" @focus="$event.target.select()" inputmode="decimal" placeholder="0.00" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2 text-right"></label>
                                             </div>
                                             <dl class="grid gap-2 text-sm sm:grid-cols-3">
-                                                <div><dt>Equivalente CRC del USD</dt><dd x-text="'₡' + (usdDraft?.equivalent ?? '—')"></dd></div>
-                                                <div><dt>Total cubierto</dt><dd x-text="'₡' + (usdDraft?.covered ?? '—')"></dd></div>
-                                                <div><dt>Restante del monto a aplicar</dt><dd x-text="'₡' + (usdDraft?.remaining ?? '—')"></dd></div>
+                                                <div><dt>Equivalente CRC del USD</dt><dd x-text="usdDraft ? money(usdDraft.equivalent) : '—'"></dd></div>
+                                                <div><dt>Total cubierto</dt><dd x-text="usdDraft ? money(usdDraft.covered) : '—'"></dd></div>
+                                                <div><dt>Restante del monto a aplicar</dt><dd x-text="usdDraft ? money(usdDraft.remaining) : '—'"></dd></div>
                                             </dl>
                                             <label x-show="usdDraft?.hasUsd && usdDraft?.hasChange && usdSession.policy === 'either'" class="block text-sm font-semibold">Moneda del cambio
                                                 <select x-model="checkout.draft.changeCurrency" :disabled="checkout.processing" class="mt-1 min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2">
                                                     <option value="">Seleccione</option><option value="CRC">Cambio en colones</option><option value="USD">Cambio en dólares</option>
                                                 </select>
                                             </label>
-                                            <p class="rounded-lg bg-slate-900 p-3 text-white">Cambio: <strong x-text="usdDraft?.currency === 'USD' ? 'US$ ' + usdDraft.changeUsd : '₡' + (usdDraft?.changeCrc ?? '0.0000')"></strong></p>
+                                            <p class="rounded-lg bg-slate-900 p-3 text-white">Cambio: <strong x-text="usdDraft?.currency === 'USD' ? 'US$ ' + formatQuantity(usdDraft.changeUsd) : money(usdDraft?.changeCrc ?? 0)"></strong></p>
                                         </div>
                                     </template>
                                     <div class="mt-4 flex justify-end gap-2"><button type="button" @click="cancelPaymentDraft" class="rounded-xl border border-[#B9BDC2] px-4 py-2 font-bold">Cancelar</button><button type="button" @click="addPayment" :disabled="!canAddPayment || checkout.processing" class="rounded-xl bg-amber-500 px-5 py-2 font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:opacity-40" x-text="selectedPaymentMethod?.allows_change ? 'Agregar efectivo' : 'Agregar pago'"></button></div>
@@ -1451,12 +1451,19 @@ document.addEventListener('alpine:init', () => {
             const absolute = units < 0n ? -units : units;
             return sign + String(absolute / 10000n) + '.' + String(absolute % 10000n).padStart(4, '0');
         },
+        updateCashReceived(currency, value) {
+            const field = currency === 'USD' ? 'receivedUsd' : 'receivedAmount';
+            const other = currency === 'USD' ? 'receivedAmount' : 'receivedUsd';
+            this.checkout.draft[field] = value.replace(',', '.');
+            if (this.decimalUnits(this.checkout.draft[field]) > 0n) this.checkout.draft[other] = '';
+        },
         get usdDraft() {
             const crc = this.decimalUnits(this.checkout.draft.receivedAmount);
             const usd = this.decimalUnits(this.checkout.draft.receivedUsd);
             const rate = this.decimalUnits(this.usdSession?.rate);
             const amount = this.decimalUnits(this.checkout.draft.amount);
             if (crc === null || usd === null || rate === null || amount === null || rate <= 0n) return null;
+            if (crc > 0n && usd > 0n) return null;
             const equivalent = usd * rate / 10000n;
             const covered = crc + equivalent;
             const excess = covered > amount ? covered - amount : 0n;
@@ -1471,7 +1478,7 @@ document.addEventListener('alpine:init', () => {
                 changeUsd: this.decimalText(changeUsd), changeCrc: this.decimalText(currency === 'CRC' ? excess : 0n) };
         },
         usdPaymentLabel(payment) {
-            return `Recibido US$ ${payment.received_amount_usd || '0.0000'} · Cambio US$ ${payment.change_amount_usd || '0.0000'}`;
+            return `Recibido US$ ${this.formatQuantity(payment.received_amount_usd)} · Cambio US$ ${this.formatQuantity(payment.change_amount_usd)}`;
         },
         get appliedTotal() { return this.checkout.payments.reduce((sum, payment) => sum + Number(payment.amount), 0); },
         get pendingBalance() { return Math.max(0, Math.round(this.grandTotal - this.appliedTotal - this.loyaltyRedeemedEstimate - this.totalCreditNotesApplied)); },
@@ -1890,7 +1897,7 @@ document.addEventListener('alpine:init', () => {
             this.checkout.draft.changeCurrency = '';
             this.checkout.draft.receivedAmount = String(amount);
             if (!method.requires_reference && !method.allows_change) { this.addPayment(); return; }
-            this.$nextTick(() => { const field = method.requires_reference ? this.$refs.checkoutReference : this.$refs.receivedAmount; field?.focus(); field?.select?.(); });
+            this.$nextTick(() => { const field = method.requires_reference ? this.$refs.checkoutReference : (this.usdCashEnabled ? this.$refs.receivedCrc : this.$refs.receivedAmount); field?.focus(); field?.select?.(); });
         },
         usePendingBalance() { this.checkout.draft.amount = String(this.pendingBalance); this.checkout.draft.receivedAmount = String(this.pendingBalance); this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); }); },
         cancelPaymentDraft() { this.checkout.draft = { methodId: '', amount: String(this.pendingBalance), receivedAmount: String(this.pendingBalance), reference: '' }; this.checkout.error = ''; this.$nextTick(() => { this.$refs.checkoutAmount?.focus(); this.$refs.checkoutAmount?.select(); }); },
