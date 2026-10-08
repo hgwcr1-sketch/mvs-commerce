@@ -26,6 +26,18 @@ class SendElectronicDocumentMail implements ShouldQueue
 {
     use Queueable;
 
+    /**
+     * Nombre de adjunto por sufijo de FiscalCustodyArtifacts::xmls(). El
+     * orden de adjuntos lo fija la fuente única, no este trabajo.
+     *
+     * @var array<string, string>
+     */
+    private const XML_ATTACHMENT_NAMES = [
+        '_firmado' => '-xml-firmado.xml',
+        '_enviado' => '-xml-enviado.xml',
+        '_respuesta_hacienda' => '-respuesta-hacienda.xml',
+    ];
+
     public int $tries = 1;
 
     public function __construct(public readonly int $deliveryId) {}
@@ -143,27 +155,17 @@ class SendElectronicDocumentMail implements ShouldQueue
 
         $xmls = FiscalCustodyArtifacts::xmls($custody);
 
-        if (isset($xmls['_enviado'])) {
-            $files[] = [
-                'name' => $base.'-xml-enviado.xml',
-                'mime' => 'application/xml',
-                'content' => $xmls['_enviado'],
-            ];
-        }
+        foreach ($xmls as $suffix => $xml) {
+            $name = self::XML_ATTACHMENT_NAMES[$suffix] ?? null;
 
-        if (isset($xmls['_firmado'])) {
-            $files[] = [
-                'name' => $base.'-xml-firmado.xml',
-                'mime' => 'application/xml',
-                'content' => $xmls['_firmado'],
-            ];
-        }
+            if ($name === null) {
+                continue;
+            }
 
-        if (isset($xmls['_respuesta_hacienda'])) {
             $files[] = [
-                'name' => $base.'-respuesta-hacienda.xml',
+                'name' => $base.$name,
                 'mime' => 'application/xml',
-                'content' => $xmls['_respuesta_hacienda'],
+                'content' => $xml,
             ];
         }
 

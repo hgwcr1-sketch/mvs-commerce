@@ -17,6 +17,9 @@ final class FiscalCustodyArtifacts
      * embebidos legacy en payload/respuesta. '_enviado' solo existe si el
      * payload lo contiene: el proveedor no expone un XML enviado separado.
      *
+     * Orden canónico único para todos los consumidores (ZIP, CE-MAIL,
+     * descarga): _firmado → _enviado → _respuesta_hacienda.
+     *
      * @return array<string, string>
      */
     public static function xmls(?FiscalDocumentCustody $custody): array
@@ -34,14 +37,14 @@ final class FiscalCustodyArtifacts
             $artifacts['_firmado'] = $signed;
         }
 
-        $hacienda = self::nonEmptyString($custody->hacienda_response_xml);
-        if ($hacienda !== null) {
-            $artifacts['_respuesta_hacienda'] = $hacienda;
-        }
-
         $sent = is_array($custody->payload) ? self::walkForXml($custody->payload) : null;
         if ($sent !== null) {
             $artifacts['_enviado'] = $sent;
+        }
+
+        $hacienda = self::nonEmptyString($custody->hacienda_response_xml);
+        if ($hacienda !== null) {
+            $artifacts['_respuesta_hacienda'] = $hacienda;
         }
 
         return $artifacts;

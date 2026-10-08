@@ -14,6 +14,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
+use App\Support\FiscalCustodyArtifacts;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -593,8 +594,8 @@ class FiscalDocumentsPortalTest extends TestCase
         $base = 'FE_00100001010000000311_'.$clave;
         $this->assertSame([
             'resumen_descarga.txt',
-            $base.'_enviado.xml',
             $base.'_firmado.xml',
+            $base.'_enviado.xml',
             $base.'_respuesta_hacienda.json',
         ], array_keys($entries));
         $this->assertSame('<Factura>ENVIADA</Factura>', $entries[$base.'_enviado.xml']);
@@ -618,6 +619,44 @@ class FiscalDocumentsPortalTest extends TestCase
         $this->assertStringContainsString('Documentos excluidos por falta de custodia/XML: 1', $entries['resumen_descarga.txt']);
         $this->assertStringContainsString('00100001010000000312', $entries['resumen_descarga.txt']);
         $this->assertSame('1', $response->headers->get('X-MVS-Documentos-Excluidos'));
+    }
+
+    public function test_artifact_order_with_three_xml_is_firmado_enviado_and_respuesta_hacienda(): void
+    {
+        [$company, $branch] = $this->fiscalContext();
+        $this->enableFiscal($company);
+        $this->actingUser($company, $branch);
+
+        $clave = '50600000000000000001001000001010000000000004141';
+        $withCustody = $this->makeDoc($company, [
+            'consecutivo' => '00100001010000000411',
+            'clave' => $clave,
+            'provider_document_id' => 'PE-DOC-ORDEN',
+        ]);
+        $custody = FiscalDocumentCustody::create([
+            'electronic_document_id' => $withCustody->id,
+            'payload' => ['clave' => $clave, 'xml' => '<Factura>ENVIADA</Factura>'],
+            'xml_signed' => '<Factura>FIRMADA</Factura>',
+            'hacienda_response_xml' => '<MensajeHacienda>ACEPTADO</MensajeHacienda>',
+        ]);
+
+        $this->assertSame(
+            ['_firmado', '_enviado', '_respuesta_hacienda'],
+            array_keys(FiscalCustodyArtifacts::xmls($custody))
+        );
+
+        $entries = $this->zipEntries($this->get(route('fiscal.documents.zip'))->assertOk());
+
+        $base = 'FE_00100001010000000411_'.$clave;
+        $this->assertSame([
+            'resumen_descarga.txt',
+            $base.'_firmado.xml',
+            $base.'_enviado.xml',
+            $base.'_respuesta_hacienda.xml',
+        ], array_keys($entries));
+        $this->assertSame('<Factura>FIRMADA</Factura>', $entries[$base.'_firmado.xml']);
+        $this->assertSame('<Factura>ENVIADA</Factura>', $entries[$base.'_enviado.xml']);
+        $this->assertSame('<MensajeHacienda>ACEPTADO</MensajeHacienda>', $entries[$base.'_respuesta_hacienda.xml']);
     }
 
     public function test_period_zip_excludes_other_company_documents_and_uses_safe_file_names(): void
