@@ -2,18 +2,13 @@
 
 namespace App\Services\Sales;
 
+use App\Models\CompanyFiscalConfig;
+use App\Models\CreditNoteApplication;
+use App\Models\ElectronicDocument;
 use App\Models\Sale;
-use App\Models\Company;
-use App\Models\Branch;
-use App\Models\Customer;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
-use App\Models\CashSession;
-use App\Models\CashRegister;
-use App\Models\CompanyFiscalConfig;
-use App\Models\ElectronicDocument;
-use App\Models\User;
-use App\Models\CreditNoteApplication;
+use App\Services\Loyalty\LoyaltySaleReceiptService;
 use chillerlan\QRCode\Common\EccLevel;
 use chillerlan\QRCode\Output\QRMarkupSVG;
 use chillerlan\QRCode\QRCode;
@@ -149,7 +144,7 @@ readonly class SaleReceiptData
         $cashier = $sale->user;
 
         // Loyalty: reutilizar la lógica existente
-        $loyaltySummary = app(\App\Services\Loyalty\LoyaltySaleReceiptService::class)->forSale($sale);
+        $loyaltySummary = app(LoyaltySaleReceiptService::class)->forSale($sale);
 
         $loyalty = null;
         if ($loyaltySummary !== null) {
@@ -272,26 +267,28 @@ readonly class SaleReceiptData
         }
 
         $doc = $docs->firstWhere('status', 'accepted')
-            ?? $docs->first(fn (ElectronicDocument $candidate) => $candidate->clave !== null);
+            ?? $docs->first(fn (ElectronicDocument $candidate) => $candidate->clave !== null)
+            ?? $docs->first();
 
-        if (! $doc || ! $doc->clave) {
+        if (! $doc) {
             return null;
         }
 
+        $clave = $doc->clave;
         $config = CompanyFiscalConfig::query()->where('company_id', $sale->company_id)->first();
 
         return [
-            'clave' => $doc->clave,
-            'consecutivo' => $doc->consecutivo,
+            'clave' => $clave,
+            'consecutivo' => $clave !== null ? $doc->consecutivo : null,
             'status' => $doc->status,
             'status_label' => self::fiscalStatusLabel($doc->status),
             'is_accepted' => $doc->status === 'accepted',
-            'environment' => $doc->environment === 'production' ? 'Producción' : 'Pruebas',
+            'environment' => $doc->environment === 'production' ? 'Producci��n' : 'Pruebas',
             'branch_code' => $config?->fiscal_branch_code,
             'terminal_code' => $config?->fiscal_terminal_code,
             'economic_activity' => $config?->economic_activity,
-            'condition' => $sale->sale_condition === Sale::CONDITION_CREDIT ? 'Crédito' : 'Contado',
-            'qr_image' => self::fiscalQr($doc->clave),
+            'condition' => $sale->sale_condition === Sale::CONDITION_CREDIT ? 'CrǸdito' : 'Contado',
+            'qr_image' => $clave !== null ? self::fiscalQr($clave) : null,
         ];
     }
 

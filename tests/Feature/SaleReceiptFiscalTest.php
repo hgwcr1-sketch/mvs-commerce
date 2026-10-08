@@ -11,7 +11,6 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sale;
 use App\Models\User;
-use App\Services\Sales\SaleReceiptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -95,6 +94,31 @@ class SaleReceiptFiscalTest extends TestCase
             ->get(route('pos.receipt', $other))
             ->assertOk()
             ->assertDontSee('Clave electrónica');
+    }
+
+    public function test_pending_document_shows_in_process_notice_without_clave_consecutivo_or_qr_in_thermal_formats(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        ElectronicDocument::create([
+            'company_id' => $company->id,
+            'sale_id' => $sale->id,
+            'document_type' => '01',
+            'environment' => 'production',
+            'status' => 'pending',
+            'attempt_number' => 1,
+        ]);
+
+        foreach (['58mm', '80mm'] as $format) {
+            $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+                ->get(route('pos.receipt', $sale).'?format='.$format)
+                ->assertOk()
+                ->assertSee('Comprobante electrónico en proceso')
+                ->assertSee('Estado: En proceso')
+                ->assertDontSee('Clave electrónica')
+                ->assertDontSee('Consecutivo:')
+                ->assertDontSee('QR del comprobante electrónico', false)
+                ->assertDontSee('Portal de Hacienda');
+        }
     }
 
     private function fiscal(Company $company, Sale $sale, string $status, string $clave, string $consecutivo): ElectronicDocument

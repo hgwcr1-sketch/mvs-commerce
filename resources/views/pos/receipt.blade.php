@@ -125,12 +125,19 @@
                 <span class="fiscal-state {{ $fiscalStateClass }}">Estado: {{ $fiscalData['status_label'] }}</span>
             </div>
             <div class="fiscal-grid">
-                <span><strong>Clave electrónica:</strong> <span class="fiscal-key">{{ $fiscalData['clave'] }}</span></span>
-                <span><strong>Consecutivo:</strong> <span class="fiscal-key">{{ $fiscalData['consecutivo'] ?: '—' }}</span></span>
+                @if(!empty($fiscalData['clave']))
+                    <span><strong>Clave electrónica:</strong> <span class="fiscal-key">{{ $fiscalData['clave'] }}</span></span>
+                @endif
+                @if(!empty($fiscalData['consecutivo']))
+                    <span><strong>Consecutivo:</strong> <span class="fiscal-key">{{ $fiscalData['consecutivo'] }}</span></span>
+                @endif
                 <span><strong>Sucursal / Terminal:</strong> {{ ($fiscalData['branch_code'] ?: '—') . ' / ' . ($fiscalData['terminal_code'] ?: '—') }}</span>
                 <span><strong>Condición de venta:</strong> {{ $fiscalData['condition'] }}</span>
                 <span><strong>Ambiente:</strong> {{ $fiscalData['environment'] }}</span>
             </div>
+            @if(! in_array($fiscalData['status'] ?? '', ['accepted', 'rejected', 'error'], true))
+                <p class="warning center">Comprobante electrónico en proceso</p>
+            @endif
             @if($fiscalData['qr_image'])
                 <img class="fiscal-qr" src="{{ $fiscalData['qr_image'] }}" alt="QR del comprobante electrónico">
             @endif
@@ -235,7 +242,7 @@
     </table>
     <div class="rule"></div>
     <p class="center"><strong>{{ $cashSessionData ? $cashSessionData['session_number'].' — '.$cashSessionData['cash_register_name'] : 'Sin sesión de caja' }}</strong></p>
-    @if($fiscalData)
+    @if($fiscalData && ! empty($fiscalData['clave']))
         <p class="fiscal-legal">Representación gráfica de un comprobante electrónico. Verifique su validez en el Portal de Hacienda utilizando la clave electrónica.</p>
     @endif
     <p class="center muted thanks">{{ $footerMessage }}</p>

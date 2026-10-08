@@ -11,6 +11,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Customer;
+use App\Models\ElectronicDocument;
 use App\Models\LoyaltyPortalCredential;
 use App\Models\PaymentMethod;
 use App\Models\Product;
@@ -663,6 +664,11 @@ class PosController extends Controller
             'message' => $result['duplicate'] ? 'Esta venta ya había sido procesada.' : 'Venta cobrada correctamente.',
             'sale_id' => $sale->id,
             'sale_number' => $sale->sale_number,
+            'electronic_status' => ElectronicDocument::query()
+                ->where('company_id', (int) $sale->company_id)
+                ->where('sale_id', $sale->id)
+                ->orderByDesc('attempt_number')
+                ->value('status'),
             'subtotal' => $sale->subtotal,
             'tax_total' => $sale->tax_total,
             'rounding_total' => $sale->rounding_total,
