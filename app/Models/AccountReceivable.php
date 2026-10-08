@@ -19,7 +19,7 @@ class AccountReceivable extends Model
     public const STATUS_OVERDUE = 'overdue';
     public const STATUS_CANCELLED = 'cancelled';
 
-    protected $fillable = ['company_id', 'cobros_route_id', 'branch_id', 'customer_id', 'sale_id', 'issued_at', 'due_date', 'original_amount', 'balance_due', 'status', 'currency_code'];
+    protected $fillable = ['company_id', 'cobros_route_id', 'branch_id', 'customer_id', 'sale_id', 'external_reference', 'issued_at', 'due_date', 'original_amount', 'balance_due', 'status', 'currency_code'];
 
     protected function casts(): array
     {

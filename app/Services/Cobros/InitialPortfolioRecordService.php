@@ -3,6 +3,7 @@
 namespace App\Services\Cobros;
 
 use App\Models\AccountReceivable;
+use App\Models\CobrosAssignment;
 use App\Models\CobrosInitialPortfolioCorrectionRequest;
 use App\Models\CobrosInitialPortfolioEvent;
 use App\Models\CobrosInitialPortfolioMigration;
@@ -11,6 +12,8 @@ use App\Models\CobrosRoute;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -59,36 +62,9 @@ class InitialPortfolioRecordService
         $migration = $this->assertOpen($company, $user);
 
         $identification = trim((string) $data['identification']);
-        $local = Customer::query()->where('company_id', $company->id)
-            ->where('identification', $identification)->first();
 
-        if (! $local) {
-            // Identificación ajena al tenant: no se reutiliza ni se duplica jamás.
-            if (Customer::query()->where('identification', $identification)->exists()) {
-                throw ValidationException::withMessages([
-                    'identification' => 'Esa identificación ya está registrada.',
-                ]);
-            }
-        }
-
-        return DB::transaction(function () use ($company, $user, $data, $migration, $identification, $local) {
-            $customerReused = $local !== null;
-
-            if (! $local) {
-                $local = Customer::create([
-                    'company_id' => $company->id,
-                    'customer_type' => 'individual',
-                    'identification' => $identification,
-                    // Mapeo al enum existente del Customer: 01 cédula, 03 DIMEX, 05 pasaporte.
-                    'identification_type' => ['cedula' => '01', 'dimex' => '03', 'pasaporte' => '05'][$data['identification_type']] ?? '01',
-                    'name' => trim((string) $data['name']),
-                    'phone' => trim((string) $data['phone']),
-                    'address' => $data['address'] ?? null,
-                    'latitude' => $data['latitude'] ?? null,
-                    'longitude' => $data['longitude'] ?? null,
-                    'is_active' => true,
-                ]);
-            }
+        return DB::transaction(function () use ($company, $user, $data, $migration, $identification) {
+            [$local, $customerReused] = $this->resolveTenantCustomer($company, $identification, $data);
 
             $already = CobrosInitialPortfolioRecord::query()
                 ->where('migration_id', $migration->id)
@@ -143,6 +119,311 @@ class InitialPortfolioRecordService
 
             return $record;
         });
+    }
+
+    /**
+     * 12B — importa un crédito histórico del archivo como registro + CxC PROPIA
+     * del tenant. La autoriza el PRESTAMISTA (cobros.portal_dueno) de la empresa
+     * activa; NO exige migración 5A/5B abierta (eso sigue siendo exclusivo de
+     * create()/assertOpen() para la carga manual del cobrador, intactos).
+     *
+     * Idempotencia por (empresa, external_reference): reimportar con los MISMOS
+     * datos devuelve el registro existente sin crear nada; con datos distintos
+     * genera conflicto (jamás sobrescribe). Permite N créditos por cliente:
+     * cada referencia produce su CxC independiente. Nunca crea pagos ni recibos.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function importCredit(Company $company, User $user, array $data): CobrosInitialPortfolioRecord
+    {
+        if ((int) session('active_company_id', 0) !== (int) $company->id) {
+            abort(403, 'La empresa activa no corresponde a la importación.');
+        }
+        if (! $user->hasPermission('cobros.portal_dueno', $company)) {
+            abort(403, 'Solo el prestamista puede importar créditos históricos.');
+        }
+
+        $reference = $this->validateImport($data);
+        $identification = trim((string) $data['identification']);
+
+        // (1) Idempotencia/conflicto por referencia ANTES de crear nada.
+        $existing = CobrosInitialPortfolioRecord::query()
+            ->where('company_id', $company->id)
+            ->where('external_reference', $reference)->first();
+        if ($existing !== null) {
+            if ($this->importMatches($existing, $identification, $data)) {
+                return $existing;
+            }
+
+            throw ValidationException::withMessages([
+                'external_reference' => 'La referencia ya existe con datos diferentes: corrija el archivo o use otra referencia.',
+            ]);
+        }
+
+        try {
+            return DB::transaction(function () use ($company, $user, $data, $identification, $reference) {
+                [$customer, $customerReused] = $this->resolveTenantCustomer($company, $identification, $data);
+
+                $record = CobrosInitialPortfolioRecord::create([
+                    'migration_id' => null, // Importación 12B: fuera del ciclo 5A/5B.
+                    'company_id' => $company->id,
+                    'customer_id' => $customer->id,
+                    'identification_type' => $data['identification_type'],
+                    'source' => CobrosInitialPortfolioRecord::SOURCE_INITIAL,
+                    'external_reference' => $reference,
+                    'verification' => CobrosInitialPortfolioRecord::VERIFICATION_DECLARED,
+                    'alt_contact_name' => $data['alt_contact_name'] ?? null,
+                    'alt_contact_phone' => $data['alt_contact_phone'] ?? null,
+                    'original_amount' => $this->money($data['original_amount'] ?? null),
+                    'balance' => $this->money($data['balance']),
+                    'installment' => $this->money($data['installment']),
+                    'frequency' => $data['frequency'],
+                    'next_charge_date' => $data['next_charge_date'],
+                    'prior_credits' => isset($data['prior_credits']) && $data['prior_credits'] !== '' ? (int) $data['prior_credits'] : null,
+                    'declared_behavior' => $data['declared_behavior'],
+                    'historical_note' => $data['historical_note'] ?? null,
+                    'customer_reused' => $customerReused,
+                    'migrated_by_user_id' => $user->id,
+                    'migrated_at' => now(),
+                ]);
+
+                // Asignación de cartera: reutiliza el servicio existente, pero solo
+                // si el actor tiene derecho de cobrar (rol cobrador) y el cliente
+                // AÚN no tiene cobrador: la importación nunca reasigna cartera ajena.
+                $routeId = $this->activeRouteId($company, $user);
+                $assigned = CobrosAssignment::query()->forCompany($company->id)
+                    ->where('customer_id', $customer->id)->exists();
+                if (! $assigned && $user->hasPermission('cobros.cobrar', $company)) {
+                    app(PortfolioAssignmentService::class)->assign(
+                        $company,
+                        $customer,
+                        $user,
+                        $user,
+                        'Importación de cartera histórica (12B)',
+                        $routeId
+                    );
+                }
+
+                // CxC anclada a la referencia: una por crédito, saldo propio.
+                $this->createImportedReceivable($company, $customer, $record, $routeId);
+
+                return $record;
+            });
+        } catch (QueryException $e) {
+            // Carrera contra el índice único (empresa, external_reference).
+            if (($e->errorInfo[0] ?? null) === '23000' && str_contains((string) $e->getMessage(), 'external_reference')) {
+                throw ValidationException::withMessages([
+                    'external_reference' => 'La referencia ya existe con datos diferentes: corrija el archivo o use otra referencia.',
+                ]);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Cliente del tenant: reutiliza por identificación DENTRO de la empresa o
+     * lo crea; una identificación registrada en OTRO tenant nunca se toca ni
+     * se duplica (regla exacta de 5B).
+     *
+     * @return array{0: Customer, 1: bool}
+     */
+    private function resolveTenantCustomer(Company $company, string $identification, array $data): array
+    {
+        $local = Customer::query()->where('company_id', $company->id)
+            ->where('identification', $identification)->first();
+
+        if ($local !== null) {
+            return [$local, true];
+        }
+
+        if (Customer::query()->where('identification', $identification)->exists()) {
+            throw ValidationException::withMessages([
+                'identification' => 'Esa identificación ya está registrada.',
+            ]);
+        }
+
+        return [Customer::create([
+            'company_id' => $company->id,
+            'customer_type' => 'individual',
+            'identification' => $identification,
+            // Mapeo al enum existente del Customer: 01 cédula, 03 DIMEX, 05 pasaporte.
+            'identification_type' => ['cedula' => '01', 'dimex' => '03', 'pasaporte' => '05'][$data['identification_type']] ?? '01',
+            'name' => trim((string) $data['name']),
+            'phone' => trim((string) $data['phone']),
+            'address' => $data['address'] ?? null,
+            'latitude' => $data['latitude'] ?? null,
+            'longitude' => $data['longitude'] ?? null,
+            'is_active' => true,
+        ]), false];
+    }
+
+    /**
+     * Validación de la fila de importación (mismas reglas 5B + referencia).
+     * Devuelve la referencia normalizada; lanza ValidationException si falta.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function validateImport(array $data): string
+    {
+        $errors = [];
+        $reference = trim((string) ($data['external_reference'] ?? ''));
+        $money = '/^\d{1,12}(\.\d{1,4})?$/';
+
+        if ($reference === '' || mb_strlen($reference) > 64 || preg_match('/[\x00-\x1F]/', $reference)) {
+            $errors['external_reference'] = 'La referencia externa es obligatoria (máx. 64 caracteres).';
+        }
+        if (! isset($data['identification']) || trim((string) $data['identification']) === '' || mb_strlen(trim((string) $data['identification'])) > 20) {
+            $errors['identification'] = 'La identificación es obligatoria (máx. 20 caracteres).';
+        }
+        if (! in_array($data['identification_type'] ?? '', ['cedula', 'dimex', 'pasaporte'], true)) {
+            $errors['identification_type'] = 'Tipo de identificación inválido.';
+        }
+        if (! isset($data['name']) || trim((string) $data['name']) === '' || mb_strlen(trim((string) $data['name'])) > 150) {
+            $errors['name'] = 'El nombre es obligatorio (máx. 150 caracteres).';
+        }
+        if (! isset($data['phone']) || trim((string) $data['phone']) === '' || mb_strlen(trim((string) $data['phone'])) > 30) {
+            $errors['phone'] = 'El teléfono es obligatorio (máx. 30 caracteres).';
+        }
+
+        $balance = trim((string) ($data['balance'] ?? ''));
+        if (! preg_match($money, $balance) || bccomp($balance, '0', 4) <= 0) {
+            $errors['balance'] = 'El saldo pendiente debe ser un monto mayor que cero.';
+        }
+        if (! preg_match($money, trim((string) ($data['installment'] ?? '')))) {
+            $errors['installment'] = 'La cuota es obligatoria.';
+        }
+
+        $original = trim((string) ($data['original_amount'] ?? ''));
+        if ($original !== '' && ! preg_match($money, $original)) {
+            $errors['original_amount'] = 'El monto original es inválido.';
+        } elseif ($original !== '' && preg_match($money, $balance) && bccomp($original, $balance, 4) < 0) {
+            $errors['original_amount'] = 'El monto original no puede ser menor que el saldo pendiente.';
+        }
+
+        if (! in_array($data['frequency'] ?? '', ['diario', 'semanal', 'quincenal', 'mensual'], true)) {
+            $errors['frequency'] = 'Frecuencia inválida.';
+        }
+        if (! isset($data['next_charge_date']) || ! $this->isDate($data['next_charge_date'])) {
+            $errors['next_charge_date'] = 'La fecha de vencimiento es obligatoria.';
+        }
+        if (! in_array($data['declared_behavior'] ?? '', ['bueno', 'regular', 'malo', 'sin_informacion'], true)) {
+            $errors['declared_behavior'] = 'Comportamiento declarado inválido.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return $reference;
+    }
+
+    /**
+     * Inspección SIN escritura de una fila de importación (vista previa 12B-2).
+     * Reutiliza validateImport + la clave (empresa, external_reference):
+     * ready = importable | duplicate = reimportación idéntica | conflict =
+     * referencia existente con datos distintos | invalid = validación fallida.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{status: string, errors: array<int, string>}
+     */
+    public function inspectImportRow(Company $company, array $data): array
+    {
+        try {
+            $reference = $this->validateImport($data);
+        } catch (ValidationException $e) {
+            return ['status' => 'invalid', 'errors' => collect($e->errors())->flatten()->all()];
+        }
+
+        $existing = CobrosInitialPortfolioRecord::query()
+            ->where('company_id', $company->id)
+            ->where('external_reference', $reference)->first();
+        if ($existing === null) {
+            return ['status' => 'ready', 'errors' => []];
+        }
+
+        return $this->importMatches($existing, trim((string) ($data['identification'] ?? '')), $data)
+            ? ['status' => 'duplicate', 'errors' => []]
+            : ['status' => 'conflict', 'errors' => ['La referencia ya existe con datos diferentes.']];
+    }
+
+    /** ¿Reimportación idéntica? Compara identificación + dato financiero. */
+    private function importMatches(CobrosInitialPortfolioRecord $record, string $identification, array $data): bool
+    {
+        $customer = $record->customer()->first();
+        if ($customer === null || $customer->identification !== $identification) {
+            return false;
+        }
+
+        $original = $this->money($data['original_amount'] ?? null);
+        if ((($record->original_amount ?? null) === null) !== ($original === null)) {
+            return false;
+        }
+        if ($original !== null && bccomp((string) $record->original_amount, $original, 4) !== 0) {
+            return false;
+        }
+
+        return bccomp((string) $record->balance, (string) $this->money($data['balance']), 4) === 0
+            && bccomp((string) $record->installment, (string) $this->money($data['installment']), 4) === 0
+            && $record->frequency === $data['frequency']
+            && $record->next_charge_date?->toDateString() === Carbon::parse((string) $data['next_charge_date'])->toDateString();
+    }
+
+    private function isDate(mixed $value): bool
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return false;
+        }
+
+        try {
+            Carbon::parse($value);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * CxC importada: UNA por referencia con saldo propio e idempotente por
+     * (empresa, external_reference). `sale_id` NULL (crédito histórico sin
+     * venta); status `partial` si el saldo ya no cubre el monto original
+     * (crédito parcialmente pagado), sin inventar pagos anteriores.
+     */
+    private function createImportedReceivable(Company $company, Customer $customer, CobrosInitialPortfolioRecord $record, ?int $routeId): void
+    {
+        $balance = (string) $record->balance;
+        if (bccomp($balance, '0', 4) <= 0) {
+            return; // Sin saldo no hay crédito operativo (regla 5B).
+        }
+
+        $branch = $company->branches()->orderBy('id')->first();
+        abort_if($branch === null, 422, 'La empresa no tiene sucursal para registrar el crédito migrado.');
+
+        $existing = AccountReceivable::query()->forCompany($company->id)
+            ->where('external_reference', $record->external_reference)->first();
+        if ($existing !== null) {
+            return; // Reintento: la CxC importada ya existe, no se duplica.
+        }
+
+        $original = (string) ($record->original_amount ?? $record->balance);
+
+        AccountReceivable::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'cobros_route_id' => $routeId,
+            'customer_id' => $customer->id,
+            'sale_id' => null,
+            'external_reference' => $record->external_reference,
+            'issued_at' => today(),
+            'due_date' => $record->next_charge_date?->toDateString() ?? today()->toDateString(),
+            'original_amount' => $original,
+            'balance_due' => $balance,
+            'status' => bccomp($balance, $original, 4) < 0
+                ? AccountReceivable::STATUS_PARTIAL
+                : AccountReceivable::STATUS_PENDING,
+            'currency_code' => $company->currency,
+        ]);
     }
 
     /**

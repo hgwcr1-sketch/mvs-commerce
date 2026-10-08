@@ -405,6 +405,15 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.retry');
     Route::get('/owner/customers/importar/ejecuciones/{run}/reporte', [App\Http\Controllers\Cobros\CustomerImportController::class, 'report'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.report');
+    // 12B-2 - importación de CRÉDITOS históricos (prestamista, sin migración 5A/5B).
+    Route::get('/owner/credits/importar', [App\Http\Controllers\Cobros\CreditImportController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.credits.import');
+    Route::get('/owner/credits/importar/plantilla', [App\Http\Controllers\Cobros\CreditImportController::class, 'template'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.credits.import.template');
+    Route::post('/owner/credits/importar/vista-previa', [App\Http\Controllers\Cobros\CreditImportController::class, 'preview'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.credits.import.preview');
+    Route::post('/owner/credits/importar/confirmar', [App\Http\Controllers\Cobros\CreditImportController::class, 'confirm'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.credits.import.confirm');
     Route::get('/owner/customers/{customer}', [OwnerCustomerController::class, 'show'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.show');
     // 10A - expediente PERMANENTE del cliente (oficina).

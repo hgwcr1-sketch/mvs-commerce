@@ -1229,3 +1229,59 @@ funcionalidad y sin tocar producción.
   logo de `ResponsiveNavigationTest`; la suite global agota el límite de
   memoria de 128 MB de PHP y requiere `-d memory_limit=1G`.
 - Temporales `output.txt` y `tmp_*` preservados fuera del commit.
+
+## 12B - Importación de clientes y créditos históricos (2026-10-08) - COMPLETADO LOCALMENTE
+
+### Resumen
+- 12B-1 (commit 3bd875b3): importación de CLIENTES dentro del shell CobrOS
+  reutilizando `CustomerImportRunService`/`IdentityMatcher` (entry point,
+  plantilla, preview, confirmación, reanudación, reporte; rutas
+  `cobros.owner.customers.import*` con `permission:cobros.portal_dueno`).
+- 12B-2: importación de CRÉDITOS históricos por el PRESTAMISTA como CxC
+  (patrón 5B), sin migración 5A/5B abierta, sin pagos ficticios y sin tocar
+  `cobros_credits` ni Core.
+
+### Migraciones (aditivas, locales)
+- `2026_10_08_000001`: `external_reference` (64, nullable) + índice único
+  `(company_id, external_reference)` en `cobros_initial_portfolio_records` y
+  `accounts_receivable`. down() elimina índices+columnas (filas intactas).
+- `2026_10_08_000002`: `migration_id` nullable en registros (importación fuera
+  del ciclo 5A/5B). down() restaura NOT NULL: si existen filas importadas
+  FALLA SIN BORRAR nada (DDL transaccional); verificado up/down/up en BD
+  sqlite aislada temporal.
+
+### Motor y permisos
+- `InitialPortfolioRecordService::importCredit()` (nueva): exige empresa activa
+  == empresa destino y `cobros.portal_dueno` (403 si no); idempotencia por
+  (empresa, external_reference) con conflicto sin sobrescritura; N créditos por
+  cliente => N CxC independientes (`createImportedReceivable`, `sale_id` null,
+  status `partial` si saldo < monto original); asignación de cartera solo con
+  `cobros.cobrar` y sin robar cartera ajena; `inspectImportRow()` para vista
+  previa sin escritura. `create()`/`assertOpen()` 5B intactos.
+
+### UI (portal dueño)
+- `CreditImportController` + vistas `credit-import{,-results}`: plantilla Xlsx,
+  carga CSV/Excel (máx. 500 filas / 10MB, lector instalado
+  `CustomerImportChunkReader`), preview clasificando filas, confirmación
+  explícita, borrado del archivo temporal y resultados por fila; columna
+  opcional `ruta` solo valida miembro activo; enlace "Importar créditos" en
+  Clientes.
+
+### Validación (2026-10-08)
+- Importaciones: `CobrosCustomerImportTest`+`CobrosImportedCreditPersistenceTest`
+  +`CobrosCreditImportFlowTest` = 18/18 (135 aserciones).
+- Pagos + UTF-8 shell: `CobrosPaymentTest`+`CobrosCreditInstallmentPaymentTest`
+  +`CobrosQuickNavTest` = 61/61 (614).
+- Permisos/aislamiento: `CobrosCustomerModuleTest`+`CobrosCollectorAccessTest`
+  +`CustomerCompanyIsolationTest` = 29/29 (343).
+- Cartera inicial 5B: 14/15 (la única falla es el FALLO PREEXISTENTE
+  `CobrosInitialPortfolioCompletionTest:59`, reproducido con el servicio
+  original de HEAD, sin tocar).
+- `view:cache` OK; `git diff --check` limpio; reversión 000001/000002
+  verificada en BD sqlite temporal.
+
+### Pendientes
+- Corregir (con autorización) el fallo preexistente
+  `CobrosInitialPortfolioCompletionTest:59`.
+- Fase futura: reporte CSV de resultados de importación de créditos y
+  auditoría/eventos append-only de importación.

@@ -23,7 +23,7 @@ class CobrosInitialPortfolioRecord extends Model
 
     protected $fillable = [
         'migration_id', 'company_id', 'customer_id', 'identification_type',
-        'source', 'verification', 'alt_contact_name', 'alt_contact_phone',
+        'source', 'external_reference', 'verification', 'alt_contact_name', 'alt_contact_phone',
         'original_amount', 'balance', 'installment', 'frequency', 'next_charge_date',
         'prior_credits', 'declared_behavior', 'historical_note',
         'customer_reused', 'migrated_by_user_id', 'migrated_at',
