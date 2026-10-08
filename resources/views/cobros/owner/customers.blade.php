@@ -12,6 +12,7 @@
         </div>
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('cobros.owner.customers.create') }}" class="inline-flex min-h-[44px] items-center rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover">Nuevo cliente</a>
+            <a href="{{ route('cobros.owner.customers.import') }}" class="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 px-5 text-sm font-semibold hover:bg-slate-50">Importar</a>
             <a href="{{ route('cobros.owner.assignments') }}" class="inline-flex min-h-[44px] items-center rounded-xl border border-slate-300 px-5 text-sm font-semibold hover:bg-slate-50">Asignar cartera</a>
         </div>
     </header>

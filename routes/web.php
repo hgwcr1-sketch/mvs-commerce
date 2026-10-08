@@ -390,6 +390,21 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.store');
     Route::patch('/owner/customers/collector-credit-setting', [OwnerCustomerController::class, 'updateCollectorCreditSetting'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.credit-setting');
+    // 12B - importación de clientes dentro del shell CobrOS (reutiliza el motor de importaciones).
+    Route::get('/owner/customers/importar', [App\Http\Controllers\Cobros\CustomerImportController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import');
+    Route::get('/owner/customers/importar/plantilla', [App\Http\Controllers\Cobros\CustomerImportController::class, 'template'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.template');
+    Route::post('/owner/customers/importar/revisar', [App\Http\Controllers\Cobros\CustomerImportController::class, 'preview'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.preview');
+    Route::post('/owner/customers/importar/confirmar', [App\Http\Controllers\Cobros\CustomerImportController::class, 'confirm'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.confirm');
+    Route::get('/owner/customers/importar/ejecuciones/{run}', [App\Http\Controllers\Cobros\CustomerImportController::class, 'status'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.status');
+    Route::post('/owner/customers/importar/ejecuciones/{run}/reanudar', [App\Http\Controllers\Cobros\CustomerImportController::class, 'retry'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.retry');
+    Route::get('/owner/customers/importar/ejecuciones/{run}/reporte', [App\Http\Controllers\Cobros\CustomerImportController::class, 'report'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.import.report');
     Route::get('/owner/customers/{customer}', [OwnerCustomerController::class, 'show'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.customers.show');
     // 10A - expediente PERMANENTE del cliente (oficina).
