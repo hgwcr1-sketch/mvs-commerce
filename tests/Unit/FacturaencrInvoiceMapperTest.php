@@ -14,6 +14,7 @@ use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\Facturaencr\FacturaencrCabysService;
 use App\Services\Facturaencr\FacturaencrClient;
+use App\Services\Facturaencr\FacturaencrDiscountMapper;
 use App\Services\Facturaencr\FacturaencrInvoiceMapper;
 use App\Services\Facturaencr\FacturaencrTaxpayerService;
 use App\Services\Facturaencr\FacturaencrUnitMapper;
@@ -907,7 +908,7 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $line = $payload['detalle'][0];
 
         $this->assertSame(500.0, $line['precioUnitario'], 'precioUnitario debe ser el precio real de la línea');
-        $this->assertSame(100.0, $line['descuento']);
+        $this->assertSame([['montoDescuento' => 100.0, 'codigoDescuento' => '07']], $line['descuento']);
 
         $base = bcsub(bcmul('500.0000', '2.0000', 4), '100.0000', 4);
         $this->assertSame('900.0000', $base, 'BCMath: cantidad x precio - descuento = base');
@@ -951,6 +952,52 @@ class FacturaencrInvoiceMapperTest extends TestCase
         } catch (FacturaencrValidationException $exception) {
             $this->assertArrayHasKey('detalle[0]_descuento', $exception->getErrors());
         }
+    }
+
+    public function test_multiple_lines_with_two_discounts_follow_provider_contract(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+
+        $plain = SaleItem::create([
+            'sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '4393101029900',
+            'description' => 'Sin descuento', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2900,
+            'gross_total' => 2900, 'subtotal' => 2900, 'discount_total' => 0, 'tax_rate' => 0,
+            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 2900, 'unit_cost' => 1000,
+        ]);
+        $discounted1 = SaleItem::create([
+            'sale_id' => $sale->id, 'product_code' => 'P02', 'cabys_code' => '3532301009900',
+            'description' => 'Descuento 700', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2800,
+            'gross_total' => 2800, 'subtotal' => 2100, 'discount_total' => 700, 'tax_rate' => 0,
+            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 2100, 'unit_cost' => 1000,
+        ]);
+        $discounted2 = SaleItem::create([
+            'sale_id' => $sale->id, 'product_code' => 'P03', 'cabys_code' => '3532301009900',
+            'description' => 'Descuento 400', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2200,
+            'gross_total' => 2200, 'subtotal' => 1800, 'discount_total' => 400, 'tax_rate' => 0,
+            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 1800, 'unit_cost' => 1000,
+        ]);
+
+        $payload = (new FacturaencrInvoiceMapper)->map(
+            $sale, [$plain, $discounted1, $discounted2], $customer, $company
+        );
+
+        $this->assertCount(3, $payload['detalle']);
+        $this->assertArrayNotHasKey('descuento', $payload['detalle'][0]);
+        $this->assertSame([['montoDescuento' => 700.0, 'codigoDescuento' => '07']], $payload['detalle'][1]['descuento']);
+        $this->assertSame([['montoDescuento' => 400.0, 'codigoDescuento' => '07']], $payload['detalle'][2]['descuento']);
+        $this->assertNotEmpty($payload['detalle'][1]['impuesto']);
+        $this->assertNotEmpty($payload['detalle'][2]['impuesto']);
+
+        $this->assertSame('2800.0000', (string) $discounted1->gross_total, 'el bruto no se reescribe');
+        $this->assertSame('2100.0000', (string) $discounted1->subtotal, 'la base neta se conserva');
+        $this->assertSame('2100.0000', (string) $discounted1->total, 'el total de la línea se conserva');
+        $this->assertSame('700.0000', (string) $discounted1->discount_total);
+
+        $this->assertSame(
+            [],
+            (new FacturaencrDiscountMapper)->contractErrors($payload['detalle']),
+            'el payload debe pasar el preflight del contrato antes del POST'
+        );
     }
 
     public function test_document_type_is_derived_from_sale(): void

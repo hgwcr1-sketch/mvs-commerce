@@ -30,6 +30,7 @@ class FacturaencrInvoiceMapper
     public function __construct(
         private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService(),
         private readonly ?string $environment = null,
+        private readonly FacturaencrDiscountMapper $discountMapper = new FacturaencrDiscountMapper(),
     ) {
     }
 
@@ -57,6 +58,12 @@ class FacturaencrInvoiceMapper
             'receptor' => $this->mapReceptor($customer),
             'detalle' => $this->mapDetalle($saleItems, $documentType),
         ];
+
+        // Preflight del contrato del descuento ANTES del POST.
+        $discountErrors = $this->discountMapper->contractErrors($payload['detalle']);
+        if ($discountErrors !== []) {
+            throw new FacturaencrValidationException($discountErrors);
+        }
 
         $medioPago = $this->mapMedioPago($sale, $salePayment);
         if ($medioPago !== []) {
@@ -333,9 +340,9 @@ class FacturaencrInvoiceMapper
                 'precioUnitario' => (float) $item->unit_price,
             ];
 
-            $discount = $this->money($item->discount_total);
-            if (bccomp($discount, '0', 4) > 0) {
-                $line['descuento'] = (float) $discount;
+            $discounts = $this->discountMapper->map($item->discount_total);
+            if ($discounts !== []) {
+                $line['descuento'] = $discounts;
             }
 
             $line['impuesto'] = $this->taxesFor($item, $documentType);

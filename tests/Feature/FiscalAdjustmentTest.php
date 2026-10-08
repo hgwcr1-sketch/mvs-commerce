@@ -1056,7 +1056,7 @@ class FiscalAdjustmentTest extends TestCase
 
         $payload = (new \App\Services\Facturaencr\FacturaencrAdjustmentMapper())->map($document, $company, null, '01', ['01']);
         $this->assertCount(2, $payload['detalle']);
-        $this->assertSame(100.0, $payload['detalle'][0]['descuento']);
+        $this->assertSame([['montoDescuento' => 100.0, 'codigoDescuento' => '07']], $payload['detalle'][0]['descuento']);
         $this->assertCount(2, $payload['detalle'][1]['impuesto']);
         $this->assertSame(0, bccomp('2652.0000', $document->totals['total'], 4));
 

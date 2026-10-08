@@ -39,6 +39,7 @@ class FacturaencrAdjustmentMapper
     public function __construct(
         private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService(),
         private readonly ?string $environment = null,
+        private readonly FacturaencrDiscountMapper $discountMapper = new FacturaencrDiscountMapper(),
     ) {
     }
 
@@ -84,6 +85,12 @@ class FacturaencrAdjustmentMapper
 
         if ($medioPago !== []) {
             $payload['medioPago'] = array_values($medioPago);
+        }
+
+        // Preflight del contrato del descuento ANTES del POST.
+        $discountErrors = $this->discountMapper->contractErrors($payload['detalle']);
+        if ($discountErrors !== []) {
+            throw new FacturaencrValidationException($discountErrors);
         }
 
         return array_filter($payload, static fn (mixed $value): bool => $value !== null);
@@ -230,7 +237,7 @@ class FacturaencrAdjustmentMapper
             ];
 
             if (bccomp($line->discountTotal, '0', 4) > 0) {
-                $mapped['descuento'] = (float) $line->discountTotal;
+                $mapped['descuento'] = $this->discountMapper->map($line->discountTotal);
             }
 
             $detalle[] = $mapped;
