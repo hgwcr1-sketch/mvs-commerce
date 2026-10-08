@@ -23,19 +23,59 @@ class VisitController extends Controller
     public function today(Request $request, VisitService $service, CobrosPaymentGate $gate): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
-        $visits = $service->today($request->user(), $company);
+        $agendaService = app(\App\Services\Cobros\AgendaService::class);
+
+        $tab = $request->string('tab')->toString();
+        if (! in_array($tab, \App\Services\Cobros\AgendaService::TABS, true)) {
+            $tab = 'hoy';
+        }
+        $agenda = $agendaService->agenda($request->user(), $company, $tab);
+        $items = $agenda['items'];
+        $customerIds = collect($items)
+            ->map(fn (array $item) => (int) $item['customer']->id)
+            ->unique()->values()->all();
 
         return view('cobros.visits.today', [
             'company' => $company,
-            'visits' => $visits,
+            'tab' => $agenda['tab'],
+            'tabs' => \App\Services\Cobros\AgendaService::TAB_LABELS,
+            'rangeStart' => $agenda['start'],
+            'rangeEnd' => $agenda['end'],
+            // Eventos reales de la agenda (visitas/promesas unidas a la recurrencia).
+            'items' => $items,
+            // Compatibilidad: visitas con fila propia entre los eventos mostrados.
+            'visits' => collect($items)->map(fn (array $item) => $item['visit'])->filter()->values(),
             'branches' => $request->user()->branches()->where('branches.company_id', $company->id)->get(),
-            // Fase 3A: entrada al Gate desde una visita autorizada del propio cobrador.
-            'chargeableAccounts' => $gate->chargeableAccountIds(
-                $request->user(),
-                $company,
-                $visits->pluck('customer_id')->map(fn ($id) => (int) $id)->all()
-            ),
+            // Fase 3A: entrada al Gate desde un evento autorizado del propio cobrador.
+            'chargeableAccounts' => $gate->chargeableAccountIds($request->user(), $company, $customerIds),
         ]);
+    }
+
+    /**
+     * Bloque 6 — REPROGRAMAR una ocurrencia desde la Agenda.
+     * Crea la visita de origen SOLO si hace falta y reutiliza VisitService::reschedule.
+     * Cambia únicamente la fecha operativa de ESA visita: la frecuencia base
+     * (cobros_assignments) y la CxC (due_date/saldo) quedan intactas. Sin IDOR.
+     */
+    public function agendaReschedule(Request $request, Customer $customer, \App\Services\Cobros\AgendaService $agenda): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $data = $request->validate([
+            'origin_date' => ['required', 'date'],
+            'scheduled_for' => ['required', 'date', 'after:origin_date'],
+        ], [
+            'scheduled_for.after' => 'La nueva fecha debe ser posterior a la visita original.',
+        ]);
+
+        $agenda->rescheduleOccurrence(
+            $request->user(),
+            $company,
+            $customer,
+            $data['origin_date'],
+            $data['scheduled_for']
+        );
+
+        return back()->with('success', 'Visita reprogramada. La frecuencia base y el crédito no cambiaron.');
     }
 
     public function customerHistory(Request $request, Customer $customer, VisitService $service): View
@@ -63,6 +103,40 @@ class VisitController extends Controller
         $company = Company::findOrFail((int) session('active_company_id'));
         $validated = $this->validatePayload($request, forUpdate: true);
         $service->record($request->user(), $company, $visit, $validated);
+
+        // Procesar visita => avanza la próxima fecha operativa (nunca la financiera).
+        // Reprogramar NO avanza: la excepción no desplaza la recurrencia base.
+        if (($validated['status'] ?? null) !== CobrosVisit::STATUS_RESCHEDULED) {
+            app(\App\Services\Cobros\AgendaService::class)
+                ->advanceAfterProcessing($request->user(), $company, $visit->customer);
+        }
+
+        return back()->with('success', 'Gestión registrada correctamente.');
+    }
+
+    /**
+     * Gestión rápida desde la ficha de Mi Cartera (UX del centro de trabajo).
+     * Reutiliza 2B: mismos estados, mismas validaciones y misma bitácora.
+     * Cliente sin asignar o de otra empresa => 404 (autoridad = auth + cartera).
+     */
+    public function manage(Request $request, Customer $customer, VisitService $service): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:visitado,no_localizado,promesa_pago,reprogramada'],
+            'promise_date' => ['nullable', 'date', 'required_if:status,promesa_pago'],
+            'scheduled_for' => ['nullable', 'date', 'required_if:status,reprogramada'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $service->manage($request->user(), $company, $customer, $validated);
+
+        // Procesar visita => avanza la próxima fecha operativa (nunca la financiera).
+        // Reprogramar NO avanza: la excepción no desplaza la recurrencia base.
+        if ($validated['status'] !== CobrosVisit::STATUS_RESCHEDULED) {
+            app(\App\Services\Cobros\AgendaService::class)
+                ->advanceAfterProcessing($request->user(), $company, $customer);
+        }
 
         return back()->with('success', 'Gestión registrada correctamente.');
     }

@@ -26,12 +26,17 @@ use App\Http\Controllers\Cobros\CobrosAlertController;
 use App\Http\Controllers\Cobros\CobrosAuditController;
 use App\Http\Controllers\Cobros\CobrosDashboardController;
 use App\Http\Controllers\Cobros\CollectorPaymentController;
+use App\Http\Controllers\Cobros\CollectorCreditController;
+use App\Http\Controllers\Cobros\CollectorCreditDeliveryController;
 use App\Http\Controllers\Cobros\DailyClosingController;
 use App\Http\Controllers\Cobros\CollectorPortfolioController;
 use App\Http\Controllers\Cobros\ForceChangePasswordController;
+use App\Http\Controllers\Cobros\CreditRequestController;
+use App\Http\Controllers\Cobros\InitialPortfolioController;
 use App\Http\Controllers\Cobros\OwnerAssignmentController;
 // Inventario
 use App\Http\Controllers\Cobros\OwnerCollectorController;
+use App\Http\Controllers\Cobros\OwnerCustomerController;
 use App\Http\Controllers\Cobros\OwnerDashboardController;
 use App\Http\Controllers\Cobros\VisitController;
 use App\Http\Controllers\CompanyCashSettingController;
@@ -163,7 +168,16 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
 // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
 // Usa 'cobros.active.company' (no redirige a onboarding de Commerce).
-Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class, 'cobros.entry'])->prefix('cobros')->name('cobros.')->group(function () {
+Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class, 'cobros.entry', 'cobros.route'])->prefix('cobros')->name('cobros.')->group(function () {
+    // Selector de ruta del cobrador: exige UNA ruta activa/licenciada en sesión.
+    Route::middleware('permission:cobros.cobrar')->group(function () {
+        Route::get('/rutas', [App\Http\Controllers\Cobros\RouteSelectorController::class, 'index'])->name('routes.select');
+        Route::post('/rutas', [App\Http\Controllers\Cobros\RouteSelectorController::class, 'store'])->name('routes.store');
+    });
+    // Campana CobrOS: click en una notificación → marca SOLO ese recipient del
+    // usuario autenticado como leído (read_at Core) y redirige a su destino.
+    Route::get('/notifications/{recipient}/open', [CobrosAlertController::class, 'open'])
+        ->name('notifications.open');
     Route::get('/supervisor', [CobrosDashboardController::class, 'supervisor'])
         ->middleware('permission:cobros.supervisar')->name('supervisor.index');
     Route::get('/supervisor/audit', [CobrosAuditController::class, 'index'])
@@ -176,8 +190,17 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
     Route::get('/collector/portfolio/{customer}', [CollectorPortfolioController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
+    // 2) MIS CLIENTES: con y sin crédito activo (expediente histórico legítimo).
+    Route::get('/collector/mis-clientes', [CollectorPortfolioController::class, 'mine'])
+        ->middleware('permission:cobros.cobrar')->name('collector.my-customers');
     Route::post('/collector/portfolio/{customer}/location', [CollectorPortfolioController::class, 'storeLocation'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.location');
+    // Teléfono (cliente o contacto indicado) desde el recibo: mismo tenant + cartera.
+    Route::post('/collector/customers/{customer}/phone', [CollectorPortfolioController::class, 'storePhone'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customer.phone');
+    // Bloque 6: configuración operativa de día/frecuencia de visita (jamás toca la CxC).
+    Route::post('/collector/portfolio/{customer}/visit-schedule', [CollectorPortfolioController::class, 'storeVisitSchedule'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customer.visit-schedule');
     Route::get('/collector/payments/create/{account}', [CollectorPaymentController::class, 'create'])
         ->middleware('permission:cobros.cobrar')->name('collector.payments.create');
     Route::post('/collector/payments/{account}', [CollectorPaymentController::class, 'store'])
@@ -186,16 +209,108 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.cobrar')->name('collector.payments.history');
     Route::get('/collector/receipts/{receipt}', [CollectorPaymentController::class, 'receipt'])
         ->middleware('permission:cobros.acceder')->name('collector.payments.receipt');
+    // Recibo formal independiente (print-friendly): solo el recibo, sin navbar/menús.
+    Route::get('/collector/receipts/{receipt}/print', [CollectorPaymentController::class, 'receiptPrint'])
+        ->middleware('permission:cobros.acceder')->name('collector.payments.receipt.print');
     Route::post('/collector/receipts/{receipt}/annul', [CollectorPaymentController::class, 'annul'])
         ->middleware(['permission:cobros.anular', 'throttle:10,1'])->name('collector.payments.annul');
+    // Fase 6B — "Nuevo cliente" del cobrador (se asigna automáticamente a su cartera).
+    Route::get('/collector/customers/create', [CollectorPortfolioController::class, 'createCustomer'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.create');
+    Route::post('/collector/customers', [CollectorPortfolioController::class, 'storeCustomer'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.customers.store');
+    // BLOQUE 7A - solicitud de credito del cobrador: crear, revisar, enviar y listar.
+    // Sin PATCH/PUT: una solicitud enviada NO tiene endpoint de edicion.
+    Route::get('/collector/credit-requests', [CreditRequestController::class, 'index'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credit-requests.index');
+    Route::get('/collector/credit-requests/create', [CreditRequestController::class, 'create'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credit-requests.create');
+    // 7A typeahead de CLIENTE EXISTENTE: solo clientes de la empresa activa.
+    Route::get('/collector/credit-requests/customers', [CreditRequestController::class, 'searchCustomers'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:60,1'])->name('collector.credit-requests.customers');
+    Route::get('/collector/credit-requests/bureau-check', [CreditRequestController::class, 'bureauCheck'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:60,1'])->name('collector.credit-requests.bureau-check');
+    // 9C-B collector_authorized: pantalla de evaluación del COBRADOR (datos,
+    // fotos privadas, consentimiento + consulta y confirmación manual).
+    Route::get('/collector/credit-requests/{solicitud}/evaluacion', [CreditRequestController::class, 'evaluate'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credit-requests.evaluate');
+    Route::get('/collector/credit-requests/{solicitud}/foto/{lado}', [CreditRequestController::class, 'photo'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credit-requests.photo');
+    // 10A - expediente PERMANENTE DEL CLIENTE (acceso desde ficha "VER CLIENTE").
+    Route::get('/collector/customers/{customer}/expediente', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'show'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.expediente');
+    Route::post('/collector/customers/{customer}/expediente', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'save'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.customers.expediente.save');
+    Route::get('/collector/customers/{customer}/expediente/documento/{tipo}', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'document'])
+        ->middleware('permission:cobros.cobrar')->name('collector.customers.expediente.document');
+    // 10A - "Mis préstamos" del cobrador (lista de créditos propios desembolsados).
+    Route::get('/collector/prestamos', [CollectorCreditController::class, 'index'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credits.index');
+    Route::post('/collector/credit-requests/review', [CreditRequestController::class, 'review'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credit-requests.review');
+    Route::post('/collector/credit-requests', [CreditRequestController::class, 'store'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credit-requests.store');
+    // BLOQUE 9C - el COBRADOR prepara, decide y entrega su propio préstamo:
+    // CONTINUAR CON EL PRÉSTAMO o NO REALIZARLO, sin aprobación individual
+    // del dueño (su pantalla queda como supervisión informativa).
+    Route::get('/collector/credit-requests/{solicitud}/preparar', [CollectorCreditController::class, 'prepare'])
+        ->middleware('permission:cobros.cobrar')->name('collector.credit-requests.prepare');
+    Route::post('/collector/credit-requests/preview', [CollectorCreditController::class, 'preview'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:60,1'])->name('collector.credit-requests.preview');
+    Route::post('/collector/credit-requests/{solicitud}/continuar', [CollectorCreditController::class, 'approve'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credit-requests.continuar');
+    Route::post('/collector/credit-requests/{solicitud}/no-realizar', [CollectorCreditController::class, 'notRealizar'])
+    ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credit-requests.not-realizar');
+    // 13) Modalidad collector_authorized: el cobrador revisa sus propios datos.
+    Route::post('/collector/credit-requests/{solicitud}/verificar', [CollectorCreditController::class, 'verify'])
+    ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.credit-requests.verify');
+    Route::post('/collector/creditos/{credit}/entregar', [CollectorCreditController::class, 'disburse'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('collector.creditos.disburse');
+    Route::get('/collector/creditos/{credit}/entrega', [CollectorCreditDeliveryController::class, 'delivery'])
+        ->middleware('permission:cobros.cobrar')->name('collector.creditos.entrega');
+    Route::get('/collector/creditos/{credit}/comprobante', [CollectorCreditDeliveryController::class, 'receipt'])
+        ->middleware('permission:cobros.cobrar')->name('collector.creditos.comprobante');
+    Route::get('/collector/creditos/{credit}/comprobante.pdf', [CollectorCreditDeliveryController::class, 'pdf'])
+        ->middleware('permission:cobros.cobrar')->name('collector.creditos.comprobante_pdf');
     Route::get('/visits/today', [VisitController::class, 'today'])
         ->middleware('permission:cobros.cobrar')->name('visits.today');
     Route::get('/visits/customer/{customer}', [VisitController::class, 'customerHistory'])
         ->middleware('permission:cobros.cobrar')->name('visits.customer');
     Route::post('/visits/customer/{customer}', [VisitController::class, 'store'])
         ->middleware('permission:cobros.cobrar')->name('visits.store');
+    // Gestión rápida desde la ficha: reutiliza 2B (mismos estados y bitácora).
+    Route::post('/visits/customer/{customer}/manage', [VisitController::class, 'manage'])
+        ->middleware('permission:cobros.cobrar')->name('visits.manage');
+    // Cartera inicial POR COBRADOR (5A/5B): el cobrador inicia/carga/finaliza.
+    // Consulta común identificación => nombre (solo lectura; sin proveedor => manual).
+    Route::get('/clientes/identificacion-nombre', [App\Http\Controllers\Cobros\CustomerIdentificationLookupController::class, '__invoke'])
+        ->middleware(['permission:cobros.acceder', 'throttle:30,1'])->name('customers.identification-name');
+    Route::get('/mi-cartera-inicial', [InitialPortfolioController::class, 'index'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio');
+    Route::post('/mi-cartera-inicial/iniciar', [InitialPortfolioController::class, 'start'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio.start');
+    Route::post('/mi-cartera-inicial/finalizar', [InitialPortfolioController::class, 'finalize'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio.finalize');
+    Route::get('/mi-cartera-inicial/clientes/nuevo', [InitialPortfolioController::class, 'createClient'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio.client');
+    Route::post('/mi-cartera-inicial/clientes', [InitialPortfolioController::class, 'storeClient'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio.client.store');
+    Route::post('/mi-cartera-inicial/registros/{record}/correccion', [InitialPortfolioController::class, 'requestCorrection'])
+        ->middleware('permission:cobros.acceder')->name('initial-portfolio.correction.request');
+    // Prestamista: resumen, revisión y resolución de correcciones (no gate).
+    Route::get('/mi-cartera-inicial/resumen', [InitialPortfolioController::class, 'summary'])
+        ->middleware('permission:cobros.portal_dueno')->name('initial-portfolio.summary');
+    Route::post('/mi-cartera-inicial/revisar', [InitialPortfolioController::class, 'review'])
+        ->middleware('permission:cobros.portal_dueno')->name('initial-portfolio.review');
+    Route::post('/mi-cartera-inicial/correcciones/{correction}/resolver', [InitialPortfolioController::class, 'resolveCorrection'])
+        ->middleware('permission:cobros.portal_dueno')->name('initial-portfolio.correction.resolve');
+    Route::post('/mi-cartera-inicial/reabrir', [InitialPortfolioController::class, 'reopenForCollector'])
+        ->middleware('permission:cobros.portal_dueno')->name('initial-portfolio.reopen.owner');
     Route::patch('/visits/{visit}', [VisitController::class, 'update'])
         ->middleware('permission:cobros.cobrar')->name('visits.update');
+    // Bloque 6: reprogramar UNA ocurrencia de la Agenda (frecuencia base intacta).
+    Route::post('/visits/{customer}/agenda-reschedule', [VisitController::class, 'agendaReschedule'])
+        ->middleware('permission:cobros.cobrar')->name('visits.agenda.reschedule');
     // Cierre del día: declaración por medio de pago + evidencias, enviado al dueño.
     Route::get('/closing', [DailyClosingController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('closing.show');
@@ -203,6 +318,17 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('closing.store');
     Route::get('/closing/{closing}/evidence/{kind}', [DailyClosingController::class, 'evidence'])
         ->middleware('permission:cobros.acceder')->name('closing.evidence');
+    Route::get('/accesos-rapidos', [\App\Http\Controllers\Cobros\CobrosQuickNavController::class, 'edit'])
+        ->middleware('permission:cobros.cobrar')->name('quick-nav.edit');
+    Route::put('/accesos-rapidos', [\App\Http\Controllers\Cobros\CobrosQuickNavController::class, 'update'])
+        ->middleware(['permission:cobros.cobrar', 'throttle:30,1'])->name('quick-nav.update');
+    Route::middleware('permission:cobros.portal_dueno')->prefix('owner/routes')->name('owner.routes')->group(function () {
+        Route::get('/', [App\Http\Controllers\Cobros\OwnerRouteController::class, 'index']);
+        Route::get('/create', [App\Http\Controllers\Cobros\OwnerRouteController::class, 'create'])->name('.create');
+        Route::post('/', [App\Http\Controllers\Cobros\OwnerRouteController::class, 'store'])->name('.store');
+        Route::get('/{route}/edit', [App\Http\Controllers\Cobros\OwnerRouteController::class, 'edit'])->name('.edit');
+        Route::put('/{route}', [App\Http\Controllers\Cobros\OwnerRouteController::class, 'update'])->name('.update');
+    });
     Route::get('/owner', [OwnerDashboardController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.dashboard');
     Route::get('/owner/audit', [CobrosAuditController::class, 'index'])
@@ -211,6 +337,18 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.reports');
     Route::get('/owner/alerts', [CobrosAlertController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.alerts');
+    // BLOQUE 8 - verificacion de solicitudes de credito del dueno/prestamista.
+    Route::middleware('permission:cobros.portal_dueno')->prefix('owner/solicitudes')->name('owner.solicitudes')->group(function () {
+        Route::get('/', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'index'])->name('.index');
+        // 9C.3 - oficina ejecuta la consulta de evaluación (policy-aware, server-side).
+        Route::get('/consulta', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'bureauCheck'])
+            ->middleware('throttle:60,1')->name('.bureau-check');
+        Route::get('/{id}', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'show'])->name('.show');
+        Route::get('/{id}/foto/{lado}', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'photo'])->name('.photo');
+        Route::post('/{id}/verificar', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'verify'])->middleware('throttle:30,1')->name('.verify');
+        Route::post('/{id}/corregir', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'correct'])->middleware('throttle:30,1')->name('.correct');
+        Route::post('/{id}/rechazar', [App\Http\Controllers\Cobros\OwnerCreditRequestController::class, 'reject'])->middleware('throttle:30,1')->name('.reject');
+    });
     Route::get('/owner/collectors', [OwnerCollectorController::class, 'index'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors');
     // Fase 6B — drill-down del dueño por cobrador (cartera y métricas del mes).
@@ -222,6 +360,16 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.toggle');
     Route::put('/owner/collectors/{user}/branches', [OwnerCollectorController::class, 'updateBranches'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.branches');
+    // Política de AUTORIDAD de préstamos por cobrador (solo el dueño la cambia).
+    Route::patch('/owner/collectors/{user}/autoridad', [OwnerCollectorController::class, 'updateAuthority'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.authority');
+    // 9B.3 — reparto interno de la mora: general (empresa) y override por cobrador.
+    Route::get('/owner/configuracion/mora', [App\Http\Controllers\Cobros\OwnerLateFeeSettingsController::class, 'edit'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.latefee');
+    Route::put('/owner/configuracion/mora', [App\Http\Controllers\Cobros\OwnerLateFeeSettingsController::class, 'update'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.latefee.update');
+    Route::patch('/owner/collectors/{user}/mora', [OwnerCollectorController::class, 'updateLateFee'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.latefee');
     Route::post('/owner/collectors/{user}/regenerate-access', [OwnerCollectorController::class, 'regenerateAccess'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.regenerate');
     // Revisión del dueño sobre un cierre diario recibido (trazabilidad).
@@ -233,6 +381,43 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.asignar')->name('owner.assignments.store');
     Route::delete('/owner/assignments/{customer}', [OwnerAssignmentController::class, 'destroy'])
         ->middleware('permission:cobros.asignar')->name('owner.assignments.destroy');
+    // Fase 6B — módulo Clientes del dueño/administrador en /cobros/*.
+    Route::get('/owner/customers', [OwnerCustomerController::class, 'index'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers');
+    Route::get('/owner/customers/create', [OwnerCustomerController::class, 'create'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.create');
+    Route::post('/owner/customers', [OwnerCustomerController::class, 'store'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.store');
+    Route::patch('/owner/customers/collector-credit-setting', [OwnerCustomerController::class, 'updateCollectorCreditSetting'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.credit-setting');
+    Route::get('/owner/customers/{customer}', [OwnerCustomerController::class, 'show'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.show');
+    // 10A - expediente PERMANENTE del cliente (oficina).
+    Route::get('/owner/customers/{customer}/expediente', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'show'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.expediente');
+    Route::post('/owner/customers/{customer}/expediente', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'save'])
+        ->middleware(['permission:cobros.portal_dueno', 'throttle:30,1'])->name('owner.customers.expediente.save');
+    Route::get('/owner/customers/{customer}/expediente/documento/{tipo}', [App\Http\Controllers\Cobros\CreditRequestExpedienteController::class, 'document'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.expediente.document');
+    Route::get('/owner/customers/{customer}/edit', [OwnerCustomerController::class, 'edit'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.edit');
+    // El parámetro se llama {cliente}: UpdateCobrosCustomerRequest lo usa para
+    // el 404 cross-company y para ignorar la unicidad del propio cliente.
+    Route::put('/owner/customers/{cliente}', [OwnerCustomerController::class, 'update'])
+        ->middleware('permission:cobros.portal_dueno')->name('owner.customers.update');
+    // BLOQUE 9 — crédito: definir condiciones → aprobar → desembolsar.
+    // Solo prestamista (portal_dueno); el cobrador jamás aprueba ni desembolsa.
+    Route::middleware('permission:cobros.portal_dueno')->prefix('owner/creditos')->name('owner.creditos')->group(function () {
+        Route::get('/desde/{solicitud}', [App\Http\Controllers\Cobros\OwnerCreditController::class, 'define'])->name('.define');
+        Route::post('/preview', [App\Http\Controllers\Cobros\OwnerCreditController::class, 'preview'])->middleware('throttle:60,1')->name('.preview');
+        Route::post('/{solicitud}/aprobar', [App\Http\Controllers\Cobros\OwnerCreditController::class, 'approve'])->middleware('throttle:30,1')->name('.approve');
+        Route::get('/{credit}', [App\Http\Controllers\Cobros\OwnerCreditController::class, 'show'])->name('.show');
+        Route::post('/{credit}/desembolsar', [App\Http\Controllers\Cobros\OwnerCreditController::class, 'disburse'])->middleware('throttle:30,1')->name('.disburse');
+        // BLOQUE 9A.2 - entrega con firma, comprobante PDF privado y WhatsApp.
+        Route::get('/{credit}/entrega', [App\Http\Controllers\Cobros\OwnerCreditDeliveryController::class, 'delivery'])->name('.entrega');
+        Route::get('/{credit}/comprobante', [App\Http\Controllers\Cobros\OwnerCreditDeliveryController::class, 'receipt'])->name('.comprobante');
+        Route::get('/{credit}/comprobante.pdf', [App\Http\Controllers\Cobros\OwnerCreditDeliveryController::class, 'pdf'])->name('.comprobante_pdf');
+    });
     Route::get('/', [CobrosDashboardController::class, 'index'])
         ->name('index');
 });
@@ -303,10 +488,17 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
     Route::patch('/empresas/{company}/cobros-contrato', [PlatformAdminController::class, 'updateCobrosContract'])->name('cobros-contract.update');
+    // Reapertura excepcional POR COBRADOR (auditable) de la cartera inicial.
+    Route::post('/empresas/{company}/cobradores/{user}/cartera-inicial/reabrir', [App\Http\Controllers\Cobros\InitialPortfolioController::class, 'reopen'])
+        ->name('initial-portfolio.reopen');
     Route::post('/empresas/{company}/cobradores', [PlatformAdminController::class, 'storeCollector'])->name('collectors.store');
     Route::patch('/empresas/{company}/cobradores/{user}/toggle', [PlatformAdminController::class, 'toggleCollector'])->name('collectors.toggle');
     Route::put('/empresas/{company}/cobradores/{user}/branches', [PlatformAdminController::class, 'updateCollectorBranches'])->name('collectors.branches');
     Route::post('/empresas/{company}/cobradores/{user}/regenerate-access', [PlatformAdminController::class, 'regenerateCollectorAccess'])->name('collectors.regenerate');
+    // Licencias individuales: renovar, suspender y reactivar por cobrador.
+    Route::post('/empresas/{company}/cobradores/{user}/licencia/renovar', [PlatformAdminController::class, 'renewCollectorLicense'])->name('collectors.license.renew');
+    Route::patch('/empresas/{company}/cobradores/{user}/licencia/suspender', [PlatformAdminController::class, 'suspendCollectorLicense'])->name('collectors.license.suspend');
+    Route::patch('/empresas/{company}/cobradores/{user}/licencia/reactivar', [PlatformAdminController::class, 'resumeCollectorLicense'])->name('collectors.license.resume');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
 });
 

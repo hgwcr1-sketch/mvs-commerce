@@ -2,6 +2,104 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 11 semáforo de riesgo — 11A + 11B COMPLETADOS LOCALMENTE (2026-10-07)
+
+**11A — motor (solo lectura):** `app/Services/Cobros/CreditRiskService.php` clasifica por
+cliente: VERDE (0 cuotas vencidas), AMARILLO (1), ROJO (2+); nuevos sin historial VERDE;
+migrados por `declared_behavior` (malo=ROJO, regular=AMARILLO) salvo deuda grave declarada
+en `historical_note` => ROJO; abono parcial no cambia el color (solo cuenta cuota vencida
+con pendiente BCMath > 0). Alcance tenant vía `forCompany()` (nunca `where company_id`
+a pelo, el global scope `BelongsToCobrosTenant` filtraba de más y daba falsos VERDES).
+Sin migraciones: usa `CobrosCredit` + `CobrosCreditInstallment` + `declared_behavior`.
+**11B — componente e integración:** `resources/views/cobros/components/credit-risk.blade.php`
+silueta con punto de estado + `role="img"`/`aria-label`/`sr-only`; acepta `level` directo o
+`customer`+`company` (resuelve con `classify` memoizado por request). `classifyMany()` en el
+servicio comparte la fecha del día para listados. Integrado junto al nombre en:
+`collector/portfolio`, `collector/my-customers`, `collector/customer` (ficha, size lg),
+`owner/customers`, `owner/customer` (size lg), `collector/credit-index` y
+`collector/credit-request-expediente`. NO en recibos/pantallas de cobro. Vistas de
+solicitudes del dueño (`owner/credit-requests`, `owner/credit-request-show`) quedan pendientes:
+solo muestran nombre de solicitud sin relación `customer` (requiere cablear `customer_id` en
+el listado). Archivos: servicio, componente, 7 vistas, `tests/Feature/CobrosCreditRisk11BTest.php` (nuevo, 2/2).
+Validación: 11A 4/4 + 11B 2/2 + `CobrosInitialPortfolio5BTest|CobrosManualFixesTest` = **20/20 (166 aserciones)**;
+`view:cache` OK; `git diff --check` OK; Pint solo `line_ending` CRLF conocido (sin corregir para no
+expandir diffs). Sin migraciones, sin commit/push ni despliegue.
+
+## CobrOS — base por rutas (2026-10-04)
+
+Decisión vigente: Prestamista → Rutas → Cobradores → Clientes; ruta independiente
+de sucursal, licencia pagada por ruta y membresías múltiples por persona. Base
+aditiva y contexto interno de una ruta por sesión; sin integrar aún los flujos
+operativos ni modificar el saldo migrado. Detalle, límites y pruebas dirigidas:
+[COBROS_RUTAS_BASE.md](COBROS_RUTAS_BASE.md). Trabajo previo preservado, sin commit.
+
+## Módulo CLIENTES de CobrOS — completado localmente (2026-10-02)
+
+**Actualización 2026-10-03:** búsqueda parcial case-insensitive con equivalencia básica
+de acentos en Mi cartera; captura GPS opcional en alta (sin marcar validación RouteOS);
+configuración por empresa en Clientes para permitir crédito al crear, apagada por defecto.
+Cuando está habilitada, solo el alta del cobrador puede enviar `credit_limit`/`credit_days`,
+con `credit_limit` BCMath limitado por el máximo empresarial; no se habilita edición
+posterior. Migraciones aditivas `000003` (toggle) y `000004` (máximo). En el caso manual
+auditado, Mario Vega pertenece a empresa 2 y tiene asignado el cliente 2 de esa empresa, pero
+no tiene filas en `branch_user`; la CxC está en sucursal 2. El rechazo del Gate por sucursal
+es correcto; asignar al cobrador a la sucursal mediante administración existente, sin bypass.
+Tests dirigidos cartera/clientes/Gate **40/40, 246 aserciones**; sin suite completa ni commit.
+
+Dueño/admin (`cobros.portal_dueno`): `/cobros/owner/customers` con búsqueda `q`, saldo
+abierto y cobrador; crear, editar y detalle (CxC abiertas, historial de cobros, recibos);
+drill-down `/cobros/owner/collectors/{user}` (cartera + cobrado/recibos del mes). Cobrador
+(`cobros.cobrar`): botón **Nuevo cliente** en *Mi cartera* con autoasignación vía
+`PortfolioAssignmentService::assign`. Enlace **Clientes** añadido a la barra del shell.
+CobrOS no escribe crédito/nivel de precio/geolocalización (siguen en Commerce, R01).
+
+Archivos: `OwnerCustomerController`, `StoreCobrosCustomerRequest`, `UpdateCobrosCustomerRequest`,
+`OwnerCollectorController@show`, `CollectorPortfolioController@createCustomer/storeCustomer`,
+vistas `cobros/owner/{customers,customer-form,customer,collector-show}` y
+`cobros/collector/customer-create`, nav `cobros/components/navigation.blade.php`, rutas en `routes/web.php`.
+Evidencia: `CobrosCustomerModuleTest` **8/8 (61)**; regresión `Cobros|CustomerCompanyIsolation`
+**319/319 (2559)**; `Credit|…|SaleVoid` 107/114 con los 7 fallos preexistentes `SaleVoid*`;
+Pint PASS en lo tocado; `git diff --check` PASS. Sin migraciones, sin SSH/push/merge ni producción.
+
+**Pendiente:** importación de clientes dentro de CobrOS (decisión de alcance) y los ítems
+externos de 6B — PG real, registro/ciclo 2 de la PWA, dispositivo real, GPS, custodia,
+auditoría externa y **APROBADO PARA PRODUCCIÓN** — listados en la tabla
+"CERRADO vs REQUIERE APROBACIÓN" de [COBROS_6B_PREPARACION_PILOTO.md](COBROS_6B_PREPARACION_PILOTO.md).
+
+## Panel Maestro CobrOS — acceso visible, licencias potenciales y revalidación de cupo (2026-10-02)
+
+Auditoría: el flujo ya existía casi completo (1E-A/1E-B): `company_modules` con
+`license_mode`/`collector_limit`/`admin_license_charged`, `CompanyLicenseService::updateCobrosContract`
+(habilita el módulo), `CompanyProvisioner::commercialOnboard` (dueño + rol Administrador con todos
+los permisos de `permission_role`), `CollectorManagementService` (cupo + `permission_role`, sin Spatie)
+y Panel Maestro (`platform.cobros-contract.update`, `platform.collectors.*`). Añadido hoy:
+`getPotentialLicenses()` = cobradores + administrador/dueño (sin cambio si `admin_license_charged`),
+revalidación del cupo al **reactivar** un cobrador en modalidad `company_cupo` (brecha anotada en
+`docs/COBROS_6B_PREPARACION_PILOTO.md`), sección "Contrato CobrOS" visible en `platform/show` aunque
+el módulo esté desactivado (aviso + guardar lo reactiva) y anclas `#contrato-cobros`/`#modulos-contrato`
+en la cabecera. Archivos: `app/Services/Cobros/CollectorManagementService.php`,
+`app/Http/Controllers/PlatformAdminController.php`, `resources/views/platform/show.blade.php`,
+`tests/Feature/CobrosLicensingContractTest.php` (+5), `tests/Feature/CobrosCollectorManagementTest.php` (+2).
+Validación: 50/50 (165 aserciones) en `CobrosCollectorManagementTest|CobrosLicensingContractTest`, 119/119 (1249) en regresión M02/M03/M10/M13/M14 + CompanyLicense/PlatformAdmin/CompanyModuleAccess y 297/297 (2432) con `--filter=Cobros`. Sin migraciones, sin staging/producción, push ni merge.
+
+**Cerrado 2026-10-02 (decisión tomada):** semántica de licencias potenciales = **cobradores activos + 1 administrador/dueño** (nunca `cupo+1`); control de concurrencia con `lockForUpdate()` sobre `company_modules` de CobrOS **dentro de la transacción** de `createCollector` (ambas ramas: usuario nuevo y usuario existente) y de `toggleCollector` al reactivar, revalidando `collector_limit` **después** del lock y abortando sin crear/reactivar usuario (`lockContractAndAssertSlot`). Sin tablas/modelos nuevos; `permission_role`, Panel Maestro y flujo 1E intactos. Nota: en PostgreSQL el lock serializa; en SQLite la grammar no emite `FOR UPDATE`, por lo que la garantía efectiva es de staging/producción. Brecha anotada en `docs/COBROS_6B_PREPARACION_PILOTO.md:137` actualizada. Sigue abierto: licencia individual con vigencia propia por cobrador (requiere contrato nuevo).
+
+## Staging CobrOS — vhost exclusivo con redirects de entrada (2026-10-02)
+
+Solo `/etc/nginx/sites-available/cobros-staging.mvscommerce.com` (staging; producción
+`mvscommerce`/`mvscommerce-web` sin tocar, sin push ni cambios en repo/BD/.env). Entradas
+`location = /`, `/login` y `/dashboard` devuelven 302 a `/cobros` o `/cobros/login`, y
+`~ ^/(fidelidad|portal-clientes)(/|$)` 302 a `/cobros`; decisión de entrada ya no depende
+de `mvs_entry`, cookies, UA, `intended` ni PWA. Diagnóstico temporal retirado del servidor:
+middleware `DiagRequest`, su `prepend` en `bootstrap/app.php`, `storage/logs/diag-request.log`
+y el `log_format/access_log` especial de nginx (backups: `*.bak-diag-20261002-150728` y
+`*.bak-fix-20261002-151827`). Verificado con curl y Chrome móvil 360 px (perfil limpio):
+`/`, `/login`, `/dashboard`, `/fidelidad`, `/portal-clientes/1` terminan en `/cobros/login`;
+form action `POST /cobros/login`; manifest `manifest-cobros.json` + `sw-cobros.js` scope
+`/cobros` OK. Cadena post-login (`/cobros/login` → `/cobros` → `/cobros/owner` con
+`cobros.portal_dueno`) cubierta por `CobrosAuthenticationTest` 31/31 local; login real en el
+teléfono sigue pendiente de ejecución por el usuario.
+
 ## Worktree CobrOS — Validación local 6B cerrada; piloto BLOQUEADO (2026-10-01)
 
 Rama `feature/cobros-v1`; base al iniciar cierre `08fba58`. Cierre local

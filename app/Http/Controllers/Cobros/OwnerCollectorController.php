@@ -178,6 +178,11 @@ class OwnerCollectorController extends Controller
             'promisesMonth' => $promisesMonth,
             'newCustomersMonth' => $newCustomersMonth,
             'closings' => $closings,
+            // 2) Política de autoridad vigente de ESTE cobrador (lectura UX).
+            'authorityPolicy' => \App\Models\CobrosCollectorAuthorityPolicy::policyFor(
+                (int) $company->id,
+                (int) $collector->id
+            ),
         ]);
     }
 
@@ -256,6 +261,86 @@ class OwnerCollectorController extends Controller
         $service->assignBranches($user, $company, $data['branch_ids']);
 
         return back()->with('success', "Sucursales de {$user->name} actualizadas.");
+    }
+
+    /**
+     * 2) Política de AUTORIDAD de préstamos por cobrador — solo el dueño la
+     * cambia (ruta con cobros.portal_dueno; el cobrador jamás puede cambiar
+     * la propia). Resuelta/guardada server-side, tenant-scoped y auditable
+     * (changed_by + changed_at). Aplica a decisiones futuras: los créditos
+     * y solicitudes anteriores conservan su autoridad congelada en snapshot.
+     */
+    public function updateAuthority(Request $request, User $user): RedirectResponse
+    {
+        $company = Company::query()->findOrFail((int) session('active_company_id'));
+
+        // Mismo criterio del detalle: miembro de la empresa activa con rol cobrador.
+        $collector = User::query()
+            ->whereKey($user->id)
+            ->whereHas('companies', fn ($q) => $q->where('companies.id', $company->id))
+            ->whereHas('roles', function ($q) use ($company) {
+                $q->where('roles.company_id', $company->id)
+                    ->where('roles.is_active', true)
+                    ->whereHas('permissions', fn ($p) => $p->where('permissions.name', 'cobros.cobrar'));
+            })
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'authority' => ['required', 'string', 'in:owner_required,collector_authorized'],
+        ], [
+            'authority.required' => 'Elija quién autoriza los préstamos de este cobrador.',
+            'authority.in' => 'Opción no válida.',
+        ]);
+
+        \App\Models\CobrosCollectorAuthorityPolicy::set(
+            (int) $company->id,
+            (int) $collector->id,
+            $data['authority'],
+            (int) $request->user()->id
+        );
+
+        return redirect()
+            ->route('cobros.owner.collectors.show', $collector)
+            ->with('success', 'Listo · Se guardó quién autoriza los préstamos de '.$collector->name.'.');
+    }
+
+    /**
+     * 9B.3 — porcentaje de mora POR COBRADOR (override opcional, solo dueño;
+     * la ruta exige cobros.portal_dueno: el cobrador jamás lo cambia).
+     * Vacío = "usar porcentaje general". Participación interna: no altera
+     * deuda, mora del cliente, CxC ni cuotas.
+     */
+    public function updateLateFee(Request $request, User $user): RedirectResponse
+    {
+        $company = Company::query()->findOrFail((int) session('active_company_id'));
+
+        // Mismo criterio de tenant que updateAuthority/show: miembro con cobros.cobrar.
+        $collector = User::query()
+            ->whereKey($user->id)
+            ->whereHas('companies', fn ($q) => $q->where('companies.id', $company->id))
+            ->whereHas('roles', function ($q) use ($company) {
+                $q->where('roles.company_id', $company->id)
+                    ->where('roles.is_active', true)
+                    ->whereHas('permissions', fn ($p) => $p->where('permissions.name', 'cobros.cobrar'));
+            })
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'collector_late_fee_pct' => ['nullable', 'string', 'regex:/^\d{1,3}(\.\d{1,2})?$/D', 'lte:100'],
+        ], [
+            'collector_late_fee_pct.regex' => 'Escriba un porcentaje válido, por ejemplo 60 o 40.50.',
+            'collector_late_fee_pct.lte' => 'El porcentaje no puede ser mayor a 100.',
+        ]);
+
+        $value = trim((string) ($data['collector_late_fee_pct'] ?? ''));
+        $collector->collector_late_fee_pct = $value === '' ? null : $value;
+        $collector->save();
+
+        $detail = $value === '' ? 'usará el porcentaje general' : "tendrá {$value}% de la mora";
+
+        return redirect()
+            ->route('cobros.owner.collectors.show', $collector)
+            ->with('success', "Listo · {$collector->name} {$detail}.");
     }
 
     /**

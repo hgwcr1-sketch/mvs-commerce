@@ -37,6 +37,89 @@
         </dl>
     </div>
 
+    {{-- 2) Política de AUTORIDAD: lenguaje humano, sin términos técnicos. --}}
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label="Autorización de préstamos">
+        <h2 class="text-lg font-semibold text-slate-900">¿Quién autoriza los préstamos de este cobrador?</h2>
+        <form method="POST" action="{{ route('cobros.owner.collectors.authority', $collector) }}">
+            @csrf
+            @method('PATCH')
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label for="authority-owner" class="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border-2 p-4 {{ $authorityPolicy === 'owner_required' ? 'border-primary bg-primary/10' : 'border-slate-200 bg-white hover:bg-slate-50' }}">
+                    <input type="radio" id="authority-owner" name="authority" value="owner_required"
+                           {{ $authorityPolicy === 'owner_required' ? 'checked' : '' }}
+                           class="mt-1 h-5 w-5 shrink-0 border-slate-400">
+                    <span class="min-w-0">
+                        <span class="block text-sm font-bold text-slate-900">YO REVISO Y AUTORIZO</span>
+                        <span class="mt-1 block text-sm text-slate-600">Las solicitudes de este cobrador esperan su autorización.</span>
+                    </span>
+                </label>
+                <label for="authority-collector" class="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border-2 p-4 {{ $authorityPolicy === 'collector_authorized' ? 'border-primary bg-primary/10' : 'border-slate-200 bg-white hover:bg-slate-50' }}">
+                    <input type="radio" id="authority-collector" name="authority" value="collector_authorized"
+                           {{ $authorityPolicy === 'collector_authorized' ? 'checked' : '' }}
+                           class="mt-1 h-5 w-5 shrink-0 border-slate-400">
+                    <span class="min-w-0">
+                        <span class="block text-sm font-bold text-slate-900">EL COBRADOR PUEDE AUTORIZAR</span>
+                        <span class="mt-1 block text-sm text-slate-600">Este cobrador puede decidir y entregar préstamos sin esperar su autorización.</span>
+                    </span>
+                </label>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">El cambio aplica a las próximas decisiones; los préstamos ya entregados no se modifican.</p>
+            <button type="submit" class="mt-4 inline-flex min-h-[44px] items-center rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover">Guardar</button>
+        </form>
+    </section>
+
+    {{-- 9B.3: porcentaje de mora de ESTE cobrador; solo el dueño lo cambia. --}}
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label="Porcentaje de mora del cobrador">
+        <h2 class="text-lg font-semibold text-slate-900">Porcentaje de mora para este cobrador</h2>
+        <form method="POST" action="{{ route('cobros.owner.collectors.latefee', $collector) }}" class="mt-3">
+            @csrf
+            @method('PATCH')
+            @php($generalShown = rtrim(rtrim((string) ($company->collector_late_fee_pct ?? '50.00'), '0'), '.'))
+            <label for="latefee-mode" class="block text-sm font-semibold text-slate-700">Porcentaje de mora para este cobrador</label>
+            <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <select id="latefee-mode" name="latefee_mode"
+                        class="min-h-[48px] w-full rounded-xl border border-slate-300 px-4 text-base text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <option value="general" {{ old('latefee_mode', $collector->collector_late_fee_pct === null ? 'general' : 'custom') === 'general' ? 'selected' : '' }}>Usar porcentaje general ({{ $generalShown }}%)</option>
+                    <option value="custom" {{ old('latefee_mode', $collector->collector_late_fee_pct === null ? 'general' : 'custom') === 'custom' ? 'selected' : '' }}>Porcentaje personalizado (0–100)</option>
+                </select>
+                <div id="latefee-pct-wrap" class="{{ $collector->collector_late_fee_pct !== null ? '' : 'hidden' }}">
+                    <label for="latefee-pct" class="sr-only">Porcentaje personalizado de mora</label>
+                    <div class="flex items-center gap-2">
+                        <input id="latefee-pct" name="collector_late_fee_pct" type="text" inputmode="decimal" maxlength="6"
+                               value="{{ old('collector_late_fee_pct', $collector->collector_late_fee_pct ?? '') }}"
+                               placeholder="60"
+                               class="min-h-[48px] w-32 rounded-xl border border-slate-300 px-4 text-right text-base font-semibold text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40">
+                        <span class="text-base font-semibold text-slate-600">%</span>
+                    </div>
+                </div>
+            </div>
+            @error('collector_late_fee_pct')
+            <p class="mt-1 text-sm font-semibold text-red-600">{{ $message }}</p>
+            @enderror
+            <p class="mt-2 text-xs text-slate-500">Si se cobran ₡5,000.00 de mora con 50%: cobrador ₡2,500.00 y prestamista ₡2,500.00. No cambia la deuda del cliente.</p>
+            <button type="submit" class="mt-4 inline-flex min-h-[44px] items-center rounded-xl bg-primary px-5 text-sm font-bold text-white hover:bg-primary-hover">Guardar</button>
+        </form>
+        <script>
+            (function () {
+                var mode = document.getElementById('latefee-mode');
+                var wrap = document.getElementById('latefee-pct-wrap');
+                var pct = document.getElementById('latefee-pct');
+                if (!mode || !wrap || !pct) { return; }
+                function apply(clear) {
+                    var custom = mode.value === 'custom';
+                    wrap.classList.toggle('hidden', !custom);
+                    if (!custom && clear) { pct.value = ''; }
+                }
+                mode.addEventListener('change', function () { apply(true); });
+                var form = mode.closest('form');
+                if (form) {
+                    form.addEventListener('submit', function () { if (mode.value !== 'custom') { pct.value = ''; } });
+                }
+                apply(false);
+            })();
+        </script>
+    </section>
+
     <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label="Operación del mes">
         <h2 class="text-lg font-semibold text-slate-900">Operación de {{ $monthLabel }}</h2>
         <dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -184,6 +267,7 @@
                     </div>
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2">
+                    <a href="{{ route('cobros.owner.customers.show', $customer) }}" class="inline-flex min-h-[44px] items-center rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-primary-hover">Ver detalle</a>
                 </div>
             </article>
         @empty

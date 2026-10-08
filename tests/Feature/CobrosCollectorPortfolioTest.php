@@ -122,6 +122,13 @@ class CobrosCollectorPortfolioTest extends TestCase
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
             ->get(route('cobros.collector.portfolio', ['q' => substr($digits, -4)]))
             ->assertOk()->assertViewHas('customers', fn ($rows) => $rows->getCollection()->modelKeys() === [$byPhone->id]);
+
+        [$accented] = $this->customerWithAccount($c, $b, $u, '50.0000', ['name' => 'Peña Pérez']);
+        foreach (['P', 'pEñA', 'pena'] as $term) {
+            $this->get(route('cobros.collector.portfolio', ['q' => $term]))
+                ->assertOk()
+                ->assertSee($accented->name);
+        }
     }
 
     public function test_totals_counts_branches_and_due_dates_are_correct(): void
@@ -174,7 +181,32 @@ class CobrosCollectorPortfolioTest extends TestCase
             ->get(route('cobros.collector.portfolio.show', $customer))
             ->assertOk()
             ->assertSee($account->sale->sale_number)
+            ->assertSee('💰 COBRAR')
+            ->assertSee(route('cobros.collector.payments.create', $account), false)
+            ->assertSee('min-h-[48px]', false)
             ->assertSee('150.00');
+    }
+
+    public function test_customer_detail_explains_when_gate_blocks_collection(): void
+    {
+        [$c, $b, $u] = $this->context();
+        [$customer, $account] = $this->customerWithAccount($c, $b, $u, '1000.0000');
+        // Sucursal desvinculada NO bloquea: branch_id de CxC es trazabilidad, no autoridad.
+        $u->branches()->detach($b);
+
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.portfolio.show', $customer))
+            ->assertOk()
+            ->assertSee('💰 COBRAR');
+
+        // El Gate sí bloquea (y lo explica) cuando el cliente asignado deja de estar activo.
+        $customer->update(['is_active' => false]);
+
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.portfolio.show', $customer))
+            ->assertOk()
+            ->assertDontSee('💰 COBRAR')
+            ->assertSee('Este cliente no está en su cartera.');
     }
 
     public function test_data_snapshots_remain_intact_after_browsing(): void
@@ -212,6 +244,79 @@ class CobrosCollectorPortfolioTest extends TestCase
         // Cobrador autenticado ve enlace Mi cartera y la ruta del dashboard redirige al listado real.
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
             ->get(route('cobros.collector.portfolio'))->assertOk()->assertSee('Mi cartera');
+    }
+
+    public function test_card_shows_call_whatsapp_and_maps_actions_from_stored_data(): void
+    {
+        [$c, $b, $u] = $this->context();
+        [$full] = $this->customerWithAccount($c, $b, $u, '1000.0000', ['name' => 'Acciones completas '.uniqid(), 'identification' => '1-'.random_int(10000000, 99999999)]);
+        $full->update(['phone' => '+506 8888 1234', 'latitude' => '9.92810000', 'longitude' => '-84.09000000']);
+        [$bare] = $this->customerWithAccount($c, $b, $u, '500.0000', ['name' => 'Sin datos '.uniqid()]);
+
+        $response = $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.portfolio'))->assertOk();
+        $html = $response->getContent();
+
+        // Teléfono almacenado => LLAMAR (tel:) + WHATSAPP (wa.me), sin cédula ni datos financieros.
+        $this->assertStringContainsString('tel:+50688881234', $html);
+        $this->assertMatchesRegularExpression('#href="https://wa\.me/\d+\?text=#', $html);
+        preg_match('#href="(https://wa\.me/[^"]+)"#', $html, $wa);
+        $this->assertNotEmpty($wa);
+        $this->assertStringNotContainsString(substr((string) $full->identification, 2), urldecode($wa[1]));
+        $this->assertStringNotContainsString('1000.0000', urldecode($wa[1]));
+
+        // GPS => IR AL CLIENTE con Google Maps universal (no Waze-only).
+        $this->assertStringContainsString('IR AL CLIENTE', $html);
+        $this->assertStringContainsString('https://www.google.com/maps/search/?api=1&amp;query=9.9281', $html);
+        $this->assertStringNotContainsString('waze.com', $html);
+
+        // Faltantes => estados discretos, sin enlaces rotos.
+        $this->assertStringContainsString('Teléfono pendiente', $html);
+        $this->assertStringContainsString('Ubicación pendiente', $html);
+        $this->assertStringNotContainsString('href="tel:"', $html);
+
+        // COBRAR disponible exactamente donde el Gate marca la cuenta como cobrable.
+        $chargeable = $response->viewData('chargeableAccounts');
+        $this->assertArrayHasKey($full->id, $chargeable);
+        $this->assertArrayHasKey($bare->id, $chargeable);
+        $this->assertSame(count($chargeable), substr_count($html, '>COBRAR<'));
+    }
+
+    public function test_card_hides_customer_belonging_to_another_route(): void
+    {
+        [$c, $b, $u] = $this->context();
+        $active = \App\Models\CobrosRoute::create(['company_id' => $c->id, 'name' => 'Ruta activa '.uniqid(), 'active' => true]);
+        $active->users()->attach($u->id, ['active' => true]);
+        app(\App\Services\Cobros\CollectorLicenseService::class)->renewForRoute(
+            $active, $c, User::factory()->create(['is_platform_admin' => true, 'is_active' => true]), now()->addMonth()
+        );
+        $other = \App\Models\CobrosRoute::create(['company_id' => $c->id, 'name' => 'Ruta ajena '.uniqid(), 'active' => true]);
+        [$mine] = $this->customerWithAccount($c, $b, $u, '700.0000', ['name' => 'De mi ruta '.uniqid()]);
+        [$theirs] = $this->customerWithAccount($c, $b, $u, '800.0000', ['name' => 'De otra ruta '.uniqid()]);
+        CobrosAssignment::query()->forCompany($c->id)->where('customer_id', $theirs->id)
+            ->update(['cobros_route_id' => $other->id]);
+
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id, 'active_cobros_route_id' => $active->id])
+            ->get(route('cobros.collector.portfolio'))
+            ->assertOk()
+            ->assertSee($mine->name)
+            ->assertDontSee($theirs->name);
+    }
+
+    public function test_card_local_phone_shows_call_and_whatsapp_without_pending(): void
+    {
+        [$c, $b, $u] = $this->context();
+        [$customer] = $this->customerWithAccount($c, $b, $u, '300.0000', ['name' => 'Local '.uniqid()]);
+        $customer->update(['phone' => '88133806']);
+
+        $html = $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.portfolio'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('href="tel:88133806"', $html);
+        $this->assertStringContainsString('wa.me/50688133806', $html);
+        $this->assertStringContainsString('>LLAMAR<', $html);
+        $this->assertStringContainsString('>WHATSAPP<', $html);
+        $this->assertStringNotContainsString('Teléfono pendiente', $html);
     }
 
     private function context(array $permissions = ['cobros.acceder', 'cobros.cobrar']): array

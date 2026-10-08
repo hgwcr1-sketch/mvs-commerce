@@ -140,6 +140,7 @@
                         @endif
                     </div>
                     <div class="flex flex-wrap gap-2">
+                        <a href="{{ route('cobros.owner.collectors.show', $collector['id']) }}" class="min-h-10 inline-flex items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover">Ver cartera</a>
                         @if($contract['license_mode'] === 'company_cupo')
                             <form method="POST" action="{{ route('cobros.owner.collectors.toggle', $collector['id']) }}">
                                 @csrf

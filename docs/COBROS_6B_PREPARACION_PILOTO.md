@@ -4,6 +4,40 @@
 de `sw-cobros.js` + validación SW/manifest en staging; dispositivo real sigue
 pendiente).
 
+2026-10-02 (tarde). **Módulo CLIENTES cerrado localmente**: listado con búsqueda y saldo
+del dueño en `/cobros/owner/customers` (crear, editar, detalle con CxC/pagos/recibos),
+alta **Nuevo cliente** del cobrador con autoasignación a su cartera
+(`/cobros/collector/customers`), drill-down del dueño por cobrador
+(`/cobros/owner/collectors/{user}`) y enlace **Clientes** en la barra del shell.
+Aislamiento cross-company (404) y por permisos (403); CobrOS no escribe
+crédito/nivel de precio/geolocalización (siguen en Commerce, R01).
+Evidencia: `CobrosCustomerModuleTest` **8/8 (61)** y regresión
+`Cobros|CustomerCompanyIsolation` **319/319 (2559)**; pint PASS en los PHP tocados;
+`git diff --check` PASS. Detalle en [PROGRESO_COBROS.md](PROGRESO_COBROS.md).
+Sin migraciones, SSH, push, merge ni despliegue.
+
+### Estado 6B — CERRADO vs REQUIERE APROBACIÓN / RECURSO EXTERNO (2026-10-02)
+
+| CERRADO (local, con evidencia) | Fecha |
+|---|---|
+| Integración Vite del asset PWA (`@vite([... 'resources/js/cobros-pwa.js'])`) | 2026-10-02 |
+| Fix de `public/sw-cobros.js` (`claim()` solo en `activate`) + validación de registro/alcance/cachés en staging HTTPS | 2026-10-02 |
+| Precisión monetaria: rechazo de >4 decimales, acumulación BCMath exacta, `credit_limit` a escala 4 (`CobrosMoneyPrecision6BTest` 10/10) | 2026-10-02 |
+| Cierre de cupo bajo `lockForUpdate()` en creación y reactivación de cobradores | 2026-10-02 |
+| Módulo CLIENTES en CobrOS (dueño: lista/búsqueda/crear/editar/detalle; cobrador: **Nuevo cliente** autoasignado; drill-down por cobrador; aislamiento por empresa) | 2026-10-02 |
+| Navegación del shell sin duplicados (barra + Más) | `5ddb018` |
+
+| REQUIERE APROBACIÓN O RECURSO EXTERNO | Motivo de lo que falta |
+|---|---|
+| Registro automático del SW por la app y ciclo 2 de la PWA (cerrar sesión y reabrir) | Requiere sesión autenticada y dispositivo: **NO PROBADO / NO EJECUTADO** |
+| Instalación real de la PWA (icono → `/cobros` → login → `/cobros/owner`, teclado, nombres largos) | Requiere teléfono físico: **NO EJECUTADO** |
+| PostgreSQL real (locks `FOR UPDATE`, migraciones pobladas, FK/índices) | Entorno local = SQLite; credenciales desde el gestor autorizado: **NO DISPONIBLE** |
+| GPS: consentimiento, finalidad, retención y purga/anonimización | Decisión de producto/usuario pendiente |
+| Custodia: liquidación, entrega/aceptación e ingreso a caja | Definición operativa pendiente (excluido de 3B/3C) |
+| Licencias/cupos: `customers.credit_limit` a 4 decimales, licencia individual por cobrador, facturación | Exigen migración o contrato nuevo (no autorizados) |
+| Importación Excel/CSV de clientes dentro de CobrOS | El flujo vive en `importaciones.clientes.*` (layout Commerce): requiere decisión de alcance |
+| Auditoría externa, validación del usuario y **APROBADO PARA PRODUCCIÓN** | Acciones externas; los agentes no despliegan producción |
+
 2026-10-01 (Costa Rica). **Validación local 6B cerrada; BLOQUEADO para piloto
 financiero**. 6B/Definition of Done de producción NO completada. Base de cierre:
 `feature/cobros-v1`, `08fba58`. Sin cambios funcionales, SSH, push, merge ni
@@ -132,13 +166,14 @@ no ejecutarlo sin fijar y verificar base vacía exclusiva y credenciales limitad
 |---|---|---|
 | PWA (5B) | Manifest, worker público y fuente JS | ~~Layout pide `/js/cobros-pwa.js`…~~ **Cerrado 2026-10-02:** el layout usa `@vite([…, 'resources/js/cobros-pwa.js'])`, el build publica `assets/cobros-pwa-DZqbccKS.js` (200) y el registro/activación del SW en HTTPS de staging quedó probado (ver Actualización 2026-10-02). Falta: registro automático por la app en layout autenticado y prueba en dispositivo real |
 | Mala señal | Replay con mismo token; no pago offline | No se encontró consumidor operacional de captureDraft/sync-ready en vistas. Captura nueva genera token nuevo: no certificada recuperación tras cierre/recarga. Banner se incluye online=true y no renderiza aviso por defecto |
-| Precisión | Gate CobrOS usa BCMath, columnas decimal(19,4) | Servicio compartido applyPayment convierte montos/saldos a float y round, contrario a precisión extremo a extremo. Requiere alcance de corrección y tests de límites; no se afirma pérdida concreta con los montos pequeños probados |
+| Precisión | Gate CobrOS usa BCMath, columnas decimal(19,4) | **CERRADA 2026-10-02.** Los 3 hallazgos corregidos en `AccountsReceivableService` sin floats ni `round()`: (1) `roundedAmount()` half-up eliminado → `exactAmount()` con la misma regla que `SecurePaymentService::amount()` (**>4 decimales se RECHAZA**, no se redondea); (2) `sum('balance_due')` (float de la base, pérdida real a partir de 10 dígitos enteros: `(string)` de `10000000000.0002` daba `10000000000` y sobreaprobaba 0.0002) → acumulación exacta string/BCMath fila a fila; (3) `bccomp(credit_limit,…)` pasa de escala 2 a escala 4. Tests: `CobrosMoneyPrecision6BTest` **10/10, 51 aserciones** (cero, fracciones de colón, `10.00005` rechazado en ambas capas, sumas fraccionarias, magnitud grande, límite exacto, límite 0). Residual con aprobación pendiente: la columna `customers.credit_limit` sigue `decimal(15,2)` — llevarla a 4 decimales exige migración (no autorizada en esta tarea). `admin_license_charged` no implica facturación |
 | Liquidación | Custodia, recibos, reversos y reportes netos | No hay entrega/aceptación/conciliación e ingreso a caja. Excluido de 3B/3C, pero arquitectura exige liquidación antes de caja. Definir operación del piloto; nunca registrar otro pago para liquidar |
-| Licencias/cupos | Individual/company_cupo, Platform Admin, altas por dueño según contrato | **Bloqueador:** contrato por empresa; no evidenciado contrato individual con vigencia propia por cobrador. canCreateCollector cuenta antes de transacción sin lock contractual; toggleCollector reactiva sin revalidar cupo. Falta decisión de contrato, control y prueba de altas concurrentes/reactivación. admin_license_charged no implica facturación |
+| Licencias/cupos | Individual/company_cupo, Platform Admin, altas por dueño según contrato | **Parcialmente cerrado 2026-10-02:** `createCollector` y `toggleCollector` (reactivar) ahora revalidan `collector_limit` DENTRO de la transacción y después de `lockForUpdate()` sobre `company_modules`, con test que simula el cupo tomado entre la comprobación previa y el lock (`CobrosCollectorManagementTest`). Nota: en PostgreSQL el lock serializa; en SQLite (dev) la grammar no emite `FOR UPDATE`, así que la garantía real es de staging/producción. Sigue abierto: contrato por empresa sin licencia individual de vigencia propia por cobrador; altas concurrentes sin lock contractual quedan protegidas solo por este lock; `admin_license_charged` no implica facturación |
 | Standalone | Login/navegación propios, User y monolito compartidos según V1 | No significa backend/base separados. Instalación display:standalone, retorno/sesión/actualización en teléfono pendientes; no crear identidad paralela |
 | Dispositivos | Auth/sesión, permisos, revocación y rate limiting | Política de confianza, pérdida/robo, sesiones simultáneas y retiro pendientes; sin certificación Android/iOS/GPS real |
 | GPS | Ubicación cliente y snapshot visita | Falta plazo/finalidad, consentimiento operativo, acceso, backups y purga/anonimización autorizada preservando pagos/auditoría. No borrar GPS/pagos aquí |
 | Responsive | CSS/markup mobile-first, controles 44/48/56px | Prueba local 6B PASS en formulario, vista previa y recibo a 360/768/1280 sin overflow horizontal; esto no certifica dispositivo real. Revisar teclado, nombres largos, menú y pantallas financieras en dispositivo real antes del piloto |
+| Clientes | CRUD de Commerce + asignación de cartera CobrOS | **CERRADO 2026-10-02** en CobrOS: listado con búsqueda y saldo, crear/editar/detalle del dueño (`cobros.owner.customers.*`), **Nuevo cliente** del cobrador con autoasignación (`cobros.collector.customers.*`), drill-down por cobrador (`cobros.owner.collectors.show`), aislamiento cross-company (404) y por permisos (403), sin escritura de crédito/precio/geolocalización. Queda fuera: importación Excel/CSV (flujo de Commerce, decisión de alcance) y edición de crédito/nivel de precio (sigue en Commerce, R01) |
 
 La arquitectura inicial menciona licencia por ruta; 1E-A/1E-B documentan después
 individual/company_cupo. Se registra evolución/brechas, sin cambiar contratos,

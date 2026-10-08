@@ -17,6 +17,7 @@ class CollectorManagementService
     public function __construct(
         private CompanyLicenseService $licenseService,
         private CollectorPasswordService $passwordService,
+        private CollectorLicenseService $collectorLicenses,
     ) {}
 
     public function getContract(Company $company): ?array
@@ -64,6 +65,48 @@ class CollectorManagementService
         return User::whereIn('id', $userIds)->where('is_active', true)->count();
     }
 
+    /**
+     * Cupos efectivamente consumidos en modalidad company_cupo: cobradores
+     * reales + el dueño/admin SOLO cuando su licencia está configurada como
+     * cobrada (`admin_license_charged`); si es gratis no consume cupo.
+     */
+    public function seatUsage(Company $company): int
+    {
+        $usage = $this->getCollectorCount($company);
+
+        $contract = $this->getContract($company);
+        if (($contract['license_mode'] ?? null) !== 'company_cupo'
+            || ! ($contract['admin_license_charged'] ?? false)) {
+            return $usage;
+        }
+
+        return $usage + ($this->hasActiveOwner($company) ? 1 : 0);
+    }
+
+    /** Existe al menos un dueño/administrador activo (portador de portal_dueno). */
+    private function hasActiveOwner(Company $company): bool
+    {
+        $roleIds = Role::where('company_id', $company->id)
+            ->where('is_active', true)
+            ->whereHas('permissions', fn ($q) => $q->where('permissions.name', 'cobros.portal_dueno'))
+            ->pluck('id');
+
+        if ($roleIds->isEmpty()) {
+            return false;
+        }
+
+        $userIds = DB::table('company_user')
+            ->where('company_id', $company->id)
+            ->whereIn('role_id', $roleIds)
+            ->pluck('user_id');
+
+        if ($userIds->isEmpty()) {
+            return false;
+        }
+
+        return User::whereIn('id', $userIds)->where('is_active', true)->exists();
+    }
+
     public function canCreateCollector(Company $company): bool
     {
         $contract = $this->getContract($company);
@@ -75,7 +118,7 @@ class CollectorManagementService
             return true;
         }
 
-        return $this->getCollectorCount($company) < $limit;
+        return $this->seatUsage($company) < $limit;
     }
 
     public function getRemainingSlots(Company $company): ?int
@@ -89,7 +132,7 @@ class CollectorManagementService
             return null;
         }
 
-        return max(0, $limit - $this->getCollectorCount($company));
+        return max(0, $limit - $this->seatUsage($company));
     }
 
     /**
@@ -188,7 +231,11 @@ class CollectorManagementService
                 }
             });
 
-            return ['user' => $existingUser->fresh(), 'plain_password' => $plainPassword];
+            $created = $existingUser->fresh();
+            // Modalidad individual: el alta otorga la licencia propia si falta.
+            $this->collectorLicenses->grantIfMissing($created, $company);
+
+            return ['user' => $created, 'plain_password' => $plainPassword];
         }
 
         return DB::transaction(function () use ($company, $data, $plainPassword, $skipLimit) {
@@ -213,6 +260,9 @@ class CollectorManagementService
                 $user->branches()->syncWithoutDetaching($branchIds);
             }
 
+            // Modalidad individual: licencia propia desde el primer ingreso.
+            $this->collectorLicenses->grantIfMissing($user, $company);
+
             return ['user' => $user, 'plain_password' => $plainPassword];
         });
     }
@@ -220,6 +270,12 @@ class CollectorManagementService
     public function toggleCollector(User $user, Company $company, bool $active): void
     {
         $this->validateUserIsCollector($user, $company);
+
+        // Modalidad individual: reactivar exige licencia propia vigente
+        // (vencida o suspendida se atiende con renovar/reactivar licencia).
+        if ($active && ! $user->is_active && $this->collectorLicenses->isIndividual($company)) {
+            $this->collectorLicenses->assertCanOperate($user, $company);
+        }
 
         // Reactivar un cobrador inactivo vuelve a consumir un cupo: en modalidad
         // company_cupo el cupo se revalida DENTRO de la transacción y después
@@ -264,7 +320,7 @@ class CollectorManagementService
 
         $limit = $module->collector_limit;
 
-        if ($limit !== null && $this->getCollectorCount($company) >= $limit) {
+        if ($limit !== null && $this->seatUsage($company) >= $limit) {
             throw ValidationException::withMessages([
                 'collector' => "Límite de cobradores alcanzado ({$limit}).",
             ]);

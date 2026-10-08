@@ -216,7 +216,7 @@ class CobrosCollectorAccessTest extends TestCase
             $this->assertSame(array_unique($barHrefs), $barHrefs, 'la barra no debe repetir enlaces');
             $this->assertSame(array_unique($panelHrefs), $panelHrefs, 'el panel Más no debe repetir enlaces');
             $expected = match ($selected) {
-                'owner.dashboard' => ['cobros.owner.dashboard', 'cobros.owner.collectors', 'cobros.owner.audit', 'cobros.owner.reports', 'cobros.owner.alerts'],
+                'owner.dashboard' => ['cobros.owner.dashboard', 'cobros.owner.collectors', 'cobros.owner.customers', 'cobros.owner.solicitudes.index', 'cobros.owner.audit', 'cobros.owner.reports', 'cobros.owner.alerts', 'cobros.owner.routes'],
                 'supervisor.index' => ['cobros.supervisor.index', 'cobros.supervisor.alerts', 'cobros.supervisor.audit'],
                 'collector.index' => ['cobros.visits.today', 'cobros.collector.index', 'cobros.collector.payments.history', 'cobros.closing.show'],
             };
@@ -249,6 +249,8 @@ class CobrosCollectorAccessTest extends TestCase
         $expected = [
             'cobros.owner.dashboard',
             'cobros.owner.collectors',
+            'cobros.owner.customers',
+            'cobros.owner.solicitudes.index',
             'cobros.owner.assignments',
             'cobros.supervisor.index',
             'cobros.owner.audit',
@@ -259,8 +261,15 @@ class CobrosCollectorAccessTest extends TestCase
             'cobros.collector.payments.history',
             'cobros.closing.show',
         ];
+        // Cada opción autorizada aparece UNA sola vez en la navegación (barra + Más).
+        // El acceso puntual de la campana de notificaciones en el header no es
+        // navegación y no cuenta para este criterio.
+        $dom = new \DOMDocument;
+        @$dom->loadHTML($content);
+        [$barHrefs, $panelHrefs] = $this->navHrefsBySlot($dom);
+        $navHrefs = array_merge($barHrefs, $panelHrefs);
         foreach ($expected as $route) {
-            $this->assertSame(1, substr_count($content, 'href="'.route($route).'"'), $route);
+            $this->assertSame(1, count(array_filter($navHrefs, fn ($href) => $href === route($route))), $route);
         }
 
         // Alertas y Auditoría aparecen UNA vez: el dueño no ve las variantes de
@@ -274,9 +283,6 @@ class CobrosCollectorAccessTest extends TestCase
         $response->assertDontSee('MVS Commerce')
             ->assertDontSee('Fidelización')->assertDontSee('Fidelization');
 
-        $dom = new \DOMDocument;
-        @$dom->loadHTML($content);
-        [$barHrefs, $panelHrefs] = $this->navHrefsBySlot($dom);
         $this->assertNotEmpty($barHrefs);
         $this->assertNotEmpty($panelHrefs);
         $this->assertSame([], array_intersect($barHrefs, $panelHrefs), 'sin duplicación barra vs Más');

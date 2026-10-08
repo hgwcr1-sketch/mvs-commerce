@@ -15,10 +15,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class CobrosReceipt extends Model
 {
+    use \App\Models\Concerns\HasCobrosRoute;
+
     protected $table = 'cobros_receipts';
 
     protected $fillable = [
         'company_id',
+        'cobros_route_id',
         'branch_id',
         'customer_id',
         'account_receivable_id',
@@ -28,6 +31,10 @@ class CobrosReceipt extends Model
         'cobros_visit_id',
         'receipt_number',
         'amount',
+        'balance_before',
+        'balance_after',
+        'tendered_amount',
+        'change_amount',
         'currency_code',
         'reference',
         'client_token',
@@ -42,6 +49,10 @@ class CobrosReceipt extends Model
     {
         return [
             'amount' => 'decimal:4',
+            'balance_before' => 'decimal:4',
+            'balance_after' => 'decimal:4',
+            'tendered_amount' => 'decimal:4',
+            'change_amount' => 'decimal:4',
             'paid_at' => 'datetime',
         ];
     }

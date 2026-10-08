@@ -121,6 +121,31 @@ class VisitService
         });
     }
 
+    /**
+     * Gestión rápida desde la ficha de Mi Cartera: reutiliza la visita pendiente
+     * propia del cliente (o crea la de hoy con schedule()) y registra con las
+     * MISMAS reglas, estados y bitácora de 2B. Sin estados nuevos; no toca dinero.
+     */
+    public function manage(User $collector, Company $company, Customer $customer, array $data): CobrosVisit
+    {
+        $this->assertAssignedCustomer($collector, $company, $customer);
+
+        $visit = CobrosVisit::query()->forCompany($company->id)
+            ->where('customer_id', $customer->id)
+            ->where('collector_user_id', $collector->id)
+            ->where('status', CobrosVisit::STATUS_PENDING)
+            ->orderByDesc('scheduled_for')->orderByDesc('id')
+            ->first();
+
+        if (! $visit) {
+            $visit = $this->schedule($collector, $company, $customer, [
+                'scheduled_for' => CarbonImmutable::today($company->timezone ?: config('app.timezone'))->toDateString(),
+            ]);
+        }
+
+        return $this->record($collector, $company, $visit, $data);
+    }
+
     /** Agenda de hoy: SOLO visitas programadas para hoy del cobrador autenticado. */
     public function today(User $collector, Company $company)
     {

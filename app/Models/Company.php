@@ -26,6 +26,9 @@ use Illuminate\Database\Eloquent\Model;
     'currency',
     'timezone',
     'credit_alert_days',
+    'allow_collector_credit_on_customer_create',
+    'collector_customer_credit_limit_max',
+    'collector_late_fee_pct',
     'layaway_validity_days',
     'layaway_alert_days',
     'payable_alert_days',
@@ -40,6 +43,9 @@ class Company extends Model
             'is_active' => 'boolean',
             'whatsapp_enabled' => 'boolean',
             'credit_alert_days' => 'integer',
+            'allow_collector_credit_on_customer_create' => 'boolean',
+            'collector_customer_credit_limit_max' => 'decimal:2',
+            'collector_late_fee_pct' => 'decimal:2',
             'layaway_validity_days' => 'integer',
             'layaway_alert_days' => 'integer',
             'payable_alert_days' => 'integer',
@@ -51,6 +57,11 @@ class Company extends Model
         return $this->belongsToMany(User::class)
             ->withPivot('role_id')
             ->withTimestamps();
+    }
+
+    public function cobrosRoutes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CobrosRoute::class);
     }
 
     public function modules()

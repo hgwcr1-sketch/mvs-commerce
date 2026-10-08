@@ -2,7 +2,7 @@
 @section('title', $company->trade_name)
 @section('content')
 <div class="space-y-6" data-platform-company="{{ $company->id }}">
-    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><a href="{{ route('platform.index') }}" class="text-sm font-semibold text-amber-700">← Empresas</a><h1 class="mt-2 text-2xl font-bold sm:text-3xl">{{ $company->trade_name }}</h1><p class="mt-1 text-sm text-slate-500">Tenant #{{ $company->id }} · supervisión contractual</p></div><span class="rounded-full bg-amber-100 px-3 py-2 text-sm font-bold text-amber-800">{{ ucfirst($company->license->status) }}</span></header>
+    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><a href="{{ route('platform.index') }}" class="text-sm font-semibold text-amber-700">← Empresas</a><h1 class="mt-2 text-2xl font-bold sm:text-3xl">{{ $company->trade_name }}</h1><p class="mt-1 text-sm text-slate-500">Tenant #{{ $company->id }} · supervisión contractual</p><nav class="mt-2 flex flex-wrap gap-2 text-xs font-semibold"><a href="#contrato-cobros" class="inline-flex min-h-11 items-center rounded-full bg-amber-50 px-4 text-amber-800 hover:bg-amber-100">Contrato CobrOS</a><a href="#modulos-contrato" class="inline-flex min-h-11 items-center rounded-full bg-slate-100 px-4 text-slate-700 hover:bg-slate-200">Módulos</a></nav></div><span class="rounded-full bg-amber-100 px-3 py-2 text-sm font-bold text-amber-800">{{ ucfirst($company->license->status) }}</span></header>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div class="flex items-start justify-between gap-4"><div><h2 class="font-bold">Datos del tenant</h2><p class="mt-1 text-sm text-slate-500">Solo lectura. El propietario administra estos datos desde su onboarding/configuración.</p></div><span class="rounded-full px-3 py-1 text-xs font-bold {{ $company->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }}">{{ $company->is_active ? 'Activa' : 'Inactiva' }}</span></div>
         <dl class="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">@foreach(['legal_name'=>'Razón social','identification_number'=>'Identificación','email'=>'Correo empresarial','phone'=>'Teléfono','currency'=>'Moneda','timezone'=>'Zona horaria'] as $field=>$label)<div><dt class="text-slate-500">{{ $label }}</dt><dd class="mt-1 font-semibold">{{ $company->$field ?: 'Sin completar' }}</dd></div>@endforeach<div><dt class="text-slate-500">Propietario tenant</dt><dd class="mt-1 font-semibold">{{ $company->owner?->name ?? 'Sin asignar' }}<br><span class="font-normal">{{ $company->owner?->email }}</span></dd></div></dl>
@@ -26,13 +26,19 @@
         <div class="mt-6 overflow-x-auto"><table class="min-w-full text-sm"><thead><tr><th class="p-3">Fecha</th><th class="p-3">Acción/cambio</th><th class="p-3">Actor</th></tr></thead><tbody>@forelse($company->license->events as $event)<tr class="border-t"><td class="p-3">{{ $event->created_at->format('d/m/Y H:i') }}</td><td class="p-3">{{ $event->action }} · {{ $event->from_status ?: '—' }} → {{ $event->to_status }} @if($event->changes)<span class="block text-xs text-slate-500">{{ implode(', ', array_keys($event->changes)) }}</span>@endif</td><td class="p-3">{{ $event->actor?->email ?: 'Sistema' }}</td></tr>@empty<tr><td colspan="3" class="p-3">Sin cambios.</td></tr>@endforelse</tbody></table></div>
     </form>
 
-    <form method="POST" action="{{ route('platform.modules.update', $company) }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">@csrf @method('PATCH')<h2 class="font-bold">Módulos del contrato efectivo</h2><div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">@foreach($moduleCatalog as $key=>$module)<label class="flex min-h-14 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="modules[]" value="{{ $key }}" @checked($company->isModuleEnabled($key)) class="h-5 w-5"> {{ $module['label'] }}</label>@endforeach</div><button class="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar módulos</button></form>
+    <form id="modulos-contrato" method="POST" action="{{ route('platform.modules.update', $company) }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">@csrf @method('PATCH')<h2 class="font-bold">Módulos del contrato efectivo</h2><div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">@foreach($moduleCatalog as $key=>$module)<label class="flex min-h-14 items-center gap-3 rounded-xl border p-4 text-sm font-semibold"><input type="checkbox" name="modules[]" value="{{ $key }}" @checked($company->isModuleEnabled($key)) class="h-5 w-5"> {{ $module['label'] }}</label>@endforeach</div><button class="mt-5 min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar módulos</button></form>
 
-    @if($company->isModuleEnabled('cobros'))
-    <form method="POST" action="{{ route('platform.cobros-contract.update', $company) }}" class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+    @php
+        $cobrosModuleRow = $company->modules->firstWhere('module_key', 'cobros');
+        $cobrosDisabled = $cobrosModuleRow !== null && ! $cobrosModuleRow->is_enabled;
+    @endphp
+    <form id="contrato-cobros" method="POST" action="{{ route('platform.cobros-contract.update', $company) }}" class="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm scroll-mt-24">
         @csrf @method('PATCH')
         <h2 class="font-bold">Contrato CobrOS · Modalidad de licenciamiento</h2>
         <p class="mt-2 text-sm text-slate-600">Configure la modalidad de cobro de licencias para MVS CobrOS. Solo Platform Admin puede modificar este contrato.</p>
+        @if($cobrosDisabled)
+            <p class="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">El módulo CobrOS está desactivado para esta empresa. Guardar este contrato lo vuelve a activar.</p>
+        @endif
         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label class="text-sm font-semibold">
                 Modalidad
@@ -64,6 +70,11 @@
             {{ $cobrosContract['license_mode'] === 'individual' ? 'Licencias individuales' : 'Licencia por empresa + cupo' }} · 
             @if($cobrosContract['collector_limit'])Límite: {{ $cobrosContract['collector_limit'] }} cobradores · @endif
             Licencia admin: {{ $cobrosContract['admin_license_charged'] ? 'Se cobra como licencia adicional' : 'Incluida sin costo' }}
+            · Estado: <strong>{{ ucfirst($company->license->status) }}</strong>
+            · Vigencia: {{ $company->license->expires_at?->format('d/m/Y') ?? 'Sin vencimiento' }}
+            @if($potentialLicenses !== null)
+                · <strong>Licencias potenciales: {{ $potentialLicenses }}</strong> (cobradores + administrador/dueño)
+            @endif
         </div>
         @endif
     </form>
@@ -84,7 +95,6 @@
         sync();
     })();
     </script>
-    @endif
 
     @if($cobrosContract)
     <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -158,6 +168,7 @@
                                 <th class="p-3">Nombre</th>
                                 <th class="p-3 hidden md:table-cell">Correo</th>
                                 <th class="p-3">Estado</th>
+                                <th class="p-3 hidden lg:table-cell">Licencia</th>
                                 <th class="p-3 hidden lg:table-cell">Sucursales</th>
                                 <th class="p-3">Acciones</th>
                             </tr>
@@ -171,6 +182,46 @@
                                         <span class="rounded-full {{ $collector['is_active'] ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }} px-2 py-1 text-xs font-bold">
                                             {{ $collector['is_active'] ? 'Activo' : 'Inactivo' }}
                                         </span>
+                                    </td>
+                                    <td class="p-3 hidden lg:table-cell text-xs text-slate-500">
+                                        @php($collectorLicense = $collectorLicenses[$collector['id']] ?? null)
+                                        @if($collectorLicense)
+                                            @php($licenseState = $collectorLicense['state'])
+                                            @php($licenseBadge = [
+                                                'active' => ['bg-emerald-100 text-emerald-800', 'Activa'],
+                                                'suspended' => ['bg-red-100 text-red-800', 'Suspendida'],
+                                                'expired' => ['bg-amber-100 text-amber-800', 'Vencida'],
+                                                'pending' => ['bg-slate-200 text-slate-700', 'Programada'],
+                                            ][$licenseState] ?? ['bg-slate-200 text-slate-700', 'Sin licencia'])
+                                            <span class="rounded-full {{ $licenseBadge[0] }} px-2 py-1 text-xs font-bold">{{ $licenseBadge[1] }}</span>
+                                            <span class="mt-1 block">
+                                                Inicia: {{ $collectorLicense['license']->starts_at?->format('d/m/Y') ?? '—' }}
+                                                · Vence: {{ $collectorLicense['license']->expires_at?->format('d/m/Y') ?? '—' }}
+                                            </span>
+                                            <span class="mt-1 flex flex-wrap gap-1">
+                                                <form method="POST" action="{{ route('platform.collectors.license.renew', [$company, $collector['id']]) }}">
+                                                    @csrf
+                                                    <button class="min-h-9 rounded-lg bg-emerald-50 px-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100" onclick="return confirm('Se renovará la licencia por 1 año desde hoy.')">Renovar +1 año</button>
+                                                </form>
+                                                @if($licenseState === 'suspended')
+                                                    <form method="POST" action="{{ route('platform.collectors.license.resume', [$company, $collector['id']]) }}">
+                                                        @csrf @method('PATCH')
+                                                        <button class="min-h-9 rounded-lg bg-slate-100 px-2 text-xs font-semibold hover:bg-slate-200">Reanudar</button>
+                                                    </form>
+                                                @else
+                                                    <form method="POST" action="{{ route('platform.collectors.license.suspend', [$company, $collector['id']]) }}">
+                                                        @csrf @method('PATCH')
+                                                        <button class="min-h-9 rounded-lg bg-red-50 px-2 text-xs font-semibold text-red-700 hover:bg-red-100" onclick="return confirm('El cobrador dejará de operar CobrOS de inmediato.')">Suspender</button>
+                                                    </form>
+                                                @endif
+                                            </span>
+                                        @else
+                                            <span class="rounded-full bg-red-100 text-red-800 px-2 py-1 text-xs font-bold">Sin licencia</span>
+                                            <form method="POST" action="{{ route('platform.collectors.license.renew', [$company, $collector['id']]) }}" class="mt-1">
+                                                @csrf
+                                                <button class="min-h-9 rounded-lg bg-emerald-50 px-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">Otorgar 1 año</button>
+                                            </form>
+                                        @endif
                                     </td>
                                     <td class="p-3 hidden lg:table-cell text-xs text-slate-500">
                                         @forelse($collector['branches'] as $branchName)
@@ -223,7 +274,8 @@
                 </div>
                 <div class="rounded-xl bg-slate-50 p-4 text-center">
                     <p class="text-sm text-slate-500">Cupos disponibles</p>
-                    <p class="mt-1 text-3xl font-bold {{ $collectorCount >= $cobrosContract['collector_limit'] ? 'text-red-600' : 'text-emerald-600' }}">{{ max(0, $cobrosContract['collector_limit'] - $collectorCount) }}</p>
+                    <p class="mt-1 text-3xl font-bold {{ $seatUsage >= $cobrosContract['collector_limit'] ? 'text-red-600' : 'text-emerald-600' }}">{{ max(0, $cobrosContract['collector_limit'] - $seatUsage) }}</p>
+                    <p class="mt-1 text-xs text-slate-400">Uso total: {{ $seatUsage }}{{ $cobrosContract['admin_license_charged'] ? ' (incluye dueño cobrado)' : ' (dueño gratis no consume cupo)' }}</p>
                 </div>
             </div>
             @if(count($collectors))

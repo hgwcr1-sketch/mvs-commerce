@@ -2,10 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\{Branch, Company, Permission, Role, User};
-use App\Services\{CompanyCashSettingsProvisioner, CompanyLicenseService};
+use App\Models\Branch;
+use App\Models\Company;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
+use App\Services\Cobros\CollectorManagementService;
+use App\Services\CompanyCashSettingsProvisioner;
+use App\Services\CompanyLicenseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\{DB, Schema};
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class CobrosLicensingContractTest extends TestCase
@@ -303,6 +309,112 @@ class CobrosLicensingContractTest extends TestCase
             ])->assertRedirect();
 
         $this->assertTrue($company->fresh()->isModuleEnabled('cobros'));
+    }
+
+    /* ---------------------------------------------------------------------
+     | Licencias potenciales = cobradores + administrador/dueño
+     | --------------------------------------------------------------------- */
+
+    public function test_potential_licenses_are_null_without_contract(): void
+    {
+        [$company] = $this->setupCompany();
+        $service = app(CollectorManagementService::class);
+
+        $this->assertNull($service->getPotentialLicenses($company));
+    }
+
+    public function test_potential_licenses_count_collectors_plus_admin(): void
+    {
+        [$company, $admin] = $this->setupCompany();
+        $management = app(CollectorManagementService::class);
+
+        $this->actingAs($admin)
+            ->patch(route('platform.cobros-contract.update', $company), [
+                'license_mode' => 'company_cupo',
+                'collector_limit' => 5,
+                'admin_license_charged' => true,
+            ]);
+
+        // Solo el administrador/dueño: 0 cobradores + 1 = 1 licencia potencial.
+        $this->assertSame(1, $management->getPotentialLicenses($company));
+
+        $management->createCollector($company, [
+            'name' => 'Cobrador Uno', 'email' => 'pot1@test.com', 'password' => 'password123',
+        ], $admin);
+        $management->createCollector($company, [
+            'name' => 'Cobrador Dos', 'email' => 'pot2@test.com', 'password' => 'password123',
+        ], $admin);
+
+        // 2 cobradores + 1 administrador/dueño = 3 licencias potenciales.
+        $this->assertSame(3, $management->getPotentialLicenses($company));
+    }
+
+    public function test_admin_license_charged_does_not_change_potential_count(): void
+    {
+        [$companyA, $adminA] = $this->setupCompany('Charged');
+        [$companyB, $adminB] = $this->setupCompany('Free');
+        $management = app(CollectorManagementService::class);
+
+        $this->actingAs($adminA)->patch(route('platform.cobros-contract.update', $companyA), [
+            'license_mode' => 'individual', 'admin_license_charged' => true,
+        ]);
+        $this->actingAs($adminB)->patch(route('platform.cobros-contract.update', $companyB), [
+            'license_mode' => 'individual', 'admin_license_charged' => false,
+        ]);
+
+        $this->assertSame(1, $management->getPotentialLicenses($companyA));
+        $this->assertSame(1, $management->getPotentialLicenses($companyB));
+    }
+
+    /* ---------------------------------------------------------------------
+     | Acceso visible: contrato CobrOS siempre presente en el Panel Maestro
+     | --------------------------------------------------------------------- */
+
+    public function test_contract_section_is_visible_even_when_module_is_disabled(): void
+    {
+        [$company, $admin] = $this->setupCompany();
+
+        $this->actingAs($admin)
+            ->patch(route('platform.modules.update', $company), ['modules' => ['sales']])
+            ->assertRedirect();
+
+        $this->assertFalse($company->fresh()->isModuleEnabled('cobros'));
+
+        $this->actingAs($admin)
+            ->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertSee('id="contrato-cobros"', false)
+            ->assertSee('Contrato CobrOS', false)
+            ->assertSee('El módulo CobrOS está desactivado', false);
+
+        $this->actingAs($admin)
+            ->patch(route('platform.cobros-contract.update', $company), [
+                'license_mode' => 'individual',
+                'admin_license_charged' => false,
+            ])->assertRedirect();
+
+        $this->assertTrue($company->fresh()->isModuleEnabled('cobros'));
+    }
+
+    public function test_show_renders_potential_licenses_kpi(): void
+    {
+        [$company, $admin] = $this->setupCompany();
+
+        $this->actingAs($admin)->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertDontSee('Licencias potenciales', false);
+
+        $this->actingAs($admin)
+            ->patch(route('platform.cobros-contract.update', $company), [
+                'license_mode' => 'company_cupo',
+                'collector_limit' => 4,
+                'admin_license_charged' => true,
+            ]);
+
+        $this->actingAs($admin)->get(route('platform.companies.show', $company))
+            ->assertOk()
+            ->assertSee('Licencias potenciales: 1', false)
+            ->assertSee('cobradores + administrador/dueño', false);
     }
 
     /* ---------------------------------------------------------------------

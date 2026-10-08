@@ -15,6 +15,18 @@ class CobrosDashboardController extends Controller
     public function index(Request $request): RedirectResponse
     {
         $company = Company::findOrFail((int) session('active_company_id'));
+        // Señal persistida: fila de ciclo NO finalizada => vive en el flujo de
+        // migración (disponible/en progreso). Legacy sin ciclo conserva su landing;
+        // finalizar o reaperturar cambia el estado sin tocar este cálculo.
+        $initialPortfolio = app(\App\Services\Cobros\InitialPortfolioMigrationService::class);
+        if ($request->user()->hasPermission('cobros.cobrar', $company)
+            && ! $request->user()->hasPermission('cobros.portal_dueno', $company)
+            && ! $request->user()->hasPermission('cobros.supervisar', $company)
+            && $initialPortfolio->hasOpenCycle($company, $request->user())
+            && $initialPortfolio->stateFor($company, $request->user()) !== \App\Services\Cobros\InitialPortfolioMigrationService::STATE_FINALIZED
+        ) {
+            return redirect()->route('cobros.initial-portfolio');
+        }
         foreach ([
             'cobros.portal_dueno' => 'cobros.owner.dashboard',
             'cobros.supervisar' => 'cobros.supervisor.index',

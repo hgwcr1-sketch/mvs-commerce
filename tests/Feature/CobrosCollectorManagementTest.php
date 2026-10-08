@@ -259,6 +259,7 @@ class CobrosCollectorManagementTest extends TestCase
     public function test_platform_admin_can_toggle_collector_in_individual_mode(): void
     {
         [$company, $admin, $collector] = $this->individualContextWithCollector();
+        app(\App\Services\Cobros\CollectorLicenseService::class)->grantIfMissing($collector, $company);
 
         $this->actingAs($admin)
             ->patch(route('platform.collectors.toggle', [$company, $collector]))

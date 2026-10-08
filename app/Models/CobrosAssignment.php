@@ -8,17 +8,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CobrosAssignment extends Model
 {
+    use \App\Models\Concerns\HasCobrosRoute;
+
     protected $fillable = [
         'company_id',
+        'cobros_route_id',
         'customer_id',
         'collector_user_id',
         'assigned_by',
         'assigned_at',
+        // Bloque 6: configuración OPERATIVA de visitas (no financiera).
+        'visit_frequency',
+        'visit_weekday',
+        'visit_month_day',
+        'next_visit_date',
     ];
 
     protected function casts(): array
     {
-        return ['assigned_at' => 'datetime'];
+        return ['assigned_at' => 'datetime', 'next_visit_date' => 'date'];
     }
 
     public function company(): BelongsTo

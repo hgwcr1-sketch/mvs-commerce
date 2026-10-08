@@ -22,6 +22,7 @@ use Illuminate\Notifications\Notifiable;
     'tenant_invited_at',
     'tenant_activated_at',
     'last_login_at',
+    'collector_late_fee_pct',
 ])]
 
 #[Hidden([
@@ -54,6 +55,13 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Branch::class)
             ->withTimestamps();
+    }
+
+    public function cobrosRoutes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(CobrosRoute::class, 'cobros_route_user')
+            ->using(CobrosRouteUser::class)->withPivot(['id', 'company_id', 'active'])->withTimestamps()
+            ->withPivotValue('company_id', (int) session('active_company_id', 0));
     }
 
     public function isActive(): bool

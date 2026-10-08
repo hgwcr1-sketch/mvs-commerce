@@ -291,6 +291,26 @@ class CobrosPaymentTest extends TestCase
         $this->assertDatabaseCount('cobros_receipts', 0);
     }
 
+    /** payments/create con ubicación: 200 + enlace Maps real (reutiliza getGoogleMapsUrlAttribute). */
+    public function test_create_screen_links_to_google_maps_when_customer_has_location(): void
+    {
+        [$c, $b, $u] = $this->context();
+        [$customer, $account] = $this->customerWithAccount($c, $b, $u, '500.0000');
+
+        // Sin GPS: la página abre y no ofrece enlace de navegación.
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.payments.create', $account))
+            ->assertOk()
+            ->assertDontSee('google.com/maps');
+
+        $customer->update(['latitude' => '9.931', 'longitude' => '-84.082']);
+
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.payments.create', $account))
+            ->assertOk()
+            ->assertSee('https://www.google.com/maps/search/?api=1&query=9.93100000,-84.08200000');
+    }
+
     public function test_receipt_history_and_detail_are_scoped_to_the_collector(): void
     {
         [$c, $b, $u] = $this->context();
@@ -366,6 +386,114 @@ class CobrosPaymentTest extends TestCase
         $this->assertDatabaseCount('cobros_receipts', 1);
         $this->assertDatabaseCount('cash_sessions', 0);
         $this->assertDatabaseCount('cash_movements', 0);
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('revocations')]
+    public function test_revocation_between_preflight_and_transaction_aborts_without_financial_writes(string $change): void
+    {
+        [$company, $branch, $collector] = $this->context();
+        [$customer, $account] = $this->customerWithAccount($company, $branch, $collector, '1500.0000');
+        $payload = $this->payload('100.0001', $this->method($company, 'cash'));
+        if ($change === 'individual_license') {
+            $company->modules()->where('module_key', 'cobros')->update(['license_mode' => 'individual']);
+            app(\App\Services\Cobros\CollectorLicenseService::class)->grantIfMissing($collector, $company);
+        }
+        $realGate = app(\App\Services\Cobros\CobrosPaymentGate::class);
+        $depth = \Illuminate\Support\Facades\DB::transactionLevel();
+        $calls = 0;
+        $gate = \Mockery::mock(\App\Services\Cobros\CobrosPaymentGate::class);
+        $gate->shouldReceive('assertCanStart')->twice()->andReturnUsing(
+            function ($user, $tenant, $ar) use ($realGate, &$calls, $change, $company, $branch, $collector, $customer, $depth) {
+                if (++$calls === 2) {
+                    $this->assertGreaterThan($depth, \Illuminate\Support\Facades\DB::transactionLevel());
+                }
+                $decision = $realGate->assertCanStart($user, $tenant, $ar);
+                // Intercalación determinista: la revocación gana antes del lock.
+                if ($calls === 1) {
+                    match ($change) {
+                        'assignment' => CobrosAssignment::where('customer_id', $customer->id)->delete(),
+                        'reassignment' => CobrosAssignment::where('customer_id', $customer->id)->update(['collector_user_id' => User::factory()->create()->id]),
+                        'user' => $collector->update(['is_active' => false]),
+                        'company' => $company->update(['is_active' => false]),
+                        'membership' => $collector->companies()->detach($company->id),
+                        'permission' => $collector->roleInCompany($company)->permissions()->detach(),
+                        'module' => $company->modules()->where('module_key', 'cobros')->update(['is_enabled' => false]),
+                        'license' => $company->license()->update(['expires_at' => now()->subDay(), 'grace_until' => null]),
+                        'individual_license' => \App\Models\CobrosCollectorLicense::where('company_id', $company->id)
+                            ->where('user_id', $collector->id)->update(['status' => 'suspended']),
+                    };
+                }
+
+                return $decision;
+            }
+        );
+        $this->app->instance(\App\Services\Cobros\CobrosPaymentGate::class, $gate);
+        try {
+            app(\App\Services\Cobros\SecurePaymentService::class)->register($collector, $company, $account, $payload);
+            $this->fail('La revocación debe impedir el cobro.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertContains($exception->getStatusCode(), [403, 404]);
+        }
+        $this->assertSame(2, $calls);
+        $this->assertSame('1500.0000', $account->fresh()->balance_due);
+        $this->assertDatabaseCount('accounts_receivable_payments', 0);
+        $this->assertDatabaseCount('cobros_receipts', 0);
+        $this->assertDatabaseCount('cash_movements', 0);
+    }
+
+    public static function revocations(): array
+    {
+        // 'branch' no revoca autoridad: branch_id de CxC es trazabilidad, no frontera.
+        return array_map(fn ($change) => [$change], ['assignment', 'reassignment', 'user', 'company', 'membership', 'permission', 'module', 'license', 'individual_license']);
+    }
+
+    public function test_failure_after_payment_rolls_back_payment_balance_and_receipt(): void
+    {
+        [$company, $branch, $collector] = $this->context();
+        [, $account] = $this->customerWithAccount($company, $branch, $collector, '1500.0000');
+        $audit = \Mockery::mock(\App\Services\RouteosAuditService::class);
+        $audit->shouldReceive('log')->once()->andThrow(new \RuntimeException('forced rollback'));
+        $this->app->instance(\App\Services\RouteosAuditService::class, $audit);
+        try {
+            app(\App\Services\Cobros\SecurePaymentService::class)->register(
+                $collector, $company, $account, $this->payload('100.0001', $this->method($company, 'cash'))
+            );
+            $this->fail('Debe revertirse toda la operación.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('forced rollback', $exception->getMessage());
+        }
+        $this->assertSame('1500.0000', $account->fresh()->balance_due);
+        $this->assertDatabaseCount('accounts_receivable_payments', 0);
+        $this->assertDatabaseCount('cobros_receipts', 0);
+    }
+
+    public function test_balance_changed_after_preflight_is_checked_under_lock_and_receipt_is_rolled_back(): void
+    {
+        [$company, $branch, $collector] = $this->context();
+        [, $account] = $this->customerWithAccount($company, $branch, $collector, '1500.0000');
+        $realGate = app(\App\Services\Cobros\CobrosPaymentGate::class);
+        $calls = 0;
+        $gate = \Mockery::mock(\App\Services\Cobros\CobrosPaymentGate::class);
+        $gate->shouldReceive('assertCanStart')->twice()->andReturnUsing(function ($user, $tenant, $ar) use ($realGate, &$calls, $account) {
+            $decision = $realGate->assertCanStart($user, $tenant, $ar);
+            if (++$calls === 1) {
+                AccountReceivable::whereKey($account->id)->update(['balance_due' => '50.0000']);
+            }
+
+            return $decision;
+        });
+        $this->app->instance(\App\Services\Cobros\CobrosPaymentGate::class, $gate);
+        try {
+            app(\App\Services\Cobros\SecurePaymentService::class)->register(
+                $collector, $company, $account, $this->payload('100.0001', $this->method($company, 'cash'))
+            );
+            $this->fail('Debe usar el saldo actual.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('amount', $exception->errors());
+        }
+        $this->assertSame('50.0000', $account->fresh()->balance_due);
+        $this->assertDatabaseCount('accounts_receivable_payments', 0);
+        $this->assertDatabaseCount('cobros_receipts', 0);
     }
 
     /** @return array<string, mixed> */

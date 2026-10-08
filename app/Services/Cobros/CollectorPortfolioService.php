@@ -11,6 +11,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Fase 2A — Mi Cartera: cartera real del cobrador, estrictamente solo lectura.
@@ -23,10 +25,19 @@ class CollectorPortfolioService
 {
     public function portfolio(User $collector, Company $company, ?string $search = null): array
     {
-        $customers = $this->assignedCustomersQuery($collector, $company, $search)
+        // 1) Mi cartera = SOLO deuda activa: quien canceló todo (saldo real 0)
+        //    desaparece de la lista, sin borrar Customer, assignment ni pagos.
+        $customers = $this->assignedCustomersQuery($collector, $company, $search, true)
             ->paginate(20)->withQueryString();
 
         $customerIds = $customers->getCollection()->modelKeys();
+
+        // Nombres de ruta por cliente (para mostrar "Ruta" en vez de sucursal).
+        $routeNames = $customerIds === [] ? collect() : CobrosAssignment::query()->forCompany($company->id)
+            ->whereIn('customer_id', $customerIds)->where('collector_user_id', $collector->id)
+            ->whereNotNull('cobros_route_id')->with('cobrosRoute:id,name')->get()
+            ->filter()->groupBy('customer_id')
+            ->map(fn ($rows) => $rows->pluck('cobrosRoute.name')->filter()->unique()->values());
 
         $openAccounts = AccountReceivable::query()->forCompany($company->id)
             ->whereIn('customer_id', $customerIds)
@@ -39,7 +50,7 @@ class CollectorPortfolioService
         $grouped = $openAccounts->groupBy('customer_id');
         $lastPayments = $this->lastReliablePayments($company, $customerIds);
 
-        $customers->getCollection()->each(function (Customer $customer) use ($grouped, $lastPayments, $company) {
+        $customers->getCollection()->each(function (Customer $customer) use ($grouped, $lastPayments, $company, $routeNames) {
             $accounts = $grouped->get($customer->id, collect());
             $balance = '0.0000';
             foreach ($accounts as $account) {
@@ -49,6 +60,7 @@ class CollectorPortfolioService
             $customer->setAttribute('portfolio_balance', $balance);
             $customer->setAttribute('portfolio_open_count', $accounts->count());
             $customer->setAttribute('portfolio_branches', $accounts->pluck('branch.name')->filter()->unique()->values());
+            $customer->setAttribute('portfolio_routes', $routeNames->get($customer->id, collect()));
             $customer->setAttribute('portfolio_next_due', $accounts->min('due_date'));
             $customer->setAttribute('portfolio_last_payment', $lastPayments->get($customer->id));
         });
@@ -68,6 +80,34 @@ class CollectorPortfolioService
             && $this->assignmentExists($collector, $company, $customer),
             404
         );
+
+        $expediente = \App\Models\CobrosCreditExpediente::query()
+            ->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->with(['references', 'documents'])->first();
+        $requests = \App\Models\CobrosCreditRequest::query()
+            ->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->orderByDesc('id')->limit(20)->get();
+        $credits = \App\Models\CobrosCredit::query()
+            ->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->orderByDesc('id')->limit(20)->get();
+        $receipts = \App\Models\CobrosReceipt::query()
+            ->where('company_id', $company->id)->where('customer_id', $customer->id)
+            ->orderByDesc('paid_at')->orderByDesc('id')->limit(20)->get();
+        $visits = \App\Models\CobrosVisit::query()->forCompany($company->id)
+            ->where('customer_id', $customer->id)->where('collector_user_id', $collector->id)
+            ->orderByDesc('scheduled_for')->orderByDesc('id')->limit(10)->get();
+        $nextDue = null;
+        foreach ($credits as $cr) {
+            $inst = \App\Models\CobrosCreditInstallment::query()->where('cobros_credit_id', $cr->id)
+                ->where('status', '!=', 'paid')->orderBy('due_date')->first();
+            if ($inst) {
+                $cr->setAttribute('next_due_date', $inst->due_date);
+                $cr->setAttribute('next_due_amount', $inst->total_due ?? $inst->amount ?? null);
+                if ($nextDue === null || $inst->due_date < $nextDue) {
+                    $nextDue = $inst->due_date;
+                }
+            }
+        }
 
         $openAccounts = AccountReceivable::query()->forCompany($company->id)
             ->where('customer_id', $customer->id)
@@ -98,32 +138,73 @@ class CollectorPortfolioService
             'openAccounts' => $openAccounts,
             'total_balance' => $balance,
             'payments' => $payments,
+            'expediente' => $expediente,
+            'creditRequests' => $requests,
+            'credits' => $credits,
+            'receipts' => $receipts,
+            'visits' => $visits,
+            'nextDueDate' => $nextDue,
         ];
     }
 
-    private function assignedCustomersQuery(User $collector, Company $company, ?string $search): Builder
+    /**
+     * 2) MIS CLIENTES — todas las personas legítimamente relacionadas con este
+     * cobrador/ruta (incluidas las que ya terminaron de pagar), con estado
+     * humano de crédito. No borra nada: es la vista de expediente histórico.
+     */
+    public function misClientes(User $collector, Company $company, ?string $search = null): array
     {
+        $customers = $this->assignedCustomersQuery($collector, $company, $search, false)
+            ->paginate(20)->withQueryString();
+
+        $customerIds = $customers->getCollection()->modelKeys();
+
+        $activeIds = $customerIds === [] ? [] : AccountReceivable::query()->forCompany($company->id)
+            ->whereIn('customer_id', $customerIds)
+            ->where('balance_due', '>', 0)
+            ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])
+            ->distinct()->pluck('customer_id')->all();
+
+        $customers->getCollection()->each(function (Customer $customer) use ($activeIds) {
+            $customer->setAttribute('has_active_debt', in_array($customer->id, $activeIds, true));
+            $customer->setAttribute('credit_status_label', in_array($customer->id, $activeIds, true)
+                ? 'Crédito activo'
+                : 'Sin crédito activo');
+        });
+
+        return [
+            'customers' => $customers,
+            'search' => $search,
+        ];
+    }
+
+    private function assignedCustomersQuery(User $collector, Company $company, ?string $search, bool $onlyWithDebt): Builder
+    {
+        $routeId = $this->activeRouteId();
+
         return Customer::query()
             ->where('customers.company_id', $company->id)
             ->where('customers.is_active', true)
             ->whereHas('cobrosAssignments', fn (Builder $q) => $q
                 ->forCompany($company->id)
-                ->where('collector_user_id', $collector->id))
-            ->when($search !== null && trim($search) !== '', function (Builder $q) use ($search) {
-                $term = trim($search);
-                $operator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-                $q->where(function (Builder $w) use ($operator, $term) {
-                    foreach (['name', 'commercial_name', 'identification', 'phone', 'mobile'] as $field) {
-                        $w->orWhere($field, $operator, "%{$term}%");
-                    }
-                });
-            })
+                ->where('collector_user_id', $collector->id)
+                // Con ruta activa: sus assignments + legados sin ruta (sin backfill).
+                // Nunca clientes de OTRA ruta.
+                ->when($routeId !== null, fn (Builder $q) => $q->where(fn (Builder $w) => $w
+                    ->where('cobros_route_id', $routeId)
+                    ->orWhereNull('cobros_route_id'))))
+            // Solo deuda activa (comparación decimal exacta en SQL, sin floats).
+            ->when($onlyWithDebt, fn (Builder $q) => $q->whereHas('accountsReceivable', fn (Builder $a) => $a
+                ->forCompany($company->id)
+                ->where('balance_due', '>', 0)
+                ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])))
+            ->when($search !== null && trim($search) !== '', fn (Builder $q) => \App\Support\Cobros\CustomerSearch::apply($q, $search))
             ->orderBy('name')->orderBy('id');
     }
 
     private function totalBalance(User $collector, Company $company, ?string $search): string
     {
-        $customerIds = $this->assignedCustomersQuery($collector, $company, $search)->pluck('customers.id');
+        $customerIds = $this->assignedCustomersQuery($collector, $company, $search, true)->pluck('customers.id');
         $balance = '0.0000';
         if ($customerIds->isEmpty()) {
             return $balance;
@@ -163,10 +244,23 @@ class CollectorPortfolioService
 
     private function assignmentExists(User $collector, Company $company, Customer $customer): bool
     {
+        $routeId = $this->activeRouteId();
+
         return CobrosAssignment::query()->forCompany($company->id)
             ->where('collector_user_id', $collector->id)
             ->where('customer_id', $customer->id)
+            ->when($routeId !== null, fn ($q) => $q->where(fn ($w) => $w
+                ->where('cobros_route_id', $routeId)
+                ->orWhereNull('cobros_route_id')))
             ->exists();
+    }
+
+    /** Ruta activa de la sesión (ya validada por el middleware/selector). */
+    private function activeRouteId(): ?int
+    {
+        $routeId = (int) session('active_cobros_route_id', 0);
+
+        return $routeId > 0 ? $routeId : null;
     }
 
     /** Fase 2C — guardar ubicación del cliente desde el cobrador. NO valida location_validated_*. */
@@ -185,5 +279,37 @@ class CollectorPortfolioService
                 ? trim((string) $data['location_reference'])
                 : $customer->location_reference,
         ]);
+    }
+
+    /**
+     * Fase 6B — teléfono (cliente o contacto indicado) capturado por el cobrador
+     * desde el recibo. Reutiliza el campo telefónico existente de Customer:
+     * no crea modelos nuevos ni datos adicionales. Misma empresa + cartera
+     * asignada, o 404 (nunca revela clientes ajenos).
+     */
+    public function savePhone(User $collector, Company $company, Customer $customer, string $phone): void
+    {
+        abort_unless(
+            (int) $customer->company_id === (int) $company->id
+            && $this->assignmentExists($collector, $company, $customer),
+            404
+        );
+
+        $digits = preg_replace('/\D/', '', $phone) ?? '';
+        if ($digits === '' || strlen($digits) > 15) {
+            throw ValidationException::withMessages(['phone' => 'Ingrese un teléfono válido (hasta 15 dígitos).']);
+        }
+
+        $countryCode = $customer->phone_country_code ?: $company->default_phone_country_code;
+        $countryDigits = $countryCode !== null ? (preg_replace('/\D/', '', $countryCode) ?? '') : '';
+        // Número ya internacional con prefijo del país conocido: se guarda local.
+        if ($countryDigits !== '' && strlen($digits) > strlen($countryDigits) && str_starts_with($digits, $countryDigits)) {
+            $digits = substr($digits, strlen($countryDigits));
+        }
+        if ($countryDigits === '' && strlen($digits) < 10) {
+            throw ValidationException::withMessages(['phone' => 'Ingrese el teléfono con prefijo de país (ej. +506 8888 8888).']);
+        }
+
+        $customer->update(['phone' => $digits]);
     }
 }

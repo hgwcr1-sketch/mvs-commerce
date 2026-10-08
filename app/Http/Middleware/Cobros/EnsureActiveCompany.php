@@ -3,6 +3,7 @@
 namespace App\Http\Middleware\Cobros;
 
 use App\Models\Company;
+use App\Services\Cobros\CollectorLicenseService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -49,6 +50,15 @@ class EnsureActiveCompany
 
             $activeCompanyId = $company->id;
             session(['active_company_id' => $activeCompanyId]);
+        }
+
+        // Licenciamiento individual: sin licencia vigente no se opera CobrOS.
+        $company = $company ?? Company::find($activeCompanyId);
+        if ($company !== null) {
+            $licenses = app(CollectorLicenseService::class);
+            if (! $licenses->hasValidLicense($user, $company)) {
+                abort(403, $licenses->denyMessage($user, $company));
+            }
         }
 
         return $next($request);

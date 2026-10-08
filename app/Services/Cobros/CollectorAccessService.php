@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class CollectorAccessService
 {
+    public function __construct(private readonly CollectorLicenseService $licenses) {}
+
     public function branchesForCollecting(User $user, Company $company): Collection
     {
         if (! $this->canCollect($user, $company)) {
@@ -32,7 +34,10 @@ class CollectorAccessService
     public function canCollect(User $user, Company $company): bool
     {
         // hasPermission valida company_user, rol de esa empresa activo y módulo.
-        return $user->isActive() && $user->hasPermission('cobros.cobrar', $company);
+        // Licencia individual vigente es requisito adicional solo en esa modalidad.
+        return $user->isActive()
+            && $user->hasPermission('cobros.cobrar', $company)
+            && $this->licenses->hasValidLicense($user, $company);
     }
 
     private function assignedBranches(User $user, Company $company): BelongsToMany

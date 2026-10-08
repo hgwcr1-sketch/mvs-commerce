@@ -13,6 +13,24 @@
     <link rel="stylesheet" href="{{ asset('css/cobros-shell.css') }}?v=3">
 </head>
 <body class="cobros-app" data-cobros-owner="{{ auth()->id() }}:{{ $company->id }}">
+    @php
+        // Migración de cartera inicial: navegación operativa oculta SOLO con ciclo
+        // abierto (señal persistida) o dentro de las pantallas del flujo de migración.
+        // Legacy sin ciclo en su landing normal y prestamista/supervisor: navegación normal.
+        $migratingCollector = false;
+        $layoutUser = auth()->user();
+        if ($layoutUser) {
+            $layoutMigrations = app(\App\Services\Cobros\InitialPortfolioMigrationService::class);
+            $layoutOnMigrationScreen = request()->routeIs('cobros.initial-portfolio*')
+                && ! request()->routeIs('cobros.initial-portfolio.summary', 'cobros.initial-portfolio.review', 'cobros.initial-portfolio.correction.*');
+            $migratingCollector = $layoutUser->hasPermission('cobros.cobrar', $company)
+                && ! $layoutUser->hasPermission('cobros.portal_dueno', $company)
+                && ! $layoutUser->hasPermission('cobros.supervisar', $company)
+                && ($layoutMigrations->hasOpenCycle($company, $layoutUser)
+                    || $layoutOnMigrationScreen)
+                && $layoutMigrations->stateFor($company, $layoutUser) !== \App\Services\Cobros\InitialPortfolioMigrationService::STATE_FINALIZED;
+        }
+    @endphp
     <a class="cobros-skip" href="#cobros-main">Ir al contenido</a>
     <div class="cobros-workspace">
         <header class="cobros-header">
@@ -21,6 +39,7 @@
                 <div><span>Empresa activa</span><strong>{{ $company->trade_name }}</strong></div>
             </div>
             <div class="cobros-account">
+                @include('cobros.components.bell')
                 <span class="cobros-user">{{ auth()->user()->name }}</span>
                 <form method="POST" action="{{ route('cobros.logout') }}">
                     @csrf
@@ -38,6 +57,7 @@
             @yield('content')
         </main>
     </div>
+    @unless($migratingCollector)
     @include('cobros.components.navigation', ['panel' => false])
     <dialog id="cobros-more-panel" class="cobros-more-panel" aria-labelledby="cobros-more-title">
         <div class="cobros-panel-heading">
@@ -57,6 +77,7 @@
         </form>
         <p class="cobros-sidebar-footer">MVS CobrOS · Versión 1.0</p>
     </dialog>
+    @endunless
     <script src="{{ asset('js/cobros-navigation.js') }}?v=1" defer></script>
     @include('cobros.components.connection')
 </body>

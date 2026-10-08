@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'active.company' => EnsureActiveCompany::class,
             'cobros.active.company' => \App\Http\Middleware\Cobros\EnsureActiveCompany::class,
             'cobros.entry' => \App\Http\Middleware\Cobros\MarkEntry::class,
+            'cobros.route' => \App\Http\Middleware\Cobros\EnsureActiveCobrosRoute::class,
             'company.licensed' => EnsureCompanyLicense::class,
             'company.module' => EnsureCompanyModule::class,
 

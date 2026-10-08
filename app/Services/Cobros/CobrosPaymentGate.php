@@ -57,14 +57,9 @@ class CobrosPaymentGate
             );
         }
 
-        // 4. Sucursal de la cuenta dentro del alcance operativo del cobrador.
-        if ($account->branch_id === null
-            || ! in_array((int) $account->branch_id, $this->allowedBranchIds($collector, $company), true)) {
-            return PaymentGateDecision::denied(
-                PaymentGateDecision::BRANCH_NOT_AUTHORIZED,
-                'No puede cobrar en la sucursal de esta cuenta.'
-            );
-        }
+        // 4. Se eliminó la restricción por sucursal: el cobrador puede cobrar
+        // desde cualquier sucursal de la empresa mientras se cumplan las demás
+        // reglas.
 
         // 5. Cuenta pagada o cancelada: no admite cobro.
         if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true)) {
@@ -114,19 +109,13 @@ class CobrosPaymentGate
      */
     public function chargeableAccountIds(User $collector, Company $company, array $customerIds): array
     {
-        if ($customerIds === [] || $this->permissionDecision($collector, $company) !== null) {
-            return [];
-        }
-
-        $branches = $this->allowedBranchIds($collector, $company);
-        if ($branches === []) {
-            return [];
-        }
-
+        // Obtiene todas las cuentas de los clientes dentro de la empresa
+        // que tienen saldo > 0 y cuyo estado no sea pagado o cancelado.
+        // No se filtra por sucursal: el cobrador puede acceder a cualquier
+        // sucursal de la empresa.
         $chargeable = [];
         $accounts = AccountReceivable::query()->forCompany($company->id)
             ->whereIn('customer_id', $customerIds)
-            ->whereIn('branch_id', $branches)
             ->where('balance_due', '>', 0)
             ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])
             ->with('customer')->orderBy('due_date')->orderBy('id')->get();

@@ -32,6 +32,8 @@ class AlertTypeRegistry
 
     public const TYPE_COBROS_LICENSE_EXPIRING = 'cobros.license_expiring';
 
+    public const TYPE_COBROS_CREDIT_REQUEST = 'cobros.credit_request';
+
     public const TYPES = [
         self::TYPE_PURCHASE_VERIFICATION => [
             'label' => 'Verificación de compras',
@@ -76,6 +78,18 @@ class AlertTypeRegistry
             'module' => 'CobrOS',
             'notification_permission' => 'notificaciones.cobros',
             'source_permissions' => ['cobros.portal_dueno', 'cobros.supervisar'],
+        ],
+        // BLOQUE 8 — campana CobrOS: nueva solicitud y corrección/reenvío.
+        // notification_permission usa un permiso del módulo CobrOS (NO
+        // notificaciones.*): el gate del Core exige el módulo "notifications"
+        // contratado, que los tenants CobrOS no tienen habilitado → 0
+        // destinatarios. Con 'cobros.acceder' el gate respeta el módulo real
+        // (cobros) y el aislamiento sigue por source_permissions + destinatario.
+        self::TYPE_COBROS_CREDIT_REQUEST => [
+            'label' => 'Solicitud de crédito (CobrOS)',
+            'module' => 'CobrOS',
+            'notification_permission' => 'cobros.acceder',
+            'source_permissions' => ['cobros.portal_dueno'],
         ],
     ];
 

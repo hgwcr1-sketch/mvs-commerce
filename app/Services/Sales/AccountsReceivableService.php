@@ -22,16 +22,22 @@ class AccountsReceivableService
         if (! $customer) {
             throw ValidationException::withMessages(['customer_id' => 'Para vender a crédito debe seleccionar un cliente válido.']);
         }
-        if (bccomp((string) $customer->credit_limit, '0', 2) <= 0) {
+        if (bccomp((string) $customer->credit_limit, '0', 4) <= 0) {
             throw ValidationException::withMessages(['credit' => 'Este cliente no tiene crédito autorizado.']);
         }
         if ((int) $customer->credit_days <= 0) {
             throw ValidationException::withMessages(['credit' => 'El cliente no tiene un plazo de crédito configurado.']);
         }
 
-        $used = (string) AccountReceivable::query()->forCompany($sale->company_id)->where('customer_id', $customer->id)
-            ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])->lockForUpdate()->sum('balance_due');
-        $available = bcsub((string) $customer->credit_limit, bcadd($used, '0', 4), 4);
+        // Acumulación exacta en string/BCMath: sum() de la base devuelve float
+        // en SQLite/MySQL y rompe la precisión de la disponibilidad de crédito.
+        $used = '0.0000';
+        $open = AccountReceivable::query()->forCompany($sale->company_id)->where('customer_id', $customer->id)
+            ->whereNotIn('status', [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED])->lockForUpdate()->get(['balance_due']);
+        foreach ($open as $row) {
+            $used = bcadd($used, (string) $row->balance_due, 4);
+        }
+        $available = bcsub((string) $customer->credit_limit, $used, 4);
         if (bccomp((string) $sale->total, $available, 4) > 0) {
             throw ValidationException::withMessages(['credit' => 'El cliente no tiene crédito disponible suficiente.']);
         }
@@ -71,7 +77,7 @@ class AccountsReceivableService
             if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true) || bccomp($balanceDue, '0', 4) <= 0) {
                 throw ValidationException::withMessages(['account' => 'La cuenta ya no admite abonos.']);
             }
-            $amount = $this->roundedAmount($data['amount'] ?? null);
+            $amount = $this->exactAmount($data['amount'] ?? null);
             if (bccomp($amount, '0', 4) <= 0 || bccomp($amount, $balanceDue, 4) > 0) {
                 throw ValidationException::withMessages(['amount' => 'El abono debe ser positivo y no superar el saldo pendiente.']);
             }
@@ -98,18 +104,18 @@ class AccountsReceivableService
         }, 3);
     }
 
-    private function roundedAmount(mixed $value): string
+    /**
+     * Monto exacto con BCMath, misma regla que SecurePaymentService (CobrOS):
+     * nunca float, nunca round() y nunca más de cuatro decimales. Un monto con
+     * más de cuatro decimales se RECHAZA en lugar de redondearlo.
+     */
+    private function exactAmount(mixed $value): string
     {
         $amount = is_string($value) || is_int($value) ? trim((string) $value) : '';
-        if (! preg_match('/^\d{1,15}(?:\.\d+)?$/D', $amount)) {
-            throw ValidationException::withMessages(['amount' => 'El abono debe ser un monto decimal válido.']);
+        if (! preg_match('/^\d{1,12}(\.\d{1,4})?$/', $amount)) {
+            throw ValidationException::withMessages(['amount' => 'Ingrese un monto válido con hasta cuatro decimales.']);
         }
 
-        $fraction = explode('.', $amount, 2)[1] ?? '';
-        $rounded = bcadd($amount, '0', 4);
-
-        return isset($fraction[4]) && $fraction[4] >= '5'
-            ? bcadd($rounded, '0.0001', 4)
-            : $rounded;
+        return bcadd($amount, '0', 4);
     }
 }

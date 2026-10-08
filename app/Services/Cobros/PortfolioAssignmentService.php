@@ -13,12 +13,13 @@ use Illuminate\Validation\ValidationException;
 
 class PortfolioAssignmentService
 {
-    public function assign(Company $company, Customer $customer, User $collector, User $actor, ?string $reason = null): CobrosAssignment
+    /** $routeId: ruta activa del cobrador para migraciones 5B (null = sin ruta, legado). */
+    public function assign(Company $company, Customer $customer, User $collector, User $actor, ?string $reason = null, ?int $routeId = null): CobrosAssignment
     {
         $this->assertSameCompany($company, $customer);
         $this->assertValidCollector($company, $collector);
 
-        return DB::transaction(function () use ($company, $customer, $collector, $actor, $reason) {
+        return DB::transaction(function () use ($company, $customer, $collector, $actor, $reason, $routeId) {
             $existing = CobrosAssignment::query()
                 ->forCompany($company->id)
                 ->where('customer_id', $customer->id)
@@ -27,6 +28,11 @@ class PortfolioAssignmentService
 
             if ($existing) {
                 if ((int) $existing->collector_user_id === (int) $collector->id) {
+                    // Migración 5B: completa la ruta solo si la asignación no la tenía.
+                    if ($routeId !== null && $existing->cobros_route_id === null) {
+                        $existing->update(['cobros_route_id' => $routeId]);
+                    }
+
                     return $existing;
                 }
 
@@ -49,6 +55,7 @@ class PortfolioAssignmentService
             try {
                 $assignment = CobrosAssignment::create([
                     'company_id' => $company->id,
+                    'cobros_route_id' => $routeId,
                     'customer_id' => $customer->id,
                     'collector_user_id' => $collector->id,
                     'assigned_by' => $actor->id,

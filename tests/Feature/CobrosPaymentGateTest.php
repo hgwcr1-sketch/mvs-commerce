@@ -33,6 +33,12 @@ class CobrosPaymentGateTest extends TestCase
         [$c, $b, $u] = $this->context();
         [$customer, $account] = $this->customerWithAccount($c, $b, $u, '25000.5000');
 
+        $this->assertDatabaseHas('branch_user', ['user_id' => $u->id, 'branch_id' => $account->branch_id]);
+        $this->assertDatabaseHas('cobros_assignments', [
+            'company_id' => $c->id,
+            'collector_user_id' => $u->id,
+            'customer_id' => $customer->id,
+        ]);
         $this->assertTrue(app(CobrosPaymentGate::class)->canStart($u, $c, $account));
 
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
@@ -122,14 +128,23 @@ class CobrosPaymentGateTest extends TestCase
     public function test_branch_outside_collector_scope_is_blocked(): void
     {
         [$c, $b, $u] = $this->context();
-        [, $account] = $this->customerWithAccount($c, $b, $u, '3000.0000');
-        $u->branches()->detach($b);
+        [$customer] = $this->customerWithAccount($c, $b, $u, '3000.0000');
+        $otherBranch = Branch::create([
+            'company_id' => $c->id,
+            'name' => 'Sucursal no asignada',
+            'code' => 'X'.random_int(100, 999),
+            'is_active' => true,
+        ]);
+        $account = $this->account($c, $otherBranch, $u, '3000.0000', $customer->id);
 
         $decision = app(CobrosPaymentGate::class)->evaluate($u, $c, $account);
-        $this->assertTrue($decision->isDeniedBecause(PaymentGateDecision::BRANCH_NOT_AUTHORIZED));
+        // Con la nueva regla, el cobrador puede iniciar cobro incluso si la cuenta
+        // pertenece a una sucursal distinta a la vista asignada.
+        $this->assertTrue($decision->isAllowed());
 
         $this->actingAs($u)->withSession(['active_company_id' => $c->id])
-            ->get(route('cobros.collector.payments.create', $account))->assertForbidden();
+            ->get(route('cobros.collector.payments.create', $account))->assertOk();
+        $this->assertDatabaseCount('accounts_receivable_payments', 0);
     }
 
     public function test_paid_cancelled_and_zero_balance_accounts_are_blocked(): void

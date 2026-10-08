@@ -7,9 +7,10 @@ use App\Models\Company;
 use App\Models\CompanyLicense;
 use App\Models\LicensePlan;
 use App\Models\User;
+use App\Services\Cobros\CollectorLicenseService;
+use App\Services\Cobros\CollectorManagementService;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
-use App\Services\Cobros\CollectorManagementService;
 use App\Services\Modules\ModuleRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -105,6 +106,16 @@ class PlatformAdminController extends Controller
         $collectors = $cobrosContract ? $collectorService->listCollectors($company) : [];
         $collectorCount = $cobrosContract ? $collectorService->getCollectorCount($company) : 0;
 
+        // Licencias individuales por cobrador (solo modalidad individual).
+        $licenseGate = app(\App\Services\Cobros\CollectorLicenseService::class);
+        $collectorLicenses = [];
+        foreach ($licenseGate->licensesByUser($company) as $userId => $license) {
+            $collectorLicenses[$userId] = [
+                'license' => $license,
+                'state' => $licenseGate->stateOf($license, $company),
+            ];
+        }
+
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
@@ -112,6 +123,9 @@ class PlatformAdminController extends Controller
             'cobrosContract' => $cobrosContract,
             'collectors' => $collectors,
             'collectorCount' => $collectorCount,
+            'potentialLicenses' => $collectorService->getPotentialLicenses($company),
+            'seatUsage' => $collectorService->seatUsage($company),
+            'collectorLicenses' => $collectorLicenses,
         ]);
     }
 
@@ -261,5 +275,50 @@ class PlatformAdminController extends Controller
         $collectorService->replaceBranches($user, $company, $data['branch_ids']);
 
         return back()->with('success', "Sucursales de {$user->name} actualizadas.");
+    }
+
+    /** Renueva la licencia individual de un cobrador (por defecto +1 año). */
+    public function renewCollectorLicense(Request $request, Company $company, User $user, CollectorLicenseService $licenses): RedirectResponse
+    {
+        $this->assertPlatformAdminAndIndividual($request, $company, $licenses);
+
+        $data = $request->validate([
+            'expires_at' => ['nullable', 'date', 'after:today'],
+        ]);
+
+        $timezone = $company->timezone ?: config('app.timezone');
+        $expiresAt = isset($data['expires_at'])
+            ? CarbonImmutable::parse($data['expires_at'], $timezone)->endOfDay()
+            : CarbonImmutable::now($timezone)->addDays(CollectorLicenseService::DEFAULT_TERM_DAYS)->endOfDay();
+
+        $licenses->renew($user, $company, $expiresAt);
+
+        return back()->with('success', "Licencia de {$user->name} renovada hasta {$expiresAt->format('d/m/Y')}.");
+    }
+
+    /** Suspende la licencia individual: el cobrador deja de operar CobrOS. */
+    public function suspendCollectorLicense(Request $request, Company $company, User $user, CollectorLicenseService $licenses): RedirectResponse
+    {
+        $this->assertPlatformAdminAndIndividual($request, $company, $licenses);
+
+        $licenses->suspend($user, $company, $request->user());
+
+        return back()->with('success', "Licencia de {$user->name} suspendida.");
+    }
+
+    /** Reactiva una licencia individual suspendida (la vigencia debe seguir abierta). */
+    public function resumeCollectorLicense(Request $request, Company $company, User $user, CollectorLicenseService $licenses): RedirectResponse
+    {
+        $this->assertPlatformAdminAndIndividual($request, $company, $licenses);
+
+        $licenses->resume($user, $company);
+
+        return back()->with('success', "Licencia de {$user->name} reactivada.");
+    }
+
+    private function assertPlatformAdminAndIndividual(Request $request, Company $company, CollectorLicenseService $licenses): void
+    {
+        abort_unless($request->user()->isPlatformAdmin(), 403);
+        abort_unless(($licenses->contract($company)['license_mode'] ?? null) === 'individual', 422, 'Solo disponible en modalidad de licencias individuales.');
     }
 }

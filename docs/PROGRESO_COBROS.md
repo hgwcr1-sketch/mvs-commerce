@@ -1,5 +1,85 @@
 # MVS CobrOS — Registro de avance
 
+## Base estructural por rutas — 2026-10-04
+
+Implementadas rutas, membresías por empresa y licencia independiente por ruta,
+reutilizando vigencias/estados y auditoría comercial existentes. Referencias
+nullable en asignaciones/CxC/recibos, contexto interno único por sesión y scopes
+de aislamiento. **95 tests / 455 aserciones** dirigidos; sin UI, backfill, cambio
+del saldo migrado ni integración operativa todavía. Ver decisión y límites en
+[COBROS_RUTAS_BASE.md](COBROS_RUTAS_BASE.md).
+
+## 6B — Módulo CLIENTES en /cobros/* (2026-10-02) — COMPLETADO LOCALMENTE
+
+Módulo de clientes dentro del shell CobrOS, sin enlaces de regreso a Commerce:
+
+- **Dueño/administrador** (`cobros.portal_dueno`): `GET /cobros/owner/customers` con
+  búsqueda `q` (nombre, comercial, identificación, teléfono, celular, correo), saldo
+  abierto por cliente (suma BCMath a 4 decimales) y cobrador asignado; crear, editar y
+  detalle con CxC abiertas, historial de cobros paginado y últimos recibos vigentes.
+  Enlace **Clientes** en la barra del shell (fuente única `cobros/components/navigation.blade.php`).
+- **Cobrador** (`cobros.cobrar`): botón **Nuevo cliente** en *Mi cartera* →
+  `GET/POST /cobros/collector/customers`: alta mínima que se autoasigna a su cartera con
+  `PortfolioAssignmentService::assign` (misma regla que usa el dueño).
+- **Drill-down del dueño por cobrador**: `GET /cobros/owner/collectors/{user}`
+  (`cobros.owner.collectors.show`) con cartera real vía `CollectorPortfolioService::portfolio`,
+  saldo total, cobrado y recibos del mes (`PortfolioSummaryService::decimalSum`) y buscador;
+  botón **Ver cartera** en *Cobradores registrados*.
+
+Reglas: todo acotado por `company_id` de la sesión activa (404 cross-company en
+`show`/`edit`/`update`); el `company_id` enviado en el request se descarta. El crédito y
+nivel de precio no se editan desde CobrOS; el alta del cobrador solo admite `credit_limit`
+y `credit_days` cuando el dueño habilita explícitamente el permiso por empresa. Coordenadas
+opcionales se guardan en los campos `Customer.latitude`/`longitude`, sin validarlas. Sin
+migraciones de permisos (se reutilizan `cobros.portal_dueno` y `cobros.cobrar`).
+
+### Archivos creados
+- `app/Http/Controllers/Cobros/OwnerCustomerController.php`
+- `app/Http/Requests/StoreCobrosCustomerRequest.php` (hereda de `StoreCustomerRequest`: normalización de teléfonos, unicidad por empresa y mensajes en español)
+- `app/Http/Requests/UpdateCobrosCustomerRequest.php`
+- `resources/views/cobros/owner/{customers,customer-form,customer,collector-show}.blade.php`
+- `resources/views/cobros/collector/customer-create.blade.php`
+- `tests/Feature/CobrosCustomerModuleTest.php`
+
+### Archivos modificados
+- `routes/web.php`: `cobros.owner.customers.*`, `cobros.owner.collectors.show`, `cobros.collector.customers.*`
+- `app/Http/Controllers/Cobros/CollectorPortfolioController.php` (`createCustomer`/`storeCustomer`)
+- `app/Http/Controllers/Cobros/OwnerCollectorController.php` (`show`)
+- `resources/views/cobros/components/navigation.blade.php`, `owner/collectors.blade.php`, `collector/portfolio.blade.php`
+- `tests/Feature/CobrosCollectorAccessTest.php` (expectativas de navegación con la nueva opción)
+
+### Validación
+- `CobrosCustomerModuleTest` **8/8, 61 aserciones**: listado/búsqueda, alta/edición/detalle,
+  saldo abierto, aislamiento cross-company (404), alta del cobrador con autoasignación y
+  `company_id` descartado, 403 del cobrador sobre el módulo del dueño, drill-down con 404 a
+  no-cobradores y a usuarios de otra empresa, validación de nombre/identificación duplicada.
+- Regresión `--filter="Cobros|CustomerCompanyIsolation"` **319/319, 2559 aserciones** (SQLite `:memory:`).
+- `Credit|Layaway|PosCheckout|AccountsReceivable|CuentasCobrar|SaleVoid` → **107/114**: los 7 fallos
+  son los preexistentes de `SaleVoid*` (`InventoryPostingService::voidSale()` inexistente), verificados como ajenos.
+- Pint PASS en todos los PHP tocados (se corrigieron sus violaciones) y `git diff --check` PASS.
+  Sin migraciones, sin staging/producción, push ni merge.
+
+Pendiente dentro de Clientes: **importación Excel/CSV** de clientes no expuesta en CobrOS
+(el flujo vive en `importaciones.clientes.*` con layout de Commerce; requiere decisión de
+alcance y vistas propias dentro del shell).
+
+### Extensión 2026-10-03 — búsqueda, GPS y crédito al alta del cobrador
+
+La búsqueda de Mi cartera admite fragmentos case-insensitive y equivalencia básica de
+acentos (consulta paginada, acotada a la cartera y empresa). El GPS del alta es opcional y
+no bloquea el guardado. El dueño controla por empresa `allow_collector_credit_on_customer_create`
+(apagado por defecto) y `collector_customer_credit_limit_max`; habilitado permite establecer
+`customers.credit_limit` hasta ese máximo y `credit_days` solo durante la creación, usando el
+modelo consumido por `AccountsReceivableService`. Sin edición posterior ni cambios de nivel
+de precio desde CobrOS. El máximo empresarial requiere migración aditiva `000004`.
+
+Auditoría local del caso reportado: cliente 2 y su CxC abierta pertenecen a la empresa 2;
+la CxC usa la sucursal 2 (activa y de empresa 2); Mario Vega es miembro de empresa 2 y está
+asignado a ese cliente, pero `branch_user` no contiene sucursales para su usuario. El Gate
+rechaza correctamente por alcance de sucursal; no se cambió ni se debe omitir la regla.
+Validación dirigida: `CobrosCollectorPortfolioTest`, `CobrosCustomerModuleTest` y
+`CobrosPaymentGateTest`, **40/40, 246 aserciones**; `git diff --check` PASS.
+
 ## 6B — Preparación local, piloto BLOQUEADO (2026-10-01)
 
 Base de cierre local `feature/cobros-v1`, `08fba58`. Informe, evidencia y
@@ -512,6 +592,30 @@ Gestión de cobradores controlada por la modalidad de licenciamiento de la empre
 - Sin migraciones nuevas. Sin push ni merge. Sin 1E-C, 2A ni pagos.
 - `tmp_generate_cobros_icons.php` intacto.
 
+### Cierre de cupo bajo lock (2026-10-02)
+
+- `createCollector` (rama de usuario nuevo y rama de usuario existente) y
+  `toggleCollector` al reactivar ejecutan `lockContractAndAssertSlot()`:
+  `lockForUpdate()` sobre la fila `company_modules` de CobrOS **dentro de la
+  misma transacción**, y relectura de `collector_limit` + conteo **después**
+  del lock; si el cupo ya se alcanzó, aborta con `ValidationException['collector']`
+  sin crear ni reactivar usuario.
+- La comprobación previa a la transacción se conserva como fallo rápido; la
+  hecha bajo lock es la autoritativa. Sin tablas/modelos nuevas ni licencias
+  individuales por cobrador; `permission_role`, Panel Maestro y flujo 1E intactos.
+- Licencias potenciales: `CollectorManagementService::getPotentialLicenses()` =
+  cobradores **activos** + 1 administrador/dueño (nunca `cupo+1`), mostrado en
+  `platform.show` y en la sección "Contrato CobrOS" (visible aunque el módulo
+  esté desactivado; guardar lo reactiva).
+- Prueba de carrera: `CobrosCollectorManagementTest::
+  test_creation_aborts_when_slot_is_taken_between_precheck_and_lock` simula a
+  otro escritor tomando el único cupo entre la comprobación previa y el lock
+  (listener de `DB::listen` dentro de la transacción) y exige que solo exista
+  el primer usuario, con el lock emitido en transacción. Regresión de
+  creación/reactivación: `test_creation_still_works_when_slot_is_free`.
+- Límite del entorno: en PostgreSQL el lock serializa; en SQLite la grammar no
+  emite `FOR UPDATE`, por lo que la garantía efectiva es de staging/producción.
+
 ### Completado: onboarding de credenciales temporales (2026-09-21)
 
 Cierre del onboarding de cobradores 1E-B: contraseña temporal, primer login
@@ -930,6 +1034,51 @@ Alcance entregado: centro de notificaciones con el canal `CobrOS` y los
   `financialSnapshot` verificados).
 - **Comando:** `cobros:evaluate-alerts` para evaluación programada.
 - **Reglas:** permiso `notificaciones.cobros` + rol CobrOS; una preferencia
+
+## Bloque 11 — Semáforo de riesgo crediticio (2026-10-07) — 11A/11B COMPLETADOS LOCALMENTE
+
+### 11A — Motor de clasificación (COMPLETADO)
+
+- `app/Services/Cobros/CreditRiskService.php` (solo lectura, `final class`):
+  - `classify(Company, Customer, ?CarbonImmutable)` → `['level' => verde|amarillo|rojo, 'overdue_count' => int, 'source' => cuotas|nuevo|historico]`.
+  - VERDE = 0 cuotas vencidas pendientes; AMARILLO = exactamente 1; ROJO = 2+.
+  - Cliente sin créditos ni registro de cartera inicial → VERDE (`source = nuevo`).
+  - Migrados sin cuotas → `declared_behavior` (malo=ROJO, regular=AMARILLO, bueno/sin_informacion=VERDE), salvo `historical_note` con marcadores graves (`grave|incobrable|judicial|demanda|embargo`) → ROJO.
+  - Cuota vencida cuenta solo si pendiente BCMath (`contractual_amount - applied_amount`) > 0; cuota `PAID` no cuenta; abono parcial no cambia el color por sí solo.
+  - Alcance SIEMPRE `forCompany()` (evita el global scope `BelongsToCobrosTenant` en `CobrosCredit`/`CobrosCreditInstallment` que causaba falsos VERDES).
+  - Sin migraciones; sin escrituras de ningún tipo.
+- Tests: `tests/Feature/CobrosCreditRisk11ATest.php` **4/4**.
+
+### 11B — Componente visual e integración en listados (COMPLETADO)
+
+- `classifyMany(Company, iterable<Customer>, ?CarbonImmutable)` → mapa `customer_id => resultado`; resuelve la fecha una sola vez por lote (reutiliza `classify`, sin duplicar motor).
+- Componente reutilizable `resources/views/cobros/components/credit-risk.blade.php`:
+  - Props: `level` directo **o** `customer` + `company` (resuelve vía `classify` con memoización estática por request/clave empresa:cliente), `label`, `size` (`md`/`lg`).
+  - Silueta de persona (SVG) con punto de estado; ring/dot coloreado (emerald/amber/red).
+  - Accesibilidad: `role="img"`, `aria-label="Estado de crédito: …"`, `sr-only`, `title`; silueta `aria-hidden`.
+  - Default defensivo a `verde` ante nivel inválido/nulo.
+- Integración junto al nombre (7 vistas):
+  - `cobros/collector/portfolio.blade.php` (lista de cartera).
+  - `cobros/collector/my-customers.blade.php` (mis clientes).
+  - `cobros/collector/customer.blade.php` (ficha del cobrador, `size=lg`).
+  - `cobros/owner/customers.blade.php` (listado del dueño).
+  - `cobros/owner/customer.blade.php` (ficha del dueño, `size=lg`).
+  - `cobros/collector/credit-index.blade.php` (mis préstamos).
+  - `cobros/collector/credit-request-expediente.blade.php` (expediente).
+  - NO se coloca en recibos ni pantallas de cobro/pago.
+- Test focal: `tests/Feature/CobrosCreditRisk11BTest.php` **2/2** (render del componente con nivel accesible y color; equivalencia `classifyMany` vs `classify` con `source = nuevo`).
+
+### Validación 11B
+
+- `php artisan test --filter='(CobrosCreditRisk11ATest|CobrosCreditRisk11BTest|CobrosInitialPortfolio5BTest|CobrosManualFixesTest)'` → **20/20 (166 aserciones)** (incluye tests que renderizan cartera/my-customers con el componente).
+- `php artisan view:cache` OK; `git diff --check` OK; Pint solo `line_ending` CRLF (decisión 11A: no corregir para no expandir diffs).
+- Sin migraciones, sin commit/push/despliegue.
+
+### Pendiente 11B (documentado, no bloqueante)
+
+- `owner/credit-requests.blade.php` y `owner/credit-request-show.blade.php` no muestran semáforo: el listado expone `CobrosCreditRequest` (nombre de solicitud) sin relación `customer` cargada; requiere cablear `customer_id`/`customer` en el controlador del dueño antes de integrar.
+- Batch real de `classifyMany` en controladores (hoy el componente resuelve por cliente con memoización; `classifyMany` queda disponible para optimizar N+1 de listados largos).
+
   nunca concede acceso, solo filtra; enero recibo/alerta no escribe dinero.
 
 **Evidencia:** `CobrosAlertsTest` 9/9 (87 aserciones) y suite focal

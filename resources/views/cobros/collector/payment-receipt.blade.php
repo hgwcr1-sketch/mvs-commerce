@@ -34,16 +34,6 @@
 
         <dl class="mt-4 space-y-2 text-base">
             <div class="flex items-start justify-between gap-3">
-                <dt class="text-slate-500">Empresa</dt>
-                <dd class="text-right font-semibold text-slate-900">{{ $company->trade_name }}</dd>
-            </div>
-            @if($receipt->branch)
-                <div class="flex items-start justify-between gap-3">
-                    <dt class="text-slate-500">Sucursal</dt>
-                    <dd class="text-right font-semibold text-slate-900">{{ $receipt->branch->name }}</dd>
-                </div>
-            @endif
-            <div class="flex items-start justify-between gap-3">
                 <dt class="text-slate-500">Cliente</dt>
                 <dd class="text-right font-semibold text-slate-900">{{ $receipt->customer->name }}</dd>
             </div>
@@ -69,6 +59,49 @@
                 <dt class="text-slate-500">Saldo restante de la cuenta</dt>
                 <dd class="text-right font-bold text-slate-900">@include('cobros.components.money', ['amount' => $receipt->accountReceivable->fresh()->balance_due, 'currency' => $receipt->currency_code])</dd>
             </div>
+            @if(!empty($loanApplication))
+            {{-- 9B.1/9B.3: aplicación del cobro al préstamo, en lenguaje humano. --}}
+            <div class="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                <p class="font-bold uppercase tracking-wide text-amber-700">Pago registrado ✓ · Préstamo {{ $loanApplication['reference'] }}</p>
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Aplicado al préstamo</span>
+                    <span class="font-semibold text-slate-900">@include('cobros.components.money', ['amount' => $loanApplication['amount'], 'currency' => $receipt->currency_code])</span>
+                </div>
+                @if(bccomp((string) $loanApplication['mora'], '0', 4) > 0)
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Mora pagada</span>
+                    <span class="font-semibold text-slate-900">@include('cobros.components.money', ['amount' => $loanApplication['mora'], 'currency' => $receipt->currency_code])</span>
+                </div>
+                @endif
+                @foreach($loanApplication['lines'] as $line)
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Cuota {{ $line['number'] }}: @include('cobros.components.money', ['amount' => $line['amount'], 'currency' => $receipt->currency_code])
+                        @if($line['completes'])
+                        <span class="font-semibold text-green-700">· queda pagada ✓</span>
+                        @else
+                        <span class="font-semibold text-amber-700">· pendiente @include('cobros.components.money', ['amount' => $line['pending_after'], 'currency' => $receipt->currency_code])</span>
+                        @endif
+                    </span>
+                </div>
+                @endforeach
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Saldo del préstamo</span>
+                    <span class="font-bold text-slate-900">@include('cobros.components.money', ['amount' => $loanApplication['saldo'], 'currency' => $receipt->currency_code])</span>
+                </div>
+                @if($loanApplication['cancelled'])
+                <p class="font-bold text-green-700">Préstamo cancelado ✓</p>
+                @else
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Próximo pago</span>
+                    <span class="font-semibold text-slate-900">{{ $loanApplication['next_due'] }}</span>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                    <span class="text-amber-800">Monto pendiente</span>
+                    <span class="font-semibold text-slate-900">@include('cobros.components.money', ['amount' => $loanApplication['next_amount'], 'currency' => $receipt->currency_code])</span>
+                </div>
+                @endif
+            </div>
+            @endif
         </dl>
 
         @if($receipt->annulled_at)
@@ -87,10 +120,51 @@
         </p>
     </div>
 
-    <button type="button" onclick="window.print()"
-            class="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-lg font-bold text-slate-950 hover:bg-primary-hover">
-        IMPRIMIR / COMPARTIR
-    </button>
+    {{-- Acciones grandes: WhatsApp (si hay teléfono) + impresión del recibo formal. --}}
+    <div class="space-y-3">
+        @if($whatsappUrl)
+            <a href="{{ $whatsappUrl }}" target="_blank" rel="noopener"
+               class="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-4 text-lg font-bold text-white hover:bg-green-700">
+                🟢 ENVIAR POR WHATSAPP
+            </a>
+        @else
+            <button type="button" disabled aria-disabled="true"
+                    class="flex min-h-[56px] w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 py-4 text-lg font-bold text-slate-500">
+                🟢 ENVIAR POR WHATSAPP
+            </button>
+            <p class="text-center text-sm font-semibold text-slate-600">
+                Sin teléfono registrado en el cliente: no se puede enviar por WhatsApp.
+            </p>
+            {{-- Captura in-situ del teléfono (cliente o contacto indicado). Sin JS: <details>. --}}
+            <details class="rounded-xl border-2 border-primary bg-white">
+                <summary class="flex min-h-[56px] w-full cursor-pointer list-none items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-lg font-bold text-slate-950 hover:bg-primary-hover">
+                    ➕ AGREGAR TELÉFONO
+                </summary>
+                <form method="POST" action="{{ route('cobros.collector.customer.phone', $receipt->customer) }}" class="space-y-3 p-4">
+                    @csrf
+                    <input type="hidden" name="receipt" value="{{ $receipt->receipt_number }}">
+                    <div>
+                        <label for="phone" class="block text-sm font-semibold text-slate-700">Teléfono (cliente o contacto indicado)</label>
+                        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required maxlength="30"
+                               value="{{ old('phone') }}" placeholder="Ej. 8888 8888 o +506 8888 8888"
+                               class="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 py-3 text-base text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40">
+                        @error('phone')
+                            <p role="alert" class="mt-1 text-sm font-semibold text-red-600">{{ $message }}</p>
+                        @enderror
+                        <p class="mt-1 text-xs text-slate-500">No se envían documentos ni cédulas.</p>
+                    </div>
+                    <button type="submit"
+                            class="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-base font-bold text-white hover:bg-slate-700">
+                        GUARDAR TELÉFONO
+                    </button>
+                </form>
+            </details>
+        @endif
+        <a href="{{ route('cobros.collector.payments.receipt.print', $receipt->receipt_number) }}" target="_blank" rel="noopener"
+           class="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-bold text-slate-800 hover:bg-slate-50">
+            🖨️ IMPRIMIR
+        </a>
+    </div>
 
     @if($mayAnnul)
         <form method="POST" action="{{ route('cobros.collector.payments.annul', $receipt->receipt_number) }}"

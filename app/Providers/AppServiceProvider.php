@@ -7,6 +7,10 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Models\User;
 use App\Models\Company;
+use App\Contracts\Fiscal\FiscalTaxpayerLookupInterface;
+use App\Services\Fiscal\Hacienda\HaciendaClient;
+use App\Services\Fiscal\Hacienda\HaciendaTaxpayerLookupService;
+use App\Services\Fiscal\Hacienda\HaciendaTaxpayerNormalizer;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,7 +19,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // MF03 (portado de mvs-fiscal): consulta de contribuyentes de Hacienda.
+        $this->app->bind(HaciendaClient::class, fn () => HaciendaClient::fromConfig());
+        $this->app->bind(HaciendaTaxpayerNormalizer::class, fn () => new HaciendaTaxpayerNormalizer());
+        $this->app->bind(HaciendaTaxpayerLookupService::class, fn ($app) => new HaciendaTaxpayerLookupService(
+            $app->make(HaciendaClient::class),
+            $app->make(HaciendaTaxpayerNormalizer::class),
+        ));
+        $this->app->bind(FiscalTaxpayerLookupInterface::class, fn ($app) => $app->make(HaciendaTaxpayerLookupService::class));
     }
 
     /**
