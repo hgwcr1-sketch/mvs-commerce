@@ -930,7 +930,86 @@
                     <footer class="grid shrink-0 grid-cols-2 gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:flex sm:justify-end sm:px-6"><button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="rounded-xl border border-[#B9BDC2] px-5 py-3 font-bold">Cancelar</button><button type="button" @click="clearPayments" :disabled="checkout.processing || !checkout.payments.length" class="rounded-xl border border-[#B1922D] px-5 py-3 font-bold text-[#806817] disabled:opacity-40">Limpiar pagos</button><button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm" class="col-span-2 rounded-xl bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:bg-slate-300" x-text="checkout.processing ? 'Procesando…' : `Confirmar cobro — ${money(grandTotal)}`"></button></footer>
                 </div>
             </template>
-            <template x-if="checkout.result"><div class="overflow-y-auto p-6 text-center sm:p-10"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl font-black text-[#111111]">✓</div><h2 class="mt-4 text-3xl font-black text-[#111111]">Venta completada</h2><p class="mt-2 text-xl font-bold text-[#806817]" x-text="checkout.result.sale_number"></p><div class="mx-auto mt-5 max-w-md rounded-2xl bg-slate-50 p-5"><p>Total: <strong x-text="money(checkout.result.total)"></strong></p><p>Vuelto total: <strong x-text="money(checkout.result.total_change)"></strong></p><div class="mt-3 space-y-1 text-left"><template x-for="payment in checkout.result.payments"><p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p></template></div></div><div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)"><template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)" :key="payment.payment_method_id"><p x-text="usdPaymentLabel(payment)"></p></template></div><p x-show="checkout.result.duplicate" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p><div x-show="checkout.printStatus === 'failed'" class="mx-auto mt-3 max-w-md rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No fue posible imprimir directamente.</div><div x-show="checkout.printStatus === 'printing'" class="mx-auto mt-3 max-w-md rounded-lg bg-blue-50 p-3 text-sm text-blue-700">Imprimiendo ticket…</div><p x-show="checkout.printMessage" x-text="checkout.printMessage" role="status" aria-live="polite" class="mt-3 break-words text-sm text-slate-700"></p><div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><button type="button" @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl bg-[#111111] px-5 py-3 font-normal text-white disabled:opacity-50">Imprimir comprobante</button><button type="button" x-show="checkout.result.electronic_status === 'accepted'" x-cloak @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B1922D] px-5 py-3 font-semibold text-[#806817] disabled:opacity-50">Imprimir comprobante fiscal</button><a x-show="checkout.printStatus === 'failed'" x-cloak :href="checkout.result.receipt_url" target="_blank" rel="noopener" class="min-h-11 rounded-xl border border-slate-300 px-5 py-3 font-semibold">Usar impresión del navegador</a><button type="button" @click="newSale" class="rounded-xl bg-amber-500 px-5 py-3 font-normal text-black hover:bg-amber-600">Nueva venta</button></div></div></template>
+            <template x-if="checkout.result">
+                <div class="flex min-h-0 flex-1 flex-col">
+                    <header class="flex items-center justify-between gap-3 border-b border-[#B9BDC2]/60 bg-[#111111] px-5 py-4 text-white sm:px-7">
+                        <div class="min-w-0">
+                            <h2 class="text-2xl font-black tracking-tight">Venta completada</h2>
+                            <p class="mt-1 truncate text-sm text-[#B9BDC2]" x-text="checkout.result.sale_number"></p>
+                        </div>
+                        <span class="shrink-0 rounded-full bg-primary/20 px-3 py-1 text-sm font-black text-[#D4AF37]" x-text="money(checkout.result.total)"></span>
+                    </header>
+
+                    <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" data-post-sale>
+                        <section class="rounded-2xl border border-[#B9BDC2] bg-slate-50 p-4 sm:p-5" aria-label="Resumen del comprobante">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="rounded-lg bg-[#111111] px-3 py-1 text-xs font-black uppercase tracking-widest text-white" x-text="checkout.result.sale_number"></span>
+                                <a :href="checkout.result.receipt_url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] bg-white px-4 py-2 text-xs font-bold text-[#806817]">Ver comprobante</a>
+                            </div>
+                            <dl class="mt-3 space-y-2 text-sm">
+                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Cliente</dt><dd class="text-right font-bold" x-text="checkout.result.customer_name || 'Consumidor Final'"></dd></div>
+                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Subtotal</dt><dd class="text-right font-bold" x-text="money(checkout.result.subtotal)"></dd></div>
+                                <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Impuesto</dt><dd class="text-right font-bold" x-text="money(checkout.result.tax_total)"></dd></div>
+                                <div class="flex items-center justify-between gap-3 border-t border-[#B9BDC2] pt-2"><dt class="font-black">Total</dt><dd class="text-right text-xl font-black text-[#111111]" x-text="money(checkout.result.total)"></dd></div>
+                                <div class="flex items-center justify-between gap-3" x-show="Number(checkout.result.total_change) > 0"><dt class="text-slate-500">Vuelto total</dt><dd class="text-right font-bold" x-text="money(checkout.result.total_change)"></dd></div>
+                            </dl>
+                            <div class="mt-3 space-y-1 text-sm">
+                                <template x-for="payment in checkout.result.payments">
+                                    <p><strong x-text="payment.method_name"></strong>: <span x-text="money(payment.amount)"></span><span x-show="payment.reference" x-text="` · Ref: ${payment.reference}`"></span><span x-show="payment.change_amount > 0" x-text="` · Recibido ${money(payment.received_amount)} · Vuelto ${money(payment.change_amount)}`"></span></p>
+                                </template>
+                            </div>
+                            <div class="mt-3 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)">
+                                <template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)">
+                                    <p x-text="usdPaymentLabel(payment)"></p>
+                                </template>
+                            </div>
+                            <p x-show="checkout.result.duplicate" class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Esta venta ya había sido procesada.</p>
+                        </section>
+
+                        <section x-show="checkout.result.fiscal" class="mt-4 rounded-2xl border border-[#B9BDC2] bg-white p-4" aria-label="Estado del comprobante electrónico">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <h3 class="font-black">Comprobante electrónico</h3>
+                                <span class="rounded-full px-3 py-1 text-xs font-black" :class="checkout.result.fiscal && checkout.result.fiscal.is_accepted ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'" x-text="checkout.result.fiscal ? checkout.result.fiscal.status_label : ''"></span>
+                            </div>
+                            <template x-if="checkout.result.fiscal && checkout.result.fiscal.is_accepted">
+                                <div class="mt-3 space-y-2 text-sm">
+                                    <p class="break-all"><span class="text-slate-500">Clave electrónica:</span> <strong class="font-mono" x-text="checkout.result.fiscal.clave"></strong></p>
+                                    <p class="break-all" x-show="checkout.result.fiscal.consecutivo"><span class="text-slate-500">Consecutivo:</span> <strong class="font-mono" x-text="checkout.result.fiscal.consecutivo"></strong></p>
+                                    <img x-show="checkout.result.fiscal.qr_image" :src="checkout.result.fiscal.qr_image" alt="QR del comprobante electrónico" class="h-28 w-28">
+                                </div>
+                            </template>
+                            <template x-if="checkout.result.fiscal && !checkout.result.fiscal.is_accepted">
+                                <div class="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                                    <span x-text="['rejected', 'error'].includes(checkout.result.fiscal.status) ? `Comprobante electrónico ${checkout.result.fiscal.status_label}` : 'Comprobante electrónico en proceso'"></span>
+                                    <p class="mt-1 text-xs font-normal">La clave, el consecutivo y el QR se muestran una vez que el comprobante sea aceptado.</p>
+                                </div>
+                            </template>
+                        </section>
+
+                        <section class="mt-4 rounded-2xl border border-[#B9BDC2] bg-white p-4" aria-label="Correo del comprobante">
+                            <label for="post-sale-email" class="text-sm font-black">Correo del cliente</label>
+                            <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                                <input id="post-sale-email" type="email" x-model="checkout.receiptEmail" inputmode="email" autocomplete="email" maxlength="150" placeholder="cliente@correo.com" :disabled="checkout.mail.sending" class="min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2">
+                                <button type="button" @click="sendReceiptMail()" :disabled="checkout.mail.sending" class="min-h-11 shrink-0 rounded-xl bg-[#111111] px-5 py-2 font-normal text-white disabled:opacity-50" x-text="checkout.mail.sending ? 'Enviando…' : 'Enviar comprobante por correo'"></button>
+                            </div>
+                            <p x-show="checkout.mail.message" x-text="checkout.mail.message" role="status" aria-live="polite" class="mt-2 rounded-lg bg-emerald-50 p-2 text-sm font-semibold text-emerald-700"></p>
+                            <p x-show="checkout.mail.error" x-text="checkout.mail.error" role="status" aria-live="polite" class="mt-2 rounded-lg bg-red-50 p-2 text-sm font-semibold text-red-700"></p>
+                        </section>
+
+                        <div x-show="checkout.printStatus === 'failed'" class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No fue posible imprimir directamente.</div>
+                        <div x-show="checkout.printStatus === 'printing'" class="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">Imprimiendo ticket…</div>
+                        <p x-show="checkout.printMessage" x-text="checkout.printMessage" role="status" aria-live="polite" class="mt-3 break-words text-sm text-slate-700"></p>
+                    </div>
+
+                    <footer class="flex flex-wrap gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:justify-end sm:px-6" data-post-sale>
+                        <button type="button" @click="printCompletedSale(checkout.result.sale_id, false)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl bg-[#111111] px-4 py-3 font-normal text-white disabled:opacity-50">Imprimir comprobante</button>
+                        <button type="button" @click="printCompletedSale(checkout.result.sale_id, true)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold disabled:opacity-50">Reimprimir</button>
+                        <a :href="checkout.result.receipt_pdf_url" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold">Descargar PDF</a>
+                        <button type="button" x-show="checkout.result.electronic_status === 'accepted'" x-cloak @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B1922D] px-4 py-3 font-semibold text-[#806817] disabled:opacity-50">Imprimir comprobante fiscal</button>
+                        <button type="button" @click="newSale" class="min-h-11 rounded-xl bg-primary px-5 py-3 font-normal text-black hover:bg-primary-hover">Nueva venta</button>
+                    </footer>
+                </div>
+            </template>
         </div>
     </div>
 
@@ -1258,7 +1337,7 @@ document.addEventListener('alpine:init', () => {
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->where('type', '!=', 'loyalty_points')->values()),
-        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' },
+        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', mail: { sending: false, message: '', error: '' } },
         quickCustomer: {
             open: false,
             saving: false,
@@ -1823,8 +1902,17 @@ document.addEventListener('alpine:init', () => {
         lineTotal(item, index) {
             return this.decimal4(this.lineSubtotal(item, index) + this.lineTax(item, index));
         },
-        money(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); },
-        money2(value) { return new Intl.NumberFormat('es-CR', { style: 'currency', currency: 'CRC', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); },
+        money(value) { return this.crcMoney(value); },
+        money2(value) { return this.crcMoney(value); },
+        // Símbolo CRC explícito: Intl con style 'currency' depende de la versión
+        // de CLDR del navegador y puede emitir signos sustitutos o el texto CRC
+        // en lugar del colón. Formatea solo los dígitos y antepone el colón
+        // UTF-8, siempre con 2 decimales.
+        crcMoney(value) {
+            const amount = Number(value) || 0;
+            const digits = new Intl.NumberFormat('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(amount));
+            return (amount < 0 ? '-' : '') + '₡' + digits;
+        },
         formatPoints(value) { return new Intl.NumberFormat('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); },
         formatQuantity(value) { return new Intl.NumberFormat('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0); },
         otherStockLabel(product) { return product.other_branch_stock.map(stock => `${stock.branch_name} ${this.formatQuantity(stock.available_stock)}`).join(', '); },
@@ -1835,14 +1923,24 @@ document.addEventListener('alpine:init', () => {
         },
         closeImage() { this.imageModal = { open: false, url: null, name: '' }; },
         handleGlobalEnter(event) {
-            if (event.defaultPrevented || this.orderRequest.open || this.checkout.open || this.quickCustomer.open || this.customerPhone.open || this.cameraScannerOpen || this.resultsOpen || this.customerResultsOpen) return;
-            if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
+            if (event.defaultPrevented) return;
+            const target = event.target;
+            const tagName = target && target.tagName ? target.tagName : '';
+            // Escritura y acciones manuales: nunca Convertir Enter en "Nueva venta".
+            const typingTarget = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(tagName)
+                || Boolean(target && target.isContentEditable)
+                || Boolean(target && typeof target.closest === 'function' && target.closest('[contenteditable="true"], [data-post-sale]'));
+            const secondaryModalOpen = this.orderRequest.open || this.quickCustomer.open || this.customerPhone.open
+                || this.cameraScannerOpen || Boolean(this.imageModal && this.imageModal.open)
+                || this.resultsOpen || this.customerResultsOpen;
             if (this.checkout.result && !this.checkout.processing) {
-                if (event.repeat) return;
+                if (event.repeat || secondaryModalOpen || typingTarget) return;
                 event.preventDefault();
                 this.newSale();
                 return;
             }
+            if (secondaryModalOpen || this.checkout.open) return;
+            if (typingTarget) return;
             if (this.canCheckout) { event.preventDefault(); this.openCheckout(); }
         },
         openCheckout() {
@@ -1968,6 +2066,8 @@ document.addEventListener('alpine:init', () => {
                 });
                 const payload = await this.readFetchResponse(response);
                 this.checkout.result = payload;
+                this.checkout.receiptEmail = payload?.customer_email || '';
+                this.checkout.mail = { sending: false, message: '', error: '' };
                 this.checkout.printStatus = null;
                 this.cart = [];
                 this.customerId = null;
@@ -2036,9 +2136,47 @@ document.addEventListener('alpine:init', () => {
                 if (checkout.printStatus === 'printing') checkout.printStatus = 'failed';
             }
         },
+        // Reutiliza la ruta y el controlador ya existentes (pos.receipt.mail)
+        // sin duplicar la lógica de envío del comprobante.
+        async sendReceiptMail() {
+            const checkout = this.checkout;
+            if (!checkout.result || checkout.mail.sending) return;
+            const email = String(checkout.receiptEmail || '').trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+                checkout.mail.error = 'Indique un correo válido para enviar el comprobante.';
+                checkout.mail.message = '';
+                return;
+            }
+            checkout.mail.sending = true;
+            checkout.mail.error = '';
+            checkout.mail.message = '';
+            try {
+                const mailUrl = {{ Illuminate\Support\Js::from(route('pos.receipt.mail', ['sale' => '__SALE_ID__'], false)) }};
+                const response = await fetch(mailUrl.replace('__SALE_ID__', checkout.result.sale_id), {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify({ email }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.success === false) {
+                    checkout.mail.error = payload.message || 'No fue posible enviar el comprobante.';
+                    return;
+                }
+                checkout.mail.message = payload.message || `Comprobante enviado a ${email}.`;
+            } catch {
+                checkout.mail.error = 'No fue posible enviar el comprobante. Intente nuevamente.';
+            } finally {
+                checkout.mail.sending = false;
+            }
+        },
         newSale() {
             this.checkoutToken = generateUUID();
-            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' };
+            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', mail: { sending: false, message: '', error: '' } };
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
             this.successMessage = '';

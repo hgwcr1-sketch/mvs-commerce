@@ -30,6 +30,7 @@ use App\Services\PosDefaultDocumentType;
 use App\Services\Sales\CreditNoteService;
 use App\Services\Sales\LayawayService;
 use App\Services\Sales\PosSaleProcessor;
+use App\Services\Sales\SaleReceiptData;
 use App\Services\Sales\SaleReceiptService;
 use App\Services\Sales\SuspendedSaleService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -654,9 +655,12 @@ class PosController extends Controller
 
         $emissionDispatcher->forSale($result['sale']);
 
-        $sale = $result['sale']->load('payments.paymentMethod');
+        $sale = $result['sale']->load('payments.paymentMethod', 'customer');
         $payments = $sale->payments;
         $firstPayment = $payments->first();
+        // Modal post-venta: cliente, correo precargable y estado fiscal reales
+        // (mismo origen que el comprobante: SaleReceiptData::fiscalFor).
+        $fiscal = SaleReceiptData::fiscalFor($sale);
 
         return response()->json([
             'success' => true,
@@ -685,6 +689,19 @@ class PosController extends Controller
             'received_amount' => $firstPayment?->received_amount,
             'change_amount' => $firstPayment?->change_amount,
             'receipt_url' => route('pos.receipt', $sale),
+            'receipt_pdf_url' => route('pos.receipt.pdf', $sale),
+            'customer_name' => $sale->customer?->name ?? 'Consumidor Final',
+            'customer_email' => $sale->customer?->email,
+            'fiscal' => $fiscal === null ? null : [
+                'status' => $fiscal['status'],
+                'status_label' => $fiscal['status_label'],
+                'is_accepted' => $fiscal['is_accepted'],
+                // Clave, consecutivo y QR solo aportados por la fuente única;
+                // la vista decide mostrarlos únicamente cuando fue aceptado.
+                'clave' => $fiscal['clave'],
+                'consecutivo' => $fiscal['consecutivo'],
+                'qr_image' => $fiscal['qr_image'],
+            ],
         ]);
     }
 

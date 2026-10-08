@@ -254,7 +254,7 @@ readonly class SaleReceiptData
      * reciente con clave firmada. Devuelve null cuando no hay documento
      * electrónico con clave (ventas normales / aún no emitidas).
      */
-    private static function fiscalFor(Sale $sale): ?array
+    public static function fiscalFor(Sale $sale): ?array
     {
         $docs = ElectronicDocument::query()
             ->where('company_id', (int) $sale->company_id)

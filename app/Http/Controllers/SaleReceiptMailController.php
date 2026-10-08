@@ -6,6 +6,7 @@ use App\Mail\SaleReceiptMail;
 use App\Models\Company;
 use App\Models\Sale;
 use App\Services\Sales\SaleReceiptService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -13,7 +14,7 @@ use Throwable;
 
 class SaleReceiptMailController extends Controller
 {
-    public function __invoke(Request $request, Sale $sale, SaleReceiptService $receipts): RedirectResponse
+    public function __invoke(Request $request, Sale $sale, SaleReceiptService $receipts): JsonResponse|RedirectResponse
     {
         $data = $request->validate([
             'email' => ['required', 'email:rfc', 'max:150'],
@@ -28,7 +29,21 @@ class SaleReceiptMailController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No fue posible enviar el comprobante. La venta permanece registrada; puede intentarlo nuevamente.',
+                ], 422);
+            }
+
             return back()->withErrors(['email' => 'No fue posible enviar el comprobante. La venta permanece registrada; puede intentarlo nuevamente.']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "Comprobante enviado a {$data['email']}.",
+            ]);
         }
 
         return back()->with('success', "Comprobante enviado a {$data['email']}.");

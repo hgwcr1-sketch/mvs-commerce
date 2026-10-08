@@ -1,5 +1,14 @@
 # MVS Commerce — Estado actual
 
+## Modal post-venta POS completo y simbolo CRC (2026-10-08)
+
+**Rama:** `release/fiscal-portal-prod-20261006`. Validacion local; un commit local, sin push ni produccion.
+
+- El modal que aparece al terminar una venta ahora resume el comprobante (numero, cliente, subtotal/impuesto/total, vuelto y pagos), muestra el estado fiscal real, precarga el correo del cliente en un input editable y expone: enviar por correo, imprimir, reimprimir, descargar PDF, imprimir fiscal (solo `electronic_status === accepted`, con clave/consecutivo/QR reales) y Nueva venta.
+- El envio reutiliza `pos.receipt.mail` + `SaleReceiptService` via JSON (`SaleReceiptMailController` responde JSON cuando la peticion lo pide; el formulario del comprobante sigue con redirect). La impresion sigue usando MVS Print (`printCompletedSale`) y el PDF la ruta `pos.receipt.pdf`.
+- Enter con el modal visible dispara Nueva venta una sola vez: ignora `event.repeat`, no actua sobre INPUT/SELECT/TEXTAREA/BUTTON/A ni contenteditable, no actua dentro de `[data-post-sale]` ni con otro modal abierto, y `newSale()` devuelve el foco al buscador del POS.
+- **Simbolo CRC:** `money()`/`money2()` del POS dejan de depender de `Intl` con `style:'currency'` (segun la version de CLDR puede emitir signos sustitutos o texto CRC) y ahora formatean digitos y antepone el colon UTF-8 con 2 decimales (`crcMoney`). Las vistas de comprobante y el ticket ESC/POS ya usaban el colon UTF-8; se verifico ausencia de signos sustitutos en las superficies POS.
+- Validacion local: `PosPostSaleModalTest` 5/5, `SaleReceiptMailTest` + `PosCheckoutTest` (1 fallo preexistente), `CreditNotePosUiTest` 11/11, JS `pos-post-sale-modal.cjs`, `pos-close-enter-real.cjs`, `pos-modal-binding-real.cjs`, Pint focal y `git diff --check` PASS. `SaleReceiptFiscalTest` crashea igual que antes del cambio (preexistente).
 ## POS efectivo: foco y moneda exclusiva (2026-10-08)
 
 - En `release/fiscal-portal-prod-20261006`, el bloque CRC/USD enfoca y selecciona el CRC visible al activar efectivo. Cada entrada positiva limpia la otra moneda; un estado residual con ambas positivas bloquea agregar el pago.
