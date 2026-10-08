@@ -35,12 +35,16 @@ class CollectorPortfolioController extends Controller
         $customerIds = $portfolio['customers']->getCollection()->modelKeys();
         $availableRoutes = app(\App\Services\Cobros\CobrosRouteContext::class)->available($request->user());
 
+        // 12A: semáforo por lote (3 consultas fijas, sin N+1 por cliente).
+        $riskLevels = app(\App\Services\Cobros\CreditRiskService::class)->classifyMany($company, $portfolio['customers']);
+
         return view('cobros.collector.portfolio', [
             'company' => $company,
             // Ruta activa en sesión (nombre visible, nunca IDs internos).
             'activeRoute' => $availableRoutes->firstWhere('id', (int) session('active_cobros_route_id', 0)),
             'availableRoutes' => $availableRoutes,
             'customers' => $portfolio['customers'],
+            'riskLevels' => $riskLevels,
             'totalBalance' => $portfolio['total_balance'],
             'search' => $search ?? '',
             // Contrato conservado del shell: sucursales operativas del cobrador en la empresa activa.
@@ -205,10 +209,14 @@ class CollectorPortfolioController extends Controller
         $data = $service->misClientes($request->user(), $company, $search);
         $availableRoutes = app(\App\Services\Cobros\CobrosRouteContext::class)->available($request->user());
 
+        // 12A: semáforo por lote (3 consultas fijas, sin N+1 por cliente).
+        $riskLevels = app(\App\Services\Cobros\CreditRiskService::class)->classifyMany($company, $data['customers']);
+
         return view('cobros.collector.my-customers', [
             'company' => $company,
             'activeRoute' => $availableRoutes->firstWhere('id', (int) session('active_cobros_route_id', 0)),
             'customers' => $data['customers'],
+            'riskLevels' => $riskLevels,
             'search' => $data['search'] ?? '',
         ]);
     }

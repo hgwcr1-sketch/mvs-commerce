@@ -40,7 +40,7 @@
                 <a href="{{ route('cobros.owner.solicitudes.show', $r->id) }}"
                    class="flex min-h-[64px] items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:bg-slate-50">
                     <div class="min-w-0">
-                        <p class="truncate font-semibold text-slate-900">#{{ $r->id }} · {{ $r->name }}</p>
+                        <p class="truncate font-semibold text-slate-900"><span class="inline-flex min-w-0 items-center gap-1.5">@if($r->customer)@include('cobros.components.credit-risk', ['customer' => $r->customer, 'company' => $company, 'label' => null, 'level' => $riskLevels[(int) $r->customer->id]['level'] ?? null])@endif<span class="truncate">#{{ $r->id }} · {{ $r->name }}</span></span></p>
                         <p class="truncate text-sm text-slate-500">{{ $r->identification }} · {{ $r->collector?->name ?? '—' }} · ₡{{ number_format((float) $r->amount_requested, 2) }}</p>
                     </div>
                     <span class="shrink-0 rounded-full px-3 py-1 text-xs font-bold

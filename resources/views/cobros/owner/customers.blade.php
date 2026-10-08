@@ -52,7 +52,7 @@
             <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <h2 class="break-words text-base font-semibold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $row['customer'], 'company' => $company])<span>{{ $row['customer']->name }}</span></span></h2>
+                        <h2 class="break-words text-base font-semibold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $row['customer'], 'company' => $company, 'level' => $riskLevels[(int) $row['customer']->id]['level'] ?? null])<span>{{ $row['customer']->name }}</span></span></h2>
                         <p class="mt-0.5 break-words text-sm text-slate-500">
                             {{ $row['customer']->identification ?: 'Sin identificación' }}
                             @if($row['customer']->phone || $row['customer']->mobile)

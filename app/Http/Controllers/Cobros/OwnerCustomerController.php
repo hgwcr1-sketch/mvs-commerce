@@ -93,6 +93,8 @@ class OwnerCustomerController extends Controller
         return view('cobros.owner.customers', [
             'company' => $company,
             'rows' => $rows,
+            // 12A: semáforo por lote (3 consultas fijas, sin N+1 por cliente).
+            'riskLevels' => app(\App\Services\Cobros\CreditRiskService::class)->classifyMany($company, $customers),
             'customers' => $customers,
             'search' => $search ?? '',
             'creditAssignmentEnabled' => $company->allow_collector_credit_on_customer_create,

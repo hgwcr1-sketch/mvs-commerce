@@ -31,7 +31,8 @@ class OwnerCreditRequestController extends Controller
             'status' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $query = CobrosCreditRequest::query()->with(['route', 'collector'])->orderByDesc('id');
+        // 12A: 'customer' para el semáforo de riesgo (relación tenant-scoped).
+        $query = CobrosCreditRequest::query()->with(['route', 'collector', 'customer'])->orderByDesc('id');
         if (! empty($data['route_id'])) {
             $query->where('cobros_route_id', (int) $data['route_id']);
         }
@@ -39,13 +40,19 @@ class OwnerCreditRequestController extends Controller
             $query->where('status', $data['status']);
         }
 
+        $company = $this->company();
+        $requests = $query->get();
+
         return view('cobros.owner.credit-requests', [
-            'company' => $this->company(),
+            'company' => $company,
             'routes' => CobrosRoute::query()->orderBy('name')->get(['id', 'name']),
-            'requests' => $query->get(),
+            'requests' => $requests,
             'filters' => $data,
+            // 12A: semáforo por lote (3 consultas fijas, sin N+1 por cliente).
+            'riskLevels' => app(\App\Services\Cobros\CreditRiskService::class)
+                ->classifyMany($company, $requests->pluck('customer')->filter()),
             // 9C: estado REAL del cr�dito por solicitud (badge "Pr�stamo entregado").
-            'creditStatus' => \App\Models\CobrosCredit::whereIn('credit_request_id', $query->pluck('id'))
+            'creditStatus' => \App\Models\CobrosCredit::whereIn('credit_request_id', $requests->pluck('id'))
                 ->pluck('status', 'credit_request_id'),
         ]);
     }
@@ -58,7 +65,7 @@ class OwnerCreditRequestController extends Controller
 
         return view('cobros.owner.credit-request-show', [
             'company' => $this->company(),
-            'creditRequest' => $creditRequest->load(['route', 'collector', 'logs' => fn ($q) => $q->orderByDesc('id')]),
+            'creditRequest' => $creditRequest->load(['route', 'collector', 'customer', 'logs' => fn ($q) => $q->orderByDesc('id')]),
             'credit' => \App\Models\CobrosCredit::where('credit_request_id', $creditRequest->id)->first(),
             'haciendaName' => $this->haciendaName($creditRequest),
             // 9C.4: la MISMA política de autoridad gobierna la UX de consulta

@@ -65,7 +65,7 @@
             <li class="rounded-xl border border-slate-200 bg-white p-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <h2 class="truncate text-base font-semibold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $customer, 'company' => $company])<span class="truncate">{{ $customer->name }}</span></span></h2>
+                        <h2 class="truncate text-base font-semibold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $customer, 'company' => $company, 'level' => $riskLevels[(int) $customer->id]['level'] ?? null])<span class="truncate">{{ $customer->name }}</span></span></h2>
                         <p class="mt-0.5 truncate text-sm text-slate-500">
                             {{ $customer->identification ?: 'Sin identificación' }}
                             @if($customer->phone || $customer->mobile)

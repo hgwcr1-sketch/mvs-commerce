@@ -24,7 +24,7 @@
         <div class="rounded-2xl border border-slate-200 bg-white p-4">
             <h2 class="mb-2 text-sm font-bold uppercase text-slate-500">Solicitante</h2>
             <dl class="space-y-1 text-sm">
-                <div class="flex justify-between gap-2"><dt class="text-slate-500">Nombre</dt><dd class="text-right font-semibold">{{ $creditRequest->name }}</dd></div>
+                <div class="flex justify-between gap-2"><dt class="text-slate-500">Nombre</dt><dd class="flex items-center justify-end gap-1.5 text-right font-semibold">@if($creditRequest->customer)@include('cobros.components.credit-risk', ['customer' => $creditRequest->customer, 'company' => $company, 'label' => null])@endif{{ $creditRequest->name }}</dd></div>
                 <div class="flex justify-between gap-2"><dt class="text-slate-500">Identificación</dt><dd class="text-right font-semibold">{{ strtoupper((string) $creditRequest->identification_type) }} {{ $creditRequest->identification }}</dd></div>
                 <div class="flex justify-between gap-2"><dt class="text-slate-500">Teléfono</dt><dd class="text-right font-semibold">{{ $creditRequest->phone ?: '—' }}</dd></div>
                 <div class="flex justify-between gap-2"><dt class="text-slate-500">Dirección</dt><dd class="text-right font-semibold">{{ $creditRequest->address ?: '—' }}</dd></div>

@@ -34,7 +34,7 @@
             @foreach($customers as $customer)
                 <li class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
-                        <p class="truncate text-base font-bold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $customer, 'company' => $company])<span class="truncate">{{ $customer->name }}</span></span></p>
+                        <p class="truncate text-base font-bold text-slate-900"><span class="inline-flex items-center gap-1.5">@include('cobros.components.credit-risk', ['customer' => $customer, 'company' => $company, 'level' => $riskLevels[(int) $customer->id]['level'] ?? null])<span class="truncate">{{ $customer->name }}</span></span></p>
                         <p class="mt-0.5 text-sm text-slate-500">
                             {{ $customer->identification }}
                             @if($customer->phone) · {{ $customer->phone }}@endif

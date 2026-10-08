@@ -82,19 +82,110 @@ final class CreditRiskService
     }
 
     /**
-     * 11B — clasificación por lote (solo lectura, reutiliza classify; evita N+1
-     * en listados al compartir la fecha y no repetir consultas de fecha).
+     * 11B/12A — clasificación por lote SIN N+1: consulta 1 vez los créditos de
+     * la empresa, 1 vez sus cuotas vencidas y 1 vez el histórico migrado
+     * (3 consultas fijas, independientes del número de clientes). Resultados
+     * idénticos a classify() cliente por cliente. Solo lectura.
      *
      * @param  iterable<Customer>  $customers
      * @return array<int, array{level: string, overdue_count: int, source: string}>
      */
     public function classifyMany(Company $company, iterable $customers, ?CarbonImmutable $today = null): array
     {
-        $date = $today ?? CarbonImmutable::today($company->timezone ?: config('app.timezone'));
-        $levels = [];
+        $date = ($today ?? CarbonImmutable::today($company->timezone ?: config('app.timezone')))->toDateString();
 
+        $items = [];
         foreach ($customers as $customer) {
-            $levels[(int) $customer->getKey()] = $this->classify($company, $customer, $date);
+            $items[(int) $customer->getKey()] = $customer;
+        }
+
+        if ($items === []) {
+            return [];
+        }
+
+        // Q1: créditos de los clientes en pantalla (una sola consulta).
+        $creditOwner = CobrosCredit::query()
+            ->forCompany($company->id)
+            ->whereIn('customer_id', array_keys($items))
+            ->get(['id', 'customer_id'])
+            ->mapWithKeys(fn (CobrosCredit $credit): array => [(int) $credit->id => (int) $credit->customer_id]);
+
+        // Q2: cuotas vencidas no pagadas de esos créditos (una sola consulta).
+        $overdue = array_fill_keys(array_keys($items), 0);
+
+        if ($creditOwner->isNotEmpty()) {
+            $installments = CobrosCreditInstallment::query()
+                ->whereIn('credit_id', $creditOwner->keys()->all())
+                ->whereDate('due_date', '<', $date)
+                ->whereNotIn('status', [CobrosCreditInstallment::STATUS_PAID])
+                ->get(['credit_id', 'contractual_amount', 'applied_amount']);
+
+            foreach ($installments as $installment) {
+                $pending = bcsub((string) $installment->contractual_amount, (string) $installment->applied_amount, 4);
+                if (bccomp($pending, '0', 4) > 0) {
+                    $owner = $creditOwner[(int) $installment->credit_id] ?? null;
+                    if ($owner !== null) {
+                        $overdue[$owner]++;
+                    }
+                }
+            }
+        }
+
+        // Q3: histórico migrado, registro más reciente por cliente.
+        $records = [];
+        CobrosInitialPortfolioRecord::query()
+            ->forCompany($company->id)
+            ->whereIn('customer_id', array_keys($items))
+            ->orderByDesc('id')
+            ->get(['id', 'customer_id', 'declared_behavior', 'historical_note'])
+            ->each(function (CobrosInitialPortfolioRecord $record) use (&$records): void {
+                $id = (int) $record->customer_id;
+                if (! array_key_exists($id, $records)) {
+                    $records[$id] = $record;
+                }
+            });
+
+        $withCredits = array_fill_keys($creditOwner->values()->unique()->all(), true);
+
+        $levels = [];
+        foreach (array_keys($items) as $id) {
+            $count = $overdue[$id] ?? 0;
+
+            if ($count > 0) {
+                $levels[$id] = [
+                    'level' => $count === 1 ? self::YELLOW : self::RED,
+                    'overdue_count' => $count,
+                    'source' => 'cuotas',
+                ];
+
+                continue;
+            }
+
+            if (isset($withCredits[$id])) {
+                $levels[$id] = ['level' => self::GREEN, 'overdue_count' => 0, 'source' => 'cuotas'];
+
+                continue;
+            }
+
+            $record = $records[$id] ?? null;
+
+            if ($record === null) {
+                $levels[$id] = ['level' => self::GREEN, 'overdue_count' => 0, 'source' => 'nuevo'];
+
+                continue;
+            }
+
+            if ($this->hasGraveHistoricalDebt($record)) {
+                $levels[$id] = ['level' => self::RED, 'overdue_count' => 0, 'source' => 'historico'];
+
+                continue;
+            }
+
+            $levels[$id] = match (strtolower(trim((string) $record->declared_behavior))) {
+                'malo' => ['level' => self::RED, 'overdue_count' => 0, 'source' => 'historico'],
+                'regular' => ['level' => self::YELLOW, 'overdue_count' => 0, 'source' => 'historico'],
+                default => ['level' => self::GREEN, 'overdue_count' => 0, 'source' => 'historico'],
+            };
         }
 
         return $levels;
