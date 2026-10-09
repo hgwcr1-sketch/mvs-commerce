@@ -2,6 +2,54 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## 16C-2B Fase 2 — Cierre técnico del bloque 16 (2026-10-09)
+
+Base verificada: `feature/cobros-v1`, HEAD `9ebfcf6f`, rastreados limpios al
+iniciar. **Trabajo LOCAL SIN COMMIT** (sin staging ni push/merge/reset/stash).
+
+- **Contrato transaccional** `CobrosActivationContract` (DTO inmutable: clave
+  idempotente, estado `pending_payment`, `payment_confirmed=false`, rutas con su
+  prestamista, `linkage` y `referral`) + `CobrosActivationContractService`:
+  - `prepare()` solo LEE — reutiliza `CobrosRegistrationActivationService::plan()`
+    (validación integral + clave idempotente **por borrador**) y
+    `LaborInvitationService::verifyReference()` para resolver el vínculo con el
+    prestamista EXACTO (`company_id`, `lender_user_id`, destinatario) cuando la
+    modalidad es `cobrador_vinculado`. Nada escribe.
+  - `execute()` está **bloqueado hasta la confirmación de pago (bloque 17)**:
+    lanza el error controlado y NO aprovisiona empresas, usuarios, membresías,
+    rutas ni licencias. Reintentos con la misma clave no duplican nada.
+  - `consumeInvitation()` **atómica e idempotente**: update condicional
+    (`used_at IS NULL AND revoked_at IS NULL AND expires_at > now()`) + marcador
+    `consumed_at`/`consumed_invitation_id` en el payload del borrador. Un
+    reintento del MISMO borrador devuelve `already_consumed=true` sin volver a
+    consumir; cualquier otro portador, la revocación y el vencimiento se
+    rechazan. `LaborInvitationService::assertLender` pasó de privado a público
+    para reutilizar la comprobación empresa/prestamista (único cambio en fase 1).
+- **Una sola cuenta por cobrador:** el contrato jamás crea usuarios; el correo
+  ya registrado sigue rechazándose en 16C-1, y un cobrador con varios
+  prestamistas conserva borrador/correo único con la clave idempotente por
+  borrador, mientras cada ruta mantiene SU prestamista (carteras aisladas,
+  `linkage=null` en `cobrador_multiprestamista`).
+
+**Pruebas focales BD aislada (SQLite en memoria):** nuevas
+`CobrosActivationContractTest` **7/7 (55 aserciones)** — contrato de solo
+lectura + clave estable + snapshot de 10 tablas de aprovisionamiento intacto,
+`execute()` bloqueado con cero escrituras, consumo atómico + idempotencia,
+bloqueo de reutilización/revocación/vencimiento, vínculo al prestamista
+correcto con una sola cuenta, carteras aisladas por prestamista y
+destinatario/referencia ajenos rechazados. Regresión focal
+`CobrosOnboardingInvitationTest|CobrosLaborInvitationTest` **19/19** y
+`CobrosRegistrationActivationTest|CobrosRegistrationPersistenceTest|CobrosModality132A|CobrosPublicRoutesDraftTest`
+**28/29** (único fallo: `CobrosPublicRoutesDraftTest:123`, **PREEXISTENTE**
+verificado en HEAD `cd378855`). `php -l`, `git diff --check` OK.
+
+**Sin pasarelas, cobros, licencias activas, correos ni activación del registro
+público.** **Pendientes bloque 17:** confirmación de pago como único disparador
+de `execute()` (CompanyProvisioner + CobrosModalityService::assign + alta de
+rutas), envío del enlace de invitación al destinatario, notificación/reverso si
+el pago falla tras consumir, y **certificación de concurrencia en PostgreSQL**
+(claims y `lockForUpdate` no emiten `FOR UPDATE` en SQLite) antes de producción.
+
 ## 16C-2B / Fase 1 — Invitaciones en onboarding (2026-10-09)
 
 Base verificada: `feature/cobros-v1`, HEAD `cd378855`, rastreados limpios al

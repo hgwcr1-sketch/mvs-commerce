@@ -151,7 +151,8 @@ class LaborInvitationService
         });
     }
 
-    private function assertLender(Company $company, User $lender): void
+    /** Empresa + prestamista autorizados (activos y vigentes en BD). */
+    public function assertLender(Company $company, User $lender): void
     {
         $stored = Company::query()->lockForUpdate()->find($company->id);
         if (! $stored || ! $stored->is_active || (int) $stored->owner_user_id !== (int) $lender->id
