@@ -39,7 +39,11 @@ class PollElectronicDocumentStatus implements ShouldQueue
     public function __construct(
         public readonly int $electronicDocumentId,
         public readonly int $attempt = 1,
-    ) {}
+    ) {
+        // Cola fiscal dedicada: emit y poll corren juntos, aislados de
+        // default/mail, sin que el worker default los consuma.
+        $this->queue = 'fiscal';
+    }
 
     public function handle(FiscalManager $fiscalManager): void
     {

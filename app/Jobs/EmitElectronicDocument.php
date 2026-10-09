@@ -35,7 +35,10 @@ class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public readonly int $saleId,
         public readonly string $documentType,
-    ) {}
+    ) {
+        // Cola fiscal dedicada: aísla la emisión de default/mail.
+        $this->queue = 'fiscal';
+    }
 
     public function uniqueId(): string
     {

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\CashSessionClosedMail;
 use App\Mail\CashSessionOpenedMail;
 use App\Models\CashSessionMailNotification;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -12,13 +13,19 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
 
-class SendCashSessionMailNotification implements ShouldQueue
+class SendCashSessionMailNotification implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
     public int $tries = 1;
 
     public function __construct(public readonly int $notificationId) {}
+
+    /** 1 notification_id = máximo 1 job en cola a la vez. */
+    public function uniqueId(): string
+    {
+        return "cash-session-mail:{$this->notificationId}";
+    }
 
     public function handle(): void
     {
