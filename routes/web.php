@@ -148,6 +148,10 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
+// BLOQUE 16A-2A - landing pública MVS CobrOS (anónima; ?ref= opcional, solo sesión).
+Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
+    ->name('cobros.landing');
+
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
     Route::middleware([RedirectIfAuthenticated::class, 'cobros.entry'])->group(function () {
