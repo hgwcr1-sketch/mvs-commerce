@@ -22,6 +22,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Configuración Stripe
+    |--------------------------------------------------------------------------
+    |
+    | Modo: test | live
+    | Claves separadas por entorno para evitar mezclas accidentales.
+    | Se leen desde variables de entorno para no guardar secretos en repo.
+    |
+    */
+
+    'stripe' => [
+        'mode' => env('STRIPE_MODE', 'test'),
+        'secret_key_test' => env('STRIPE_TEST_SECRET_KEY'),
+        'secret_key_live' => env('STRIPE_LIVE_SECRET_KEY'),
+        'publishable_key_test' => env('STRIPE_TEST_PUBLISHABLE_KEY'),
+        'publishable_key_live' => env('STRIPE_LIVE_PUBLISHABLE_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Proveedor por defecto por producto y país
     |--------------------------------------------------------------------------
     |

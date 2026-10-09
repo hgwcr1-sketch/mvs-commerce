@@ -119,7 +119,7 @@ class BillingPaymentProvider17BTest extends TestCase
                 $callable();
                 $this->fail('El proveedor no disponible no debe devolver resultado.');
             } catch (PaymentProviderUnavailableException $e) {
-                $this->assertStringContainsString('integración real', $e->getMessage());
+                $this->assertStringContainsString('Stripe no est', $e->getMessage());
             }
         }
 
