@@ -31,49 +31,53 @@ class CobrosPublicRoutesDraftTest extends TestCase
         ], $extra))->assertRedirect(route('cobros.register.step', ['paso' => 3]));
     }
 
-    public function test_multiple_draft_routes_persist_survive_back_navigation_and_edit_idempotently(): void
+    /**
+     * BLOQUE 16R-1 — una sola ruta por cobrador: se permite crear, editar
+     * (idempotente) y eliminar; la segunda ruta se rechaza en servidor.
+     */
+    public function test_single_draft_route_persists_survives_back_navigation_and_edit_idempotently(): void
     {
         $this->reachRoutesStep();
 
         $this->addRoute('Ruta Norte');
-        $this->addRoute('Ruta Sur', ['code' => 'RSUR']);
-        $this->addRoute('Ruta Centro');
 
         $routes = session('cobros.registration')['routes'];
-        $this->assertCount(3, $routes);
+        $this->assertCount(1, $routes);
+
+        $this->post(route('cobros.register.routes.save'), ['name' => 'Ruta Sur'])
+            ->assertSessionHasErrors('name');
+        $this->assertCount(1, session('cobros.registration')['routes'],
+            'La segunda ruta debe rechazarse sin tocar la primera.');
 
         $this->get(route('cobros.register.step', ['paso' => 1]))->assertOk();
         $resume = $this->get(route('cobros.register.step', ['paso' => 3]));
-        $resume->assertOk()
-            ->assertSee('Ruta Norte')
-            ->assertSee('Ruta Sur')
-            ->assertSee('Ruta Centro');
-        $this->assertCount(3, session('cobros.registration')['routes']);
+        $resume->assertOk()->assertSee('Ruta Norte')->assertDontSee('Ruta Sur');
+        $this->assertCount(1, session('cobros.registration')['routes']);
 
-        $routeId = $routes[1]['id'];
+        $routeId = $routes[0]['id'];
 
         $this->post(route('cobros.register.routes.save'), [
             'route_id' => $routeId,
-            'name' => 'Ruta Sur Editada',
-            'code' => 'RSUR2',
+            'name' => 'Ruta Norte Editada',
+            'code' => 'RN2',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->post(route('cobros.register.routes.save'), [
             'route_id' => $routeId,
-            'name' => 'Ruta Sur Editada',
-            'code' => 'RSUR2',
+            'name' => 'Ruta Norte Editada',
+            'code' => 'RN2',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $routes = session('cobros.registration')['routes'];
-        $this->assertCount(3, $routes, 'La edición idempotente no debe duplicar rutas');
-        $this->assertSame('Ruta Sur Editada', $routes[1]['name']);
+        $this->assertCount(1, $routes, 'La edición idempotente no debe duplicar rutas');
+        $this->assertSame('Ruta Norte Editada', $routes[0]['name']);
 
         $this->post(route('cobros.register.routes.remove'), ['route_id' => $routeId])
             ->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
-        $routes = session('cobros.registration')['routes'];
-        $this->assertCount(2, $routes);
-        $this->get(route('cobros.register.step', ['paso' => 3]))->assertDontSee('Ruta Sur Editada');
+        $routes = session('cobros.registration')['routes'] ?? [];
+        $this->assertCount(0, $routes);
+        $this->get(route('cobros.register.step', ['paso' => 3]))->assertDontSee('Ruta Norte Editada');
 
         $this->assertDatabaseCount('cobros_routes', 0);
         $this->assertGuest();
@@ -117,7 +121,7 @@ class CobrosPublicRoutesDraftTest extends TestCase
         $review = $this->get(route('cobros.register.step', ['paso' => 4]));
         $review->assertOk()
             ->assertSee('Comenzar sin cartera por ahora')
-            ->assertSee('Sin rutas en borrador');
+            ->assertSee('Sin ruta en borrador');
     }
 
     public function test_import_templates_are_not_offered_without_authorized_context(): void
@@ -174,15 +178,20 @@ class CobrosPublicRoutesDraftTest extends TestCase
             'name' => 'Colombia Owner',
             'email' => 'col.owner@test.com',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
+
+        // La ruta del país anterior ocupa la única plaza: se elimina antes de
+        // definir la ruta de Colombia (una sola ruta por cobrador).
+        $previousRouteId = session('cobros.registration')['routes'][0]['id'];
+        $this->post(route('cobros.register.routes.remove'), ['route_id' => $previousRouteId])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 3]));
         $this->addRoute('Ruta Bogotá');
-        $this->addRoute('Ruta Medellín');
         $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'manual'])
             ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
 
         $co = $this->get(route('cobros.register.step', ['paso' => 4]));
         $co->assertOk()
             ->assertSee('$60.000 COP')
-            ->assertSee('$240.000 COP');
+            ->assertSee('$120.000 COP');
 
         $this->assertDatabaseCount('users', 0);
         $this->assertDatabaseCount('companies', 0);

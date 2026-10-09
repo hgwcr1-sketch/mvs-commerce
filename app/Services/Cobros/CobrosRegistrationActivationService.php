@@ -59,8 +59,17 @@ class CobrosRegistrationActivationService
 
         $modality = $payload['modality'] ?? null;
         if (! is_string($modality) || ! CobrosModalityCatalog::has($modality)) {
-            $errors['modality'] = 'Seleccione una de las cinco modalidades disponibles.';
+            $errors['modality'] = 'Seleccione una de las modalidades disponibles.';
             $modality = null;
+        }
+
+        // BLOQUE 16R-1 — el servidor rechaza la modalidad multiprestamista
+        // mientras la bandera del Panel Maestro no la habilite. El catálogo
+        // y los servicios existentes no se modifican: solo se bloquea aquí
+        // el alta de NUEVOS registros bajo esa modalidad.
+        if ($modality === CobrosModalityCatalog::COBRADOR_MULTIPRESTAMISTA
+            && ! (bool) config('cobros.registration.multi_lender_enabled', false)) {
+            $errors['modality'] = 'La modalidad multiprestamista no está habilitada para nuevos registros.';
         }
 
         $errors = [
@@ -219,7 +228,9 @@ class CobrosRegistrationActivationService
         }
 
         if (count($routes) > PublicRegistrationController::MAX_DRAFT_ROUTES) {
-            $errors['routes'] = 'Máximo '.PublicRegistrationController::MAX_DRAFT_ROUTES.' rutas en borrador.';
+            $errors['routes'] = PublicRegistrationController::MAX_DRAFT_ROUTES === 1
+                ? 'El registro admite una sola ruta por cuenta de cobrador.'
+                : 'Máximo '.PublicRegistrationController::MAX_DRAFT_ROUTES.' rutas en borrador.';
         }
 
         $requiresLender = $modality !== null && CobrosModalityCatalog::allowsMultipleLenders($modality);

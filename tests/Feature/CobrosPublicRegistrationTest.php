@@ -38,10 +38,17 @@ class CobrosPublicRegistrationTest extends TestCase
             ->assertSee('Rutas')
             ->assertSee('content="#D4AF37"', false);
 
-        foreach (CobrosModalityCatalog::all() as $key => $definition) {
+        // BLOQUE 16R-1: la modalidad multiprestamista queda oculta del
+        // onboarding público mientras la bandera del Panel Maestro esté
+        // desactivada (valor por defecto); el catálogo total sigue en 5.
+        $visible = collect(CobrosModalityCatalog::all())
+            ->except(CobrosModalityCatalog::COBRADOR_MULTIPRESTAMISTA);
+        foreach ($visible as $definition) {
             $step->assertSee($definition['label']);
         }
+        $step->assertDontSee(CobrosModalityCatalog::label(CobrosModalityCatalog::COBRADOR_MULTIPRESTAMISTA));
         $this->assertSame(5, count(CobrosModalityCatalog::all()));
+        $this->assertSame(4, count($visible));
         $this->assertGuest();
     }
 
@@ -149,7 +156,7 @@ class CobrosPublicRegistrationTest extends TestCase
 
         $this->post(route('cobros.register.country'), [
             'country_iso' => 'CO',
-            'modality' => 'cobrador_multiprestamista',
+            'modality' => 'cobrador_independiente',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 2]));
 
         $this->post(route('cobros.register.personal'), [
@@ -219,5 +226,51 @@ class CobrosPublicRegistrationTest extends TestCase
 
         $this->get(route('cobros.login'))->assertOk();
         $this->get('/bienvenida-cobros')->assertOk();
+    }
+
+    /**
+     * BLOQUE 16R-1 — un cobrador = una ruta y un prestamista; la modalidad
+     * multiprestamista queda oculta y bloqueada por el servidor; el segundo
+     * prestamista se rechaza con la misma regla que la segunda ruta.
+     */
+    public function test_one_collector_one_route_and_multi_lender_blocked_server_side(): void
+    {
+        // 1) Multiprestamista: oculta en la interfaz y bloqueada por servidor.
+        $this->get(route('cobros.register.step', ['paso' => 1]))
+            ->assertOk()
+            ->assertDontSee('Cobrador multiprestamista');
+
+        $this->post(route('cobros.register.country'), [
+            'country_iso' => 'CR',
+            'modality' => 'cobrador_multiprestamista',
+        ])->assertSessionHasErrors('modality');
+        $this->assertNull(session('cobros.registration')['modality'] ?? null);
+
+        // 2) Una ruta permitida; la segunda se rechaza.
+        $this->completeFirstStep('CR', 'cobrador_independiente');
+        $this->post(route('cobros.register.personal'), [
+            'name' => 'Cobrador Único',
+            'email' => 'unico.ruta@test.com',
+        ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
+
+        $this->post(route('cobros.register.routes.save'), ['name' => 'Ruta Norte'])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 3]));
+        $this->assertCount(1, session('cobros.registration')['routes']);
+
+        $this->post(route('cobros.register.routes.save'), ['name' => 'Ruta Sur'])
+            ->assertSessionHasErrors('name');
+        $this->assertCount(1, session('cobros.registration')['routes']);
+
+        // 3) La vista del paso 3 oculta el formulario de nueva ruta.
+        $this->get(route('cobros.register.step', ['paso' => 3]))
+            ->assertOk()
+            ->assertSee('Ruta Norte')
+            ->assertDontSee('name="name"', false);
+
+        // 4) Sin activación ni entidades operativas.
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('companies', 0);
+        $this->assertDatabaseCount('cobros_routes', 0);
+        $this->assertGuest();
     }
 }

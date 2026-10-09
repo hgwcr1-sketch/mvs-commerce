@@ -37,7 +37,11 @@ class PublicRegistrationController extends Controller
 
     public const ROUTES_STEP = 3;
 
-    public const MAX_DRAFT_ROUTES = 20;
+    /**
+     * BLOQUE 16R-1 — un cobrador = máximo UNA ruta en el registro público.
+     * El Panel Maestro podrá ampliarlo en el futuro vía config('cobros.registration.max_draft_routes').
+     */
+    public const MAX_DRAFT_ROUTES = 1;
 
     /** BLOQUE 16B-2B: límites de carga reutilizados de los motores 12B. */
     public const UPLOAD_MAX_ROWS = 500;
@@ -194,7 +198,7 @@ class PublicRegistrationController extends Controller
             'step' => $step,
             'progressSteps' => self::PROGRESS_STEPS,
             'countries' => self::AVAILABLE_COUNTRIES,
-            'modalities' => CobrosModalityCatalog::all(),
+            'modalities' => $this->availableModalities(),
             'portfolioPlans' => self::PORTFOLIO_PLANS,
             'registration' => $registration,
             'editRouteId' => $editRouteId,
@@ -216,8 +220,18 @@ class PublicRegistrationController extends Controller
             'modality' => ['required', 'string', Rule::in(CobrosModalityCatalog::keys())],
         ], [
             'country_iso.in' => 'Seleccione uno de los países habilitados: Costa Rica o Colombia.',
-            'modality.in' => 'Seleccione una de las cinco modalidades disponibles.',
+            'modality.in' => 'Seleccione una de las modalidades disponibles.',
         ]);
+
+        // BLOQUE 16R-1 — el servidor bloquea la modalidad multiprestamista
+        // aunque se oculte de la interfaz: la habilitación futura depende de
+        // la bandera del Panel Maestro (config/cobros.php), no del cliente.
+        if ($data['modality'] === CobrosModalityCatalog::COBRADOR_MULTIPRESTAMISTA
+            && ! $this->multiLenderEnabled()) {
+            return back()->withErrors([
+                'modality' => 'La modalidad multiprestamista no está habilitada para nuevos registros.',
+            ])->withInput();
+        }
 
         $request->session()->put(self::SESSION_KEY, array_merge(session(self::SESSION_KEY, []), [
             'country_iso' => $data['country_iso'],
@@ -299,7 +313,11 @@ class PublicRegistrationController extends Controller
             }
         } else {
             if (count($routes) >= self::MAX_DRAFT_ROUTES) {
-                return back()->withErrors(['name' => 'Máximo '.self::MAX_DRAFT_ROUTES.' rutas en borrador.']);
+                return back()->withErrors([
+                    'name' => self::MAX_DRAFT_ROUTES === 1
+                        ? 'Cada cuenta de cobrador admite una sola ruta en el registro. Edite o elimine la ruta existente.'
+                        : 'Máximo '.self::MAX_DRAFT_ROUTES.' rutas en borrador.',
+                ]);
             }
 
             $routes[] = array_merge($entry, ['id' => Str::lower(Str::uuid()->toString())]);
@@ -635,6 +653,32 @@ class PublicRegistrationController extends Controller
                 Arr::flatten($exception->errors())[0] ?? 'La invitación laboral ya no está vigente.'
             );
         }
+    }
+
+    /**
+     * BLOQUE 16R-1 — modalidades visibles en el onboarding público. La
+     * modalidad multiprestamista queda OCULTA mientras la bandera del Panel
+     * Maestro (config('cobros.registration.multi_lender_enabled')) esté
+     * desactivada, que es el valor por defecto. El catálogo completo sigue
+     * intacto en CobrosModalityCatalog para datos históricos y servicios.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function availableModalities(): array
+    {
+        $all = CobrosModalityCatalog::all();
+
+        if ($this->multiLenderEnabled()) {
+            return $all;
+        }
+
+        return array_diff_key($all, [CobrosModalityCatalog::COBRADOR_MULTIPRESTAMISTA => true]);
+    }
+
+    /** Bandera del Panel Maestro: habilitación futura de multiprestamista. */
+    private function multiLenderEnabled(): bool
+    {
+        return (bool) config('cobros.registration.multi_lender_enabled', false);
     }
 
     /**

@@ -20,8 +20,8 @@ use Tests\TestCase;
  * Cubre: contrato de solo lectura con clave idempotente por borrador, bloqueo
  * de execute() hasta la confirmación de pago (cero aprovisionamiento), consumo
  * atómico de la invitación con reutilización/vencimiento/revocación bloqueados,
- * vínculo con el prestamista correcto, una sola cuenta por cobrador y carteras
- * aisladas por prestamista.
+ * vínculo con el prestamista correcto, una sola cuenta por cobrador y reglas
+ * 16R-1 (un prestamista/una ruta; multiprestamista oculto y bloqueado).
  */
 class CobrosActivationContractTest extends TestCase
 {
@@ -263,12 +263,36 @@ class CobrosActivationContractTest extends TestCase
         $this->assertNoProvisioning($snapshot);
     }
 
-    public function test_multiprestamista_contract_keeps_routes_and_portfolios_isolated_per_lender(): void
+    /**
+     * BLOQUE 16R-1 — el contrato rechaza la modalidad multiprestamista y la
+     * segunda ruta; dos cobradores independientes conservan contratos y
+     * claves idempotentes distintos sin aprovisionar nada.
+     */
+    public function test_contract_blocks_multi_lender_modality_and_second_route(): void
     {
         $snapshot = $this->provisioningSnapshot();
         $email = 'multi@aislamiento.test';
 
-        $first = CobrosRegistrationDraft::create([
+        // Segunda ruta: el contrato la rechaza (una sola por cobrador).
+        $twoRoutes = CobrosRegistrationDraft::create([
+            'email' => $email,
+            'payload' => [
+                'country_iso' => 'CR',
+                'modality' => 'cobrador_independiente',
+                'personal' => ['name' => 'Cobrador Doble', 'email' => $email, 'phone' => null],
+                'portfolio_plan' => 'manual',
+                'routes' => [
+                    ['id' => (string) Str::uuid(), 'name' => 'Ruta Norte'],
+                    ['id' => (string) Str::uuid(), 'name' => 'Ruta Sur'],
+                ],
+            ],
+            'last_saved_at' => now(),
+        ]);
+
+        $this->expectBlocked(fn () => $this->service->prepare($twoRoutes), 'una sola ruta');
+
+        // Modalidad multiprestamista: oculta y bloqueada por el servidor.
+        $multi = CobrosRegistrationDraft::create([
             'email' => $email,
             'payload' => [
                 'country_iso' => 'CR',
@@ -277,32 +301,24 @@ class CobrosActivationContractTest extends TestCase
                 'portfolio_plan' => 'manual',
                 'routes' => [
                     ['id' => (string) Str::uuid(), 'name' => 'Ruta Norte', 'lender' => 'Prestamista Norte'],
-                    ['id' => (string) Str::uuid(), 'name' => 'Ruta Sur', 'lender' => 'Prestamista Sur'],
                 ],
             ],
             'last_saved_at' => now(),
         ]);
 
-        $contract = $this->service->prepare($first);
+        $this->expectBlocked(fn () => $this->service->prepare($multi), 'multiprestamista');
 
-        $this->assertNull($contract->linkage, 'Sin invitación no se crea vínculo con ningún prestamista.');
-        $this->assertSame(
-            ['Prestamista Norte', 'Prestamista Sur'],
-            array_column($contract->routes, 'lender'),
-            'Cada ruta conserva su propio prestamista: las carteras no se mezclan.'
-        );
-
-        // Otro cobrador: borrador y contrato independientes, sin solape.
+        // Otro cobrador independiente: contrato válido, clave distinta, sin cuentas.
         $otherEmail = 'otro@aislamiento.test';
         $second = CobrosRegistrationDraft::create([
             'email' => $otherEmail,
             'payload' => [
                 'country_iso' => 'CR',
-                'modality' => 'cobrador_multiprestamista',
+                'modality' => 'cobrador_independiente',
                 'personal' => ['name' => 'Otro Cobrador', 'email' => $otherEmail, 'phone' => null],
                 'portfolio_plan' => 'manual',
                 'routes' => [
-                    ['id' => (string) Str::uuid(), 'name' => 'Ruta Este', 'lender' => 'Prestamista Este'],
+                    ['id' => (string) Str::uuid(), 'name' => 'Ruta Este'],
                 ],
             ],
             'last_saved_at' => now(),
@@ -310,8 +326,8 @@ class CobrosActivationContractTest extends TestCase
 
         $other = $this->service->prepare($second);
 
-        $this->assertNotSame($contract->idempotencyKey, $other->idempotencyKey);
-        $this->assertSame(['Prestamista Este'], array_column($other->routes, 'lender'));
+        $this->assertNull($other->linkage);
+        $this->assertSame(['Ruta Este'], array_column($other->routes, 'name'));
         $this->assertSame(0, User::where('email', $email)->count());
         $this->assertSame(0, User::where('email', $otherEmail)->count());
         $this->assertNoProvisioning($snapshot);

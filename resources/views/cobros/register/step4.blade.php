@@ -50,10 +50,10 @@
                     <dd class="mt-1 font-semibold">{{ $hasReferral ? 'Capturada automáticamente' : 'Sin referencia' }}</dd>
                 </div>
                 <div class="rounded-xl border border-black p-4">
-                    <dt class="text-xs font-bold uppercase text-slate-600">Rutas (borrador)</dt>
+                    <dt class="text-xs font-bold uppercase text-slate-600">Ruta (borrador)</dt>
                     <dd class="mt-1 font-semibold">
                         @if (count($draftRoutes) === 0)
-                            Sin rutas en borrador
+                            Sin ruta en borrador
                         @else
                             <ul class="list-disc pl-5">
                                 @foreach ($draftRoutes as $draftRoute)

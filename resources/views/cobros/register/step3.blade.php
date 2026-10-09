@@ -31,7 +31,7 @@
         <section class="mt-8 rounded-2xl bg-white p-5 text-black sm:p-6">
             <p class="text-xs font-bold uppercase tracking-widest text-black">Paso 3 de 4</p>
             <h1 class="mt-2 text-2xl font-bold">Rutas y cartera</h1>
-            <p class="mt-2 text-sm leading-6 text-slate-600">Configure una o varias rutas como borrador para {{ $countries[$registration['country_iso'] ?? ''] ?? 'su país' }} y su modalidad. Nada se crea operativamente hasta la activación.</p>
+            <p class="mt-2 text-sm leading-6 text-slate-600">Configure una ruta como borrador para {{ $countries[$registration['country_iso'] ?? ''] ?? 'su país' }} y su modalidad. Nada se crea operativamente hasta la activación.</p>
 
             @if ($errors->any())
                 <div role="alert" class="mt-4 rounded-xl border border-black p-4 text-sm">
@@ -43,10 +43,10 @@
                 </div>
             @endif
 
-            <h2 class="mt-6 text-sm font-bold uppercase tracking-widest text-black">Rutas en borrador</h2>
+            <h2 class="mt-6 text-sm font-bold uppercase tracking-widest text-black">Ruta en borrador</h2>
 
             @if (count($draftRoutes) === 0)
-                <p class="mt-3 rounded-xl border border-black p-4 text-sm text-slate-600">Aún no ha agregado rutas. Puede agregarlas ahora o comenzar sin cartera.</p>
+                <p class="mt-3 rounded-xl border border-black p-4 text-sm text-slate-600">Aún no ha definido su ruta. Puede agregarla ahora o comenzar sin cartera.</p>
             @else
                 <ul class="mt-3 grid grid-cols-1 gap-3">
                     @foreach ($draftRoutes as $index => $draftRoute)
@@ -72,6 +72,7 @@
                 </ul>
             @endif
 
+            @if (count($draftRoutes) === 0 || $editRoute)
             <form method="POST" action="{{ route('cobros.register.routes.save') }}" class="mt-6 space-y-4">
                 @csrf
                 @if ($editRoute)
@@ -101,6 +102,9 @@
                     @endif
                 </div>
             </form>
+            @else
+                <p class="mt-6 rounded-xl border border-black p-4 text-sm text-slate-600">Su registro admite una sola ruta. Use «Editar» o «Eliminar» sobre la ruta guardada si necesita cambiarla.</p>
+            @endif
 
             <form method="POST" action="{{ route('cobros.register.portfolio') }}" class="mt-8 space-y-5 border-t border-black pt-6">
                 @csrf

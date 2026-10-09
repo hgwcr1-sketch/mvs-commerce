@@ -20,7 +20,8 @@ use Tests\TestCase;
  * Cubre: enlace válido que entra al registro sin consumir la invitación,
  * vigencia (vencida/revocada), destinatario, prestamista, reanudación del
  * borrador, separación respecto de la referencia comercial ?ref= y aislamiento
- * de una sola cuenta de cobrador con varios prestamistas (carteras sin mezclar).
+ * de una sola cuenta de cobrador y regla 16R-1 de un prestamista/una ruta
+ * (multiprestamista oculta y bloqueada por servidor).
  */
 class CobrosOnboardingInvitationTest extends TestCase
 {
@@ -288,19 +289,35 @@ class CobrosOnboardingInvitationTest extends TestCase
         $this->assertArrayHasKey('labor_invitation', $errors);
     }
 
-    public function test_collector_with_two_lenders_keeps_one_account_and_separate_portfolios(): void
+    /**
+     * BLOQUE 16R-1 — un cobrador = un prestamista y una ruta. La modalidad
+     * multiprestamista queda oculta y bloqueada por servidor; la segunda
+     * ruta se rechaza; una segunda invitación reemplaza la referencia del
+     * MISMO borrador (un solo prestamista vigente) sin crear cuentas.
+     */
+    public function test_one_collector_one_lender_one_route_and_multi_lender_blocked(): void
     {
         [$companyA, $lenderA] = $this->lender('presta.a@multi.test');
         [$companyB, $lenderB] = $this->lender('presta.b@multi.test');
         $issuedA = $this->service->issue($companyA, $lenderA, 'cobrador@multi.test');
         $issuedB = $this->service->issue($companyB, $lenderB, 'cobrador@multi.test');
 
+        // 1) Multiprestamista: oculta en la interfaz y bloqueada por servidor.
+        $this->get(route('cobros.register.step', ['paso' => 1]))
+            ->assertOk()
+            ->assertDontSee('Cobrador multiprestamista');
         $this->post(route('cobros.register.country'), [
             'country_iso' => 'CR',
             'modality' => 'cobrador_multiprestamista',
+        ])->assertSessionHasErrors('modality');
+
+        // 2) Registro vinculado con UNA sola ruta; la segunda se rechaza.
+        $this->post(route('cobros.register.country'), [
+            'country_iso' => 'CR',
+            'modality' => 'cobrador_vinculado',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 2]));
         $this->post(route('cobros.register.personal'), [
-            'name' => 'Cobrador Multiprestamista',
+            'name' => 'Cobrador Contratado',
             'email' => 'cobrador@multi.test',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
         $this->post(route('cobros.register.routes.save'), [
@@ -308,27 +325,26 @@ class CobrosOnboardingInvitationTest extends TestCase
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
         $this->post(route('cobros.register.routes.save'), [
             'name' => 'Ruta Sur', 'lender' => 'Prestamista Sur',
-        ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
+        ])->assertSessionHasErrors('name');
         $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'manual'])
             ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
 
-        // Primera invitación: se conserva sin tocar carteras ni modalidad.
+        // Primera invitación: se conserva sin tocar rutas ni modalidad.
         $this->get($this->url($issuedA['plain']))->assertRedirect(route('cobros.register.step', ['paso' => 4]));
         $registration = session('cobros.registration');
         $this->assertSame($issuedA['invitation']->id, $registration['labor_invitation']['id']);
-        $this->assertSame('cobrador_multiprestamista', $registration['modality']);
+        $this->assertSame('cobrador_vinculado', $registration['modality']);
+        $this->assertCount(1, $registration['routes']);
+        $this->assertSame('Prestamista Norte', $registration['routes'][0]['lender']);
 
         // Segunda invitación: cambia la referencia del mismo borrador; nada más.
         $this->get($this->url($issuedB['plain']))->assertRedirect(route('cobros.register.step', ['paso' => 4]));
         $registration = session('cobros.registration');
-
         $this->assertSame($issuedB['invitation']->id, $registration['labor_invitation']['id']);
-        $this->assertSame('cobrador_multiprestamista', $registration['modality']);
-        $this->assertCount(2, $registration['routes']);
+        $this->assertCount(1, $registration['routes']);
         $this->assertSame('Prestamista Norte', $registration['routes'][0]['lender']);
-        $this->assertSame('Prestamista Sur', $registration['routes'][1]['lender']);
 
-        // Una sola cuenta/borrador; ninguna entidad operativa ni cartera mezclada.
+        // Una sola cuenta/borrador; ninguna entidad operativa.
         $this->assertSame(1, CobrosRegistrationDraft::count());
         $this->assertSame(0, User::where('email', 'cobrador@multi.test')->count());
         $this->assertDatabaseCount('cobros_routes', 0);
@@ -340,11 +356,9 @@ class CobrosOnboardingInvitationTest extends TestCase
         $this->assertNull($issuedA['invitation']->fresh()->used_at);
         $this->assertNull($issuedB['invitation']->fresh()->used_at);
 
-        // Cada prestamista sigue aislado: revocar la de A no afecta la de B.
+        // Revocar la de A no afecta la de B.
         $this->service->revoke($companyA, $lenderA, $issuedA['invitation']->id);
         $this->assertNull($issuedB['invitation']->fresh()->revoked_at);
-        $this->assertSame([], app(CobrosRegistrationActivationService::class)
-            ->validate(CobrosRegistrationDraft::firstOrFail()));
     }
 
     public function test_registration_leaves_the_invitation_available_for_final_consumption(): void

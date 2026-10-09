@@ -158,18 +158,31 @@ class CobrosRegistrationActivationTest extends TestCase
         $this->assertNoOperationalWrites(1);
     }
 
-    public function test_multiprestamista_routes_require_lender_association(): void
+    /**
+     * BLOQUE 16R-1 — el servidor rechaza la modalidad multiprestamista
+     * (bandera del Panel Maestro desactivada por defecto) y la segunda ruta
+     * (una sola por cuenta de cobrador); el catálogo no se modifica.
+     */
+    public function test_multi_lender_modality_and_second_route_are_rejected(): void
     {
         $draft = $this->draft(['modality' => 'cobrador_multiprestamista']);
 
         $errors = $this->service->validate($draft);
-        $this->assertArrayHasKey('routes.0.lender', $errors);
+        $this->assertArrayHasKey('modality', $errors);
+        $this->assertStringContainsString('multiprestamista', $errors['modality']);
 
-        $payload = $draft->payload;
-        $payload['routes'][0]['lender'] = 'Prestamista Asociado';
-        $draft->update(['payload' => $payload]);
+        $twoRoutes = $this->draft([
+            'modality' => 'cobrador_independiente',
+            'routes' => [
+                ['id' => '11111111-1111-1111-1111-111111111111', 'name' => 'Ruta Norte', 'code' => 'RN'],
+                ['id' => '22222222-2222-2222-2222-222222222222', 'name' => 'Ruta Sur', 'code' => 'RS'],
+            ],
+        ], 'dos.rutas@activacion.test');
 
-        $this->assertSame([], $this->service->validate($draft->refresh()));
+        $errors = $this->service->validate($twoRoutes);
+        $this->assertArrayHasKey('routes', $errors);
+        $this->assertStringContainsString('una sola ruta', $errors['routes']);
+
         $this->assertNoOperationalWrites();
     }
 
