@@ -18,7 +18,6 @@ use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
-use App\Services\Facturaencr\FacturaencrEmissionService;
 use App\Services\Facturaencr\FacturaencrInvoiceMapper;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
