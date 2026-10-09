@@ -19,6 +19,8 @@ class CobrosBillingContract extends Model
 
     public const MODE_MIXED = 'mixed';
 
+    public const STATUS_ACTIVE = 'active';
+
     public const STATUSES = ['draft', 'active', 'cancelled'];
 
     public const OPEN_STATUSES = ['draft', 'active'];
