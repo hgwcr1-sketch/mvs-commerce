@@ -2,6 +2,33 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 15B-1 catálogos geográficos — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `bc5211f8`. Migración aditiva
+`geo_catalog_sources` (fuente, URL, versión, fecha, fecha de importación,
+conteo, notas; única por país+fuente), modelo `GeoCatalogSource`, servicio
+`GeoCatalogImporter` (importCountry/importFile/verifyIntegrity; validación
+completa en memoria antes de escribir — UTF-8 con fallback CP1252, código y
+nombre obligatorios, duplicados rechazados, padre-hijo verificado; upsert
+transaccional idempotente sin truncate) y specs/fuentes en
+`config/geography.php` (`catalog_files`, `catalog_sources`).
+
+- **Cobertura real verificada:** CR completa desde CSVs del repositorio
+  (estructura INEC): 7 provincias + 84 cantones + 492 distritos = **583**.
+  CO completa desde DANE DIVIPOLA (datos.gov.co `vcjz-niiq` + `gdxc-w37w`,
+  snapshot commiteado en `database/catalogs/col_*.csv`, versión corte
+  30-diciembre-2024): 33 departamentos + 1122 municipios = **1155**.
+- **Pendiente honesto:** VE sin fuente fiable localizada en el tiempo del
+  bloque; NI, PA, GT, SV, HN, MX, DO con importación preparada y fuentes
+  pendientes — el importador se detiene con `RuntimeException` si no hay fuente
+  registrada (no inventa divisiones).
+
+**Pruebas:** `GeoCatalogImport15BTest` 6/6 (45: jerarquías CR/CO, códigos
+oficiales, UTF-8, duplicados sin escritura parcial, idempotencia de recarga con
+direcciones legadas intactas, aislamiento por país + registro de fuente/versión,
+bloqueo sin fuente). Regresión 15A: 6/6 (120). `git diff --check` OK.
+Sin cambios en Commerce, onboarding, licencias, pagos ni staging; sin push.
+
 ## Bloque 15A arquitectura geográfica internacional — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `e40de0a`. 5 archivos nuevos + docs
