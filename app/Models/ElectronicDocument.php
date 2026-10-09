@@ -107,6 +107,23 @@ class ElectronicDocument extends Model
 
     public function isPending(): bool
     {
-        return !$this->isFinal();
+        return ! $this->isFinal();
+    }
+
+    /**
+     * Retry técnico: solo cuando el intento anterior falló ANTES de
+     * recibir identidad fiscal del proveedor (sin documentId, clave ni
+     * consecutivo). Ese intento no consumió numeración, por lo que el
+     * mismo documento y la MISMA idempotency_key pueden reentrar.
+     *
+     * accepted/rejected y cualquier documento con identidad fiscal NO son
+     * retryables por esta vía: eso es reemisión posterior a veredicto.
+     */
+    public function isTechnicalRetryable(): bool
+    {
+        return $this->status === 'error'
+            && ! filled($this->provider_document_id)
+            && ! filled($this->clave)
+            && ! filled($this->consecutivo);
     }
 }

@@ -177,14 +177,26 @@ class EmitElectronicDocument implements ShouldBeUnique, ShouldQueue
      * Una venta tiene un solo comprobante electrónico: si el proveedor ya
      * tiene documento para esta venta no se vuelve a emitir, ni en doble
      * dispatch ni en reintento, por lo que nunca se duplica ElectronicDocument.
-     * Los estados finales accepted/rejected tampoco se reemiten.
+     *
+     * Única excepción: el retry técnico (mismo documento, misma
+     * idempotency_key) cuando el intento anterior terminó en `error` SIN
+     * provider_document_id, clave ni consecutivo — es decir, sin identidad
+     * fiscal y sin numeración consumida. accepted/rejected y los documentos
+     * con identidad siguen bloqueados: eso corresponde a la reemisión
+     * posterior al veredicto fiscal, no a este reintento.
      */
     private function alreadyEmitted(Sale $sale, string $providerCode): bool
     {
-        return ElectronicDocument::query()
+        $document = ElectronicDocument::query()
             ->where('company_id', $sale->company_id)
             ->where('sale_id', $sale->id)
             ->where('provider', $providerCode)
-            ->exists();
+            ->first();
+
+        if ($document === null) {
+            return false;
+        }
+
+        return ! $document->isTechnicalRetryable();
     }
 }

@@ -6,18 +6,18 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\ElectronicDocument;
 use App\Models\Sale;
-use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Services\Fiscal\FiscalCustodyService;
+use App\Services\Fiscal\FiscalSeriesService;
+use Illuminate\Support\Facades\Log;
 
 class FacturaencrEmissionService
 {
-    public function __construct(private readonly ?FacturaencrClient $client = null)
-    {
-    }
+    public function __construct(private readonly ?FacturaencrClient $client = null) {}
 
     private function client(): FacturaencrClient
     {
-        return $this->client ?? new FacturaencrClient();
+        return $this->client ?? new FacturaencrClient;
     }
 
     public function emit(
@@ -44,21 +44,44 @@ class FacturaencrEmissionService
             ->where('idempotency_key', $idempotencyKey)
             ->first();
 
-        if ($existing) {
+        if ($existing !== null && ! $existing->isTechnicalRetryable()) {
             return $existing;
         }
 
         $payload = $mapper->map($sale, $saleItems, $customer, $company, $salePayment, $idempotencyKey);
 
-        $document = ElectronicDocument::create([
-            'company_id' => $company->id,
-            'sale_id' => $sale->id,
-            'provider' => 'facturaencr',
-            'document_type' => $documentType,
-            'environment' => $environment,
-            'idempotency_key' => $idempotencyKey,
-            'status' => 'queued',
-        ]);
+        if ($existing !== null) {
+            // Retry técnico: mismo ElectronicDocument y misma idempotency_key.
+            // El intento fallido anterior queda auditado en attempt_number,
+            // en la custodia (payload inmutable) y en este log; solo entonces
+            // se marca queued para el nuevo POST.
+            Log::info('fiscal.emission.retry', [
+                'electronic_document_id' => $existing->id,
+                'sale_id' => $sale->id,
+                'attempt_number' => (int) $existing->attempt_number,
+                'next_attempt_number' => (int) $existing->attempt_number + 1,
+                'idempotency_key' => $idempotencyKey,
+                'previous_error_code' => $existing->last_error_code,
+                'previous_error_message' => $existing->last_error_message,
+            ]);
+
+            $existing->update([
+                'status' => 'queued',
+                'attempt_number' => (int) $existing->attempt_number + 1,
+            ]);
+
+            $document = $existing->fresh();
+        } else {
+            $document = ElectronicDocument::create([
+                'company_id' => $company->id,
+                'sale_id' => $sale->id,
+                'provider' => 'facturaencr',
+                'document_type' => $documentType,
+                'environment' => $environment,
+                'idempotency_key' => $idempotencyKey,
+                'status' => 'queued',
+            ]);
+        }
 
         $client ??= $this->client();
         $response = $client->post($this->endpointFor($documentType), $payload, $idempotencyKey);
@@ -71,6 +94,8 @@ class FacturaencrEmissionService
                 'clave' => $data['clave'] ?? null,
                 'consecutivo' => $data['consecutivo'] ?? null,
                 'provider_request_id' => $data['requestId'] ?? $idempotencyKey,
+                'last_error_code' => null,
+                'last_error_message' => null,
             ]);
         } else {
             $document->update([
@@ -81,7 +106,7 @@ class FacturaencrEmissionService
             ]);
         }
 
-        app(\App\Services\Fiscal\FiscalCustodyService::class)->record(
+        app(FiscalCustodyService::class)->record(
             $document->fresh(), $payload, (array) ($response->data ?? [])
         );
 
@@ -114,8 +139,8 @@ class FacturaencrEmissionService
         }
 
         $endpoint = $document->provider_document_id !== null
-            ? 'documents/' . $document->provider_document_id
-            : ($document->clave !== null ? 'documents/clave/' . $document->clave : null);
+            ? 'documents/'.$document->provider_document_id
+            : ($document->clave !== null ? 'documents/clave/'.$document->clave : null);
 
         if ($endpoint === null) {
             return $document;
@@ -124,7 +149,7 @@ class FacturaencrEmissionService
         $client ??= $this->client();
         $response = $client->get($endpoint);
 
-        if (!$response->isSuccess()) {
+        if (! $response->isSuccess()) {
             $document->update([
                 'last_error_code' => $response->errorCode,
                 'last_error_message' => $response->errorMessage,
@@ -158,8 +183,8 @@ class FacturaencrEmissionService
         $document->update($attributes);
         $document = $document->fresh();
 
-        app(\App\Services\Fiscal\FiscalSeriesService::class)->observe($document);
-        app(\App\Services\Fiscal\FiscalCustodyService::class)->recordResponse($document, (array) $data);
+        app(FiscalSeriesService::class)->observe($document);
+        app(FiscalCustodyService::class)->recordResponse($document, (array) $data);
 
         return $document;
     }
