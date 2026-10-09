@@ -13,6 +13,7 @@
 
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         @include('cobros.register-progress', ['step' => $step, 'progressSteps' => $progressSteps])
+        @include('cobros.register-invitation')
 
         <section class="mt-8 rounded-2xl bg-white p-5 text-black sm:p-6">
             <p class="text-xs font-bold uppercase tracking-widest text-black">Paso 2 de 3</p>

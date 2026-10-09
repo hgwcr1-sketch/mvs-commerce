@@ -2,7 +2,61 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## 16C-2B / Fase 1 — Invitaciones en onboarding (2026-10-09)
+
+Base verificada: `feature/cobros-v1`, HEAD `cd378855`, rastreados limpios al
+iniciar (solo temporales sin seguimiento). Trabajo LOCAL SIN COMMIT.
+
+- **Ruta pública** `GET /registro-cobros/invitacion/{token}`
+  (`cobros.register.invitation`, throttle 30/min) → `PublicRegistrationController@invitation`:
+  reutiliza `CobrosLaborInvitation` y `LaborInvitationService` sin reconstruirlos.
+- **Nuevo en el servicio (solo lectura, sin escrituras):** `inspect($plain)`
+  valida el enlace de entrada (pendiente + empresa/prestamista autorizados) y
+  `verifyReference($id, $hash, $email)` re-verifica la referencia guardada
+  (vigencia, revocación, destinatario y prestamista). Ninguna de las dos marca
+  `used_at`: **el registro completo NO consume la invitación**; `validate()`
+  (un solo uso) queda reservado para la fase de activación.
+- **Referencia segura:** en `cobros.registration['labor_invitation']` solo viven
+  `id`, `token_hash`, `invited_by`, `lender_name`, `company` y `captured_at`.
+  El token en claro nunca se guarda ni se imprime; `persistDraft()` la lleva al
+  `payload` del `CobrosRegistrationDraft` y la reanudación
+  (`consumeRecoveryToken`) la restaura, con aviso (`invitation_warning`) si dejó
+  de estar vigente. Clave propia, **separada de `cobros.referral` (?ref=)**; la
+  ruta de invitación no lee `?ref=`.
+- **Prestamista visible sin datos internos:** partial
+  `cobros/register-invitation.blade.php` incluido en los pasos 1–4, que solo
+  muestra nombre y razón comercial (sin token, id, huella ni correo del
+  prestamista). Modalidad se prellena a `cobrador_vinculado` solo si estaba vacía.
+- **Bloqueo en preparación de activación:** `CobrosRegistrationActivationService::laborInvitationErrors`
+  dejó de validar formato a pelo y ahora exige la referencia real verificada
+  contra `cobros_labor_invitations` (inexistente/vencida/revocada/usada,
+  destinatario distinto o prestamista distinto ⇒ error `labor_invitation`,
+  sin crear vínculos). `plan()` expone `labor_invitation` sin huella ni token.
+- **Una sola cuenta por cobrador:** una segunda invitación reemplaza la
+  referencia en el MISMO borrador, sin tocar modalidad, rutas, carteras ni
+  crear usuarios/empresas (aislamiento cartera por ruta intacto).
+
+**Pruebas:** nuevas `CobrosOnboardingInvitationTest` **11/11 (167 aserciones)**
+(válida sin consumir, vencida, revocada, destinatario incorrecto, prestamista
+incorrecto, revocación que bloquea activación, reanudación conservando
+referencia + `?ref=`, aviso al reanudar con invitación revocada, dos
+prestamistas con una sola cuenta y carteras separadas, disponibilidad para el
+consumo final, tokens inválidos sin referencia). Regresión focal
+`CobrosRegistrationActivationTest|CobrosLaborInvitationTest|CobrosRegistrationPersistenceTest`
+**25/25** (un test de activación actualizado a una invitación REAL emitida por
+el servicio) y `--filter Cobros` **741 tests: 739 OK, 2 fallos PREEXISTENTES**
+(`CobrosInitialPortfolioCompletionTest:59` y
+`CobrosPublicRoutesDraftTest:123`, verificados idénticos con los cambios
+estrechados en `git stash`). `php -l`, `view:cache` y `git diff --check` OK.
+Nota de entorno: `memory_limit=128M` aborta las suites de plantillas/cargas —
+correr con `-d memory_limit=1024M`.
+
+**Pendiente:** fase de activación real (consumo de la invitación + creación de
+vínculo cobrador/prestamista), notificación/envío del enlace al destinatario y
+verificación de concurrencia en PostgreSQL. Sin push ni commit.
+
 ## 16C-2A / Fase 1 — Motor de invitaciones laborales (2026-10-09)
+
 
 Base verificada: `feature/cobros-v1`, `105db2c9`, rastreados limpios al inicio.
 Migración aditiva `cobros_labor_invitations`, modelo y `LaborInvitationService`:

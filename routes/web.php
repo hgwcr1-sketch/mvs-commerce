@@ -175,6 +175,13 @@ Route::post('/registro-cobros/recuperar', App\Http\Controllers\Cobros\PublicRegi
 Route::get('/registro-cobros/recuperar/{token}', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@consumeRecoveryToken')
     ->name('cobros.register.recover.token');
 
+// BLOQUE 16C-2B f1 - enlace de invitación laboral hacia el registro público.
+// Valida el token sin consumirlo, conserva la referencia durante los pasos y
+// la reanudación, y mantiene esa referencia separada de la ?ref= comercial.
+Route::get('/registro-cobros/invitacion/{token}', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@invitation')
+    ->where('token', '[A-Za-z0-9_-]{1,128}')
+    ->middleware('throttle:30,1')->name('cobros.register.invitation');
+
 // BLOQUE 16B-2A - machotes VACÍOS de clientes y créditos para uso previo a la
 // alta: descargas anónimas que solo generan plantillas (sin datos de ninguna
 // empresa, sin catálogos privados y sin exponer endpoints operativos).

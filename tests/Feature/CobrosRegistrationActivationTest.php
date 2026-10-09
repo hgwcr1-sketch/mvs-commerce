@@ -195,17 +195,68 @@ class CobrosRegistrationActivationTest extends TestCase
 
     public function test_linked_collector_with_valid_job_invitation_is_ready(): void
     {
+        $lender = \App\Models\User::factory()->create([
+            'is_active' => true, 'email' => 'prestamista@empleador.test',
+        ]);
+        $company = \App\Models\Company::create([
+            'trade_name' => 'Prestamista Empleador', 'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica', 'is_active' => true,
+            'owner_user_id' => $lender->id,
+        ]);
+        $issued = app(\App\Services\Cobros\LaborInvitationService::class)
+            ->issue($company, $lender, 'cobrador@activacion.test');
+
         $draft = $this->draft([
             'modality' => 'cobrador_vinculado',
             'personal' => ['email' => 'cobrador@activacion.test'],
             'labor_invitation' => [
-                'code' => 'INV-2026_A',
-                'invited_by' => 'prestamista@empleador.test',
+                'id' => $issued['invitation']->id,
+                'token_hash' => $issued['invitation']->token_hash,
+                'invited_by' => $lender->email,
+                'lender_name' => $lender->name,
+                'company' => $company->trade_name,
             ],
         ], 'cobrador@activacion.test');
 
         $this->assertSame([], $this->service->validate($draft));
-        $this->assertNoOperationalWrites();
+
+        // La preparación solo verifica: la invitación sigue sin consumirse.
+        $this->assertNull($issued['invitation']->fresh()->used_at);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseCount('company_user', 0);
+        $this->assertDatabaseCount('cobros_routes', 0);
+    }
+
+    public function test_invitation_reference_in_plan_exposes_no_token_material(): void
+    {
+        $lender = \App\Models\User::factory()->create(['is_active' => true, 'email' => 'otro@empleador.test']);
+        $company = \App\Models\Company::create([
+            'trade_name' => 'Otro Prestamista', 'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica', 'is_active' => true,
+            'owner_user_id' => $lender->id,
+        ]);
+        $issued = app(\App\Services\Cobros\LaborInvitationService::class)
+            ->issue($company, $lender, 'cobrador2@activacion.test');
+
+        $draft = $this->draft([
+            'modality' => 'cobrador_vinculado',
+            'personal' => ['email' => 'cobrador2@activacion.test'],
+            'labor_invitation' => [
+                'id' => $issued['invitation']->id,
+                'token_hash' => $issued['invitation']->token_hash,
+                'invited_by' => $lender->email,
+                'lender_name' => $lender->name,
+                'company' => $company->trade_name,
+            ],
+        ], 'cobrador2@activacion.test');
+
+        $plan = $this->service->plan($draft);
+
+        $this->assertSame($issued['invitation']->id, $plan['labor_invitation']['id']);
+        $this->assertSame($lender->email, $plan['labor_invitation']['invited_by']);
+        $this->assertArrayNotHasKey('token_hash', $plan['labor_invitation']);
+        $this->assertStringNotContainsString($issued['plain'], json_encode($plan));
+        $this->assertNull($issued['invitation']->fresh()->used_at);
     }
 
     public function test_invalid_job_invitation_is_rejected_without_inventing_linkages(): void

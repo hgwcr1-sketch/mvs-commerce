@@ -6,6 +6,7 @@ use App\Http\Controllers\Cobros\PublicLandingController;
 use App\Http\Controllers\Cobros\PublicRegistrationController;
 use App\Models\CobrosRegistrationDraft;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -36,9 +37,6 @@ use Illuminate\Validation\ValidationException;
  */
 class CobrosRegistrationActivationService
 {
-    /** Formato del código de invitación laboral (emisor: prestamista). */
-    private const INVITATION_PATTERN = '/\A[A-Za-z0-9_-]{6,64}\z/';
-
     /**
      * Errores por campo; arreglo vacío = borrador listo para activar.
      *
@@ -72,7 +70,8 @@ class CobrosRegistrationActivationService
         ];
 
         if ($modality === CobrosModalityCatalog::COBRADOR_VINCULADO) {
-            $invitationErrors = $this->laborInvitationErrors($payload);
+            $personalEmail = $payload['personal']['email'] ?? null;
+            $invitationErrors = $this->laborInvitationErrors($payload, is_string($personalEmail) ? $personalEmail : '');
 
             if ($invitationErrors !== []) {
                 $errors['labor_invitation'] = implode(' ', $invitationErrors);
@@ -158,6 +157,7 @@ class CobrosRegistrationActivationService
             'modality' => $payload['modality'],
             'portfolio_plan' => $payload['portfolio_plan'],
             'referral' => $payload['referral']['code'] ?? null,
+            'labor_invitation' => $this->laborInvitationPlan($payload),
             'owner' => [
                 'name' => $personal['name'] ?? null,
                 'email' => $personal['email'] ?? null,
@@ -332,12 +332,16 @@ class CobrosRegistrationActivationService
     }
 
     /**
-     * Invitación laboral exigida solo a la modalidad Cobrador vinculado.
-     * Si falta o es inválida: error controlado, sin inventar el vínculo.
+     * BLOQUE 16C-2B f1 — la modalidad Cobrador vinculado exige una invitación
+     * laboral REAL, vigente y emitida para este correo por el prestamista que
+     * aparece en el borrador. Se verifica contra cobros_labor_invitations
+     * (vigencia, revocación, destinatario y prestamista) sin consumirla: aquí
+     * solo se decide si el borrador puede avanzar a la preparación de la
+     * activación. Ninguna invitación inválida o revocada crea vínculos.
      *
      * @return list<string>
      */
-    private function laborInvitationErrors(array $payload): array
+    private function laborInvitationErrors(array $payload, string $draftEmail): array
     {
         $invitation = $payload['labor_invitation'] ?? null;
 
@@ -347,9 +351,9 @@ class CobrosRegistrationActivationService
 
         $errors = [];
 
-        $code = $invitation['code'] ?? null;
-        if (! is_string($code) || preg_match(self::INVITATION_PATTERN, $code) !== 1) {
-            $errors[] = 'El código de invitación laboral no tiene un formato válido.';
+        $hash = $invitation['token_hash'] ?? null;
+        if (! is_string($hash) || preg_match('/\A[a-f0-9]{64}\z/', $hash) !== 1) {
+            $errors[] = 'El enlace de invitación laboral no conserva una referencia válida.';
         }
 
         $invitedBy = $invitation['invited_by'] ?? null;
@@ -357,6 +361,56 @@ class CobrosRegistrationActivationService
             $errors[] = 'La invitación laboral debe indicar el correo del prestamista que la emitió.';
         }
 
-        return $errors;
+        $id = $invitation['id'] ?? null;
+        if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
+            $errors[] = 'El código de invitación laboral no tiene un formato válido.';
+        }
+
+        if ($errors !== []) {
+            return $errors;
+        }
+
+        try {
+            $record = app(LaborInvitationService::class)->verifyReference((int) $id, $hash, $draftEmail);
+        } catch (ValidationException $exception) {
+            return array_values(Arr::flatten($exception->errors()));
+        }
+
+        $lender = $record->lender;
+        $recordedLender = $lender !== null ? mb_strtolower(trim((string) $lender->email)) : '';
+
+        if ($recordedLender === '' || $recordedLender !== mb_strtolower(trim($invitedBy))) {
+            return ['La invitación laboral no corresponde al prestamista indicado en el borrador.'];
+        }
+
+        return [];
+    }
+
+    /**
+     * Referencia de la invitación para la fase de activación, sin huella ni
+     * token: solo lo necesario para enlazar el cobrador con su prestamista.
+     *
+     * @return array{id: int, invited_by: string, lender_name: string, company: string}|null
+     */
+    private function laborInvitationPlan(array $payload): ?array
+    {
+        $invitation = $payload['labor_invitation'] ?? null;
+
+        if (! is_array($invitation)) {
+            return null;
+        }
+
+        $id = $invitation['id'] ?? null;
+
+        if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $id,
+            'invited_by' => (string) ($invitation['invited_by'] ?? ''),
+            'lender_name' => (string) ($invitation['lender_name'] ?? ''),
+            'company' => (string) ($invitation['company'] ?? ''),
+        ];
     }
 }

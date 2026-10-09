@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CobrosRegistrationDraft;
 use App\Notifications\RegistrationDraftRecovery;
 use App\Services\Cobros\CobrosModalityCatalog;
+use App\Services\Cobros\LaborInvitationService;
 use App\Services\Imports\CustomerImportChunkReader;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PublicRegistrationController extends Controller
@@ -112,6 +114,51 @@ class PublicRegistrationController extends Controller
         return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
     }
 
+    /**
+     * BLOQUE 16C-2B f1 — enlace de invitación laboral hacia el registro
+     * público. Valida el token con LaborInvitationService SIN consumirlo
+     * (used_at queda intacto durante todo el registro) y guarda una
+     * referencia segura en la sesión/borrador: id, huella y datos públicos
+     * del prestamista. Nunca se almacena ni se muestra el token en claro.
+     *
+     * La invitación vive en su propia clave, separada de la referencia
+     * comercial ?ref=, que esta ruta ni siquiera lee.
+     */
+    public function invitation(Request $request, string $token): RedirectResponse
+    {
+        try {
+            $invitation = app(LaborInvitationService::class)->inspect($token);
+        } catch (ValidationException) {
+            $request->session()->flash(
+                'invitation_error',
+                'El enlace de invitación no es válido, fue revocado o caducó. Solicite uno nuevo al prestamista.'
+            );
+
+            return redirect()->route('cobros.register.step', ['paso' => 1]);
+        }
+
+        $lender = $invitation->lender;
+        $registration = session(self::SESSION_KEY, []);
+        $registration['labor_invitation'] = [
+            'id' => $invitation->id,
+            'token_hash' => $invitation->token_hash,
+            'invited_by' => (string) $lender->email,
+            'lender_name' => (string) $lender->name,
+            'company' => (string) $invitation->company->trade_name,
+            'captured_at' => now()->toIso8601String(),
+        ];
+
+        if (($registration['modality'] ?? '') === '') {
+            $registration['modality'] = CobrosModalityCatalog::COBRADOR_VINCULADO;
+        }
+
+        $registration['updated_at'] = now()->toIso8601String();
+        $request->session()->put(self::SESSION_KEY, $registration);
+        $this->persistDraft();
+
+        return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
+    }
+
     public function show(Request $request): View|RedirectResponse
     {
         PublicLandingController::captureReferral($request);
@@ -157,6 +204,7 @@ class PublicRegistrationController extends Controller
             'canUseTemplates' => false,
             'priceSummary' => $this->priceSummary($registration),
             'hasReferral' => session(PublicLandingController::REFERRAL_SESSION_KEY) !== null,
+            'laborInvitation' => $this->invitationBanner($registration),
             'draftUploads' => $this->draftUploads($registration),
         ]);
     }
@@ -529,7 +577,64 @@ class PublicRegistrationController extends Controller
             ]);
         }
 
+        $this->refreshInvitationNotice($request, $registration);
+
         return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
+    }
+
+    /**
+     * Datos públicos del prestamista invitante para las vistas. Excluye id,
+     * huella, correo del prestamista y cualquier referencia al token: solo
+     * nombre y razón comercial, suficientes para saber quién invita.
+     *
+     * @return array{lender_name: string, company: string}|null
+     */
+    private function invitationBanner(array $registration): ?array
+    {
+        $invitation = $registration['labor_invitation'] ?? null;
+
+        if (! is_array($invitation)) {
+            return null;
+        }
+
+        $lenderName = trim((string) ($invitation['lender_name'] ?? ''));
+
+        if ($lenderName === '') {
+            return null;
+        }
+
+        return [
+            'lender_name' => $lenderName,
+            'company' => trim((string) ($invitation['company'] ?? '')),
+        ];
+    }
+
+    /**
+     * Tras reanudar, re-verifica la invitación guardada (solo lectura, sin
+     * consumirla) y avisa si dejó de estar vigente. La referencia se conserva
+     * en el borrador: la bloqueo definitivo ocurre al preparar la activación.
+     */
+    private function refreshInvitationNotice(Request $request, array $registration): void
+    {
+        $invitation = $registration['labor_invitation'] ?? null;
+        $email = $registration['personal']['email'] ?? null;
+
+        if (! is_array($invitation) || ! is_string($email) || $email === '') {
+            return;
+        }
+
+        try {
+            app(LaborInvitationService::class)->verifyReference(
+                (int) ($invitation['id'] ?? 0),
+                (string) ($invitation['token_hash'] ?? ''),
+                $email
+            );
+        } catch (ValidationException $exception) {
+            $request->session()->flash(
+                'invitation_warning',
+                Arr::flatten($exception->errors())[0] ?? 'La invitación laboral ya no está vigente.'
+            );
+        }
     }
 
     /**
