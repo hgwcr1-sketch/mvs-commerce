@@ -66,6 +66,19 @@
         .format-58mm .thanks{margin-top:4px;font-size:12.5px;font-weight:700}
         .format-58mm .thanks + .cut-tail{height:4mm}
         .format-80mm .thanks + .cut-tail{height:4mm}
+        /* 80mm : sin desbordamiento - tabla fija, montos envueltos y totales al ancho real */
+        .format-80mm table{table-layout:fixed}
+        .format-80mm .items-table{font-size:10px}
+        .format-80mm .items-table td,.format-80mm .items-table th{overflow-wrap:anywhere;word-break:break-word;padding:3px 2px}
+        .format-80mm .items-table thead th:nth-child(1){width:30%}
+        .format-80mm .items-table thead th:nth-child(2){width:10%}
+        .format-80mm .items-table thead th:nth-child(n+3){width:15%}
+        .format-80mm td,.format-80mm th{overflow-wrap:anywhere;word-break:break-word}
+        .format-80mm .totals{max-width:100%;margin:0}
+        .format-80mm .totals td{font-size:12.5px;padding:3px 0;overflow-wrap:anywhere}
+        .format-80mm .grand td{font-size:19px}
+        .format-80mm .fiscal-head{flex-wrap:wrap}
+        .format-80mm h1{font-size:18px}
         .format-letter .details{grid-template-columns:repeat(2,1fr);gap:6px}
         .format-letter .fiscal-grid{grid-template-columns:1fr 1fr}
         .format-58mm .fiscal{padding:5px}
@@ -166,7 +179,7 @@
         @endforeach
         </div>
     @else
-        <table>
+        <table class="items-table">
             <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Imp.</th><th>Total</th></tr></thead>
             <tbody>
             @foreach($itemsData as $item)
