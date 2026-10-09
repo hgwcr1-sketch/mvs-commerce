@@ -66,13 +66,14 @@
         .format-58mm .thanks{margin-top:4px;font-size:12.5px;font-weight:700}
         .format-58mm .thanks + .cut-tail{height:4mm}
         .format-80mm .thanks + .cut-tail{height:4mm}
-        /* 80mm : sin desbordamiento - tabla fija, montos envueltos y totales al ancho real */
-        .format-80mm table{table-layout:fixed}
-        .format-80mm .items-table{font-size:10px}
-        .format-80mm .items-table td,.format-80mm .items-table th{overflow-wrap:anywhere;word-break:break-word;padding:3px 2px}
-        .format-80mm .items-table thead th:nth-child(1){width:30%}
-        .format-80mm .items-table thead th:nth-child(2){width:10%}
-        .format-80mm .items-table thead th:nth-child(n+3){width:15%}
+        /* 80mm : items en bloques tipo 58mm - sin tabla de 6 columnas, montos nunca cortados */
+        .items80{border-top:1px solid #e2e8f0}
+        .item80{padding:5px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
+        .item80-name{font-size:12.5px;font-weight:800;line-height:1.3;word-break:break-word;color:#111827}
+        .item80-name .muted{display:block;font-size:10px;font-weight:400;margin-top:1px}
+        .item80-line{display:flex;justify-content:space-between;gap:8px;margin-top:3px;align-items:baseline;flex-wrap:wrap}
+        .item80-line .left{color:#111827;font-weight:700;word-break:break-word}
+        .item80-line .right{font-weight:800;white-space:nowrap;font-size:12.5px}
         .format-80mm td,.format-80mm th{overflow-wrap:anywhere;word-break:break-word}
         .format-80mm .totals{max-width:100%;margin:0}
         .format-80mm .totals td{font-size:12.5px;padding:3px 0;overflow-wrap:anywhere}
@@ -178,8 +179,24 @@
             </div>
         @endforeach
         </div>
+    @elseif($format === '80mm')
+        <div class="items80">
+        @foreach($itemsData as $item)
+            <div class="item80">
+                <div class="item80-name">{{ $item['description'] }}
+                    @if($item['product_code'] || ($item['cabys'] ?? null))
+                    <span class="muted">@if($item['product_code']){{ $item['product_code'] }}@endif @if($item['cabys'] ?? null)CABYS {{ $item['cabys'] }}@endif</span>
+                    @endif
+                </div>
+                <div class="item80-line">
+                    <span class="left">{{ $item['quantity'] }} x ₡{{ $money($item['unit_price']) }}@if((float) $item['discount_total'] > 0) −₡{{ $money($item['discount_total']) }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $money($item['tax_total']) }}@endif</span>
+                    <span class="right">₡{{ $money($item['total']) }}</span>
+                </div>
+            </div>
+        @endforeach
+        </div>
     @else
-        <table class="items-table">
+        <table>
             <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Imp.</th><th>Total</th></tr></thead>
             <tbody>
             @foreach($itemsData as $item)
