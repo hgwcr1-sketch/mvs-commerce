@@ -2,6 +2,32 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## 16C-2A / Fase 1 — Motor de invitaciones laborales (2026-10-09)
+
+Base verificada: `feature/cobros-v1`, `105db2c9`, rastreados limpios al inicio.
+Migración aditiva `cobros_labor_invitations`, modelo y `LaborInvitationService`:
+emisión para propietario activo de empresa, destinatario por correo normalizado,
+token aleatorio de 256 bits persistido solo como SHA-256, TTL por argumento,
+revocación e invalidación de duplicados vigentes bajo bloqueo de empresa.
+`validate()` consume atómicamente el token una sola vez; NO acepta la relación
+laboral ni crea usuarios, membresías, rutas o licencias. Sin HTTP, correo ni UI.
+Prueba focal: `CobrosLaborInvitationTest` (SQLite en memoria): 8/8, 55 aserciones,
+con timeout de 120 s y `memory_limit=1G`. Incluye una cuenta existente vinculada
+a dos prestamistas: invitaciones independientes, revocación aislada y snapshots
+intactos de usuarios, membresías, rutas, carteras y licencias. Revocación repetida
+idempotente y rechazo tras cambio de propietario o desactivación de empresa.
+La validación comprueba empresa, prestamista, destinatario y token único; no
+autentica al destinatario ni constituye aceptación (fuera de esta fase).
+PHP lint de los cuatro archivos y diff check OK.
+Cierre local 16C-2A: evidencia previa 8/8 y 55 aserciones reutilizada, sin repetir
+pruebas ni modificar el motor. Commit limitado a migración, modelo, servicio,
+pruebas y este relevo; sin push ni operaciones externas.
+**CONCURRENCIA PG NO VERIFICADA — pendiente antes de producción:** ejecutar en
+PostgreSQL local aislado dos consumos concurrentes de la misma invitación,
+confirmar un único éxito y comprobar aislamiento por empresa. La verificación
+PG anterior fue interrumpida; no constituye evidencia de validación.
+Fase siguiente y bloque 17 no iniciados.
+
 ## Bloque 15B-2 fase 2 consolidación internacional — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `2d33bfe5`. Validación visual/funcional
