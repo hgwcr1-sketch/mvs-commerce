@@ -36,7 +36,16 @@ class CollectorCreditImportController extends CreditImportController
             ->unique()
             ->values();
 
-        $imported = collect($results)->where('status', 'imported')->count();
+        $importedRows = collect($results)->where('status', 'imported');
+        $imported = $importedRows->count();
+        $summary = [
+            'imported' => $imported,
+            'duplicates' => collect($results)->where('status', 'duplicate')->count(),
+            'conflicts' => collect($results)->where('status', 'conflict')->count(),
+            'invalid' => collect($results)->where('status', 'invalid')->count(),
+            'original_total' => $importedRows->sum(fn (array $r) => (string) ($r['data']['original_amount'] ?? '0')),
+            'balance_total' => $importedRows->sum(fn (array $r) => (string) ($r['data']['balance'] ?? '0')),
+        ];
         foreach ($routeNames as $name) {
             $route = CobrosRoute::forCompany($company->id)->where('active', true)
                 ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
@@ -49,6 +58,7 @@ class CollectorCreditImportController extends CreditImportController
                 'collector_user_id' => $collector->id,
                 'source' => CobrosMigrationNotice::SOURCE_CREDIT_IMPORT,
                 'details' => $imported.' crédito(s) importados por el cobrador.',
+                'summary' => $summary,
                 'status' => CobrosMigrationNotice::STATUS_PENDING,
             ]);
         }

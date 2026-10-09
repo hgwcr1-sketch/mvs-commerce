@@ -79,7 +79,7 @@ class CobrosCollectorImportTest extends TestCase
         // El prestamista revisa y marca el aviso.
         $this->actingAs($owner)->withSession(['active_company_id' => $company->id])
             ->get(route('cobros.owner.migrations.notices'))
-            ->assertOk()->assertSee('Migración pendiente de revisar')
+            ->assertOk()->assertSee('Migraciones realizadas')
             ->assertSee($route->name);
         $this->actingAs($owner)->withSession(['active_company_id' => $company->id])
             ->post(route('cobros.owner.migrations.notices.review', $notice->id))

@@ -92,6 +92,17 @@ class CollectorCustomerImportController extends Controller
             ->map(fn ($row) => trim((string) (data_get($row->data, 'route_name') ?? '')))
             ->filter()->unique()->values();
         $created = (int) $run->created_count;
+        $summary = [
+            'created' => $created,
+            'new' => (int) $run->new_count,
+            'existing' => (int) $run->existing_count,
+            'duplicates' => (int) $run->duplicate_count,
+            'conflicts' => (int) $run->conflict_count,
+            'errors' => (int) $run->error_count,
+            'ignored' => (int) $run->ignored_count,
+            'rejected' => (int) $run->rejected_count,
+            'filename' => (string) $run->original_filename,
+        ];
         foreach ($routeNames as $name) {
             $route = CobrosRoute::forCompany($company->id)->where('active', true)
                 ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
@@ -105,6 +116,7 @@ class CollectorCustomerImportController extends Controller
                 'source' => CobrosMigrationNotice::SOURCE_CUSTOMER_IMPORT,
                 'source_id' => $run->id,
                 'details' => $created.' cliente(s) importados por el cobrador.',
+                'summary' => $summary,
                 'status' => CobrosMigrationNotice::STATUS_PENDING,
             ]);
         }

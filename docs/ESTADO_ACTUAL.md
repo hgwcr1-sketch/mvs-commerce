@@ -2,6 +2,62 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 13-1B revisión de migraciones — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, commit (ver git log), 10 archivos. Reutiliza `cobros_migration_notices`
+y la bandeja 13-1A sin duplicar funcionalidades ni crear un segundo motor financiero.
+
+- **Filtros:** bandeja `/cobros/owner/migraciones` ahora filtra por cobrador, ruta y estado
+  (pendiente/revisada) vía query params, preservados en paginación (`withQueryString`).
+- **Cotejo numérico:** nueva columna aditiva `summary` (JSON, migración `000005`, reversible)
+  poblada al confirmar la importación: créditos (importados/duplicados/conflictos/inválidos +
+  monto original total y saldo pendiente total) y clientes (creados/nuevos/existentes/
+  duplicados/conflictos/errores/ignorados/rechazados + nombre de archivo).
+- **Revisión:** «Marcar como revisada» conserva idempotencia (la primera trazabilidad no se
+  reescribe); muestra revisador y fecha. Enlace «Ver detalle de la importación» al motor
+  existente de ejecuciones de clientes (corrección sobre el flujo ya construido).
+- **No bloqueante:** revisión pendiente no impide clientes, créditos, rutas ni cobros (test explícito).
+
+**Pruebas:** `CobrosMigrationNotice13BTest` 5/5 (60 aserciones: filtros, idempotencia con
+trazabilidad, cotejo numérico, enlace a corrección existente, aislamiento multiempresa y
+permisos); regresión `CobrosCollectorImportTest|CobrosImportedCreditPersistenceTest|
+CobrosCustomerImportTest|CobrosCreditImportFlowTest` 26/26 (216) — título de la bandeja
+actualizado de «Migración pendiente de revisar» a «Migraciones realizadas» en la vista y
+el test 13-1A. `view:cache` y `git diff --check` OK. Sin push/merge/deploy; temporales
+preservados. **Siguiente:** 13-2 o bloque 14 según cronograma; no iniciar sin orden.
+
+## Bloque 13-1A importación directa del cobrador — COMPLETADO LOCALMENTE (2026-10-08)
+
+Rama `feature/cobros-v1`, commit `18e7cd5c` (base `60241598`), 15 archivos (+767/−34).
+El cobrador autorizado importa directamente clientes, créditos y saldos de SUS rutas
+(sin permiso de dueño ni aprobación previa), reutilizando los motores 12B.
+
+**Reglas implementadas:**
+- `importCredit()` (InitialPortfolioRecordService) ahora autoriza: dueño con `cobros.portal_dueno`
+  O cobrador con `cobros.cobrar` + `active_cobros_route_id` en sesión + miembro activo en esa ruta.
+- Nuevas rutas cobrador (grupo `cobros.collector.*`, exigen `cobros.cobrar`):
+  `customers.import{,.template,.preview,.confirm,.status}` y `credits.import{,.template,.preview,.confirm}`.
+- `CollectorCreditImportController` extiende el del dueño con hooks `routeRequired()` (true)
+  y `validateRoutesInPreview()` (true: la pertenencia de la ruta se valida ya en la vista previa).
+- Variante de importación de clientes `cobros_ruta` (columna `customer_import_runs.variant`
+  de la migración 12B-2): ruta OBLIGATORIA por fila, solo rutas donde `run->user_id` es
+  miembro activo; plantilla simplificada 01-04/ruta/GPS.
+- Avisos «Migración pendiente de revisar»: tabla `cobros_migration_notices` (migración
+  `000004`), una fila por ruta usada al confirmar (status `pending`→`reviewed` por el dueño
+  en `cobros.owner.migrations.notices`). Los avisos no bloquean operaciones.
+- Errores por fila no detienen la importación válida (fila inválida marcada, válida importa).
+
+**Pruebas:** `CobrosCollectorImportTest` 4/4 (46 aserciones); regresión
+`CobrosImportedCreditPersistenceTest` 11/11 (test de autorización de cobrador actualizado a
+la nueva matriz 13-1A), `CobrosCustomerImportTest`+`CobrosCreditImportFlowTest` verdes,
+`CustomerImportP32Test`+`CustomerImportSafeModeTest` 34/34 (237), suite conjunta
+26/26 (216). `view:cache` y `git diff --check` OK. Fallo preexistente NO tocado:
+`CobrosInitialPortfolioCompletionTest:59`. Sin push/merge/deploy; temporales `tmp_*`,
+`output.txt`, `cobros-staging-*.tar.gz` y `.bak_10b` preservados sin commit.
+
+**Siguiente:** 13-1B (revisión/correcciones) o 13-2 según `docs/CRONOGRAMA_PRODUCCION.md`;
+no iniciar bloque 14 sin orden.
+
 ## Bloque 11 semáforo de riesgo — 11A + 11B COMPLETADOS LOCALMENTE (2026-10-07)
 
 **11A — motor (solo lectura):** `app/Services/Cobros/CreditRiskService.php` clasifica por

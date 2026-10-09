@@ -17,12 +17,12 @@ class CobrosMigrationNotice extends Model
 
     protected $fillable = [
         'company_id', 'cobros_route_id', 'collector_user_id', 'source', 'source_id',
-        'details', 'status', 'reviewed_by', 'reviewed_at',
+        'details', 'summary', 'status', 'reviewed_by', 'reviewed_at',
     ];
 
     protected function casts(): array
     {
-        return ['reviewed_at' => 'datetime'];
+        return ['summary' => 'array', 'reviewed_at' => 'datetime'];
     }
 
     public function route()
@@ -33,5 +33,10 @@ class CobrosMigrationNotice extends Model
     public function collector()
     {
         return $this->belongsTo(User::class, 'collector_user_id');
+    }
+
+    public function reviewedBy()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 }
