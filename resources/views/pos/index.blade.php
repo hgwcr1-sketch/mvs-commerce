@@ -2005,8 +2005,17 @@ document.addEventListener('alpine:init', () => {
                 }
                 // Cierre original: la experiencia del comprobante se presenta
                 // directamente en receipt.blade.php (sin modal ni iframe).
+                // no_auto_print=1: la impresión automática ya la resolvió MVS Print
+                // (o quedó informada arriba); el recibo nunca auto-abre el diálogo
+                // del navegador aunque la sucursal tenga receipt_auto_print activo.
                 if (payload.receipt_url) {
-                    window.location.href = payload.receipt_url;
+                    const receiptUrl = new URL(payload.receipt_url, window.location.origin);
+                    receiptUrl.searchParams.set('no_auto_print', '1');
+                    // Si MVS Print falló, el recibo informa y ofrece impresión manual.
+                    if (this.checkout.printStatus === 'failed') {
+                        receiptUrl.searchParams.set('mvs_print', 'failed');
+                    }
+                    window.location.href = receiptUrl.toString();
                 }
             } catch (error) {
                 this.checkout.error = error.message || 'No fue posible completar el cobro. Intente nuevamente.';

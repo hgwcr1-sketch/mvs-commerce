@@ -838,7 +838,9 @@ class PosController extends Controller
         $format = $receipts->format($sale, $request->query('format'));
         // embed=1: la vista se muestra dentro del POS como vista previa; nunca auto-imprime.
         $embed = $request->boolean('embed');
-        $autoPrint = ! $embed && ($request->boolean('print') || $sale->branch->receipt_auto_print);
+        // no_auto_print=1: navegación posterior al cobro del POS; la impresión
+        // automática ya la resuelve MVS Print y nunca debe abrir el diálogo del navegador.
+        $autoPrint = ! $embed && ! $request->boolean('no_auto_print') && ($request->boolean('print') || $sale->branch->receipt_auto_print);
         $loyalty = $receipts->loyaltySummary($sale);
         $receiptData = $receipts->buildReceiptData($sale);
         $view = ($format === 'letter' && $receiptData->fiscal !== null) ? 'pos.fiscal-invoice' : 'pos.receipt';

@@ -83,6 +83,59 @@ class SaleReceiptProductionTest extends TestCase
             ->assertSee("window.addEventListener('load',()=>window.print())", false);
     }
 
+    public function test_no_auto_print_suppresses_browser_dialog_even_with_receipt_auto_print(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        $branch->update(['receipt_auto_print' => true]);
+
+        // Navegación posterior al cobro del POS: nunca auto-abre el diálogo del navegador.
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $sale).'?no_auto_print=1')
+            ->assertOk()
+            ->assertDontSee("window.addEventListener('load',()=>window.print())", false)
+            ->assertSee('window.print()', false); // el botón manual sigue disponible
+
+        // Sin el parámetro se conserva el comportamiento histórico de receipt_auto_print.
+        $this->get(route('pos.receipt', $sale))
+            ->assertOk()
+            ->assertSee("window.addEventListener('load',()=>window.print())", false);
+    }
+
+    public function test_receipt_informs_mvs_print_failure_and_offers_manual_print(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+
+        $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $sale).'?no_auto_print=1&mvs_print=failed')
+            ->assertOk()
+            ->assertSee('La impresión automática con MVS Print no estuvo disponible')
+            ->assertSee('Imprimir', false)
+            ->assertDontSee("window.addEventListener('load',()=>window.print())", false);
+    }
+
+    public function test_escpos_ticket_formats_loyalty_points_to_two_decimals_like_the_html_receipt(): void
+    {
+        [$company, $branch, $user, $sale] = $this->context();
+        LoyaltySetting::firstOrCreate(['company_id' => $company->id], ['is_active' => true]);
+        $customer = Customer::create(['company_id' => $company->id, 'customer_type' => 'individual', 'name' => 'Cliente fidel 4d', 'is_active' => true]);
+        $sale->update(['customer_id' => $customer->id]);
+        $account = LoyaltyAccount::create(['company_id' => $company->id, 'customer_id' => $customer->id, 'balance' => '1050.1250', 'total_earned' => '50.1250', 'total_redeemed' => '200.0000', 'is_active' => true]);
+        LoyaltyMovement::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'loyalty_account_id' => $account->id, 'customer_id' => $customer->id, 'user_id' => $user->id, 'type' => LoyaltyMovement::TYPE_REDEMPTION, 'points' => '-200.0000', 'balance_before' => '1250.1250', 'balance_after' => '1050.1250', 'description' => 'Canje', 'source_type' => Sale::class, 'source_id' => $sale->id, 'event_key' => "sale:{$sale->id}:redeem4d", 'effective_at' => now()]);
+        LoyaltyMovement::create(['company_id' => $company->id, 'branch_id' => $branch->id, 'loyalty_account_id' => $account->id, 'customer_id' => $customer->id, 'user_id' => $user->id, 'type' => LoyaltyMovement::TYPE_PURCHASE, 'points' => '50.1250', 'balance_before' => '1000.0000', 'balance_after' => '1050.1250', 'description' => 'Ganancia', 'source_type' => Sale::class, 'source_id' => $sale->id, 'event_key' => "sale:{$sale->id}:earn4d", 'effective_at' => now()]);
+
+        $sale->load(['company', 'branch', 'customer', 'items.product', 'payments.paymentMethod', 'user', 'cashSession.cashRegister']);
+        $receiptData = app(SaleReceiptService::class)->buildReceiptData($sale);
+        $ticket = app(EscPosSaleTicket::class)->build($receiptData, '80');
+        $text = collect($ticket['lines'])->where('type', 'text')->pluck('value')->implode("\n");
+
+        // La primera impresión (ESC/POS) usa 2 decimales, igual que el recibo HTML.
+        $this->assertStringContainsString('Puntos ganados: +50,13', $text);
+        $this->assertStringContainsString('Puntos canjeados: -200,00', $text);
+        $this->assertStringContainsString('Saldo final: 1.050,13', $text);
+        $this->assertStringNotContainsString('50.1250', $text);
+        $this->assertStringNotContainsString('1050.1250', $text);
+    }
+
     public function test_receipts_enforce_company_branch_module_and_existing_permissions(): void
     {
         [$company, $branch, $creator, $sale] = $this->context();

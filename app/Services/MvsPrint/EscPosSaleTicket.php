@@ -388,25 +388,35 @@ class EscPosSaleTicket
         $this->addText($lines, '--- Fidelizacion ---', self::ALIGN_CENTER, $width, true);
 
         if ($loyalty['kind'] === 'history' && $loyalty['balance_before'] !== null) {
-            $this->addText($lines, 'Saldo anterior: '.$loyalty['balance_before'], self::ALIGN_LEFT, $width);
+            $this->addText($lines, 'Saldo anterior: '.$this->formatPoints($loyalty['balance_before']), self::ALIGN_LEFT, $width);
         }
 
         if ((float) ($loyalty['earned'] ?? 0) > 0) {
-            $this->addText($lines, 'Puntos ganados: +'.$loyalty['earned'], self::ALIGN_LEFT, $width);
+            $this->addText($lines, 'Puntos ganados: +'.$this->formatPoints($loyalty['earned']), self::ALIGN_LEFT, $width);
         }
 
         if ((float) ($loyalty['redeemed'] ?? 0) > 0) {
-            $this->addText($lines, 'Puntos canjeados: -'.$loyalty['redeemed'], self::ALIGN_LEFT, $width);
+            $this->addText($lines, 'Puntos canjeados: -'.$this->formatPoints($loyalty['redeemed']), self::ALIGN_LEFT, $width);
         }
 
         $label = $loyalty['kind'] === 'history' ? 'Saldo final' : 'Saldo actual';
-        $this->addText($lines, $label.': '.$loyalty['balance_after'], self::ALIGN_LEFT, $width, true);
+        $this->addText($lines, $label.': '.$this->formatPoints($loyalty['balance_after']), self::ALIGN_LEFT, $width, true);
 
         if ($loyalty['adjusted']) {
             $this->addText($lines, '(saldo ajustado)', self::ALIGN_CENTER, $width);
         }
 
         return $lines;
+    }
+
+    /**
+     * Puntos con la misma presentación del recibo HTML (2 decimales):
+     * recibe el valor crudo de LoyaltySaleReceiptService (escala 4) y solo
+     * formatea la salida del ticket, sin alterar datos almacenados.
+     */
+    private function formatPoints(string|int|float|null $points): string
+    {
+        return number_format((float) ($points ?? 0), 2, ',', '.');
     }
 
     /**

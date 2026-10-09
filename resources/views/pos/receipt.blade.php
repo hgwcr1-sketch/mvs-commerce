@@ -285,6 +285,9 @@
     @if(session('success'))
         <p class="center">{{ session('success') }}</p>
     @endif
+    @if(request()->query('mvs_print') === 'failed')
+        <p class="center warning">La impresión automática con MVS Print no estuvo disponible. Use el botón «Imprimir» para imprimir el comprobante.</p>
+    @endif
     @if($errors->has('email'))
         <p class="center warning">{{ $errors->first('email') }}</p>
     @endif
