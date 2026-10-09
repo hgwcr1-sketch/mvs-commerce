@@ -174,11 +174,51 @@ class CobrosRouteIsolation14BTest extends TestCase
         $legacy = $this->receiptFor($company, null, $collector, $customerB, $accountB, $numLegacy);
 
         $this->actingAs($collector)->withSession(['active_company_id' => $company->id, 'active_cobros_route_id' => $routeB->id]);
+        // Ruta desconocida (legado): fuera del portal del cobrador hasta atribuirla.
         $this->get(route('cobros.collector.payments.history'))
-            ->assertOk()->assertSee($numB)->assertSee($legacy->receipt_number)->assertDontSee($numA);
-
+            ->assertOk()->assertSee($numB)->assertDontSee($numA)->assertDontSee($legacy->receipt_number);
+        $this->get(route('cobros.collector.payments.receipt', $legacy->receipt_number))->assertNotFound();
         $this->get(route('cobros.collector.payments.receipt', $numA))->assertNotFound();
         $this->get(route('cobros.collector.payments.receipt', $numB))->assertOk();
+
+        // Cambio de ruta: las consultas se actualizan; los registros no se alteran.
+        $this->post(route('cobros.routes.store'), ['route_id' => $routeA->id])
+            ->assertRedirect(route('cobros.collector.portfolio'));
+        $this->get(route('cobros.collector.payments.history'))
+            ->assertOk()->assertSee($numA)->assertDontSee($numB)->assertDontSee($legacy->receipt_number);
+        $this->assertNull($legacy->refresh()->cobros_route_id);
+
+        // Portal administrativo autorizado: conserva acceso a legado y otras rutas.
+        $admin = $this->member($company, ['cobros.acceder', 'cobros.portal_dueno']);
+        $this->actingAs($admin)->withSession(['active_company_id' => $company->id]);
+        $this->get(route('cobros.collector.payments.receipt', $legacy->receipt_number))->assertOk();
+        $this->get(route('cobros.collector.payments.receipt', $numA))->assertOk();
+    }
+
+    public function test_new_receipt_is_stamped_with_active_route_on_real_payment(): void
+    {
+        [$company, $collector] = $this->context();
+        $routeA = $this->routeFor($company, $collector, 'Ruta A');
+        $routeB = $this->routeFor($company, $collector, 'Ruta B');
+        [, $accountA] = $this->assignmentWithDebt($company, $routeA, $collector, 'Cliente A '.uniqid());
+        $method = PaymentMethod::firstOrCreate(
+            ['company_id' => $company->id, 'code' => 'EFECT'],
+            ['name' => 'Efectivo', 'type' => 'cash', 'is_system' => false, 'is_active' => true, 'affects_cash' => true, 'requires_reference' => false]
+        );
+        $token = (string) Str::uuid();
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id, 'active_cobros_route_id' => $routeA->id]);
+        $this->post(route('cobros.collector.payments.store', $accountA), [
+            'amount' => '100.0000',
+            'payment_method_id' => $method->id,
+            'client_token' => $token,
+            'confirm' => '1',
+        ])->assertRedirect();
+
+        // El recibo nuevo queda vinculado de forma verificable a su ruta real.
+        $receipt = CobrosReceipt::query()->where('client_token', $token)->firstOrFail();
+        $this->assertSame($routeA->id, (int) $receipt->cobros_route_id);
+        $this->assertSame('4900.0000', (string) $receipt->accountReceivable()->first()->balance_due);
     }
 
     public function test_payment_routes_require_cobros_cobrar_permission(): void

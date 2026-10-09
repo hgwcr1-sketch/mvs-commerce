@@ -29,7 +29,9 @@ trait HasCobrosRoute
                 throw ValidationException::withMessages(['collector_user_id' => 'El cobrador no esta vinculado a esta ruta.']);
             }
             if ($model->account_receivable_id && ! AccountReceivable::where('company_id', $model->company_id)
-                ->where('cobros_route_id', $model->cobros_route_id)->whereKey($model->account_receivable_id)->exists()) {
+                ->whereKey($model->account_receivable_id)
+                ->where(fn ($q) => $q->where('cobros_route_id', $model->cobros_route_id)->orWhereNull('cobros_route_id'))
+                ->exists()) {
                 throw ValidationException::withMessages(['account_receivable_id' => 'La cuenta no pertenece a esta ruta.']);
             }
         });

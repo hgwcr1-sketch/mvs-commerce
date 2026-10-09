@@ -2,6 +2,33 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 14B fase 2 recibos de ruta desconocida — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `32298f55`, 4 archivos (controlador de pagos,
+concern `HasCobrosRoute`, test de aislamiento, este documento). Sin onboarding,
+licencias nuevas, Panel Maestro ni alteración de datos históricos.
+
+- **Revisión focal:** 8 recibos locales, TODOS con `cobros_route_id` NULL (legado,
+  con `payment_id` real) y 0 con ruta atribuida; no se modifican ni reasignan.
+- **Visibilidad segura:** con ruta activa el historial del cobrador muestra solo
+  recibos de esa ruta y la lectura directa exige atribución a la ruta activa
+  (legado/de otra ruta => 404). Sin ruta en sesión el cobrador conserva los suyos
+  (compatibilidad con flujos sin contexto de ruta). Portal administrativo
+  (dueño/anular) mantiene acceso a todos los recibos autorizados.
+- **Recibos nuevos verificables:** `SecurePaymentService` estampa
+  `cobros_route_id` desde la sesión (ruta ya validada por el Gate). Relajación
+  mínima en `HasCobrosRoute`: la CxC solo exige coincidencia de ruta cuando ella
+  está atribuida (CxC legada/sin ruta ya no bloquea el cobro). No se inventan
+  rutas ni se reasigna ninguna pertenencia.
+
+**Pruebas:** `CobrosRouteIsolation14BTest` 5/5 (37: legado oculto para el
+cobrador, admin visible, cambio de ruta actualiza consultas, recibo nuevo
+estampado con pago real, permisos). Regresión ampliada: `CobrosCreditInstallmentPaymentTest`
+30/30 (402), `CobrosEndToEnd6ATest` 3/3 (94). Verdes previos no repetidos:
+LateFee 16/16 (238), Gate 18/18 (85), Visitas 9/9 (55), Selector 12/12 (93).
+`git diff --check` OK. Riesgo: recibos legados invisibles para el cobrador con
+ruta activa hasta una futura atribución verificable. Sin push/merge/reset/stash.
+
 ## Bloque 14B fase 1 aislamiento por ruta activa — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `144f8f24`, 6 archivos (5 modificados + test
