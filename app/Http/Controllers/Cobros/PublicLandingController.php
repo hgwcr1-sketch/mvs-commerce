@@ -19,7 +19,7 @@ class PublicLandingController extends Controller
      * Formato aceptado de referencia: 4 a 64 caracteres de A-Z, a-z, 0-9, "_" o "-".
      * Valores inválidos se ignoran por completo (no se almacenan ni se reflejan).
      */
-    private const REFERRAL_PATTERN = '/\A[A-Za-z0-9_-]{4,64}\z/';
+    public const REFERRAL_PATTERN = '/\A[A-Za-z0-9_-]{4,64}\z/';
 
     public function __invoke(Request $request): View
     {
