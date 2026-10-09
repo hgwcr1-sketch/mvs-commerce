@@ -13,6 +13,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class PublicRegistrationController extends Controller
 {
@@ -49,6 +50,41 @@ class PublicRegistrationController extends Controller
         'import' => 'Importación con plantillas Excel/CSV',
         'none' => 'Comenzar sin cartera por ahora',
     ];
+
+    /**
+     * BLOQUE 16B-2A — machote VACÍO de clientes (variante cobrOS) descargable
+     * antes de la alta. Reutiliza MigrationTemplateService con companyId 0:
+     * genera encabezados/formatos sin consultar catálogos ni datos de empresa,
+     * sin crear registros y sin exponer información privada.
+     */
+    public function customerTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $spreadsheet = app(\App\Services\Imports\MigrationTemplateService::class)
+            ->make('customers', 0, 'cobros');
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(
+            function () use ($writer, $spreadsheet): void {
+                try {
+                    $writer->save('php://output');
+                } finally {
+                    $spreadsheet->disconnectWorksheets();
+                }
+            },
+            'plantilla_importacion_clientes.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    /**
+     * BLOQUE 16B-2A — machote VACÍO de créditos históricos (12B-2) descargable
+     * antes de la alta. Reutiliza el generador del controlador de importación
+     * del dueño, que no depende de empresa activa ni de sesión.
+     */
+    public function creditTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        return app(CreditImportController::class)->template();
+    }
 
     /** Precios de referencia por país: administración = 1 ruta del país. */
     public const PRICING = [

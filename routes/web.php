@@ -175,6 +175,14 @@ Route::post('/registro-cobros/recuperar', App\Http\Controllers\Cobros\PublicRegi
 Route::get('/registro-cobros/recuperar/{token}', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@consumeRecoveryToken')
     ->name('cobros.register.recover.token');
 
+// BLOQUE 16B-2A - machotes VACÍOS de clientes y créditos para uso previo a la
+// alta: descargas anónimas que solo generan plantillas (sin datos de ninguna
+// empresa, sin catálogos privados y sin exponer endpoints operativos).
+Route::get('/registro-cobros/plantilla-clientes', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@customerTemplate')
+    ->middleware('throttle:10,1')->name('cobros.register.templates.customers');
+Route::get('/registro-cobros/plantilla-creditos', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@creditTemplate')
+    ->middleware('throttle:10,1')->name('cobros.register.templates.credits');
+
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
     Route::middleware([RedirectIfAuthenticated::class, 'cobros.entry'])->group(function () {

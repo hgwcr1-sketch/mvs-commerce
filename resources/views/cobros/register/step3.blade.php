@@ -116,7 +116,14 @@
                     <p class="mt-2 text-xs leading-5 text-slate-600">La importación con plantillas Excel/CSV y el registro manual se habilitan dentro de su cuenta activa; este paso solo guarda su preferencia.</p>
                 </fieldset>
 
-                <p class="text-xs leading-5 text-slate-600">Las plantillas de clientes y créditos estarán disponibles en su cuenta activa; en este borrador no se habilitan descargas.</p>
+                <div class="mt-4 rounded-xl border border-black p-4">
+                    <p class="text-sm font-bold uppercase tracking-widest text-black">Machotes vacíos</p>
+                    <p class="mt-1 text-xs leading-5 text-slate-600">Descargue y prepare sus archivos desde ahora. Son plantillas en blanco sin datos: no contienen información de otros usuarios y no importan nada todavía.</p>
+                    <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <a href="{{ route('cobros.register.templates.customers') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-black px-4 py-3 text-sm font-bold">Descargar machote de clientes</a>
+                        <a href="{{ route('cobros.register.templates.credits') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-black px-4 py-3 text-sm font-bold">Descargar machote de créditos</a>
+                    </div>
+                </div>
 
                 <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 font-bold text-black transition hover:bg-primary-hover hover:text-white sm:w-auto">Continuar a revisión</button>
             </form>
