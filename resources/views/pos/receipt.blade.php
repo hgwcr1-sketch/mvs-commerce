@@ -268,7 +268,20 @@
         @endforeach
         <a href="{{ route('pos.receipt.pdf', $sale) }}?format={{ $format }}">Descargar PDF</a>
         <a href="{{ auth()->user()->hasPermission('ventas.ver', $company) ? route('ventas.show', $sale) : route('pos.index') }}">Volver</a>
+        <a href="{{ route('pos.index') }}" data-new-sale>Nueva venta</a>
     </nav>
+    <script>
+        // Enter inicia una sola "Nueva venta": se ignora el autorepetido y nunca
+        // interfiere con el correo del cliente ni con otros controles.
+        document.addEventListener('keydown', function (event) {
+            if (event.defaultPrevented || event.repeat || event.key !== 'Enter') return;
+            const target = event.target;
+            const tag = target && target.tagName ? target.tagName : '';
+            if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(tag) || (target && target.isContentEditable)) return;
+            event.preventDefault();
+            window.location.href = {{ Illuminate\Support\Js::from(route('pos.index')) }};
+        });
+    </script>
 @endunless
 @if(!($pdfMode ?? false) && $autoPrint)
     <script>window.addEventListener('load',()=>window.print());</script>

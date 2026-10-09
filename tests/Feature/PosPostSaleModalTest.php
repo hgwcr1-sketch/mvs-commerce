@@ -65,7 +65,7 @@ class PosPostSaleModalTest extends TestCase
         $this->assertNull($response->json('electronic_status'));
     }
 
-    public function test_pos_page_renders_the_post_sale_modal_with_colon_sign_and_actions(): void
+    public function test_pos_page_restores_direct_receipt_flow_without_modal_or_iframe(): void
     {
         [$company, $branch, $user, $product, $customer] = $this->context();
 
@@ -75,29 +75,56 @@ class PosPostSaleModalTest extends TestCase
             ->getContent();
 
         foreach ([
-            'Vista previa del comprobante',
-            'receiptSrc()',
-            'setReceiptFormat(\'58mm\')',
-            '80 mm',
-            '58 mm',
-            'Carta',
-            'embed=1',
-            'Correo del cliente',
-            'Enviar comprobante por correo',
-            'Imprimir comprobante',
-            'Reimprimir',
-            'Carta/PDF',
-            'Imprimir comprobante fiscal',
-            'Nueva venta',
-            'x-model="checkout.receiptEmail"',
-            'checkout.result.receipt_pdf_url',
-            "checkout.result.electronic_status === 'accepted'",
+            'window.location.href = payload.receipt_url',
+            'await this.attemptAutoPrint(payload.sale_id)',
         ] as $needle) {
-            $this->assertStringContainsString($needle, $html, "El modal post-venta no incluye: {$needle}");
+            $this->assertStringContainsString($needle, $html, "El cierre POS no incluye: {$needle}");
+        }
+
+        foreach ([
+            '<iframe',
+            'receiptSrc()',
+            'setReceiptFormat(',
+            'sendReceiptMail',
+            'Vista previa del comprobante',
+            'template x-if="checkout.result"',
+            'post-sale-email',
+        ] as $gone) {
+            $this->assertStringNotContainsString($gone, $html, "El cierre POS aún incluye el modal/iframe: {$gone}");
         }
 
         $this->assertStringContainsString("\u{20A1}", $html, 'El POS debe mostrar el símbolo ₡');
         $this->assertStringNotContainsString("\u{00A2}", $html, 'El POS no debe mostrar el símbolo ¢ en lugar de ₡');
+    }
+
+    public function test_receipt_page_presents_original_flow_with_nueva_venta_and_protected_enter(): void
+    {
+        Mail::fake();
+        [$company, $branch, $user, $product, $customer] = $this->context();
+        $saleId = $this->checkout($user, $company, $branch, $product, $customer)->json('sale_id');
+
+        $html = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            ->get(route('pos.receipt', $saleId))
+            ->assertOk()
+            ->getContent();
+
+        foreach ([
+            'Enviar comprobante',
+            'type="email"',
+            '/comprobante/correo',
+            'window.print()',
+            'format-58mm',
+            'format-80mm',
+            'format-letter',
+            '/comprobante.pdf',
+            'Nueva venta',
+            'data-new-sale',
+            'event.repeat',
+            "['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(tag)",
+            'window.location.href = ',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $html, "El comprobante original no incluye: {$needle}");
+        }
     }
 
     public function test_receipt_mail_endpoint_answers_json_for_the_pos_modal(): void

@@ -283,11 +283,11 @@ readonly class SaleReceiptData
             'status' => $doc->status,
             'status_label' => self::fiscalStatusLabel($doc->status),
             'is_accepted' => $doc->status === 'accepted',
-            'environment' => $doc->environment === 'production' ? 'Producci��n' : 'Pruebas',
+            'environment' => $doc->environment === 'production' ? 'Producción' : 'Pruebas',
             'branch_code' => $config?->fiscal_branch_code,
             'terminal_code' => $config?->fiscal_terminal_code,
             'economic_activity' => $config?->economic_activity,
-            'condition' => $sale->sale_condition === Sale::CONDITION_CREDIT ? 'CrǸdito' : 'Contado',
+            'condition' => $sale->sale_condition === Sale::CONDITION_CREDIT ? 'Crédito' : 'Contado',
             'qr_image' => $clave !== null ? self::fiscalQr($clave) : null,
         ];
     }

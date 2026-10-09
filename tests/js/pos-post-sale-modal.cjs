@@ -16,34 +16,29 @@ function check(name, condition) {
 const COLON = '\u20A1';
 const CENT = '\u00A2';
 
-// ── 1. Modal post-venta: resumen, cliente, total, fiscal, correo y acciones ──
-const modalStart = blade.indexOf('<template x-if="checkout.result">');
-const modalEnd = blade.indexOf('</footer>', modalStart);
-const modal = blade.slice(modalStart, modalEnd > 0 ? modalEnd + 400 : modalStart + 6000);
-check('modal post-venta existe', modal.length > 500);
-check('vista previa reutiliza receipt_url en iframe', modal.includes('receiptSrc()') && modal.includes('<iframe') && blade.includes('checkout.result?.receipt_url'));
-check('muestra cliente y total', modal.includes('checkout.result.customer_name') && modal.includes('money(checkout.result.total)'));
-check('selector de formato 58/80/carta', modal.includes("setReceiptFormat('{{ $value }}')") && blade.includes('SaleReceiptService::FORMAT_LABELS'));
-check('preview embebido sin autoimpresión', blade.includes('&embed=1'));
-check('fiscal se reutiliza desde receipt.blade', receipt.includes('Clave electrónica:') && receipt.includes('Comprobante electrónico en proceso') && receipt.includes('qr_image'));
-check('receipt.blade oculta acciones al embebir', receipt.includes('$embed ?? false') && fiscalInvoice.includes('$embed ?? false'));
-check('modal no duplica datos fiscales', !modal.includes('checkout.result.fiscal.clave'));
-check('correo precargado en el input editable', /<input[^>]+x-model="checkout\.receiptEmail"/.test(modal) && /type="email"/.test(modal));
-check('acción enviar correo existe', modal.includes('Enviar comprobante por correo') && modal.includes('sendReceiptMail()'));
-check('acción imprimir comprobante', modal.includes('Imprimir comprobante<') || /Imprimir comprobante<\/button>/.test(modal));
-check('acción reimprimir', modal.includes('>Reimprimir</button>'));
-check('acción Carta/PDF', modal.includes('Carta/PDF') && modal.includes('checkout.result.receipt_pdf_url'));
-check('acción nueva venta', modal.includes('@click="newSale"'));
-check('botón fiscal solo para accepted', /x-show="checkout\.result\.electronic_status === 'accepted'"/.test(modal));
-
-// ── 2. Reutiliza rutas/servicios existentes (sin duplicar) ──
-check('envío reutiliza pos.receipt.mail', blade.includes("route('pos.receipt.mail'") && blade.includes('sendReceiptMail'));
-check('impresión reutiliza MVS Print (printCompletedSale)', blade.includes('printCompletedSale(checkout.result.sale_id)'));
-check('imprimir usa primera impresión y reimprimir usa reprint', blade.includes('printCompletedSale(checkout.result.sale_id, false)') && blade.includes('printCompletedSale(checkout.result.sale_id, true)'));
-check('PDF reutiliza pos.receipt.pdf del payload', modal.includes('checkout.result.receipt_pdf_url'));
+// ── 1. Cierre POS: recibo original directo (sin modal resumido ni iframe) ──
+check('index.blade sin iframe', !blade.includes('<iframe'));
+check('index.blade sin receiptSrc()', !blade.includes('receiptSrc()'));
+check('index.blade sin selector de formato duplicado', !blade.includes('setReceiptFormat'));
+check('index.blade sin correo duplicado del modal', !blade.includes('sendReceiptMail') && !blade.includes('post-sale-email'));
+check('index.blade sin resumen modal post-venta', !blade.includes('Vista previa del comprobante') && !blade.includes('template x-if="checkout.result"'));
+check('al completar navega al receipt original', blade.includes('window.location.href = payload.receipt_url'));
+check('preserva MVS Print antes de navegar', blade.includes('await this.attemptAutoPrint(payload.sale_id)'));
+check('impresion reutiliza MVS Print (printCompletedSale)', blade.includes('attemptAutoPrint(payload.sale_id)') && /printCompletedSale\(saleId, false\)/.test(blade));
 check('no se inventa otro endpoint de correo', !/fetch\('[^']*correo[^']*'/.test(blade));
 
-// ── 3. Enter → Nueva venta una sola vez, con sus exclusiones ──
+// ── 2. receipt.blade.php reutilizado como experiencia original del cierre ──
+check('receipt.blade ofrece Nueva venta', receipt.includes('data-new-sale') && receipt.includes('Nueva venta'));
+check('receipt.blade conserva correo editable', receipt.includes('Enviar comprobante') && receipt.includes('type="email"') && receipt.includes("route('pos.receipt.mail'"));
+check('receipt.blade conserva impresion y formatos', receipt.includes('window.print()') && receipt.includes('format-58mm') && receipt.includes('format-80mm') && receipt.includes('format-letter'));
+check('receipt.blade conserva PDF (Carta)', receipt.includes("route('pos.receipt.pdf'"));
+check('receipt.blade conserva QR de fidelizacion', (receipt.match(new RegExp(COLON, 'g')) || []).length > 10 && receipt.includes('loyalty-table'));
+check('receipt.blade conserva fiscal accepted/pending', receipt.includes('Clave electr\u00f3nica:') && receipt.includes('Comprobante electr\u00f3nico en proceso') && receipt.includes('qr_image'));
+check('Enter en receipt: guardado contra duplicados', /keydown[\s\S]{0,700}event\.repeat/.test(receipt));
+check('Enter en receipt no interfiere con el correo ni otros controles', /keydown[\s\S]{0,700}\['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'\]\.includes\(tag\)/.test(receipt));
+check('Enter en receipt navega al POS (nueva venta)', /keydown[\s\S]{0,900}window\.location\.href = /.test(receipt));
+
+// ── 3. Enter en el POS → Nueva venta una sola vez, con sus exclusiones ──
 const match = blade.match(/handleGlobalEnter\(event\) \{([\s\S]*?)\n        \},/);
 check('handleGlobalEnter existe', Boolean(match));
 if (!match) process.exit(1);
@@ -74,7 +69,7 @@ function event(target = {}, extra = {}) {
 let s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false } });
 let e = event();
 handler.call(s, e);
-check('Enter con modal de resultado visible ejecuta newSale', s.newSaleCalls === 1);
+check('Enter con resultado visible ejecuta newSale', s.newSaleCalls === 1);
 check('Enter llama preventDefault', e.prevented === true);
 
 s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false } });
@@ -91,19 +86,11 @@ check('Enter en contenteditable no dispara newSale', s.newSaleCalls === 0);
 
 s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false } });
 handler.call(s, event({ tagName: 'A' }));
-check('Enter con foco en enlace (PDF/comprobante) no dispara newSale', s.newSaleCalls === 0);
-
-s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false } });
-handler.call(s, event({ tagName: 'SPAN', closest: (selector) => selector.includes('data-post-sale') ? {} : null }));
-check('Enter dentro de las acciones del modal no dispara newSale', s.newSaleCalls === 0);
-
-s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false }, imageModal: { open: true } });
-handler.call(s, event());
-check('Enter con modal secundario abierto no dispara newSale', s.newSaleCalls === 0);
+check('Enter con foco en enlace no dispara newSale', s.newSaleCalls === 0);
 
 s = state({ checkout: { open: true, result: { sale_id: 1 }, processing: false } });
 handler.call(s, event({ tagName: 'BUTTON' }));
-check('Enter con foco en botón no dispara newSale', s.newSaleCalls === 0);
+check('Enter con foco en boton no dispara newSale', s.newSaleCalls === 0);
 
 s = state({ checkout: { open: false, result: null, processing: false } });
 handler.call(s, event());
@@ -111,7 +98,7 @@ check('Sin resultado Enter abre el cobro (flujo normal)', s.openCheckoutCalls ==
 
 check('newSale devuelve el foco al POS', /newSale\(\) \{[\s\S]{0,1500}focusSearch\(\)/.test(blade));
 
-// ── 4. Símbolo ₡ determinista (sin depender de CLDR) ──
+// ── 4. Simbolo ₡ determinista (sin depender de CLDR) ──
 const crc = blade.match(/crcMoney\(value\) \{([\s\S]*?)\n        \},/);
 check('crcMoney existe', Boolean(crc));
 if (crc) {
@@ -123,16 +110,16 @@ if (crc) {
     check('money2() delega en crcMoney', /money2\(value\) \{ return this\.crcMoney\(value\); \}/.test(blade));
 }
 
-// ── 5. Superficies POS sin ¢/ø y con ₡ (incluye térmico 58/80 y fiscal) ──
+// ── 5. Superficies POS sin ¢/ø y con ₡ (incluye termico 58/80 y fiscal) ──
 check('index.blade sin ¢', !blade.includes(CENT));
 check('receipt.blade sin ¢', !receipt.includes(CENT));
 check('fiscal-invoice sin ¢', !fiscalInvoice.includes(CENT));
 check('receipt.blade usa ₡ en 58/80', (receipt.match(new RegExp(COLON, 'g')) || []).length > 10);
 check('receipt.blade conserva 58mm y 80mm', receipt.includes('format-58mm') && receipt.includes('format-80mm'));
-check('ticket ESC/POS declara colón UTF-8', escPos.includes("CURRENCY = '" + COLON + "'"));
+check('ticket ESC/POS declara colon UTF-8', escPos.includes("CURRENCY = '" + COLON + "'"));
 
 if (failures > 0) {
     console.error(failures + ' comprobaciones fallidas');
     process.exit(1);
 }
-console.log('Modal post-venta POS: todas las comprobaciones pasaron');
+console.log('Todas las comprobaciones pasaron');

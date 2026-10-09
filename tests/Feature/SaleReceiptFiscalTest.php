@@ -27,7 +27,7 @@ class SaleReceiptFiscalTest extends TestCase
         $this->fiscal($company, $sale, 'accepted', $clave, $consecutivo);
 
         foreach (['letter', '58mm', '80mm'] as $format) {
-            $this->actingAs($user)->withSession($this->activeSession($company, $branch))
+            $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))
                 ->get(route('pos.receipt', $sale).'?format='.$format)
                 ->assertOk()
                 ->assertSee('Clave electrónica')
@@ -40,6 +40,10 @@ class SaleReceiptFiscalTest extends TestCase
                 ->assertSee('QR del comprobante electrónico', false)
                 ->assertSee('Portal de Hacienda')
                 ->assertSee('₡1.017');
+
+            if ($format !== 'letter') {
+                $response->assertSee('Producción');
+            }
         }
 
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))

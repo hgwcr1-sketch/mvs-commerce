@@ -930,73 +930,6 @@
                     <footer class="grid shrink-0 grid-cols-2 gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:flex sm:justify-end sm:px-6"><button type="button" @click="requestCloseCheckout" :disabled="checkout.processing" class="rounded-xl border border-[#B9BDC2] px-5 py-3 font-bold">Cancelar</button><button type="button" @click="clearPayments" :disabled="checkout.processing || !checkout.payments.length" class="rounded-xl border border-[#B1922D] px-5 py-3 font-bold text-[#806817] disabled:opacity-40">Limpiar pagos</button><button type="button" @click="confirmCheckout" :disabled="!checkoutCanConfirm" class="col-span-2 rounded-xl bg-amber-500 px-6 py-3 text-lg font-normal text-black hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-600/40 disabled:cursor-not-allowed disabled:bg-slate-300" x-text="checkout.processing ? 'Procesando…' : `Confirmar cobro — ${money(grandTotal)}`"></button></footer>
                 </div>
             </template>
-            <template x-if="checkout.result">
-                <div class="flex min-h-0 flex-1 flex-col">
-                    <header class="flex items-center justify-between gap-3 border-b border-[#B9BDC2]/60 bg-[#111111] px-5 py-4 text-white sm:px-7">
-                        <div class="min-w-0">
-                            <h2 class="text-2xl font-black tracking-tight">Venta completada</h2>
-                            <p class="mt-1 truncate text-sm text-[#B9BDC2]" x-text="checkout.result.sale_number"></p>
-                        </div>
-                        <span class="shrink-0 rounded-full bg-primary/20 px-3 py-1 text-sm font-black text-[#D4AF37]" x-text="money(checkout.result.total)"></span>
-                    </header>
-
-                    <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" data-post-sale>
-                        <section class="rounded-2xl border border-[#B9BDC2] bg-white" aria-label="Vista previa del comprobante">
-                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#B9BDC2]/60 bg-slate-50 px-3 py-2 sm:px-4">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="rounded-lg bg-[#111111] px-3 py-1 text-xs font-black uppercase tracking-widest text-white" x-text="checkout.result.sale_number"></span>
-                                    <span class="text-sm font-black text-[#111111]" x-text="money(checkout.result.total)"></span>
-                                    <span class="text-xs font-bold text-slate-500" x-text="checkout.result.customer_name || 'Consumidor Final'"></span>
-                                </div>
-                                <div class="flex items-center gap-1 rounded-xl border border-[#B9BDC2] bg-white p-1" role="group" aria-label="Formato del comprobante">
-                                    @foreach(\App\Services\Sales\SaleReceiptService::FORMAT_LABELS as $value => $label)
-                                        <button type="button"
-                                                @click="setReceiptFormat('{{ $value }}')"
-                                                :aria-pressed="checkout.receiptFormat === '{{ $value }}'"
-                                                :class="checkout.receiptFormat === '{{ $value }}' ? 'bg-[#D4AF37] text-black' : 'text-slate-600 hover:bg-slate-100'"
-                                                class="min-h-11 rounded-lg px-3 py-2 text-xs font-black">{{ $label }}</button>
-                                    @endforeach
-                                </div>
-                            </div>
-                            <div class="bg-slate-200 p-2 sm:p-4">
-                                <iframe :src="receiptSrc()"
-                                        title="Vista previa del comprobante"
-                                        data-post-sale
-                                        class="mx-auto h-[45vh] min-h-[240px] w-full max-w-[420px] rounded-xl border border-[#B9BDC2] bg-white sm:h-[52vh] sm:max-w-[480px]"></iframe>
-                            </div>
-                        </section>
-
-                        <p x-show="checkout.result.duplicate" class="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Esta venta ya había sido procesada.</p>
-                        <div class="mt-3 space-y-1 text-sm" x-show="checkout.payments.some(payment => payment.received_amount_usd)">
-                            <template x-for="payment in checkout.payments.filter(payment => payment.received_amount_usd)">
-                                <p x-text="usdPaymentLabel(payment)"></p>
-                            </template>
-                        </div>
-
-                        <section class="mt-4 rounded-2xl border border-[#B9BDC2] bg-white p-4" aria-label="Correo del comprobante">
-                            <label for="post-sale-email" class="text-sm font-black">Correo del cliente</label>
-                            <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-                                <input id="post-sale-email" type="email" x-model="checkout.receiptEmail" inputmode="email" autocomplete="email" maxlength="150" placeholder="cliente@correo.com" :disabled="checkout.mail.sending" class="min-h-11 w-full rounded-xl border border-slate-400 px-3 py-2">
-                                <button type="button" @click="sendReceiptMail()" :disabled="checkout.mail.sending" class="min-h-11 shrink-0 rounded-xl bg-[#111111] px-5 py-2 font-normal text-white disabled:opacity-50" x-text="checkout.mail.sending ? 'Enviando…' : 'Enviar comprobante por correo'"></button>
-                            </div>
-                            <p x-show="checkout.mail.message" x-text="checkout.mail.message" role="status" aria-live="polite" class="mt-2 rounded-lg bg-emerald-50 p-2 text-sm font-semibold text-emerald-700"></p>
-                            <p x-show="checkout.mail.error" x-text="checkout.mail.error" role="status" aria-live="polite" class="mt-2 rounded-lg bg-red-50 p-2 text-sm font-semibold text-red-700"></p>
-                        </section>
-
-                        <div x-show="checkout.printStatus === 'failed'" class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">No fue posible imprimir directamente.</div>
-                        <div x-show="checkout.printStatus === 'printing'" class="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">Imprimiendo ticket…</div>
-                        <p x-show="checkout.printMessage" x-text="checkout.printMessage" role="status" aria-live="polite" class="mt-3 break-words text-sm text-slate-700"></p>
-                    </div>
-
-                    <footer class="flex flex-wrap gap-2 border-t border-[#B9BDC2] bg-white p-4 sm:justify-end sm:px-6" data-post-sale>
-                        <button type="button" @click="printCompletedSale(checkout.result.sale_id, false)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl bg-[#111111] px-4 py-3 font-normal text-white disabled:opacity-50">Imprimir comprobante</button>
-                        <button type="button" @click="printCompletedSale(checkout.result.sale_id, true)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold disabled:opacity-50">Reimprimir</button>
-                        <a :href="checkout.result.receipt_pdf_url + '?format=letter'" target="_blank" rel="noopener" class="inline-flex min-h-11 items-center rounded-xl border border-[#B9BDC2] px-4 py-3 font-bold">Carta/PDF</a>
-                        <button type="button" x-show="checkout.result.electronic_status === 'accepted'" x-cloak @click="printCompletedSale(checkout.result.sale_id)" :disabled="['checking', 'printing'].includes(checkout.printStatus)" class="min-h-11 rounded-xl border border-[#B1922D] px-4 py-3 font-semibold text-[#806817] disabled:opacity-50">Imprimir comprobante fiscal</button>
-                        <button type="button" @click="newSale" class="min-h-11 rounded-xl bg-primary px-5 py-3 font-normal text-black hover:bg-primary-hover">Nueva venta</button>
-                    </footer>
-                </div>
-            </template>
         </div>
     </div>
 
@@ -1324,7 +1257,7 @@ document.addEventListener('alpine:init', () => {
         usdSessions: @js($cashSessions->map(fn ($session) => ['id' => $session->id, 'enabled' => $session->accepts_usd_snapshot && $session->usd_exchange_rate && bccomp($session->usd_exchange_rate, '0', 4) > 0, 'rate' => $session->usd_exchange_rate, 'policy' => $session->usd_change_policy_snapshot])->values()),
         cashSessionRequired: @json($cashSettings->require_open_session || ($cashSettings->session_mode === \App\Models\CompanyCashSetting::SESSION_MODE_SHARED && $cashSessions->count() > 1)),
         paymentMethods: @json($paymentMethods->where('type', '!=', 'loyalty_points')->values()),
-        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', receiptFormat: '80mm', mail: { sending: false, message: '', error: '' } },
+        checkout: { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' },
         quickCustomer: {
             open: false,
             saving: false,
@@ -2052,9 +1985,6 @@ document.addEventListener('alpine:init', () => {
                     }),
                 });
                 const payload = await this.readFetchResponse(response);
-                this.checkout.result = payload;
-                this.checkout.receiptEmail = payload?.customer_email || '';
-                this.checkout.mail = { sending: false, message: '', error: '' };
                 this.checkout.printStatus = null;
                 this.cart = [];
                 this.customerId = null;
@@ -2067,7 +1997,12 @@ document.addEventListener('alpine:init', () => {
                 this.quoteId = null;
                 this.successMessage = payload.message;
                 if (payload.success && !payload.duplicate) {
-                    this.attemptAutoPrint(payload.sale_id);
+                    await this.attemptAutoPrint(payload.sale_id);
+                }
+                // Cierre original: la experiencia del comprobante se presenta
+                // directamente en receipt.blade.php (sin modal ni iframe).
+                if (payload.receipt_url) {
+                    window.location.href = payload.receipt_url;
                 }
             } catch (error) {
                 this.checkout.error = error.message || 'No fue posible completar el cobro. Intente nuevamente.';
@@ -2123,57 +2058,9 @@ document.addEventListener('alpine:init', () => {
                 if (checkout.printStatus === 'printing') checkout.printStatus = 'failed';
             }
         },
-        // Reutiliza la ruta y el controlador ya existentes (pos.receipt.mail)
-        // sin duplicar la lógica de envío del comprobante.
-        setReceiptFormat(format) {
-            if (['80mm', '58mm', 'letter'].includes(format)) {
-                this.checkout.receiptFormat = format;
-            }
-        },
-        receiptSrc() {
-            const base = this.checkout.result?.receipt_url || '';
-            if (!base) return '';
-            return `${base}${base.includes('?') ? '&' : '?'}format=${encodeURIComponent(this.checkout.receiptFormat)}&embed=1`;
-        },
-        async sendReceiptMail() {
-            const checkout = this.checkout;
-            if (!checkout.result || checkout.mail.sending) return;
-            const email = String(checkout.receiptEmail || '').trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-                checkout.mail.error = 'Indique un correo válido para enviar el comprobante.';
-                checkout.mail.message = '';
-                return;
-            }
-            checkout.mail.sending = true;
-            checkout.mail.error = '';
-            checkout.mail.message = '';
-            try {
-                const mailUrl = {{ Illuminate\Support\Js::from(route('pos.receipt.mail', ['sale' => '__SALE_ID__'], false)) }};
-                const response = await fetch(mailUrl.replace('__SALE_ID__', checkout.result.sale_id), {
-                    method: 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    },
-                    body: JSON.stringify({ email }),
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || payload.success === false) {
-                    checkout.mail.error = payload.message || 'No fue posible enviar el comprobante.';
-                    return;
-                }
-                checkout.mail.message = payload.message || `Comprobante enviado a ${email}.`;
-            } catch {
-                checkout.mail.error = 'No fue posible enviar el comprobante. Intente nuevamente.';
-            } finally {
-                checkout.mail.sending = false;
-            }
-        },
         newSale() {
             this.checkoutToken = generateUUID();
-            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '', receiptEmail: '', receiptFormat: '80mm', mail: { sending: false, message: '', error: '' } };
+            this.checkout = { open: false, processing: false, payments: [], draft: { methodId: '', amount: '', receivedAmount: '', reference: '' }, error: '', result: null, printStatus: null, printMessage: '' };
             this._generalDiscountInput = '';
             this._generalDiscountType = 'fixed';
             this.successMessage = '';

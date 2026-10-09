@@ -81,10 +81,11 @@ s = state({ checkout: { open: false, result: null, processing: false }, canCheck
 handler.call(s, event());
 check('Sin result Enter abre checkout (flujo normal)', s.openCheckoutCalls === 1 && s.newSaleCalls === 0);
 
-// 8. botón fiscal solo para accepted + motor térmico existente
-check('Botón Imprimir comprobante fiscal existe', blade.includes('Imprimir comprobante fiscal'));
-check('Botón fiscal solo cuando electronic_status es accepted', /x-show="checkout\.result\.electronic_status === 'accepted'"/.test(blade));
-check('Botón fiscal usa el flujo térmico existente', /Imprimir comprobante fiscal<\/button>/.test(blade) && blade.includes('printCompletedSale(checkout.result.sale_id)'));
+// 8. Cierre directo al comprobante: estado fiscal y motor térmico preservados
+const receiptBlade = fs.readFileSync(path.join(__dirname, '..', '..', 'resources', 'views', 'pos', 'receipt.blade.php'), 'utf8');
+check('Comprobante original presenta fiscal accepted/pending', receiptBlade.includes('fiscal-state') && receiptBlade.includes('Comprobante electrónico en proceso') && receiptBlade.includes('qr_image'));
+check('Motor térmico (MVS Print) se conserva en el cierre', blade.includes('attemptAutoPrint(payload.sale_id)') && /printCompletedSale\(saleId, false\)/.test(blade));
+check('Cierre navega al comprobante original', blade.includes('window.location.href = payload.receipt_url'));
 
 if (failures > 0) {
     console.error(failures + ' comprobaciones fallidas');
