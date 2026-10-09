@@ -37,10 +37,12 @@
     <div
         x-show="open"
         x-cloak
+        x-ref="results"
         class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl">
         <template x-for="(customer, index) in results" :key="customer.id">
             <button
                 type="button"
+                :data-index="index"
                 @click="select(customer)"
                 @mouseenter="highlighted = index"
                 :class="highlighted === index ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : 'hover:bg-slate-50'"
@@ -114,6 +116,7 @@
                     move(dir) {
                         if (!this.results.length) { return; }
                         this.highlighted = (this.highlighted + dir + this.results.length) % this.results.length;
+                        this.$nextTick(() => window.mvsScrollActiveIntoView?.(this.$refs.results, this.highlighted));
                     },
                     select(customer) {
                         this.selectedCustomer = customer;

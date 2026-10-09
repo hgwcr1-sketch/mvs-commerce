@@ -88,9 +88,10 @@
 
 
 
-        <div x-show="resultsOpen" class="absolute z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl" :style="dropdownPos($refs.searchInput, results.length)">
+        <div x-show="resultsOpen" x-ref="productResults" class="absolute z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl" :style="dropdownPos($refs.searchInput, results.length)">
             <template x-for="(product, index) in results" :key="product.id">
                 <button type="button"
+                        :data-index="index"
                         @click="addProduct(product)"
                         @mouseenter="selectedIndex = index"
                         :disabled="!quoteMode && !product.can_add_to_cart"
@@ -355,9 +356,11 @@
 
 
                 <div x-show="customerResultsOpen"
+                     x-ref="customerResults"
                      class="absolute z-[100] mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl" :style="dropdownPos($refs.customerSearchInput, customerResults.length)">
                     <template x-for="(customer, index) in customerResults" :key="customer.id">
                         <button type="button"
+                                :data-index="index"
                                 @click="selectCustomer(customer)"
                                 @mouseenter="customerSelectedIndex = index"
                                 :class="customerSelectedIndex === index ? 'bg-amber-50 ring-1 ring-inset ring-amber-300' : 'hover:bg-slate-50'"
@@ -1713,6 +1716,7 @@ document.addEventListener('alpine:init', () => {
         moveSelection(direction) {
             if (!this.results.length) return;
             this.selectedIndex = (this.selectedIndex + direction + this.results.length) % this.results.length;
+            this.$nextTick(() => window.mvsScrollActiveIntoView?.(this.$refs.productResults, this.selectedIndex));
         },
         addSelected() {
             if (this.results[this.selectedIndex]) this.addProduct(this.results[this.selectedIndex]);
@@ -2520,6 +2524,7 @@ document.addEventListener('alpine:init', () => {
         moveCustomerSelection(direction) {
             if (!this.customerResults.length) return;
             this.customerSelectedIndex = (this.customerSelectedIndex + direction + this.customerResults.length) % this.customerResults.length;
+            this.$nextTick(() => window.mvsScrollActiveIntoView?.(this.$refs.customerResults, this.customerSelectedIndex));
         },
         selectMarkedCustomer() {
             if (this.customerResults[this.customerSelectedIndex]) this.selectCustomer(this.customerResults[this.customerSelectedIndex]);

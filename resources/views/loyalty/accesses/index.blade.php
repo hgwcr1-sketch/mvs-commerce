@@ -59,9 +59,9 @@
                 <input id="customer-search" x-ref="searchInput" x-model="query" @input.debounce.200ms="search()" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="selectCurrent()" @keydown.escape="close()" type="search" autocomplete="off" placeholder="Buscar por nombre, identificación, teléfono o email..." class="form-input w-full">
                 <input type="hidden" name="customer_id" :value="selectedCustomer?.id ?? ''" required>
                 <p x-show="selectedCustomer" class="mt-1 text-xs font-medium text-emerald-700">Seleccionado: <span x-text="selectedCustomer?.name"></span> <span x-show="selectedCustomer?.identification" x-text="'· ' + selectedCustomer?.identification"></span></p>
-                <div x-show="open" class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+                <div x-show="open" x-ref="results" class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
                     <template x-for="(customer, index) in results" :key="customer.id">
-                        <button type="button" @click="select(customer)" @mouseenter="highlighted = index" :class="highlighted === index ? 'bg-amber-50' : ''" class="flex w-full flex-col items-start gap-0.5 border-b border-slate-100 px-3 py-2 text-left last:border-0 hover:bg-slate-50">
+                        <button type="button" :data-index="index" @click="select(customer)" @mouseenter="highlighted = index" :class="highlighted === index ? 'bg-amber-50' : ''" class="flex w-full flex-col items-start gap-0.5 border-b border-slate-100 px-3 py-2 text-left last:border-0 hover:bg-slate-50">
                             <span class="font-semibold text-slate-800" x-text="customer.name"></span>
                             <span class="text-xs text-slate-500"><span x-text="customer.identification || 'Sin identificación'"></span> · <span x-text="customer.phone || customer.mobile || customer.email || 'Sin contacto'"></span></span>
                         </button>
@@ -99,7 +99,7 @@
                         this.results=data; this.highlighted=0;
                     }).catch(()=>{ this.results=[]; }).finally(()=>{ if(id===this.requestId) this.loading=false; });
             },
-            move(dir){ if(!this.results.length) return; this.highlighted=(this.highlighted+dir+this.results.length)%this.results.length; },
+            move(dir){ if(!this.results.length) return; this.highlighted=(this.highlighted+dir+this.results.length)%this.results.length; this.$nextTick(()=>window.mvsScrollActiveIntoView?.(this.$refs.results, this.highlighted)); },
             select(c){ this.selectedCustomer=c; this.query=c.name; this.open=false; },
             selectCurrent(){ if(this.results[this.highlighted]) this.select(this.results[this.highlighted]); },
             close(){ this.open=false; }

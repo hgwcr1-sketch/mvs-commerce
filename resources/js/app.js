@@ -7,6 +7,7 @@ import './modules/clientes';
 import './modules/monetary-input';
 import './modules/compras';
 import './modules/identificacion';
+import './mvs-dropdown';
 import './mvs-print/qz';
 import './navigation';
 import './scanner';
