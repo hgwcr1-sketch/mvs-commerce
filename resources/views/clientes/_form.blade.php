@@ -210,16 +210,22 @@
     @foreach($districts as $district)
 
         <option
-            value="{{ $district->id }}"
-            @selected(old('district_id', $customer->district_id ?? '') == $district->id)>
+        value="{{ $district->id }}"
+        @selected(old('district_id', $customer->district_id ?? '') == $district->id)>
 
-            {{ $district->name }}
+        {{ $district->name }}
 
         </option>
 
     @endforeach
 
-</x-select>
+        </x-select>
+
+        <x-geo.country-select :country="old('geo_country_iso', $customer->geo_country_iso ?? null)" />
+
+        <x-geo.division-cascade
+            :country="old('geo_country_iso', $customer->geo_country_iso ?? null)"
+            :division="(int) old('geo_division_id', $customer->geo_division_id ?? 0) ?: null" />
 
     </div>
 

@@ -485,6 +485,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])->name('ubicaciones.provincias');
     Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])->name('ubicaciones.cantones');
     Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])->name('ubicaciones.distritos');
+    Route::get('/geo/divisiones', [App\Http\Controllers\GeoDivisionController::class, 'index'])->name('geo.divisiones');
 });
 
 /*

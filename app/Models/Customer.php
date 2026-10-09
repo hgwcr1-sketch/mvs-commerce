@@ -33,6 +33,8 @@ class Customer extends Model
         'province_id',
         'canton_id',
         'district_id',
+        'geo_country_iso',
+        'geo_division_id',
         'address',
         'latitude',
         'longitude',

@@ -2,6 +2,42 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 15B-2 fase 1 formularios internacionales — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `130511fe`. Piloto: formulario de
+**Clientes** (`clientes/_form.blade.php`), conservando intactos todos los
+campos y direcciones legacy (country/province/canton/district).
+
+- **Componentes reutilizables:** `x-geo.country-select` (10 países de
+  `config/geography.countries` + hint de localización) y `x-geo.division-cascade`
+  (etiquetas adaptativas desde `GeoCatalogLevel` con datos: CR Provincia/Cantón/
+  Distrito, CO Departamento/Municipio, VE Estado/Municipio/Parroquia — sin datos
+  ⇒ aviso "catálogo aún no cargado" y sin input seleccionable). Selectores
+  construidos solo con divisiones reales; `name="geo_division_id"` únicamente en
+  el nivel más profundo.
+- **Listas dependientes:** endpoint `GET /geo/divisiones` (auth, igual que
+  `ubicaciones.*`) devuelve `has_catalog`, `levels` (con datos) y `divisions`
+  (raíces o hijos de `padre`); JS cliente reconstruye la cascada y respeta
+  países sin catálogo. Aditivo en `customers`: `geo_country_iso` + `geo_division_id`
+  (migración `2026_10_09_000003`).
+- **Localización por configuración:** `geography.localization` con identificación,
+  moneda y prefijo por país — solo presentación; validaciones financieras y
+  documentos existentes SIN cambios. Validación cruzada país↔división en
+  `Store/UpdateCustomerRequest` (división existente, activa y del país elegido;
+  país en los 10 ISO soportados).
+
+**Pruebas:** `GeoFormPilot15B2Test` 6/6 (60: etiquetas adaptativas + UTF-8 en
+formulario, etiquetas por país + aviso VE, jerarquías reales CR/CO con UTF-8
+(San José, MEDELLÍN) + país inválido 422, endpoint autenticado, rechazo de
+división inexistente/ajena/país inválido, guardado internacional + cliente
+legacy + update). Regresión `CustomerCodeTest` 9/9 (39). `git diff --check` OK.
+
+**Riesgos:** al cambiar de país en cliente, la cascada se reconstruye vía JS
+(labels del país destino); el formulario solo envía el nivel profundo
+(`geo_division_id`) — ancestros derivados por la cadena de padres. Sin
+onboarding, referidos, licencias ni cambios de país de empresas existentes;
+sin push/merge/reset/stash.
+
 ## Bloque 15B-1 catálogos geográficos — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `bc5211f8`. Migración aditiva

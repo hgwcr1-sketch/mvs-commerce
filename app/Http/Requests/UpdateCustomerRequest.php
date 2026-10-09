@@ -95,6 +95,23 @@ class UpdateCustomerRequest extends FormRequest
 
             'district_id' => 'nullable|exists:districts,id',
 
+            'geo_country_iso' => [
+                'nullable',
+                'string',
+                'size:2',
+                Rule::in(array_keys((array) config('geography.countries', []))),
+            ],
+
+            'geo_division_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('geo_divisions', 'id')
+                    ->where('is_active', true)
+                    ->where('country_id', \App\Models\Country::query()
+                        ->where('iso2', strtoupper((string) $this->input('geo_country_iso')))
+                        ->value('id') ?? -1),
+            ],
+
             'address' => 'nullable|string',
 
             'latitude' => [

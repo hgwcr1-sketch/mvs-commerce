@@ -174,4 +174,25 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Nombres locales de identificación, moneda y prefijo telefónico
+    |--------------------------------------------------------------------------
+    | Solo presentación configurada. No altera validaciones financieras
+    | ni documentos existentes.
+    */
+
+    'localization' => [
+        'CR' => ['identification' => 'Cédula', 'currency_name' => 'Colón costarricense', 'phone_prefix' => '+506'],
+        'NI' => ['identification' => 'Cédula', 'currency_name' => 'Córdoba nicaragüense', 'phone_prefix' => '+505'],
+        'PA' => ['identification' => 'Cédula o RUC', 'currency_name' => 'Balboa', 'phone_prefix' => '+507'],
+        'GT' => ['identification' => 'DPI', 'currency_name' => 'Quetzal', 'phone_prefix' => '+502'],
+        'SV' => ['identification' => 'DUI', 'currency_name' => 'Dólar estadounidense', 'phone_prefix' => '+503'],
+        'HN' => ['identification' => 'Número de identidad', 'currency_name' => 'Lempira', 'phone_prefix' => '+504'],
+        'CO' => ['identification' => 'Cédula o NIT', 'currency_name' => 'Peso colombiano', 'phone_prefix' => '+57'],
+        'MX' => ['identification' => 'INE o RFC', 'currency_name' => 'Peso mexicano', 'phone_prefix' => '+52'],
+        'DO' => ['identification' => 'Cédula', 'currency_name' => 'Peso dominicano', 'phone_prefix' => '+1809'],
+        'VE' => ['identification' => 'Cédula o RIF', 'currency_name' => 'Bolívar venezolano', 'phone_prefix' => '+58'],
+    ],
+
 ];
