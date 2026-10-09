@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountReceivable;
+use App\Models\Branch;
 use App\Models\CobrosAssignment;
 use App\Models\CobrosRoute;
 use App\Models\Company;
@@ -60,6 +62,25 @@ class CobrosRouteSelectorTest extends TestCase
             'customer_id' => $customer->id, 'collector_user_id' => $collector->id,
             'assigned_by' => $collector->id, 'assigned_at' => now()]);
 
+        // La cartera operativa solo lista clientes con saldo pendiente: crear la CxC
+        // que hace visible al cliente en "Mi Cartera" (aislamiento por ruta).
+        $branch = Branch::firstOrCreate(
+            ['company_id' => $company->id, 'code' => 'CARTERA'],
+            ['name' => 'Sucursal Cartera', 'is_active' => true]
+        );
+        AccountReceivable::create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'customer_id' => $customer->id,
+            'cobros_route_id' => $route->id,
+            'issued_at' => today($company->timezone),
+            'due_date' => today($company->timezone)->addMonth(),
+            'original_amount' => '5000.0000',
+            'balance_due' => '5000.0000',
+            'status' => AccountReceivable::STATUS_PENDING,
+            'currency_code' => 'CRC',
+        ]);
+
         return $customer;
     }
 
@@ -71,7 +92,7 @@ class CobrosRouteSelectorTest extends TestCase
         $this->actingAs($collector)->withSession(['active_company_id' => $company->id])
             ->get(route('cobros.collector.portfolio'))
             ->assertOk()
-            ->assertDontSee('Seleccione su ruta')
+            ->assertDontSee('¿Qué ruta vamos a trabajar hoy?')
             ->assertSee('Ruta: San Ramón');
 
         $this->assertSame($only->id, (int) session('active_cobros_route_id'));
@@ -88,7 +109,7 @@ class CobrosRouteSelectorTest extends TestCase
             ->assertRedirect(route('cobros.routes.select'));
 
         $this->get(route('cobros.routes.select'))->assertOk()
-            ->assertSee('Seleccione su ruta')->assertSee('San Ramón')->assertSee('Palmares');
+            ->assertSee('¿Qué ruta vamos a trabajar hoy?')->assertSee('San Ramón')->assertSee('Palmares');
 
         $this->post(route('cobros.routes.store'), ['route_id' => $palmares->id])
             ->assertRedirect(route('cobros.collector.portfolio'));
@@ -176,5 +197,119 @@ class CobrosRouteSelectorTest extends TestCase
                 });
             $this->assertNull(session('active_cobros_route_id'));
         }
+    }
+
+    public function test_selector_requires_cobros_cobrar_permission(): void
+    {
+        $company = Company::create(['trade_name' => 'Selector Perm '.uniqid(), 'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica', 'is_active' => true]);
+        $admin = User::factory()->create(['is_platform_admin' => true, 'is_active' => true]);
+        app(CompanyLicenseService::class)->updateModules($company, $admin, ['cobros']);
+        $viewer = $this->member($company, ['cobros.acceder']);
+        $this->routeFor($company, $viewer, 'Solo Ver');
+
+        $this->actingAs($viewer)->withSession(['active_company_id' => $company->id])
+            ->get(route('cobros.routes.select'))
+            ->assertForbidden();
+        $this->post(route('cobros.routes.store'), ['route_id' => 1])
+            ->assertForbidden();
+        $this->assertNull(session('active_cobros_route_id'));
+    }
+
+    public function test_expired_route_license_is_hidden_and_rejected(): void
+    {
+        [$company, $collector] = $this->context();
+        $this->routeFor($company, $collector, 'Vigente');
+        $this->routeFor($company, $collector, 'Vigente 2');
+        $expired = $this->routeFor($company, $collector, 'Vencida');
+        app(CollectorLicenseService::class)->licenseForRoute($expired, $company)
+            ->update(['expires_at' => now()->subDay()]);
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id]);
+        $this->get(route('cobros.routes.select'))->assertOk()
+            ->assertSee('Vigente')->assertDontSee('Vencida');
+        $this->post(route('cobros.routes.store'), ['route_id' => $expired->id])
+            ->assertSessionHasErrors('cobros_route_id');
+        $this->assertNull(session('active_cobros_route_id'));
+    }
+
+    public function test_company_switch_clears_route_and_never_mixes_companies(): void
+    {
+        [$companyA, $collector] = $this->context();
+        $routeA = $this->routeFor($companyA, $collector, 'A Norte');
+        $this->routeFor($companyA, $collector, 'A Sur');
+
+        [$companyB] = $this->context();
+        $roleB = Role::create(['company_id' => $companyB->id, 'name' => 'RolB '.uniqid(), 'is_active' => true]);
+        foreach (['cobros.acceder', 'cobros.cobrar'] as $name) {
+            $permission = Permission::firstOrCreate(['name' => $name], ['label' => $name, 'module' => 'CobrOS', 'is_active' => true]);
+            $roleB->permissions()->attach($permission);
+        }
+        $collector->companies()->attach($companyB->id, ['role_id' => $roleB->id]);
+        $this->routeFor($companyB, $collector, 'B Central');
+        $this->routeFor($companyB, $collector, 'B Este');
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $companyA->id]);
+        $this->post(route('cobros.routes.store'), ['route_id' => $routeA->id])->assertRedirect();
+        $this->assertSame($routeA->id, (int) session('active_cobros_route_id'));
+
+        // 13-2B: cambiar de empresa olvida la ruta anterior (nunca se hereda contexto).
+        $this->post(route('company.switch.store'), ['company_id' => $companyB->id])->assertRedirect();
+        $this->assertNull(session('active_cobros_route_id'));
+        $this->assertSame($companyB->id, (int) session('active_company_id'));
+
+        // El selector lista únicamente rutas de la empresa activa.
+        $this->get(route('cobros.routes.select'))->assertOk()
+            ->assertSee('B Central')->assertSee('B Este')
+            ->assertDontSee('A Norte')->assertDontSee('A Sur');
+    }
+
+    public function test_change_route_keeps_authenticated_session(): void
+    {
+        [$company, $collector] = $this->context();
+        $first = $this->routeFor($company, $collector, 'Primera');
+        $second = $this->routeFor($company, $collector, 'Segunda');
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id]);
+        $this->post(route('cobros.routes.store'), ['route_id' => $first->id])
+            ->assertRedirect(route('cobros.collector.portfolio'));
+        $this->assertAuthenticatedAs($collector);
+        $this->assertSame($first->id, (int) session('active_cobros_route_id'));
+
+        $this->post(route('cobros.routes.store'), ['route_id' => $second->id])
+            ->assertRedirect(route('cobros.collector.portfolio'));
+        $this->assertAuthenticatedAs($collector);
+        $this->assertSame($second->id, (int) session('active_cobros_route_id'));
+        $this->assertSame($company->id, (int) session('active_company_id'));
+
+        $this->get(route('cobros.collector.portfolio'))->assertOk()->assertSee('Ruta: Segunda');
+    }
+
+    public function test_navigation_shows_switch_entry_only_with_multiple_routes(): void
+    {
+        [$company, $collector] = $this->context();
+        $this->routeFor($company, $collector, 'Única Nav');
+
+        // Navegación móvil/bottom bar: sin enlace "Cambiar ruta" con una sola ruta.
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id])
+            ->get(route('cobros.collector.portfolio'))
+            ->assertOk()->assertDontSee(route('cobros.routes.select'));
+
+        $this->routeFor($company, $collector, 'Doble Nav');
+        $this->get(route('cobros.collector.portfolio'))
+            ->assertOk()->assertSee(route('cobros.routes.select'));
+    }
+
+    public function test_selector_renders_large_touch_targets(): void
+    {
+        [$company, $collector] = $this->context();
+        $this->routeFor($company, $collector, 'Táctil A');
+        $this->routeFor($company, $collector, 'Táctil B');
+
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id])
+            ->get(route('cobros.routes.select'))
+            ->assertOk()
+            ->assertSee('¿Qué ruta vamos a trabajar hoy?')
+            ->assertSee('min-h-[56px]');
     }
 }

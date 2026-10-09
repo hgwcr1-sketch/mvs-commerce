@@ -1,9 +1,9 @@
 @extends('cobros.layout')
-@section('title', 'Seleccione su ruta — MVS CobrOS')
+@section('title', '¿Qué ruta vamos a trabajar hoy? — MVS CobrOS')
 @section('content')
 <div class="mx-auto max-w-lg space-y-4">
     <header>
-        <h1 class="text-2xl font-bold text-slate-900">Seleccione su ruta</h1>
+        <h1 class="text-2xl font-bold text-slate-900">¿Qué ruta vamos a trabajar hoy?</h1>
         <p class="mt-1 text-sm text-slate-500">Trabaja dentro de una ruta a la vez. {{ $company->trade_name }}</p>
     </header>
 

@@ -2,6 +2,35 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 14A selector multirruta — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `2aab20ca`, 2 archivos modificados (vista del
+selector + su test). Selector existente conservado, sin reconstruir funcionalidad.
+
+- **Interfaz** `route-select.blade.php`: título/h1 «¿Qué ruta vamos a trabajar hoy?»;
+  subtítulo/lógica intactos, botones `min-h-[56px]`, dorado `#D4AF37`, mobile-first.
+- **Reutiliza sin duplicar:** `CobrosRouteContext` (asignadas+activas+autorizadas+
+  licenciadas), autoselección con 1 ruta / redirect con >1 (`EnsureActiveCobrosRoute`),
+  cambio de ruta sin cerrar sesión (`POST cobros.routes.store`), enlace «Cambiar ruta»
+  solo con >1 rutas (barra móvil incluida).
+- **Evidencia CxC (arreglo de test preexistente):** exclusivamente fixture —
+  `assignmentFor` crea `Branch` + `AccountReceivable` con `balance_due='5000.0000'` y
+  `STATUS_PENDING` (constante ya existente); cero cambios en lógica financiera
+  (`git diff --name-only` = vista + test).
+- **13-2B integrado:** cambiar de empresa olvida `active_cobros_route_id` y el selector
+  lista solo rutas de la empresa activa (nunca mezcla empresas).
+- **Onboarding 16 preparado:** consumirá filas de `cobros_routes` sin tocar el selector.
+
+**Pruebas:** `CobrosRouteSelectorTest` 12/12 (93 aserciones: auto-selección,
+selector+persistencia, aislamiento de cartera por ruta, permisos 403, licencia
+expirada, cambio de empresa, cambio de ruta autenticado, enlace de navegación móvil,
+targets táctiles). Focales ya verdes: `CompanySwitchTest` 7/7 (68),
+`CobrosQuickNavTest` 4/4 (30), `ResponsiveNavigationTest` 11/11 (47 — exigió
+`php artisan storage:link` por symlink `public/storage` faltante, fallo ambiental
+preexistente). `view:cache` y `git diff --check` OK. Regresión amplia `--filter Cobros`
+(671 tests) cancelada por límite de tiempo del cierre — pendiente de corrida completa.
+Sin push/merge/reset/stash; temporales preservados. No iniciar 14B.
+
 ## Bloque 13-2B cambio seguro de empresa/prestamista — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `189558c0`, 7 archivos (4 nuevos: servicio,
