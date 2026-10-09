@@ -2,6 +2,34 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 15A arquitectura geográfica internacional — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `e40de0a`. 5 archivos nuevos + docs
+(migración aditiva, config, 2 modelos, seeder, test). Sin importación masiva
+ni cambios en cálculos, impuestos, préstamos, pagos o licencias.
+
+- **Catálogo versionable:** `geo_catalog_levels` (país, nivel, nombre,
+  `parent_level`, activo) y `geo_divisions` (país, padre auto-FK, nivel, código
+  oficial, nombre, `catalog_version`, activo) con única `(país, código)`.
+  Validaciones en `GeoDivision`: nivel configurado por país, padre del nivel
+  inmediato superior y mismo país, raíz solo nivel 1.
+- **Configurable vía `config/geography.php`:** CR, NI, PA, GT, SV, HN, CO, MX,
+  DO, VE; niveles variables por país (CR/CO/VE de 3; resto de 2) — sin
+  profundidad obligatoria. `GeoCatalogSeeder` aplica la configuración con
+  `updateOrCreate` (idempotente, sin truncate) y mantiene CR único predeterminado.
+- **Compatibilidad:** cero archivos trackeados modificados; tablas/modelos/rutas
+  legacy (`countries/provinces/cantons/districts`, direcciones de clientes)
+  intactos y verificados por prueba; los 9 países nuevos se agregan sin tocar filas existentes.
+
+**Pruebas:** `GeoCatalogArchitecture15ATest` 6/6 (120: configuración, niveles
+variables, jerarquías sin tercera obligatoria, versionado, aislamiento por país,
+compatibilidad con datos CR). Regresión geo: `CustomerOnboardingAndBranchesTest`
+7/9 — 2 fallos PREEXISTENTES ajenos (`User::hasPermission()` con company null
+en `header.blade.php`, sin relación con 15A). `git diff --check` OK.
+Riesgos: divisiones legadas (provincias/cantones) conviven con el nuevo
+catálogo hasta su eventual adopción; importadores masivos quedan pendientes.
+Sin push/merge/reset/stash.
+
 ## Bloque 14B fase 2 recibos de ruta desconocida — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `32298f55`, 4 archivos (controlador de pagos,
