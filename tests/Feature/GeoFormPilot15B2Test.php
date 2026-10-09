@@ -189,6 +189,26 @@ class GeoFormPilot15B2Test extends TestCase
         $this->assertSame($leaf->id, $legacy->fresh()->geo_division_id);
     }
 
+    public function test_component_blade_includes_responsive_markup_and_js_hooks(): void
+    {
+        $this->seedGeo();
+        $this->import('CR');
+        view()->share('errors', new \Illuminate\Support\ViewErrorBag());
+
+        $this->blade('<x-geo.division-cascade country="CR" />')
+            ->assertSee('id="geo-cascade"', false)
+            ->assertSee('md:grid-cols-2', false)
+            ->assertSee('min-height:44px', false)
+            ->assertSee('data-level', false)
+            ->assertSee('/geo/divisiones', false)
+            ->assertSee('geo_country_iso', false);
+
+        $this->blade('<x-geo.country-select />')
+            ->assertSee('min-height:44px', false)
+            ->assertSee('geo-localization-hint', false)
+            ->assertSee('geo_country_iso', false);
+    }
+
     private function context(): array
     {
         $company = Company::create([

@@ -2,6 +2,34 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 15B-2 fase 2 consolidación internacional — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `2d33bfe5`. Validación visual/funcional
+del componente geo de Clientes en **360 / 768 / 1280 px** con harness CDP
+(Chrome headless, fixture Blade renderizada + endpoint real): **21/21 checks
+verdes** — sin overflow horizontal, 10 países, etiquetas CR adaptativas,
+cambio de país → cascada CO reconstruida con selección dependiente real
+(33 departamentos → 125 municipios de Antioquia), aviso y sin input para VE,
+aviso con país vacío, hint de localización (moneda/prefijo/identificación).
+
+- **Corrección única probada:** selects del componente con `min-height:44px`
+  (3 rutas de render: country-select, cascada server-side y JS dinámico) —
+  los 4 selects quedaban bajo el mínimo táctil de 40px en los tres anchos.
+- **Cobertura real por país:** CR 583 divisiones (7/84/492) y CO 1155
+  (33/1122) con fuente/versionada (15B-1). **8 países sin catálogo: NI, PA,
+  GT, SV, HN, MX, DO, VE** — el formulario muestra aviso y no ofrece opciones;
+  importación reutilizable preparada, fuentes pendientes de verificar.
+- **Pendientes:** ejecutar importación de los 8 países al conseguir fuentes
+  oficiales; considerar `npm run build` si se migran estilos a utilidades
+  Tailwind (hoy min-height inline); JS validado con dobles de endpoint (la
+  app real usa el endpoint vivo).
+
+**Pruebas:** `GeoFormPilot15B2Test` 7/7 (69: + marcado responsive/hooks JS);
+regresiones 15A 6/6, 15B-1 6/6 y `CustomerCodeTest` 9/9 verdes en fases
+previas de este bloque. `git diff --check` OK. Temporales propios
+`tmp_15b2_geo_render.php` y `tmp_15b2_geo_browser.cjs` preservados sin commitear.
+Sin push/merge/reset/stash; sin onboarding, licencias ni referidos.
+
 ## Bloque 15B-2 fase 1 formularios internacionales — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `130511fe`. Piloto: formulario de

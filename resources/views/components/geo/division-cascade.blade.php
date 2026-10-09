@@ -19,7 +19,8 @@
                         id="geo-div-{{ $level['level'] }}"
                         data-level="{{ $level['level'] }}"
                         @if($loop->last) name="geo_division_id" @endif
-                        class="form-select">
+                        class="form-select"
+                        style="min-height:44px">
                         <option value="">Seleccione...</option>
                         @foreach($optionsByLevel[$level['level']] ?? [] as $option)
                             <option
@@ -81,6 +82,7 @@
                 label.textContent = level.name;
                 var sel = document.createElement('select');
                 sel.className = 'form-select';
+                sel.style.minHeight = '44px';
                 sel.id = 'geo-div-' + level.level;
                 sel.setAttribute('data-level', level.level);
                 sel.innerHTML = '<option value="">Seleccione...</option>';

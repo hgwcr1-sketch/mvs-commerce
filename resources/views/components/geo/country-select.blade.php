@@ -1,5 +1,5 @@
 <div>
-    <x-select name="geo_country_iso" label="País (catálogo internacional)">
+    <x-select name="geo_country_iso" label="País (catálogo internacional)" style="min-height:44px">
         <option value="">Seleccione...</option>
         @foreach($countries as $country)
             <option
