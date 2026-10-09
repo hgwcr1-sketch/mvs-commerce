@@ -162,6 +162,12 @@ Route::post('/registro-cobros/pais-modalidad', App\Http\Controllers\Cobros\Publi
     ->middleware('throttle:10,1')->name('cobros.register.country');
 Route::post('/registro-cobros/datos-personales', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storePersonalData')
     ->middleware('throttle:10,1')->name('cobros.register.personal');
+Route::post('/registro-cobros/rutas/guardar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@saveRoute')
+    ->middleware('throttle:10,1')->name('cobros.register.routes.save');
+Route::post('/registro-cobros/rutas/eliminar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@removeRoute')
+    ->middleware('throttle:10,1')->name('cobros.register.routes.remove');
+Route::post('/registro-cobros/cartera', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storePortfolioPlan')
+    ->middleware('throttle:10,1')->name('cobros.register.portfolio');
 
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {

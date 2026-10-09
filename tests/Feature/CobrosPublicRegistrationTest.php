@@ -34,7 +34,8 @@ class CobrosPublicRegistrationTest extends TestCase
             ->assertSee('Datos personales')
             ->assertSee('Revisión')
             ->assertSee('name="_token"', false)
-            ->assertSee('sm:grid-cols-4', false)
+            ->assertSee('sm:grid-cols-5', false)
+            ->assertSee('Rutas')
             ->assertSee('content="#D4AF37"', false);
 
         foreach (CobrosModalityCatalog::all() as $key => $definition) {
@@ -95,13 +96,20 @@ class CobrosPublicRegistrationTest extends TestCase
         $this->assertSame('María Fernández', $personal['name']);
         $this->assertSame('maria.registro@test.com', $personal['email']);
 
-        $review = $this->get(route('cobros.register.step', ['paso' => 3]));
-        $review->assertOk()->assertViewIs('cobros.register.step3')
+        $this->get(route('cobros.register.step', ['paso' => 4]))
+            ->assertRedirect(route('cobros.register.step', ['paso' => 3]));
+
+        $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'manual'])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
+
+        $review = $this->get(route('cobros.register.step', ['paso' => 4]));
+        $review->assertOk()->assertViewIs('cobros.register.step4')
             ->assertSee('María Fernández')
             ->assertSee('maria.registro@test.com')
             ->assertSee('8888-1111')
             ->assertSee('Costa Rica')
             ->assertSee('Prestamista')
+            ->assertSee('Registro manual')
             ->assertSee('no se genera ningún acceso')
             ->assertSee('aria-disabled="true"', false);
 
@@ -151,6 +159,13 @@ class CobrosPublicRegistrationTest extends TestCase
 
         $this->get(route('cobros.register.step', ['paso' => 3]))
             ->assertOk()
+            ->assertSee('Colombia');
+
+        $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'none'])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
+
+        $this->get(route('cobros.register.step', ['paso' => 4]))
+            ->assertOk()
             ->assertSee('Colombia')
             ->assertSee('Corrected Name');
         $this->assertSame('CO', session('cobros.registration')['country_iso']);
@@ -169,7 +184,10 @@ class CobrosPublicRegistrationTest extends TestCase
         $referral = session('cobros.referral');
         $this->assertSame('REF-abc_12345', $referral['code']);
 
-        $review = $this->get(route('cobros.register.step', ['paso' => 3]));
+        $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'none'])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
+
+        $review = $this->get(route('cobros.register.step', ['paso' => 4]));
         $review->assertOk()
             ->assertSee('Capturada automáticamente')
             ->assertDontSee('REF-abc_12345');
@@ -189,11 +207,15 @@ class CobrosPublicRegistrationTest extends TestCase
             'email' => 'sinacceso@test.com',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
-        $this->get(route('cobros.register.step', ['paso' => 3]))->assertOk();
+        $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'manual'])
+            ->assertRedirect(route('cobros.register.step', ['paso' => 4]));
+        $this->get(route('cobros.register.step', ['paso' => 4]))->assertOk();
         $this->assertGuest();
         $this->assertDatabaseCount('users', 0);
         $this->assertDatabaseCount('companies', 0);
         $this->assertDatabaseCount('company_licenses', 0);
+        $this->assertDatabaseCount('cobros_routes', 0);
+        $this->assertDatabaseCount('customers', 0);
 
         $this->get(route('cobros.login'))->assertOk();
         $this->get('/bienvenida-cobros')->assertOk();
