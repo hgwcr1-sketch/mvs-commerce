@@ -179,10 +179,17 @@ class CollectorPaymentController extends Controller
         $model = CobrosReceipt::query()->forCompany($company->id)->where('receipt_number', $receipt)->firstOrFail();
 
         $user = $request->user();
-        $mayRead = (int) $model->collector_user_id === (int) $user->id
-            || $user->hasPermission('cobros.portal_dueno', $company)
+        $administrative = $user->hasPermission('cobros.portal_dueno', $company)
             || $user->hasPermission('cobros.anular', $company);
+        $mayRead = (int) $model->collector_user_id === (int) $user->id
+            || $administrative;
         abort_unless($mayRead, 404);
+
+        // 14B: el cobrador solo lee recibos de su ruta activa; el portal
+        // administrativo conserva consulta de varias rutas autorizadas.
+        $routeId = (int) session('active_cobros_route_id', 0);
+        abort_if(! $administrative && $routeId > 0 && $model->cobros_route_id !== null
+            && (int) $model->cobros_route_id !== $routeId, 404);
 
         return [$company, $model];
     }
@@ -213,11 +220,14 @@ class CollectorPaymentController extends Controller
     public function history(Request $request): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
+        $routeId = (int) session('active_cobros_route_id', 0);
 
         return view('cobros.collector.payments-history', [
             'company' => $company,
             'receipts' => CobrosReceipt::query()->forCompany($company->id)
                 ->where('collector_user_id', $request->user()->id)
+                ->when($routeId > 0, fn ($q) => $q->where(fn ($w) => $w
+                    ->whereNull('cobros_route_id')->orWhere('cobros_route_id', $routeId)))
                 ->with(['customer', 'paymentMethod'])
                 ->orderByDesc('paid_at')->orderByDesc('id')
                 ->paginate(20),

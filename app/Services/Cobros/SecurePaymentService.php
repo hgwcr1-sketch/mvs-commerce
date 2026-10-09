@@ -113,6 +113,7 @@ class SecurePaymentService
                     'customer_id' => $account->customer_id,
                     'account_receivable_id' => $account->id,
                     'collector_user_id' => $collector->id,
+                    'cobros_route_id' => (int) session('active_cobros_route_id', 0) ?: null,
                     'payment_method_id' => $method->id,
                     'cobros_visit_id' => $visit?->id,
                     'amount' => $amount,

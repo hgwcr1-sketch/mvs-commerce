@@ -197,9 +197,14 @@ class VisitService
     private function assertAssignedCustomer(User $collector, Company $company, Customer $customer): void
     {
         $sameCompany = (int) $customer->company_id === (int) $company->id;
+        // 14B: con ruta activa, la visita solo opera clientes de esa ruta (o sin ruta).
+        $routeId = (int) session('active_cobros_route_id', 0);
         $assigned = $sameCompany && \App\Models\CobrosAssignment::query()->forCompany($company->id)
             ->where('collector_user_id', $collector->id)
             ->where('customer_id', $customer->id)
+            ->when($routeId > 0, fn ($q) => $q->where(fn ($w) => $w
+                ->where('cobros_route_id', $routeId)
+                ->orWhereNull('cobros_route_id')))
             ->exists();
 
         abort_unless($assigned, 404);
@@ -212,6 +217,18 @@ class VisitService
             && (int) $visit->collector_user_id === (int) $collector->id,
             404
         );
+
+        // 14B: la visita de un cliente de otra ruta queda fuera del alcance
+        // mientras esa ruta no sea la activa (URL o peticion manipulada).
+        $routeId = (int) session('active_cobros_route_id', 0);
+        if ($routeId > 0) {
+            $onActiveRoute = \App\Models\CobrosAssignment::query()->forCompany($company->id)
+                ->where('collector_user_id', $collector->id)
+                ->where('customer_id', $visit->customer_id)
+                ->where(fn ($q) => $q->where('cobros_route_id', $routeId)->orWhereNull('cobros_route_id'))
+                ->exists();
+            abort_unless($onActiveRoute, 404);
+        }
     }
 
     private function assertStatus(string $status, array $data): void

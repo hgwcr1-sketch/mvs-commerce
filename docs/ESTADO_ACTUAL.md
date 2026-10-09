@@ -2,6 +2,33 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 14B fase 1 aislamiento por ruta activa — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `144f8f24`, 6 archivos (5 modificados + test
+nuevo). Sin onboarding, licencias nuevas, Panel Maestro ni lógica financiera ajena.
+
+- **Auditoría:** cartera, detalle de cliente (`assignmentExists`), agenda y créditos
+  (`findOrFailRequest`) YA filtraban por ruta activa — intactos.
+- **Correcciones de filtrado faltante (reutilizando el patrón ruta OR nula):**
+  - `CobrosPaymentGate::evaluate` — con ruta activa, cobro (pantalla/confirmación)
+    solo si el cliente está asignado a esa ruta; respuesta 404 segura.
+  - `VisitService::assertAssignedCustomer/assertOwnVisit` — historial, programar,
+    gestionar y reprogramar visitas solo de la ruta activa (404).
+  - `SecurePaymentService` — estampa `cobros_route_id` en el recibo al cobrar.
+  - `CollectorPaymentController` — historial de recibos filtrado por ruta; lectura
+    directa de recibo ajeno a la ruta activa => 404 (portal dueño/anular conserva
+    varias rutas).
+  - `CollectorCreditController::disburse` — entrega de préstamo de otra ruta => 403.
+- **Pertenencia intacta:** solo se agregan lecturas de `active_cobros_route_id`;
+  ninguna escritura modifica `cobros_assignments` ni datos financieros.
+
+**Pruebas:** `CobrosRouteIsolation14BTest` 4/4 (24: pago por URL directa 404 +
+regresión 200 + pertenencia intacta, visitas con cambio de ruta, recibos por ruta +
+legado visible, permisos 403). Regresiones: `CobrosPaymentGateTest` 18/18 (85),
+`CobrosVisitTest` 9/9 (55), `CobrosRouteSelectorTest` 12/12 (93). `git diff --check`
+OK. Pendiente: suites de pagos/end-to-end amplias y fase 2 de 14B. Sin
+push/merge/reset/stash; temporales preservados.
+
 ## Bloque 14A selector multirruta — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, HEAD previo `2aab20ca`, 2 archivos modificados (vista del

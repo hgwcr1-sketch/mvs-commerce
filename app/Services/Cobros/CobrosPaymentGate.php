@@ -61,6 +61,21 @@ class CobrosPaymentGate
         // desde cualquier sucursal de la empresa mientras se cumplan las demás
         // reglas.
 
+        // 3b. Ruta activa (14B): iniciar/confirmar cobro solo dentro de la ruta
+        // seleccionada, aunque el cliente esté asignado al mismo cobrador en otra
+        // ruta. Sin ruta en sesión no se aplica (portal administrativo/owner).
+        $activeRoute = (int) session('active_cobros_route_id', 0);
+        if ($activeRoute > 0 && ! CobrosAssignment::query()->forCompany($company->id)
+            ->where('collector_user_id', $collector->id)
+            ->where('customer_id', $customer->id)
+            ->where(fn ($q) => $q->where('cobros_route_id', $activeRoute)->orWhereNull('cobros_route_id'))
+            ->exists()) {
+            return PaymentGateDecision::denied(
+                PaymentGateDecision::CUSTOMER_NOT_ASSIGNED,
+                'Este cliente pertenece a otra ruta.'
+            );
+        }
+
         // 5. Cuenta pagada o cancelada: no admite cobro.
         if (in_array($account->status, [AccountReceivable::STATUS_PAID, AccountReceivable::STATUS_CANCELLED], true)) {
             return PaymentGateDecision::denied(

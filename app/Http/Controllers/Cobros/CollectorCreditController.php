@@ -201,6 +201,12 @@ class CollectorCreditController extends OwnerCreditController
             abort(403, 'Este préstamo no le pertenece.');
         }
 
+        // 14B: con ruta activa, la entrega solo procede si el prestamo es de esa ruta.
+        $activeRoute = (int) session('active_cobros_route_id', 0);
+        if ($activeRoute !== 0 && $row->cobros_route_id !== null && (int) $row->cobros_route_id !== $activeRoute) {
+            abort(403, 'Este prestamo pertenece a otra ruta.');
+        }
+
         $delivery->confirm($this->company(), $row, $request->user(), $request->input('signature'));
 
         return redirect()
