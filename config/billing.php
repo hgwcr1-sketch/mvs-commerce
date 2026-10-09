@@ -37,6 +37,8 @@ return [
         'secret_key_live' => env('STRIPE_LIVE_SECRET_KEY'),
         'publishable_key_test' => env('STRIPE_TEST_PUBLISHABLE_KEY'),
         'publishable_key_live' => env('STRIPE_LIVE_PUBLISHABLE_KEY'),
+        'webhook_secret_test' => env('STRIPE_WEBHOOK_SECRET_TEST'),
+        'webhook_secret_live' => env('STRIPE_WEBHOOK_SECRET_LIVE'),
     ],
 
     /*
