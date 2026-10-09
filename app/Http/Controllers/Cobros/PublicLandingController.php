@@ -23,6 +23,17 @@ class PublicLandingController extends Controller
 
     public function __invoke(Request $request): View
     {
+        self::captureReferral($request);
+
+        return view('cobros.public-landing');
+    }
+
+    /**
+     * Captura ?ref= en sesión si respeta el formato permitido. Compartido con
+     * el registro público: conserva la referencia sin exponerla ni premiarla.
+     */
+    public static function captureReferral(Request $request): void
+    {
         $ref = $request->query('ref');
 
         if (is_string($ref) && preg_match(self::REFERRAL_PATTERN, $ref) === 1) {
@@ -31,7 +42,5 @@ class PublicLandingController extends Controller
                 'captured_at' => now()->toIso8601String(),
             ]);
         }
-
-        return view('cobros.public-landing');
     }
 }

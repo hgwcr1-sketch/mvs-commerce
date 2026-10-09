@@ -152,6 +152,17 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
+// BLOQUE 16A-2B f1 - registro público CobrOS: wizard en sesión, sin alta,
+// licencia ni acceso operativo hasta pago confirmado (fase posterior).
+Route::get('/registro-cobros', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@start')
+    ->name('cobros.register');
+Route::get('/registro-cobros/paso', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@show')
+    ->name('cobros.register.step');
+Route::post('/registro-cobros/pais-modalidad', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storeCountryModality')
+    ->middleware('throttle:10,1')->name('cobros.register.country');
+Route::post('/registro-cobros/datos-personales', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storePersonalData')
+    ->middleware('throttle:10,1')->name('cobros.register.personal');
+
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
     Route::middleware([RedirectIfAuthenticated::class, 'cobros.entry'])->group(function () {

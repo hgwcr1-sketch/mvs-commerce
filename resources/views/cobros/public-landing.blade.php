@@ -9,15 +9,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-black text-white antialiased">
-    <header class="border-b border-white">
-        <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-            <div class="flex items-center gap-3">
-                <img src="{{ asset('images/logo-mvs-cobros.png') }}" alt="MVS CobrOS" class="h-10 w-auto" width="160" height="40">
-                <span class="text-lg font-bold">MVS CobrOS</span>
-            </div>
-            <a href="{{ route('cobros.login') }}" class="inline-flex min-h-11 items-center rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary-hover hover:text-white">Iniciar sesión</a>
-        </div>
-    </header>
+    @include('cobros.public-header')
 
     <main>
         <section class="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6">
@@ -33,7 +25,7 @@
                     <h2 class="mt-2 text-xl font-bold">Registrarse</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Cree su espacio de trabajo y configure su operación de cobranza paso a paso.</p>
                     <div class="mt-auto pt-5">
-                        <button type="button" disabled aria-disabled="true" class="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-xl border border-black px-4 py-3 text-sm font-bold text-black">Próximamente</button>
+                        <a href="{{ route('cobros.register') }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-bold text-black transition hover:bg-primary-hover hover:text-white">Registrarse</a>
                     </div>
                 </article>
 

@@ -16,7 +16,7 @@ class CobrosPublicLandingTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_landing_shows_three_ctas_with_coming_soon_and_login_access(): void
+    public function test_landing_shows_ctas_with_registration_login_and_coming_soon(): void
     {
         $response = $this->get(self::LANDING);
         $content = $response->getContent();
@@ -26,11 +26,12 @@ class CobrosPublicLandingTest extends TestCase
             ->assertSee('Probar demo')
             ->assertSee('Ver videos')
             ->assertSee('Iniciar sesión')
+            ->assertSee('href="'.route('cobros.register').'"', false)
             ->assertSee('href="'.route('cobros.login').'"', false)
             ->assertDontSee('href="'.route('login').'"', false);
 
-        $this->assertSame(3, substr_count($content, 'Próximamente'), 'Cada CTA pendiente debe indicar Próximamente');
-        $this->assertSame(3, substr_count($content, 'aria-disabled="true"'), 'Los CTA pendientes no deben ser acciones activas');
+        $this->assertSame(2, substr_count($content, 'Próximamente'), 'Solo los CTA sin ruta propia indican Próximamente');
+        $this->assertSame(2, substr_count($content, 'aria-disabled="true"'), 'Solo los CTA sin ruta propia quedan inactivos');
     }
 
     public function test_landing_lists_only_available_countries_with_enablement_note(): void
