@@ -14,6 +14,8 @@ final class CobrosActivationContract
 {
     public const STATUS_PENDING_PAYMENT = 'pending_payment';
 
+    public const STATUS_ACTIVE = 'active';
+
     /**
      * @param  list<array{draft_route_id: string, name: string, code: ?string, lender: ?string, uploads: list<array<string, mixed>>}>  $routes
      * @param  array{invitation_id: int, company_id: int, lender_user_id: int, lender_email: string, lender_name: string, recipient_email: string}|null  $linkage
@@ -48,5 +50,22 @@ final class CobrosActivationContract
             'linkage' => $this->linkage,
             'referral' => $this->referral,
         ];
+    }
+
+    /** Copia con el pago confirmado (inmutable: devuelve una nueva instancia). */
+    public function withPaymentConfirmed(): self
+    {
+        return new self(
+            idempotencyKey: $this->idempotencyKey,
+            draftId: $this->draftId,
+            email: $this->email,
+            countryIso: $this->countryIso,
+            modality: $this->modality,
+            status: self::STATUS_ACTIVE,
+            paymentConfirmed: true,
+            routes: $this->routes,
+            linkage: $this->linkage,
+            referral: $this->referral,
+        );
     }
 }

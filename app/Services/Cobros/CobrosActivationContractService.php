@@ -4,34 +4,44 @@ namespace App\Services\Cobros;
 
 use App\Models\CobrosLaborInvitation;
 use App\Models\CobrosRegistrationDraft;
+use App\Models\CobrosRoute;
+use App\Models\Company;
+use App\Models\User;
+use App\Services\CompanyProvisioner;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * BLOQUE 16C-2B f2 — servicio transaccional de la activación futura.
+ * BLOQUE 16C-2B f2 + 17A-2 f2 — servicio transaccional de la activación.
  *
- * Prepara (solo lectura) el contrato que el bloque 17 ejecutará después de la
- * confirmación de pago, y prepara el consumo ATÓMICO de la invitación laboral.
+ * Prepara (solo lectura) el contrato de un borrador listo, y lo EJECUTA
+ * después de una confirmación de pago válida (17A-2 f2).
  *
  * Reglas:
  *  - Reutiliza CobrosRegistrationActivationService (validación + plan +
  *    clave idempotente por borrador) y LaborInvitationService (vigencia,
  *    destinatario y prestamista) sin reconstruirlos.
- *  - execute() está bloqueado hasta la confirmación de pago: NO aprovisiona
- *    empresas, usuarios, membresías, rutas ni licencias en esta fase.
+ *  - execute() SOLO aprovisiona cuando el contrato trae pago confirmado;
+ *    sin pago lanza el error controlado SIN escribir.
+ *  - La activación es idempotente por idempotencyKey: un reintento del
+ *    mismo borrador no duplica usuarios, empresas, rutas ni licencias.
  *  - consumeInvitation() es atómica (update condicional con used_at IS NULL)
  *    e idempotente para reintentos del MISMO borrador; cualquier otro intento
  *    de reutilización, y toda invitación vencida o revocada, se rechaza.
- *  - Una sola cuenta por cobrador: el contrato no crea usuarios; el correo ya
- *    registrado se rechaza aguas arriba (16C-1) y un cobrador con varios
- *    prestamistas conserva su borrador/correo único, con rutas y carteras
- *    aisladas por prestamista.
+ *  - La invitación laboral se consume SOLO después de confirmar el pago.
+ *  - Si el aprovisionamiento falla, la transacción revierte: el pago
+ *    confirmado NO se pierde y el estado queda recuperable para reintento.
  */
 class CobrosActivationContractService
 {
     public function __construct(
         private CobrosRegistrationActivationService $activation,
         private LaborInvitationService $invitations,
+        private CompanyProvisioner $provisioner,
+        private CobrosModalityService $modalityService,
+        private CollectorLicenseService $collectorLicenses,
     ) {
     }
 
@@ -78,12 +88,11 @@ class CobrosActivationContractService
     }
 
     /**
-     * Punto único de entrada de la activación real. Bloqueado hasta que el
-     * bloque 17 confirme el pago: lanza el error controlado SIN escribir.
-     *
-     * @return never
+     * Punto único de entrada de la activación real. Solo ejecuta cuando el
+     * contrato trae pago confirmado; sin pago lanza el error controlado SIN
+     * escribir. La activación es idempotente por idempotencyKey.
      */
-    public function execute(CobrosActivationContract $contract): void
+    public function execute(CobrosActivationContract $contract): array
     {
         if (! $contract->paymentConfirmed) {
             throw ValidationException::withMessages([
@@ -91,6 +100,164 @@ class CobrosActivationContractService
                     .'todavía no se ha aprobado ninguna cuenta.',
             ]);
         }
+
+        $draft = CobrosRegistrationDraft::find($contract->draftId);
+        if ($draft === null) {
+            throw ValidationException::withMessages(['draft' => 'El borrador de registro ya no existe.']);
+        }
+
+        return DB::transaction(function () use ($contract, $draft) {
+            // Idempotencia: un reintento del MISMO borrador no duplica nada.
+            $existing = $this->findAlreadyActivated($draft);
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            // La invitación laboral se consume SOLO después del pago.
+            $linkage = null;
+            if ($contract->linkage !== null) {
+                $consumed = $this->consumeInvitation($draft);
+                $linkage = [
+                    'company_id' => $consumed['company_id'],
+                    'lender_user_id' => $consumed['lender_user_id'],
+                ];
+            }
+
+            // Aprovisionamiento: empresa + usuario + membresía + modalidad + ruta.
+            $result = $this->provision($contract, $draft, $linkage);
+
+            return $result;
+        });
+    }
+
+    /**
+     * Aprovisiona la cuenta del cobrador según la modalidad:
+     *  - cobrador_vinculado: se une a la empresa del prestamista (linkage).
+     *  - cobrador_independiente / prestamista: crea su propia empresa.
+     *
+     * @return array{user: User, company: Company, route: CobrosRoute}
+     */
+    private function provision(CobrosActivationContract $contract, CobrosRegistrationDraft $draft, ?array $linkage): array
+    {
+        $payload = is_array($draft->payload) ? $draft->payload : [];
+        $personal = is_array($payload['personal'] ?? null) ? $payload['personal'] : [];
+
+        $name = trim((string) ($personal['name'] ?? ''));
+        $email = trim((string) ($personal['email'] ?? $draft->email));
+        $phone = $personal['phone'] ?? null;
+
+        if ($linkage !== null) {
+            // Cobrador vinculado: empresa ya existe del prestamista.
+            $company = Company::findOrFail($linkage['company_id']);
+            $user = $this->findOrCreateUser($name, $email, $phone);
+
+            // Asegura la membresía ANTES de asignar modalidad.
+            $user->companies()->syncWithoutDetaching([$company->id]);
+
+            $this->modalityService->assign($company, $user, $contract->modality);
+
+            $route = $this->createRoute($company, $contract->routes[0] ?? null);
+
+            $this->collectorLicenses->grantIfMissing($user, $company);
+
+            return ['user' => $user, 'company' => $company, 'route' => $route];
+        }
+
+        // Independiente / prestamista: crea su propia empresa.
+        $user = User::create([
+            'name' => $name,
+            'email' => $email,
+            'password' => Hash::make(Str::random(32)),
+            'phone' => $phone,
+            'is_active' => true,
+        ]);
+
+        $company = $this->provisioner->provision(
+            $user,
+            [
+                'trade_name' => $name."'s Cartera",
+                'currency' => $contract->countryIso === 'CO' ? 'COP' : 'CRC',
+                'timezone' => $contract->countryIso === 'CO' ? 'America/Bogota' : 'America/Costa_Rica',
+            ],
+            'Principal',
+            'PRINCIPAL',
+            1,
+            [],
+            ['cobros'],
+        );
+
+        $this->modalityService->assign($company, $user, $contract->modality);
+
+        $route = $this->createRoute($company, $contract->routes[0] ?? null);
+
+        $this->collectorLicenses->grantIfMissing($user, $company);
+
+        return ['user' => $user, 'company' => $company, 'route' => $route];
+    }
+
+    /** Usuario existente por correo, o lo crea. Una sola cuenta por cobrador. */
+    private function findOrCreateUser(string $name, string $email, ?string $phone): User
+    {
+        $existing = User::where('email', $email)->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return User::create([
+            'name' => $name,
+            'email' => $email,
+            'password' => Hash::make(Str::random(32)),
+            'phone' => $phone,
+            'is_active' => true,
+        ]);
+    }
+
+    /** Crea la ruta del borrador en la empresa (una sola por cobrador). */
+    private function createRoute(Company $company, ?array $routeData): CobrosRoute
+    {
+        $name = trim((string) ($routeData['name'] ?? 'Ruta Principal'));
+
+        $existing = CobrosRoute::forCompany($company->id)->where('name', $name)->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return CobrosRoute::create([
+            'company_id' => $company->id,
+            'name' => $name,
+            'active' => true,
+        ]);
+    }
+
+    /** Verifica si el borrador ya fue activado (reintento). Público para la orquestación. */
+    public function findAlreadyActivatedPublic(CobrosRegistrationDraft $draft): ?array
+    {
+        return $this->findAlreadyActivated($draft);
+    }
+
+    /**
+     * Verifica si el borrador ya fue activado (reintento). Devuelve el
+     * resultado previo o null si aún no se activó.
+     */
+    private function findAlreadyActivated(CobrosRegistrationDraft $draft): ?array
+    {
+        $payload = is_array($draft->payload) ? $draft->payload : [];
+        $personal = is_array($payload['personal'] ?? null) ? $payload['personal'] : [];
+        $email = trim((string) ($personal['email'] ?? $draft->email));
+
+        $user = User::where('email', $email)->first();
+        if ($user === null) {
+            return null;
+        }
+
+        $company = $user->companies()->first();
+        if ($company === null) {
+            return null;
+        }
+
+        $route = CobrosRoute::forCompany($company->id)->first();
+
+        return ['user' => $user, 'company' => $company, 'route' => $route];
     }
 
     /**
