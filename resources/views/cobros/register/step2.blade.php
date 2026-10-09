@@ -49,6 +49,8 @@
                     <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 py-3 font-bold text-black transition hover:bg-primary-hover hover:text-white">Continuar a rutas</button>
                 </div>
             </form>
+
+            <p class="mt-5 text-center text-xs leading-5 text-slate-600"><a href="{{ route('cobros.register.recover') }}" class="font-bold underline">¿Perdió su progreso? Recupere su borrador por correo</a></p>
         </section>
     </main>
 

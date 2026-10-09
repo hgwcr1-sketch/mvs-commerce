@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Cobros;
 
 use App\Http\Controllers\Controller;
+use App\Models\CobrosRegistrationDraft;
+use App\Notifications\RegistrationDraftRecovery;
 use App\Services\Cobros\CobrosModalityCatalog;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -29,6 +33,9 @@ class PublicRegistrationController extends Controller
     public const ROUTES_STEP = 3;
 
     public const MAX_DRAFT_ROUTES = 20;
+
+    /** Vigencia del enlace de recuperación de borrador (un solo uso). */
+    public const RECOVERY_TTL_MINUTES = 60;
 
     /** Países habilitados inicialmente. Los demás se habilitarán después. */
     public const AVAILABLE_COUNTRIES = [
@@ -119,6 +126,7 @@ class PublicRegistrationController extends Controller
             'modality' => $data['modality'],
             'updated_at' => now()->toIso8601String(),
         ]));
+        $this->persistDraft();
 
         return redirect()->route('cobros.register.step', ['paso' => 2]);
     }
@@ -145,6 +153,7 @@ class PublicRegistrationController extends Controller
             ],
             'updated_at' => now()->toIso8601String(),
         ]));
+        $this->persistDraft();
 
         return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
     }
@@ -201,6 +210,7 @@ class PublicRegistrationController extends Controller
         $registration['routes'] = $routes;
         $registration['updated_at'] = now()->toIso8601String();
         $request->session()->put(self::SESSION_KEY, $registration);
+        $this->persistDraft();
 
         return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
     }
@@ -221,6 +231,7 @@ class PublicRegistrationController extends Controller
         $registration['routes'] = $routes;
         $registration['updated_at'] = now()->toIso8601String();
         $request->session()->put(self::SESSION_KEY, $registration);
+        $this->persistDraft();
 
         return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
     }
@@ -241,8 +252,136 @@ class PublicRegistrationController extends Controller
         $registration['portfolio_plan'] = $data['portfolio_plan'];
         $registration['updated_at'] = now()->toIso8601String();
         $request->session()->put(self::SESSION_KEY, $registration);
+        $this->persistDraft();
 
         return redirect()->route('cobros.register.step', ['paso' => self::REVIEW_STEP]);
+    }
+
+    public function showRecover(): View
+    {
+        return view('cobros.register.recover');
+    }
+
+    /**
+     * Emite un enlace temporal de un solo uso al correo del borrador.
+     * Respuesta genérica para no revelar si el correo existe.
+     */
+    public function storeRecover(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email:rfc', 'max:150'],
+        ]);
+
+        $draft = CobrosRegistrationDraft::where('email', $data['email'])->first();
+
+        if ($draft !== null) {
+            $token = Str::random(64);
+
+            $draft->update([
+                'token_hash' => hash('sha256', $token),
+                'token_expires_at' => now()->addMinutes(self::RECOVERY_TTL_MINUTES),
+                'token_used_at' => null,
+            ]);
+
+            Notification::route('mail', $draft->email)->notify(
+                new RegistrationDraftRecovery($token, $draft->token_expires_at)
+            );
+        }
+
+        $request->session()->flash(
+            'recover_status',
+            'Si existe un borrador con ese correo, recibirá un enlace de un solo uso en unos minutos.'
+        );
+
+        return redirect()->route('cobros.register.recover');
+    }
+
+    /**
+     * Reclama el token (un solo uso, con vigencia) y restaura el borrador
+     * en la sesión. El enlace solo contiene el token: nunca datos personales.
+     */
+    public function consumeRecoveryToken(Request $request, string $token): RedirectResponse
+    {
+        $hash = hash('sha256', $token);
+
+        $claimed = CobrosRegistrationDraft::where('token_hash', $hash)
+            ->whereNull('token_used_at')
+            ->where('token_expires_at', '>', now())
+            ->update(['token_used_at' => now()]);
+
+        if ($claimed === 0) {
+            $request->session()->flash('recover_error', 'El enlace no es válido, ya fue usado o caducó.');
+
+            return redirect()->route('cobros.register.recover');
+        }
+
+        $draft = CobrosRegistrationDraft::where('token_hash', $hash)->firstOrFail();
+        $payload = is_array($draft->payload) ? $draft->payload : [];
+
+        $registration = Arr::except($payload, ['referral']);
+        $registration['_draft_id'] = $draft->id;
+        $request->session()->put(self::SESSION_KEY, $registration);
+
+        $referral = $payload['referral'] ?? null;
+
+        if (is_array($referral) && ! empty($referral['code'])) {
+            $request->session()->put(PublicLandingController::REFERRAL_SESSION_KEY, [
+                'code' => $referral['code'],
+                'captured_at' => $referral['captured_at'] ?? now()->toIso8601String(),
+            ]);
+        }
+
+        return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
+    }
+
+    /**
+     * Persiste el borrador en base de datos cuando existe correo (paso 2+).
+     * Upsert por id o correo: guardar repetido no duplica registros.
+     */
+    private function persistDraft(): void
+    {
+        $registration = session(self::SESSION_KEY, []);
+        $email = $registration['personal']['email'] ?? null;
+
+        if (! is_string($email) || $email === '') {
+            return;
+        }
+
+        $draft = null;
+        $draftId = $registration['_draft_id'] ?? null;
+
+        if ($draftId !== null) {
+            $draft = CobrosRegistrationDraft::find($draftId);
+        }
+
+        $draft ??= CobrosRegistrationDraft::where('email', $email)->first();
+
+        $payload = Arr::except($registration, ['_draft_id']);
+        $referral = session(PublicLandingController::REFERRAL_SESSION_KEY);
+
+        if (is_array($referral) && ! empty($referral['code'])) {
+            $payload['referral'] = [
+                'code' => $referral['code'],
+                'captured_at' => $referral['captured_at'] ?? null,
+            ];
+        }
+
+        if ($draft !== null) {
+            $draft->update([
+                'email' => $email,
+                'payload' => $payload,
+                'last_saved_at' => now(),
+            ]);
+        } else {
+            $draft = CobrosRegistrationDraft::create([
+                'email' => $email,
+                'payload' => $payload,
+                'last_saved_at' => now(),
+            ]);
+        }
+
+        $registration['_draft_id'] = $draft->id;
+        session()->put(self::SESSION_KEY, $registration);
     }
 
     /**

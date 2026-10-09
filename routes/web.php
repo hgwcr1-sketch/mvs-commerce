@@ -168,6 +168,12 @@ Route::post('/registro-cobros/rutas/eliminar', App\Http\Controllers\Cobros\Publi
     ->middleware('throttle:10,1')->name('cobros.register.routes.remove');
 Route::post('/registro-cobros/cartera', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storePortfolioPlan')
     ->middleware('throttle:10,1')->name('cobros.register.portfolio');
+Route::get('/registro-cobros/recuperar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@showRecover')
+    ->name('cobros.register.recover');
+Route::post('/registro-cobros/recuperar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@storeRecover')
+    ->middleware('throttle:6,1')->name('cobros.register.recover.store');
+Route::get('/registro-cobros/recuperar/{token}', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@consumeRecoveryToken')
+    ->name('cobros.register.recover.token');
 
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
