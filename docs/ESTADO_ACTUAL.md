@@ -2,6 +2,34 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## Bloque 13-2A modalidades automáticas — COMPLETADO LOCALMENTE (2026-10-09, sin commit)
+
+Rama `feature/cobros-v1`, HEAD `362c4dad`, 4 archivos nuevos (catálogo + servicio +
+migración aditiva + test). No se tocaron RBAC global, roles/permisos existentes ni
+vistas; sin pantallas de onboarding.
+
+- **Catálogo central** `CobrosModalityCatalog`: las cinco modalidades (prestamista,
+  cobrador_vinculado, prestamista_cobrador, cobrador_independiente,
+  cobrador_multiprestamista) con permisos predefinidos, flags (administrative,
+  collects, uses_route_context, multiple_lenders) y etiquetas de rol. Ninguna
+  modalidad requiere selección manual de roles.
+- **Servicio** `CobrosModalityService`: `assign()`/`ensureRole()`/`currentModality()`.
+  La modalidad vive en la columna aditiva `company_user.cobros_modality`
+  (migración `2026_10_09_000001`, reversible). `role_id` solo se escribe si el rol
+  actual no cubre los permisos (rol combinado por UNIÓN, p. ej. «Cajero + Cobrador
+  vinculado»); roles super admin o que ya cubren quedan intactos. Nunca se quitan
+  permisos (solo `syncWithoutDetaching`); clientes, créditos, rutas, licencias e
+  historial no se tocan.
+- **Prestamista-cobrador** conserva `cobros.portal_dueno`   (aprobación/delegación de
+  créditos sin cambios: `CobrosCollectorAuthorityPolicy` intacta) y cobra exigiendo
+  `CobrosRouteContext` (ruta asignada + licencia vigente).
+
+**Pruebas:** `CobrosModality132ATest` 7/7 (98 aserciones: catálogo, asignación sin
+roles manuales, preservación de `role_id`/permisos, aislamiento empresarial,
+multiprestamista, regresión dueño/cobrador); regresión `CobrosCreditAuthorityPolicyTest`
+6/6 (106) y `CobrosCreditCollectorFlowTest` 7/7 (108) verdes. `migrate --force` OK en
+BD local. Sin commit/reset/push/deploy; temporales preservados.
+
 ## Bloque 13-1B revisión de migraciones — COMPLETADO LOCALMENTE (2026-10-09)
 
 Rama `feature/cobros-v1`, commit (ver git log), 10 archivos. Reutiliza `cobros_migration_notices`
