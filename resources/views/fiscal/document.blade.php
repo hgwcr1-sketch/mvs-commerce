@@ -72,7 +72,7 @@
             <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Acciones</p>
             <div class="mt-3 flex flex-wrap gap-2">
                 @if($sale)
-                    <a href="{{ route('pos.receipt', ['sale' => $sale->id]) }}" target="_blank" rel="noopener" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-200 px-4 text-sm font-bold text-slate-800">Ver PDF</a>
+                    <a href="{{ route('pos.receipt', ['sale' => $sale->id, 'format' => 'letter']) }}" target="_blank" rel="noopener" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-200 px-4 text-sm font-bold text-slate-800">Ver PDF</a>
                     <a href="{{ route('pos.receipt.pdf', ['sale' => $sale->id, 'format' => 'letter']) }}" class="min-h-[44px] inline-flex items-center rounded-xl bg-slate-800 px-4 text-sm font-bold text-white">Descargar PDF</a>
                 @endif
                 @if($xmlAvailable)
