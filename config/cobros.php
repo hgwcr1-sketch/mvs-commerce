@@ -26,4 +26,21 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | CobrOS — facturación (bloque 17A-1)
+    |--------------------------------------------------------------------------
+    |
+    | mixed_enabled: modalidad de facturación MIXTA, DESACTIVADA por defecto.
+    | Solo el Panel Maestro podrá habilitarla en el futuro; mientras tanto el
+    | servidor rechaza contratos mixtos aunque una interfaz los ofreciera.
+    |
+    */
+
+    'billing' => [
+
+        'mixed_enabled' => (bool) env('COBROS_BILLING_MIXED_ENABLED', false),
+
+    ],
+
 ];
