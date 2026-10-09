@@ -42,6 +42,7 @@ use App\Http\Controllers\Cobros\VisitController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
+use App\Http\Controllers\CompanySwitchController;
 // Compras
 use App\Http\Controllers\ControlCenterController;
 use App\Http\Controllers\CustomerAddressController;
@@ -163,6 +164,14 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
         Route::post('/cambiar-contrasena', [ForceChangePasswordController::class, 'store'])
             ->middleware('throttle:10,1')->name('password.force.store');
     });
+});
+
+// BLOQUE 13-2B — cambio seguro de empresa/prestamista sin cerrar sesión.
+// Sin 'active.company' a propósito: el selector debe poder abrirse cuando la
+// empresa de la sesión quedó obsoleta (membresía revocada o empresa inactiva).
+Route::middleware([Authenticate::class, EnsureActiveUser::class])->group(function () {
+    Route::get('/cambiar-empresa', [CompanySwitchController::class, 'index'])->name('company.switch');
+    Route::post('/cambiar-empresa', [CompanySwitchController::class, 'store'])->name('company.switch.store');
 });
 
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.

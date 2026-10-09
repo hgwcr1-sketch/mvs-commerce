@@ -30,6 +30,10 @@
             ->whereIn('status', \App\Models\PurchaseVerification::OPEN_STATUSES)
             ->count()
         : 0;
+    // BLOQUE 13-2B: selector de empresa solo con varias membresías autorizadas.
+    $headerSwitchableCount = auth()->user()
+        ? count(app(\App\Services\CompanySwitchService::class)->switchable(auth()->user()))
+        : 0;
 @endphp
 
 <header
@@ -74,6 +78,15 @@
 
     {{-- ACCIONES --}}
     <div class="flex shrink-0 items-center gap-2">
+
+        @if($headerSwitchableCount > 1 && ! request()->routeIs('company.switch'))
+            <a href="{{ route('company.switch') }}"
+                class="flex h-11 items-center rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                title="Cambiar de empresa" aria-label="Cambiar de empresa">
+                <span class="hidden sm:inline">Cambiar empresa</span>
+                <span class="sm:hidden">Cambiar</span>
+            </a>
+        @endif
 
         <span class="hidden border-r border-slate-200 pr-3 text-xs font-semibold text-slate-500 lg:inline">
             MVS Commerce

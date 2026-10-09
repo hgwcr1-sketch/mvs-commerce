@@ -2,7 +2,36 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
-## Bloque 13-2A modalidades automáticas — COMPLETADO LOCALMENTE (2026-10-09, sin commit)
+## Bloque 13-2B cambio seguro de empresa/prestamista — COMPLETADO LOCALMENTE (2026-10-09)
+
+Rama `feature/cobros-v1`, HEAD previo `189558c0`, 7 archivos (4 nuevos: servicio,
+controlador, vista, test; 3 modificados: `routes/web.php`, `components/header.blade.php`,
+este documento). Sin pantallas de onboarding, multirruta (bloque 14), pagos,
+licencias ni Panel Maestro.
+
+- **Selector** `GET/POST /cambiar-empresa` (`company.switch{,.store}`) en grupo
+  `auth + EnsureActiveUser` SIN `active.company` a propósito: usable cuando la
+  sesión de empresa quedó obsoleta. Muestra solo membresías autorizadas
+  (empresa `is_active` + rol activo) con badge «Actual» y modalidad propia.
+- **Cambio sin cerrar sesión:** `CompanySwitchService::switchTo()` valida el
+  destino en el momento, escribe `active_company_id` y limpia `active_branch_id`
+  y `active_cobros_route_id` (nada se hereda de la empresa anterior).
+- **Protecciones:** rechaza empresa ajena/inactiva/rol inactivo
+  (ValidationException, sesión intacta) y cambios con caja abierta o en cierre
+  del usuario en la empresa actual (`CashSession` open/closing).
+- **Sin herencia:** permisos y modalidad se resuelven por empresa destino
+  (`CobrosModalityService` sigue por membresía); historial, rutas y clientes de
+  la empresa original quedan intactos y fuera del alcance tenant de la nueva.
+- **Header:** enlace «Cambiar empresa» (≥44px, mobile-safe) solo con >1
+  membresía autorizada y fuera de la propia vista del selector.
+
+**Pruebas:** `CompanySwitchTest` 7/7 (68 aserciones: selector autorizado/ajeno/
+inactivo, cambio + limpieza de contexto, no herencia de roles/rutas/modalidad,
+aislamiento de clientes/créditos, bloqueo por caja abierta, regresión de login);
+regresión `AdministrativeDashboardTest` 10/10 (145, login+dashboard+header).
+`view:cache` y `git diff --check` OK. Sin push/merge/reset; temporales preservados.
+
+## Bloque 13-2A modalidades automáticas — COMPLETADO LOCALMENTE (2026-10-09, commit `189558c0`)
 
 Rama `feature/cobros-v1`, HEAD `362c4dad`, 4 archivos nuevos (catálogo + servicio +
 migración aditiva + test). No se tocaron RBAC global, roles/permisos existentes ni
