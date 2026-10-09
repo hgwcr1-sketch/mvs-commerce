@@ -125,6 +125,61 @@
                     </div>
                 </div>
 
+                @php
+                    $kindLabels = ['customers' => 'Clientes', 'credits' => 'Créditos'];
+                    $uploadsByRoute = collect($registration['uploads'] ?? [])
+                        ->groupBy('route_id');
+                @endphp
+
+                @if (session('upload_status'))
+                    <p role="status" class="mt-4 rounded-xl border border-black p-3 text-sm">{{ session('upload_status') }}</p>
+                @endif
+
+                @if (count($draftRoutes) > 0)
+                    <div class="mt-4 rounded-xl border border-black p-4">
+                        <p class="text-sm font-bold uppercase tracking-widest text-black">Archivos de cartera por ruta</p>
+                        <p class="mt-1 text-xs leading-5 text-slate-600">Sus archivos se guardan de forma privada junto a su registro. Nada se importa ahora: todo queda «Pendiente de activación» hasta que su cuenta se active.</p>
+
+                        <ul class="mt-3 grid grid-cols-1 gap-3">
+                            @foreach ($draftRoutes as $draftRoute)
+                                <li class="rounded-xl border border-black p-3">
+                                    <p class="text-sm font-semibold">{{ $draftRoute['name'] }}</p>
+                                    <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        @foreach (['customers' => 'cobros.register.uploads.customers', 'credits' => 'cobros.register.uploads.credits'] as $kind => $uploadRoute)
+                                            @php $upload = ($uploadsByRoute[$draftRoute['id']] ?? collect())->firstWhere('kind', $kind); @endphp
+                                            <div class="rounded-lg border border-black p-2">
+                                                <p class="text-xs font-bold">{{ $kindLabels[$kind] }}</p>
+                                                @if ($upload)
+                                                    <p class="mt-1 text-xs leading-5 text-slate-600">{{ $upload['original_name'] }} · {{ $upload['rows'] }} fila(s)</p>
+                                                    <p class="text-xs font-bold">Pendiente de activación</p>
+                                                    <form method="POST" action="{{ route('cobros.register.uploads.replace', ['kind' => $kind]) }}" class="mt-2 space-y-2">
+                                                        @csrf
+                                                        <input type="hidden" name="route_id" value="{{ $draftRoute['id'] }}">
+                                                        <input type="file" name="upload_file" accept=".csv,.xlsx,.xls,.txt" required class="block w-full text-sm">
+                                                        <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-black px-3 py-2 text-sm font-bold">Reemplazar</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ route('cobros.register.uploads.delete', ['kind' => $kind]) }}" class="mt-2">
+                                                        @csrf
+                                                        <input type="hidden" name="route_id" value="{{ $draftRoute['id'] }}">
+                                                        <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-black px-3 py-2 text-sm font-bold">Eliminar</button>
+                                                    </form>
+                                                @else
+                                                    <form method="POST" action="{{ route($uploadRoute) }}" class="mt-2 space-y-2">
+                                                        @csrf
+                                                        <input type="hidden" name="route_id" value="{{ $draftRoute['id'] }}">
+                                                        <input type="file" name="upload_file" accept=".csv,.xlsx,.xls,.txt" required class="block w-full text-sm">
+                                                        <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-3 py-2 text-sm font-bold text-black transition hover:bg-primary-hover hover:text-white">Cargar</button>
+                                                    </form>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
                 <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 font-bold text-black transition hover:bg-primary-hover hover:text-white sm:w-auto">Continuar a revisión</button>
             </form>
 

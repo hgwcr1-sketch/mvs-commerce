@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\CobrosRegistrationDraft;
 use App\Notifications\RegistrationDraftRecovery;
 use App\Services\Cobros\CobrosModalityCatalog;
+use App\Services\Imports\CustomerImportChunkReader;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -34,6 +36,17 @@ class PublicRegistrationController extends Controller
     public const ROUTES_STEP = 3;
 
     public const MAX_DRAFT_ROUTES = 20;
+
+    /** BLOQUE 16B-2B: límites de carga reutilizados de los motores 12B. */
+    public const UPLOAD_MAX_ROWS = 500;
+
+    public const UPLOAD_MAX_KILOBYTES = 10240;
+
+    /** Tipos de archivo de cartera aceptados en el borrador. */
+    public const UPLOAD_KINDS = ['customers', 'credits'];
+
+    /** Estado único de las cargas en borrador: nada se activa por sí solo. */
+    public const UPLOAD_STATUS = 'Pendiente de activación';
 
     /** Vigencia del enlace de recuperación de borrador (un solo uso). */
     public const RECOVERY_TTL_MINUTES = 60;
@@ -144,6 +157,7 @@ class PublicRegistrationController extends Controller
             'canUseTemplates' => false,
             'priceSummary' => $this->priceSummary($registration),
             'hasReferral' => session(PublicLandingController::REFERRAL_SESSION_KEY) !== null,
+            'draftUploads' => $this->draftUploads($registration),
         ]);
     }
 
@@ -247,6 +261,154 @@ class PublicRegistrationController extends Controller
         $registration['updated_at'] = now()->toIso8601String();
         $request->session()->put(self::SESSION_KEY, $registration);
         $this->persistDraft();
+
+        return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
+    }
+
+    /**
+     * BLOQUE 16B-2B f1 — carga PRIVADA de un archivo de cartera (clientes o
+     * créditos) asociado al borrador de registro y a la UUID de una ruta
+     * BORRADOR de la sesión. El archivo vive en almacenamiento privado (disco
+     * 'local'); los metadatos viven en payload['uploads'] del draft. Aquí NO
+     * se crea ningún registro operativo: solo se guarda como pendiente.
+     */
+    public function uploadCustomers(Request $request): RedirectResponse
+    {
+        return $this->storeUpload($request, 'customers');
+    }
+
+    public function uploadCredits(Request $request): RedirectResponse
+    {
+        return $this->storeUpload($request, 'credits');
+    }
+
+    /** Reemplazo idempotente: mismo kind+ruta sobrescribe el archivo propio. */
+    public function replaceUpload(Request $request, string $kind): RedirectResponse
+    {
+        if (! in_array($kind, self::UPLOAD_KINDS, true)) {
+            abort(422, 'Tipo de archivo inválido.');
+        }
+
+        return $this->storeUpload($request, $kind);
+    }
+
+    /** Elimina únicamente el archivo propio del borrador (kind + route_id). */
+    public function deleteUpload(Request $request, string $kind): RedirectResponse
+    {
+        if (! in_array($kind, self::UPLOAD_KINDS, true)) {
+            abort(422, 'Tipo de archivo inválido.');
+        }
+
+        $data = $request->validate([
+            'route_id' => ['required', 'string', 'max:40'],
+        ]);
+
+        $registration = session(self::SESSION_KEY, []);
+        $routeIds = collect($registration['routes'] ?? [])->pluck('id');
+
+        if (! $routeIds->contains($data['route_id'])) {
+            return back()->withErrors(['route_id' => 'La ruta indicada ya no existe en el borrador.']);
+        }
+
+        $kept = collect($this->draftUploads($registration));
+        $removed = $kept
+            ->filter(fn (array $upload) => $upload['kind'] === $kind && $upload['route_id'] === $data['route_id'])
+            ->values();
+
+        $draft = $this->currentDraft($registration);
+
+        foreach ($removed as $upload) {
+            $this->deleteOwnUploadFile((string) ($upload['path'] ?? ''), $draft);
+        }
+
+        $uploads = $kept
+            ->reject(fn (array $upload) => $upload['kind'] === $kind && $upload['route_id'] === $data['route_id'])
+            ->values()->all();
+
+        $this->saveUploads($request, $registration, $uploads,
+            'Archivo eliminado; puede cargarlo nuevamente antes de activar su cuenta.');
+
+        return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
+    }
+
+    /**
+     * Guarda el archivo (o reemplaza el propio para kind+ruta) en el disco
+     * local PRIVADO, valida límites de los motores 12B y registra metadatos
+     * mínimos: nombre original, ruta UUID, filas legibles y sha256.
+     */
+    private function storeUpload(Request $request, string $kind): RedirectResponse
+    {
+        if ($this->currentStep() < self::ROUTES_STEP) {
+            return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
+        }
+
+        $data = $request->validate([
+            'route_id' => ['required', 'string', 'max:40'],
+            'upload_file' => ['required', 'file', $kind === 'customers' ? 'mimes:xlsx,xls,csv,txt' : 'mimes:csv,txt,xlsx,xls', 'max:'.self::UPLOAD_MAX_KILOBYTES],
+        ], [
+            'upload_file.max' => 'El archivo supera el máximo de '.(self::UPLOAD_MAX_KILOBYTES / 1024).' MB permitido.',
+            'upload_file.mimes' => 'Use un archivo Excel o CSV con el formato del machote.',
+        ]);
+
+        $registration = session(self::SESSION_KEY, []);
+        $routeIds = collect($registration['routes'] ?? [])->pluck('id');
+
+        if (! $routeIds->contains($data['route_id'])) {
+            return back()->withErrors(['route_id' => 'La ruta indicada ya no existe en el borrador.']);
+        }
+
+        $file = $request->file('upload_file');
+        $reader = app(CustomerImportChunkReader::class);
+
+        try {
+            $counts = $reader->read($file->getRealPath(), 1, 1);
+        } catch (\Throwable) {
+            return back()->withErrors(['upload_file' => 'No se pudo leer el archivo. Use CSV o Excel (máx. '.self::UPLOAD_MAX_ROWS.' filas).']);
+        }
+
+        $dataRows = max(0, (int) $counts['last_row'] - 1);
+
+        if ($dataRows > self::UPLOAD_MAX_ROWS) {
+            return back()->withErrors(['upload_file' => 'El archivo excede las '.self::UPLOAD_MAX_ROWS.' filas permitidas.']);
+        }
+
+        $draft = $this->currentDraft($registration);
+
+        if ($draft === null) {
+            return back()->withErrors(['upload_file' => 'Guarde primero sus datos personales para adjuntar archivos.']);
+        }
+
+        $previous = collect($this->draftUploads($registration))
+            ->first(fn (array $upload) => $upload['kind'] === $kind && $upload['route_id'] === $data['route_id']);
+
+        $directory = 'registration-uploads/'.$draft->id;
+        $path = $file->store($directory, 'local');
+
+        if ($path === false || ! Storage::disk('local')->exists($path)) {
+            return back()->withErrors(['upload_file' => 'No se pudo guardar el archivo. Intente nuevamente.']);
+        }
+
+        if (is_array($previous) && ! empty($previous['path']) && $previous['path'] !== $path) {
+            $this->deleteOwnUploadFile((string) $previous['path'], $draft);
+        }
+
+        $uploads = collect($this->draftUploads($registration))
+            ->reject(fn (array $upload) => $upload['kind'] === $kind && $upload['route_id'] === $data['route_id'])
+            ->push([
+                'kind' => $kind,
+                'route_id' => $data['route_id'],
+                'path' => $path,
+                'original_name' => mb_substr($file->getClientOriginalName(), 0, 120),
+                'mime' => (string) $file->getMimeType(),
+                'rows' => $dataRows,
+                'sha256' => hash_file('sha256', $file->getRealPath()),
+                'uploaded_at' => now()->toIso8601String(),
+                'status' => self::UPLOAD_STATUS,
+            ])
+            ->values()->all();
+
+        $this->saveUploads($request, $registration, $uploads,
+            'Archivo cargado y asociado a su borrador: Pendiente de activación.');
 
         return redirect()->route('cobros.register.step', ['paso' => self::ROUTES_STEP]);
     }
@@ -473,5 +635,83 @@ class PublicRegistrationController extends Controller
             'total' => $format($price['unit'] * ($routeCount + 1)),
             'routeCount' => $routeCount,
         ];
+    }
+
+    /** Draft persistido del borrador (por id de sesión o correo). */
+    private function currentDraft(array $registration): ?CobrosRegistrationDraft
+    {
+        $draftId = $registration['_draft_id'] ?? null;
+
+        if ($draftId !== null) {
+            $draft = CobrosRegistrationDraft::find($draftId);
+
+            if ($draft !== null) {
+                return $draft;
+            }
+        }
+
+        $email = $registration['personal']['email'] ?? null;
+
+        return is_string($email) && $email !== ''
+            ? CobrosRegistrationDraft::where('email', $email)->first()
+            : null;
+    }
+
+    /** Cargas del borrador: desde la sesión o, tras pérdida de sesión, del draft persistido. */
+    private function draftUploads(array $registration): array
+    {
+        $uploads = $registration['uploads'] ?? null;
+
+        if (is_array($uploads)) {
+            return $uploads;
+        }
+
+        $draft = $this->currentDraft($registration);
+        $payload = $draft?->payload;
+
+        return is_array($payload) && is_array($payload['uploads'] ?? null)
+            ? $payload['uploads']
+            : [];
+    }
+
+    /**
+     * Borra un archivo propio SOLO si pertenece al directorio del borrador
+     * actual (registration-uploads/{draft_id}/). Un path ajeno se ignora.
+     */
+    private function deleteOwnUploadFile(string $path, ?CobrosRegistrationDraft $draft): void
+    {
+        if ($draft === null || $path === '') {
+            return;
+        }
+
+        $prefix = 'registration-uploads/'.$draft->id.'/';
+
+        if (! str_starts_with($path, $prefix)) {
+            return;
+        }
+
+        Storage::disk('local')->delete($path);
+    }
+
+    /** Guarda uploads en sesión y draft; también sincroniza el mapa con cada ruta. */
+    private function saveUploads(Request $request, array $registration, array $uploads, string $status): void
+    {
+        $registration['uploads'] = $uploads;
+        $registration['updated_at'] = now()->toIso8601String();
+
+        $routeUploads = [];
+        foreach ($uploads as $upload) {
+            if (isset($upload['route_id'], $upload['kind'])) {
+                $routeUploads[$upload['route_id']][$upload['kind']] = [
+                    'rows' => $upload['rows'],
+                    'status' => $upload['status'],
+                ];
+            }
+        }
+
+        $registration['route_uploads'] = $routeUploads;
+        $request->session()->put(self::SESSION_KEY, $registration);
+        $this->persistDraft();
+        $request->session()->flash('upload_status', $status);
     }
 }

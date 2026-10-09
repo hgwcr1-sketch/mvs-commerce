@@ -183,6 +183,18 @@ Route::get('/registro-cobros/plantilla-clientes', App\Http\Controllers\Cobros\Pu
 Route::get('/registro-cobros/plantilla-creditos', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@creditTemplate')
     ->middleware('throttle:10,1')->name('cobros.register.templates.credits');
 
+// BLOQUE 16B-2B f1 - carga PRIVADA de archivos de cartera (borrador de registro
+// + UUID de ruta del borrador). Solo guardar/reemplazar/eliminar; nada se
+// importa hasta la activación (procesamiento idempotente posterior).
+Route::post('/registro-cobros/archivos/clientes', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@uploadCustomers')
+    ->middleware('throttle:10,1')->name('cobros.register.uploads.customers');
+Route::post('/registro-cobros/archivos/creditos', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@uploadCredits')
+    ->middleware('throttle:10,1')->name('cobros.register.uploads.credits');
+Route::post('/registro-cobros/archivos/{kind}/reemplazar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@replaceUpload')
+    ->middleware('throttle:10,1')->name('cobros.register.uploads.replace');
+Route::post('/registro-cobros/archivos/{kind}/eliminar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@deleteUpload')
+    ->middleware('throttle:10,1')->name('cobros.register.uploads.delete');
+
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.
 Route::prefix('cobros')->name('cobros.')->group(function () {
     Route::middleware([RedirectIfAuthenticated::class, 'cobros.entry'])->group(function () {
