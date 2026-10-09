@@ -12,13 +12,14 @@
         .format-letter{width:210mm;min-height:270mm;padding:14mm}
         h1{margin:0;font-size:20px;text-align:center}
         h2{margin:4px 0 0;font-size:13px;text-align:center;font-weight:700}
-        .brand{color:#D4AF37;letter-spacing:.08em}
+        .brand{color:#111827;letter-spacing:.08em}
         .company-logo{display:block;max-height:16mm;max-width:42mm;margin:0 auto 3px}
         .center{text-align:center}
         .loyalty-invitation{text-align:center;page-break-inside:avoid;overflow-wrap:anywhere}
         .loyalty-invitation p{margin:3px 0;font-size:11px}
         .loyalty-qr{display:block;width:25mm;height:25mm;max-width:100%;margin:2px auto}
         .muted{color:#475569;font-size:11px}
+        .sku{color:#111827;font-size:12px;font-weight:600;letter-spacing:.01em}
         .warning{margin:8px 0;border:1px dashed #92400e;padding:7px;color:#92400e;font-size:11px;font-weight:bold;text-align:center}
         .fiscal{margin:8px 0;border:1px solid #cbd5e1;padding:7px}
         .fiscal-head{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:5px;font-size:11px}
@@ -58,6 +59,7 @@
         .item58{padding:5px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
         .item58-name{font-size:13.5px;font-weight:800;line-height:1.3;word-break:break-word;color:#111827}
         .item58-name .muted{display:block;font-size:10px;font-weight:400;margin-top:1px}
+        .item58-name .sku{display:block;font-size:12.5px;font-weight:600;color:#111827;margin-top:1px}
         .item58-line{display:flex;justify-content:space-between;gap:5px;font-size:12.5px;margin-top:3px;align-items:flex-start}
         .item58-line .left{color:#111827;font-weight:700;flex:1;word-break:break-word}
         .item58-line .right{font-weight:800;white-space:nowrap;color:#111827;font-size:12.5px}
@@ -70,7 +72,8 @@
         .items80{border-top:1px solid #e2e8f0}
         .item80{padding:5px 0;border-bottom:1px solid #e2e8f0;page-break-inside:avoid}
         .item80-name{font-size:12.5px;font-weight:800;line-height:1.3;word-break:break-word;color:#111827}
-        .item80-name .muted{display:block;font-size:10px;font-weight:400;margin-top:1px}
+        .item80-name .item80-code{display:block;font-size:10px;font-weight:400;margin-top:1px;color:#475569}
+        .item80-name .sku{font-size:12px;font-weight:600;color:#111827}
         .item80-line{display:flex;justify-content:space-between;gap:8px;margin-top:3px;align-items:baseline;flex-wrap:wrap}
         .item80-line .left{color:#111827;font-weight:700;word-break:break-word}
         .item80-line .right{font-weight:800;white-space:nowrap;font-size:12.5px}
@@ -171,7 +174,7 @@
         <div class="items58">
         @foreach($itemsData as $item)
             <div class="item58">
-                <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="muted">{{ $item['product_code'] }}</span>@endif @if($item['cabys'] ?? null)<span class="muted">CABYS {{ $item['cabys'] }}</span>@endif</div>
+                <div class="item58-name">{{ $item['description'] }} @if($item['product_code'])<span class="sku">{{ $item['product_code'] }}</span>@endif @if($item['cabys'] ?? null)<span class="muted">CABYS {{ $item['cabys'] }}</span>@endif</div>
                 <div class="item58-line">
                     <span class="left">{{ $item['quantity'] }} x ₡{{ $money($item['unit_price']) }}@if((float) $item['discount_total'] > 0) -₡{{ $money($item['discount_total']) }}@endif @if((float) $item['tax_total'] > 0) +₡{{ $money($item['tax_total']) }}@endif</span>
                     <span class="right">₡{{ $money($item['total']) }}</span>
@@ -185,7 +188,7 @@
             <div class="item80">
                 <div class="item80-name">{{ $item['description'] }}
                     @if($item['product_code'] || ($item['cabys'] ?? null))
-                    <span class="muted">@if($item['product_code']){{ $item['product_code'] }}@endif @if($item['cabys'] ?? null)CABYS {{ $item['cabys'] }}@endif</span>
+                    <span class="item80-code">@if($item['product_code'])<span class="sku">{{ $item['product_code'] }}</span>@endif @if($item['cabys'] ?? null)<span class="cabys">CABYS {{ $item['cabys'] }}</span>@endif</span>
                     @endif
                 </div>
                 <div class="item80-line">
@@ -201,7 +204,7 @@
             <tbody>
             @foreach($itemsData as $item)
                 <tr>
-                    <td>{{ $item['description'] }}@if($item['product_code'] || ($item['cabys'] ?? null))<br><span class="muted">{{ $item['product_code'] }}@if($item['cabys'] ?? null) · CABYS {{ $item['cabys'] }}@endif</span>@endif</td>
+                    <td>{{ $item['description'] }}@if($item['product_code'] || ($item['cabys'] ?? null))<br>@if($item['product_code'])<span class="sku">{{ $item['product_code'] }}</span>@endif @if($item['cabys'] ?? null)<span class="muted">CABYS {{ $item['cabys'] }}</span>@endif @endif</td>
                     <td>{{ $item['quantity'] }}</td>
                     <td>₡{{ $money($item['unit_price']) }}</td>
                     <td>₡{{ $money($item['discount_total']) }}</td>

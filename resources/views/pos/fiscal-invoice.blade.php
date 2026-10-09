@@ -39,6 +39,7 @@
         table.items td:first-child{text-align:left}
         .item-name{font-weight:700}
         .item-cabys{display:block;font-size:8px;color:#64748b;margin-top:.5mm}
+        .item-cabys .sku{font-size:9px;font-weight:700;color:#111827}
         .right-col{width:84mm;float:right}
         .left-col{width:86mm;float:left}
         .loyalty{background:#f8fafc;border-left:3px solid #D4AF37;padding:1.6mm 3mm;font-size:9px}
@@ -167,9 +168,9 @@
                     <td>
                         <span class="item-name">{{ $it->product?->name ?? $it->description }}</span>
                         @if($it->cabys_code ?? null)
-                            <span class="item-cabys">CABYS {{ $it->cabys_code }}@if($it->product_code) · Código {{ $it->product_code }}@endif</span>
+                            <span class="item-cabys">CABYS {{ $it->cabys_code }}@if($it->product_code) · <span class="sku">Código {{ $it->product_code }}</span>@endif</span>
                         @elseif($it->product_code)
-                            <span class="item-cabys">Código {{ $it->product_code }}</span>
+                            <span class="item-cabys"><span class="sku">Código {{ $it->product_code }}</span></span>
                         @endif
                     </td>
                     <td>{{ rtrim(rtrim(number_format((float) $it->quantity, 4, ',', '.'), '0'), ',') }}</td>
