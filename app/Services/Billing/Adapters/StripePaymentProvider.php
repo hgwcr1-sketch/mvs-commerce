@@ -79,6 +79,15 @@ class StripePaymentProvider implements PaymentProviderInterface
         return $this->client;
     }
 
+    /**
+     * Obtiene el cliente Stripe para sesiones Checkout.
+     * Separado de getClient() por claridad semántica (mismo cliente, distinto uso).
+     */
+    public function getClientForCheckout(): StripeClient
+    {
+        return $this->getClient();
+    }
+
     public function createPayment(PaymentRequest $request): PaymentEvent
     {
         $client = $this->getClient();
