@@ -45,7 +45,7 @@ class CobrosPublicLandingTest extends TestCase
         $response->assertOk()
             ->assertSee('Costa Rica')
             ->assertSee('Colombia')
-            ->assertSee('Disponible')
+            ->assertDontSee('>Disponible<', false)
             ->assertSee('podrán solicitar su habilitación')
             ->assertDontSee('Nicaragua')
             ->assertDontSee('Guatemala')

@@ -54,7 +54,7 @@
                     <h2 class="mt-2 text-xl font-bold">Crear cuenta</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Elija cómo va a usar CobrOS y cree su espacio de trabajo paso a paso.</p>
                     <div class="mt-auto pt-5">
-                        <button type="button" @click="modalityOpen = true" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl border border-black px-4 py-4 text-base font-bold text-black transition hover:bg-black hover:text-white">Crear cuenta</button>
+                        <button type="button" @click="modalityOpen = true" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-bold text-black transition hover:bg-primary-hover hover:text-white">Crear cuenta</button>
                     </div>
                 </article>
 
@@ -64,7 +64,7 @@
                     <h2 class="mt-2 text-xl font-bold">Probar DEMO</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Recorra MVS CobrOS con datos de ejemplo, sin tocar información real.</p>
                     <div class="mt-auto pt-5">
-                        <a href="{{ route('cobros.demo') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl border border-black px-4 py-4 text-base font-bold transition hover:bg-black hover:text-white">Probar DEMO</a>
+                        <a href="{{ route('cobros.demo') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-bold text-black transition hover:bg-primary-hover hover:text-white">Probar DEMO</a>
                     </div>
                 </article>
 
@@ -74,7 +74,7 @@
                     <h2 class="mt-2 text-xl font-bold">Ver videos explicativos</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Videos cortos para dominar cada módulo de la plataforma.</p>
                     <div class="mt-auto pt-5">
-                        <a href="{{ route('cobros.videos') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl border border-black px-4 py-4 text-base font-bold transition hover:bg-black hover:text-white">Ver videos</a>
+                        <a href="{{ route('cobros.videos') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-bold text-black transition hover:bg-primary-hover hover:text-white">Ver videos</a>
                     </div>
                 </article>
             </div>
@@ -126,7 +126,6 @@
                         <span class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary px-4 py-2 font-semibold">
                             {{ $country['name'] }}
                             <span class="text-xl leading-none" aria-hidden="true">{{ $country['flag'] }}</span>
-                            <span class="text-xs font-bold uppercase text-primary">Disponible</span>
                         </span>
                     @empty
                         <span class="text-sm text-slate-300">Países en preparación.</span>
