@@ -38,6 +38,8 @@ class CobrosPaymentConfirmationService
         private readonly CobrosBillingContractService $contracts,
         private readonly CompanyLicenseService $licenseService,
         private readonly CollectorLicenseService $collectorLicenses,
+        private readonly ReferralBonusService $referralBonuses,
+        private readonly ReferralCreditDiscountService $referralCredits,
     ) {
     }
 
@@ -93,11 +95,21 @@ class CobrosPaymentConfirmationService
                 ->first();
 
             if ($existing !== null) {
+                // El flujo interno de confirmación puede reenviar una solicitud
+                // preexistente (ej. renovación preparada con proveedor interno).
+                if ($existing->status !== CobrosPaymentConfirmation::STATUS_CONFIRMED) {
+                    $existing->update([
+                        'status' => CobrosPaymentConfirmation::STATUS_CONFIRMED,
+                        'confirmed_by_user_id' => $actor->id,
+                        'confirmed_at' => now(),
+                    ]);
+                }
+
                 return $existing;
             }
 
             $this->assertContractOpen($contract);
-            $this->assertAmountMatches($contract, $amount);
+            $this->assertAmountMatches($contract, $amount, $periodYear, $periodMonth);
             $this->assertPeriodWithinTerm($contract, $periodYear, $periodMonth);
             $this->assertNoDuplicatePeriod($contract, $periodYear, $periodMonth);
 
@@ -119,9 +131,11 @@ class CobrosPaymentConfirmationService
 
         // 2) Intentar activación (fuera de la transacción de confirmación)
         //    Si falla, la confirmación NO se revierte; queda para reintento.
+        $activated = true;
         try {
             $this->activateContract($contract, $actor, $periodYear, $periodMonth, $provider);
         } catch (ValidationException $e) {
+            $activated = false;
             // Log y continuar: la confirmación queda CONFIRMADA y recuperable
             \Illuminate\Support\Facades\Log::warning('Activación fallida tras pago confirmado; se reintentará', [
                 'transaction_id' => $transactionId,
@@ -130,7 +144,58 @@ class CobrosPaymentConfirmationService
             ]);
         }
 
+        // PRE-19B-4B: consumo idempotente de reservas de saldo a favor SOLO
+        // tras activación legítima; ante fallo el saldo permanece reservado.
+        if ($activated) {
+            $this->referralCredits->settleReservations($contract, $periodYear, $periodMonth);
+        }
+
+        // PRE-19B-3: emisión idempotente de bonificaciones del programa
+        // (referido comercial / crecimiento) tras el primer pago confirmado.
+        $this->referralBonuses->onConfirmedPayment($confirmation->fresh());
+
         return $confirmation;
+    }
+
+    /**
+     * PRE-19B-4B — liquidación interna AUTORIZADA de una mensualidad cubierta
+     * íntegramente por saldo a favor (neto ₡0). NO genera cargo externo ni
+     * solicita transferencia: confirma una liquidación de ₡0 con referencia
+     * estable, activa por la vía de sistema (sin exigir platform admin al
+     * pagador) y consume las reservas una sola vez. Idempotente por
+     * transaction_id (reintentos devuelven la misma confirmación).
+     */
+    public function liquidateCreditInternal(
+        CobrosBillingContract $contract,
+        User $payer,
+        int $periodYear,
+        int $periodMonth,
+    ): CobrosPaymentConfirmation {
+        abort_unless(
+            $payer->is_active && (int) $contract->payer_user_id === (int) $payer->id,
+            403,
+            'Solo el pagador del contrato puede liquidar con saldo a favor.'
+        );
+
+        $net = $this->referralCredits->netAmountForPeriod($contract, $periodYear, $periodMonth);
+        if (bccomp($net, '0', 4) !== 0) {
+            throw ValidationException::withMessages([
+                'credit' => 'La mensualidad no está cubierta íntegramente por saldo a favor.',
+            ]);
+        }
+
+        // Provider 'credit' => activación por configuración de sistema
+        // (misma vía que webhook), sin exigir platform admin al pagador.
+        return $this->confirm(
+            $contract,
+            $payer,
+            sprintf('CRED-%d-%04d%02d', $contract->id, $periodYear, $periodMonth),
+            $net,
+            $periodYear,
+            $periodMonth,
+            'credit',
+            'Liquidación interna con saldo a favor de referidos.',
+        );
     }
 
     /** Renovación mensual: registra el período siguiente como pendiente. */
@@ -217,7 +282,9 @@ class CobrosPaymentConfirmationService
                         'company_id' => $contract->company_id,
                         'period_year' => $year,
                         'period_month' => $month,
-                        'amount' => $this->contracts->monthlyTotal($contract),
+                        // PRE-19B-4B: importe neto server-side (total menos
+                        // saldo a favor reservado/liquidado del período).
+                        'amount' => $this->referralCredits->netAmountForPeriod($contract, $year, $month),
                         'currency' => $contract->currency,
                         'status' => CobrosPaymentConfirmation::STATUS_PENDING,
                         'provider' => 'sinpe',
@@ -285,7 +352,7 @@ class CobrosPaymentConfirmationService
             $this->assertSinpePending($fresh);
             $contract = $this->assertConfirmationMatchesContract($fresh);
             $this->assertContractOpen($contract);
-            $this->assertAmountMatches($contract, (string) $fresh->amount);
+            $this->assertAmountMatches($contract, (string) $fresh->amount, $fresh->period_year, $fresh->period_month);
             $this->assertPeriodWithinTerm($contract, $fresh->period_year, $fresh->period_month);
 
             $fresh->update([
@@ -302,6 +369,7 @@ class CobrosPaymentConfirmationService
 
         if ($approvedNow) {
             // Activación fuera de la transacción de decisión (patrón confirm()).
+            $activated = true;
             try {
                 $this->activateContract(
                     $confirmation->contract,
@@ -311,12 +379,27 @@ class CobrosPaymentConfirmationService
                     'sinpe'
                 );
             } catch (ValidationException $e) {
+                $activated = false;
                 \Illuminate\Support\Facades\Log::warning('Activación fallida tras aprobación manual SINPE; se reintentará', [
                     'transaction_id' => $confirmation->transaction_id,
                     'contract_id' => $confirmation->cobros_billing_contract_id,
                     'error' => $e->getMessage(),
                 ]);
             }
+
+            // PRE-19B-4B: consumo idempotente de reservas de saldo a favor SOLO
+            // tras activación legítima; ante fallo el saldo permanece reservado.
+            if ($activated) {
+                $this->referralCredits->settleReservations(
+                    $confirmation->contract,
+                    $confirmation->period_year,
+                    $confirmation->period_month,
+                );
+            }
+
+            // PRE-19B-3: emisión idempotente de bonificaciones del programa
+            // (referido comercial / crecimiento) tras el primer pago confirmado.
+            $this->referralBonuses->onConfirmedPayment($confirmation);
         }
 
         return $confirmation;
@@ -484,9 +567,15 @@ class CobrosPaymentConfirmationService
         }
     }
 
-    private function assertAmountMatches(CobrosBillingContract $contract, string $amount): void
+    /**
+     * PRE-19B-4B: el importe esperado es el NETO del período (total vigente
+     * menos saldo a favor reservado/liquidado). Sin reservas el neto coincide
+     * con la cotización mensual, por lo que el comportamiento canónico sin
+     * programa de referidos no cambia.
+     */
+    private function assertAmountMatches(CobrosBillingContract $contract, string $amount, int $periodYear, int $periodMonth): void
     {
-        $expected = $this->contracts->monthlyTotal($contract);
+        $expected = $this->referralCredits->netAmountForPeriod($contract, $periodYear, $periodMonth);
 
         if (bccomp($this->normalizeAmount($amount), $expected, 4) !== 0) {
             throw ValidationException::withMessages([

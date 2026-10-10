@@ -9,7 +9,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-black text-white antialiased">
-    @include('cobros.public-header')
+    @include('cobros.public-header', ['showLogin' => false])
 
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         @include('cobros.register-progress', ['step' => $step, 'progressSteps' => $progressSteps])
@@ -33,6 +33,18 @@
                     <dt class="text-xs font-bold uppercase text-slate-600">Modalidad</dt>
                     <dd class="mt-1 font-semibold">{{ $modalities[$registration['modality'] ?? '']['label'] ?? '—' }}</dd>
                 </div>
+                @if (($registration['modality'] ?? '') === \App\Services\Cobros\CobrosModalityCatalog::COBRADOR_VINCULADO)
+                    <div class="rounded-xl border border-black p-4 sm:col-span-2">
+                        <dt class="text-xs font-bold uppercase text-slate-600">Vínculo laboral</dt>
+                        <dd class="mt-1 font-semibold">
+                            @if (!empty($registration['labor_invitation']['lender_name']))
+                                Pertenece al prestamista: {{ $registration['labor_invitation']['lender_name'] }}
+                            @else
+                                <span class="font-semibold text-red-700">Invitación pendiente: aún no cuenta con un vínculo válido con un prestamista. El alta quedará bloqueada hasta validar la invitación.</span>
+                            @endif
+                        </dd>
+                    </div>
+                @endif
                 <div class="rounded-xl border border-black p-4">
                     <dt class="text-xs font-bold uppercase text-slate-600">Nombre</dt>
                     <dd class="mt-1 font-semibold">{{ $registration['personal']['name'] ?? '—' }}</dd>

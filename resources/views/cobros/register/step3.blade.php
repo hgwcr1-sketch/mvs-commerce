@@ -9,7 +9,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-black text-white antialiased">
-    @include('cobros.public-header')
+    @include('cobros.public-header', ['showLogin' => false])
 
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         @include('cobros.register-progress', ['step' => $step, 'progressSteps' => $progressSteps])

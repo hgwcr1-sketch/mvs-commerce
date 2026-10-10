@@ -9,7 +9,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-black text-white antialiased">
-    @include('cobros.public-header')
+    @include('cobros.public-header', ['showLogin' => false])
 
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         @include('cobros.register-progress', ['step' => $step, 'progressSteps' => $progressSteps])
@@ -17,8 +17,15 @@
 
         <section class="mt-8 rounded-2xl bg-white p-5 text-black sm:p-6">
             <p class="text-xs font-bold uppercase tracking-widest text-black">Paso 1 de 3</p>
-            <h1 class="mt-2 text-2xl font-bold">País y modalidad</h1>
-            <p class="mt-2 text-sm leading-6 text-slate-600">Elija dónde opera y cómo administrará su cobranza. Podrá corregir estos datos antes de la revisión.</p>
+            @php $modalityLocked = ($registration['modality'] ?? '') !== ''; @endphp
+            <h1 class="mt-2 text-2xl font-bold">{{ $modalityLocked ? 'País' : 'País y modalidad' }}</h1>
+            <p class="mt-2 text-sm leading-6 text-slate-600">
+                @if ($modalityLocked)
+                    Elija dónde opera su negocio. La modalidad elegida se conserva automáticamente.
+                @else
+                    Elija dónde opera y cómo administrará su cobranza. Podrá corregir estos datos antes de la revisión.
+                @endif
+            </p>
 
             @if ($errors->any())
                 <div role="alert" class="mt-4 rounded-xl border border-black p-4 text-sm">
@@ -44,8 +51,14 @@
                         @endforeach
                     </div>
                     <p class="mt-2 text-xs leading-5 text-slate-600">Los demás países podrán solicitar su habilitación próximamente.</p>
+                    @include('cobros.country-cta')
                 </fieldset>
 
+                @if ($modalityLocked)
+                    {{-- PRE-19B-5C: la modalidad ya fue elegida (bienvenida/invitación);
+                         se conserva oculta y NO se vuelve a mostrar la lista. --}}
+                    <input type="hidden" name="modality" value="{{ $registration['modality'] }}">
+                @else
                 <fieldset>
                     <legend class="text-sm font-bold">Modalidad de operación</legend>
                     <div class="mt-3 grid grid-cols-1 gap-3">
@@ -60,6 +73,7 @@
                         @endforeach
                     </div>
                 </fieldset>
+                @endif
 
                 <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-5 py-3 font-bold text-black transition hover:bg-primary-hover hover:text-white sm:w-auto">Continuar</button>
             </form>

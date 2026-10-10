@@ -152,6 +152,13 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
+// PRE-19B-5D - páginas públicas DEMO y Videos (anónimas; sin motor de
+// simulador aún: muestran «Simulador en preparación» / «Próximamente»).
+Route::get('/demo-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'demo'])
+    ->name('cobros.demo');
+Route::get('/videos-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'videos'])
+    ->name('cobros.videos');
+
 // BLOQUE 16A-2B f1 - registro público CobrOS: wizard en sesión, sin alta,
 // licencia ni acceso operativo hasta pago confirmado (fase posterior).
 Route::get('/registro-cobros', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@start')

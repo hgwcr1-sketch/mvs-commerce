@@ -43,4 +43,59 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | CobrOS — programa de referidos y crecimiento (PRE-19B-1)
+    |--------------------------------------------------------------------------
+    |
+    | bonus_percent: porcentaje V1 (10 %) de la bonificación sobre el importe
+    | del primer pago confirmado del referido o de la primera licencia pagada
+    | por un colaborador nuevo. Las bonificaciones se registran SIEMPRE como
+    | saldo a favor (cobros_referral_bonus_credits.status=credit); nunca como
+    | desembolso automático. La incorporación laboral (invitación) no paga
+    | bonificación por sí misma.
+    |
+    */
+
+    'referrals' => [
+
+        'bonus_percent' => (float) env('COBROS_REFERRAL_BONUS_PERCENT', 10),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Landing pública de bienvenida (PRE-19B-5A)
+    |--------------------------------------------------------------------------
+    | Países mostrados en la pantalla pública, desde configuración dinámica.
+    | Agregar un país aquí lo publica en la landing sin tocar la vista.
+    */
+
+    'landing' => [
+
+        'countries' => [
+            ['iso' => 'CR', 'name' => 'Costa Rica', 'flag' => '🇨🇷', 'dial_code' => '+506', 'phone_digits' => 8],
+            ['iso' => 'CO', 'name' => 'Colombia', 'flag' => '🇨🇴', 'dial_code' => '+57', 'phone_digits' => 10],
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Teléfono del registro público (PRE-19B-5E)
+    |--------------------------------------------------------------------------
+    | Prefijo internacional y longitud nacional por país. Agregar un país a
+    | landing.countries con su dial_code/phone_digits extiende el registro
+    | sin tocar vistas ni validación.
+    */
+
+    'phone' => [
+
+        'countries' => [
+            'CR' => ['dial_code' => '+506', 'phone_digits' => 8],
+            'CO' => ['dial_code' => '+57', 'phone_digits' => 10],
+        ],
+
+    ],
+
 ];

@@ -113,8 +113,28 @@ class PublicRegistrationController extends Controller
 
     public const SESSION_KEY = 'cobros.registration';
 
-    public function start(): RedirectResponse
+    public function start(Request $request): RedirectResponse
     {
+        // PRE-19B-5B: «Crear cuenta» desde la bienvenida puede preseleccionar
+        // modalidad (Prestamista / Cobrador independiente / Trabajo para un
+        // prestamista) SIN duplicar el registro: solo se siembra si la sesión
+        // aún no tiene una (una invitación laboral previa manda).
+        $modality = $request->query('modality');
+        $allowed = [
+            CobrosModalityCatalog::PRESTAMISTA,
+            CobrosModalityCatalog::COBRADOR_INDEPENDIENTE,
+            CobrosModalityCatalog::COBRADOR_VINCULADO,
+        ];
+
+        if (is_string($modality) && in_array($modality, $allowed, true)) {
+            $registration = session(self::SESSION_KEY, []);
+            if (($registration['modality'] ?? '') === '') {
+                $registration['modality'] = $modality;
+                $registration['updated_at'] = now()->toIso8601String();
+                $request->session()->put(self::SESSION_KEY, $registration);
+            }
+        }
+
         return redirect()->route('cobros.register.step', ['paso' => $this->currentStep()]);
     }
 
@@ -210,6 +230,8 @@ class PublicRegistrationController extends Controller
             'hasReferral' => session(PublicLandingController::REFERRAL_SESSION_KEY) !== null,
             'laborInvitation' => $this->invitationBanner($registration),
             'draftUploads' => $this->draftUploads($registration),
+            // PRE-19B-5E — prefijo telefónico del país elegido (config dinámica).
+            'phoneDialCode' => $this->phoneDialCode($registration['country_iso'] ?? null),
         ]);
     }
 
@@ -249,19 +271,32 @@ class PublicRegistrationController extends Controller
             return redirect()->route('cobros.register.step', ['paso' => 1]);
         }
 
+        $countryIso = (string) (session(self::SESSION_KEY)['country_iso'] ?? '');
+
         $data = $request->validate([
             'name' => ['required', 'string', 'min:3', 'max:150'],
             'email' => ['required', 'email:rfc', 'max:150', Rule::unique('users', 'email')],
-            'phone' => ['nullable', 'string', 'max:50'],
+            // PRE-19B-5C/5E — el teléfono es obligatorio; se normaliza y
+            // valida según el país elegido (prefijo y longitud nacional).
+            'phone' => ['required', 'string', 'max:50'],
         ], [
             'email.unique' => 'Ya existe una cuenta con ese correo electrónico.',
+            'phone.required' => 'El teléfono es obligatorio. Ingrese un número válido para continuar.',
         ]);
+
+        $normalizedPhone = $this->normalizePhone((string) $data['phone'], $countryIso);
+
+        if ($normalizedPhone === null) {
+            return back()->withErrors([
+                'phone' => 'Ingrese un teléfono válido para su país (se admite con o sin el prefijo internacional).',
+            ])->withInput();
+        }
 
         $request->session()->put(self::SESSION_KEY, array_merge(session(self::SESSION_KEY, []), [
             'personal' => [
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'phone' => $data['phone'] ?? null,
+                'phone' => $normalizedPhone,
             ],
             'updated_at' => now()->toIso8601String(),
         ]));
@@ -754,6 +789,55 @@ class PublicRegistrationController extends Controller
         }
 
         return 1;
+    }
+
+    /** PRE-19B-5E — prefijo internacional del país (config/cobros.php). */
+    private function phoneDialCode(?string $iso): string
+    {
+        if ($iso === null || $iso === '') {
+            return '';
+        }
+
+        return (string) config("cobros.phone.countries.{$iso}.dial_code", '');
+    }
+
+    /**
+     * PRE-19B-5E — normaliza el teléfono según país: admite el prefijo
+     * internacional escrito por el usuario, espacios, guiones y paréntesis;
+     * devuelve el número nacional con formato si la longitud coincide con el
+     * país, o null si no es válido. Los borradores/números históricos no se
+     * reescriben: solo se aplica a envíos nuevos.
+     */
+    private function normalizePhone(string $raw, string $iso): ?string
+    {
+        $rule = config("cobros.phone.countries.{$iso}");
+        $dialCode = is_array($rule) ? (string) ($rule['dial_code'] ?? '') : '';
+        $digitsExpected = is_array($rule) ? (int) ($rule['phone_digits'] ?? 0) : 0;
+
+        if ($dialCode === '' || $digitsExpected === 0) {
+            return null;
+        }
+
+        // Forma canónica: solo dígitos, con prefijo internacional opcional.
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        $dialDigits = preg_replace('/\D+/', '', $dialCode) ?? '';
+
+        if ($dialDigits !== '' && str_starts_with($digits, $dialDigits)) {
+            $national = substr($digits, strlen($dialDigits));
+        } else {
+            $national = $digits;
+        }
+
+        if (strlen($national) !== $digitsExpected) {
+            return null;
+        }
+
+        // Formato legible por país: Costa Rica 8888-8888; Colombia 300 000 0000.
+        if ($iso === 'CO') {
+            return substr($national, 0, 3).' '.substr($national, 3, 3).' '.substr($national, 6);
+        }
+
+        return substr($national, 0, 4).'-'.substr($national, 4);
     }
 
     /**

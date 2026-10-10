@@ -9,7 +9,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen bg-black text-white antialiased">
-    @include('cobros.public-header')
+    @include('cobros.public-header', ['showLogin' => false])
 
     <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         @include('cobros.register-progress', ['step' => $step, 'progressSteps' => $progressSteps])
@@ -41,8 +41,17 @@
                     <input type="email" name="email" value="{{ old('email', $registration['personal']['email'] ?? '') }}" required maxlength="150" autocomplete="email" inputmode="email" class="mt-2 min-h-11 w-full rounded-xl border border-black px-4 py-3 font-normal outline-none">
                 </label>
 
-                <label class="block text-sm font-bold">Teléfono (opcional)
-                    <input type="tel" name="phone" value="{{ old('phone', $registration['personal']['phone'] ?? '') }}" maxlength="50" autocomplete="tel" inputmode="tel" class="mt-2 min-h-11 w-full rounded-xl border border-black px-4 py-3 font-normal outline-none">
+                <label class="block text-sm font-bold">Teléfono <span class="text-red-700">(obligatorio)</span>
+                    @php $phonePlaceholder = (($registration['country_iso'] ?? '') === 'CO') ? '300 000 0000' : '8888-8888'; @endphp
+                    <span class="mt-2 flex items-stretch gap-2">
+                        @if (($phoneDialCode ?? '') !== '')
+                            <span class="inline-flex min-h-11 shrink-0 items-center rounded-xl border border-black bg-slate-100 px-3 py-3 font-bold" aria-hidden="true">{{ $phoneDialCode }}</span>
+                        @endif
+                        <input type="tel" name="phone" value="{{ old('phone', $registration['personal']['phone'] ?? '') }}" required maxlength="50" autocomplete="tel-national" inputmode="tel" placeholder="{{ $phonePlaceholder }}" class="min-h-11 w-full rounded-xl border border-black px-4 py-3 font-normal outline-none">
+                    </span>
+                    @if (($phoneDialCode ?? '') !== '')
+                        <span class="mt-1 block text-xs leading-5 text-slate-600">Se muestra el prefijo de su país ({{ $phoneDialCode }}); escriba solo el número nacional.</span>
+                    @endif
                 </label>
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

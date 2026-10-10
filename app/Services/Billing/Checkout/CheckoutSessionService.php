@@ -76,14 +76,27 @@ class CheckoutSessionService
         $contract = $this->resolveContract($request);
         $quote = $this->pricing->quoteForContract($contract);
 
+        // PRE-19B-4B: importe cobrado = neto server-side si hay saldo a favor
+        // reservado; si no, el total de la cotización. El navegador nunca
+        // define el importe. El neto debe ser positivo y <= total cotizado.
+        $chargedAmount = $quote->monthlyTotal;
+        if ($request->netAmount !== null && $request->netAmount !== '') {
+            if (bccomp($request->netAmount, '0', 4) <= 0 || bccomp($request->netAmount, $quote->monthlyTotal, 4) > 0) {
+                throw ValidationException::withMessages([
+                    'amount' => 'El importe neto de Checkout es inválido para el contrato.',
+                ]);
+            }
+            $chargedAmount = $request->netAmount;
+        }
+
         // 4) Construir idempotency key
         $idempotencyKey = $request->idempotencyKey !== ''
             ? $request->idempotencyKey
-            : $this->buildIdempotencyKey($request, $quote);
+            : $this->buildIdempotencyKey($request, $quote, $chargedAmount);
 
         // 5) Crear sesión Checkout en Stripe
         $client = $this->stripeProvider->getClientForCheckout();
-        $session = $this->createStripeSession($client, $request, $contract, $quote, $idempotencyKey);
+        $session = $this->createStripeSession($client, $request, $contract, $quote, $idempotencyKey, $chargedAmount);
 
         // 6) Respuesta con datos mínimos para redirección
         return new CheckoutSessionResponse(
@@ -93,7 +106,7 @@ class CheckoutSessionService
             companyId: $request->companyId,
             contractReference: $request->contractReference,
             currency: $quote->currency,
-            amount: $quote->monthlyTotal,
+            amount: $chargedAmount,
             periodYear: $request->periodYear,
             periodMonth: $request->periodMonth,
             idempotencyKey: $idempotencyKey,
@@ -135,6 +148,7 @@ class CheckoutSessionService
         CobrosBillingContract $contract,
         \App\Data\Cobros\CobrosPriceQuote $quote,
         string $idempotencyKey,
+        string $chargedAmount,
     ): \Stripe\Checkout\Session {
         $params = [
             'mode' => self::MODE_PAYMENT, // Futuro: subscription
@@ -153,7 +167,7 @@ class CheckoutSessionService
                             'period_month' => (string) ($request->periodMonth ?? ''),
                         ], $request->metadata),
                     ],
-                    'unit_amount' => $this->toMinorUnits($quote->monthlyTotal, $quote->currency),
+                    'unit_amount' => $this->toMinorUnits($chargedAmount, $quote->currency),
                 ],
                 'quantity' => 1,
             ]],
@@ -265,14 +279,14 @@ class CheckoutSessionService
         }
     }
 
-    private function buildIdempotencyKey(CheckoutSessionRequest $request, \App\Data\Cobros\CobrosPriceQuote $quote): string
+    private function buildIdempotencyKey(CheckoutSessionRequest $request, \App\Data\Cobros\CobrosPriceQuote $quote, string $chargedAmount): string
     {
         $data = implode('|', [
             $request->product,
             $request->companyId,
             $request->contractReference,
             $quote->currency,
-            $quote->monthlyTotal,
+            $chargedAmount,
             $request->periodYear ?? '',
             $request->periodMonth ?? '',
         ]);

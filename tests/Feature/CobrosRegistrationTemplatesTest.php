@@ -102,6 +102,7 @@ class CobrosRegistrationTemplatesTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Draft Owner',
             'email' => 'templates.owner@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $step3 = $this->get(route('cobros.register.step', ['paso' => 3]));

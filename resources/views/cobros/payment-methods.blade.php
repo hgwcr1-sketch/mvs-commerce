@@ -110,6 +110,34 @@
             <p class="mt-1 text-3xl font-bold text-slate-900">{{ $quote->formattedTotal() }}</p>
         </div>
 
+        {{-- PRE-19B-4B: saldo a favor de referidos (cálculo server-side) --}}
+        @if(isset($creditPlan) && bccomp($creditPlan->creditoAplicable, '0', 4) > 0)
+            <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Saldo a favor de referidos</p>
+                <dl class="mt-2 space-y-1 text-sm">
+                    <div class="flex justify-between gap-3">
+                        <dt class="text-slate-600">Total original</dt>
+                        <dd class="font-semibold text-slate-800">{{ Money::human($creditPlan->totalOriginal, $creditPlan->currency) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt class="text-slate-600">Bonificación aplicada</dt>
+                        <dd class="font-semibold text-emerald-700">−{{ Money::human($creditPlan->creditoAplicable, $creditPlan->currency) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3 border-t border-emerald-200 pt-1">
+                        <dt class="text-slate-700">Importe final a pagar</dt>
+                        <dd class="text-lg font-bold text-slate-900">{{ Money::human($creditPlan->totalAPagar, $creditPlan->currency) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt class="text-slate-600">Saldo remanente</dt>
+                        <dd class="font-semibold text-slate-800">{{ Money::human($creditPlan->saldoRemanente, $creditPlan->currency) }}</dd>
+                    </div>
+                </dl>
+                @if($creditPlan->requiereLiquidacionInterna)
+                    <p class="mt-2 text-sm font-semibold text-emerald-800">Cubierto íntegramente: la liquidación es interna, sin cargo externo.</p>
+                @endif
+            </div>
+        @endif
+
         @if(count($quote->lines) > 0)
         <details class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <summary class="min-h-[44px] cursor-pointer select-none text-sm font-semibold text-slate-700">Ver desglose del importe</summary>

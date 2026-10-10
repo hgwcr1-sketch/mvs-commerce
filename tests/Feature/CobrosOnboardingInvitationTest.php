@@ -67,6 +67,7 @@ class CobrosOnboardingInvitationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Cobrador Invitado',
             'email' => $email,
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->post(route('cobros.register.routes.save'), array_merge([
@@ -319,6 +320,7 @@ class CobrosOnboardingInvitationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Cobrador Contratado',
             'email' => 'cobrador@multi.test',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
         $this->post(route('cobros.register.routes.save'), [
             'name' => 'Ruta Norte', 'lender' => 'Prestamista Norte',

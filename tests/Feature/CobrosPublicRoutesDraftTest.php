@@ -19,6 +19,7 @@ class CobrosPublicRoutesDraftTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Draft Owner',
             'email' => 'draft.owner@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
     }
 
@@ -177,6 +178,7 @@ class CobrosPublicRoutesDraftTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Colombia Owner',
             'email' => 'col.owner@test.com',
+            'phone' => '300 000 0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         // La ruta del país anterior ocupa la única plaza: se elimina antes de

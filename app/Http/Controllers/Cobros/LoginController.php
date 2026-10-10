@@ -13,6 +13,13 @@ class LoginController extends SharedLoginController
 {
     public function create()
     {
+        // PRE-19B-5B: sesión autenticada válida → panel CobrOS directo.
+        // El middleware del panel resuelve empresa/licencia como en cualquier
+        // acceso autenticado (no se saltan controles).
+        if (auth()->user() !== null) {
+            return redirect()->route('cobros.index');
+        }
+
         return view('cobros.auth.login');
     }
 

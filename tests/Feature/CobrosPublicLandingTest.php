@@ -22,16 +22,20 @@ class CobrosPublicLandingTest extends TestCase
         $content = $response->getContent();
 
         $response->assertOk()
-            ->assertSee('Registrarse')
-            ->assertSee('Probar demo')
+            ->assertSee('Crear cuenta')
+            ->assertSee('Probar DEMO')
             ->assertSee('Ver videos')
             ->assertSee('Iniciar sesión')
-            ->assertSee('href="'.route('cobros.register').'"', false)
+            ->assertSee('href="'.route('cobros.register', ['modality' => 'prestamista']).'"', false)
             ->assertSee('href="'.route('cobros.login').'"', false)
+            ->assertSee('href="'.route('cobros.demo').'"', false)
+            ->assertSee('href="'.route('cobros.videos').'"', false)
             ->assertDontSee('href="'.route('login').'"', false);
 
-        $this->assertSame(2, substr_count($content, 'Próximamente'), 'Solo los CTA sin ruta propia indican Próximamente');
-        $this->assertSame(2, substr_count($content, 'aria-disabled="true"'), 'Solo los CTA sin ruta propia quedan inactivos');
+        // PRE-19B-5D: DEMO y Videos ya tienen ruta propia; la landing no
+        // conserva CTA deshabilitados ni «Próximamente».
+        $this->assertSame(0, substr_count($content, 'Próximamente'), 'La landing no debe quedar con CTA próximamente.');
+        $this->assertSame(0, substr_count($content, 'aria-disabled="true"'), 'La landing no debe quedar con CTA inactivos.');
     }
 
     public function test_landing_lists_only_available_countries_with_enablement_note(): void
@@ -90,7 +94,7 @@ class CobrosPublicLandingTest extends TestCase
         $response->assertOk()
             ->assertSee('name="viewport"', false)
             ->assertSee('content="#D4AF37"', false)
-            ->assertSee('sm:grid-cols-3', false)
+            ->assertSee('lg:grid-cols-4', false)
             ->assertSee('min-h-11', false)
             ->assertSee('logo-mvs-cobros.png')
             ->assertSee('MVS CobrOS')

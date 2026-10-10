@@ -23,6 +23,7 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
     public function __construct(
         private readonly CobrosPaymentConfirmationService $confirmationService,
         private readonly CobrosPostPaymentActivationService $activationService,
+        private readonly ReferralBonusService $referralBonuses,
     ) {
     }
 
@@ -54,8 +55,11 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
             return;
         }
 
-        // Verificar que el importe y moneda coinciden con el contrato
-        $expectedAmount = $this->getContractMonthlyAmount($contract);
+        // Verificar que el importe y moneda coinciden con el contrato.
+        // PRE-19B-4B: el esperado es el NETO del período (total menos saldo
+        // a favor reservado/liquidado), la misma regla de server-side que
+        // Checkout/SINPE, evitando diferencias por bonificación aplicada.
+        $expectedAmount = $this->getExpectedAmount($contract, $event->periodYear, $event->periodMonth);
         if (bccomp($event->amount, $expectedAmount, 4) !== 0) {
             return;
         }
@@ -98,6 +102,10 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
             // y el estado es recuperable para reintento interno.
             // No lanzamos excepción para no romper el webhook Stripe.
         }
+
+        // PRE-19B-3: emisión idempotente de bonificaciones del programa
+        // (referido comercial / crecimiento) tras el primer pago confirmado.
+        $this->referralBonuses->onConfirmedPayment($confirmation);
     }
 
     /** Busca el borrador de registro asociado al contrato. */
@@ -173,9 +181,15 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
         }
     }
 
-    /** Obtiene el total mensual vigente del contrato (string decimal 4 dígitos). */
-    private function getContractMonthlyAmount(CobrosBillingContract $contract): string
+    /** Importe esperado del período: neto tras saldo a favor (PRE-19B-4B). */
+    private function getExpectedAmount(CobrosBillingContract $contract, ?int $periodYear, ?int $periodMonth): string
     {
+        $credits = app(ReferralCreditDiscountService::class);
+
+        if ($periodYear !== null && $periodMonth !== null && $periodYear >= 2020 && $periodMonth >= 1 && $periodMonth <= 12) {
+            return $credits->netAmountForPeriod($contract, $periodYear, $periodMonth);
+        }
+
         return app(\App\Services\Cobros\CobrosBillingContractService::class)
             ->monthlyTotal($contract);
     }

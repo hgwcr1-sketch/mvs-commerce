@@ -22,6 +22,13 @@ final class CheckoutSessionRequest
         public readonly ?int $periodMonth = null,
         public readonly array $metadata = [],
         public readonly string $idempotencyKey = '',
+        /**
+         * PRE-19B-4B: importe NETO calculado en servidor (total menos saldo
+         * a favor de referidos reservado). null = sin bonificación (importe
+         * completo de la cotización). El navegador NUNCA lo define: solo lo
+         * inyecta el servicio interno de CobrOS.
+         */
+        public readonly ?string $netAmount = null,
     ) {
     }
 
@@ -47,6 +54,7 @@ final class CheckoutSessionRequest
             periodMonth: $request->periodMonth,
             metadata: array_merge($request->metadata, $metadata),
             idempotencyKey: $idempotencyKey,
+            netAmount: null,
         );
     }
 

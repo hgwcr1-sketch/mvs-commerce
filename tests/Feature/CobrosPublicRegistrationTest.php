@@ -162,6 +162,7 @@ class CobrosPublicRegistrationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Corrected Name',
             'email' => 'corrected@test.com',
+            'phone' => '300 000 0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->get(route('cobros.register.step', ['paso' => 3]))
@@ -186,6 +187,7 @@ class CobrosPublicRegistrationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Con Referencia',
             'email' => 'referida@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $referral = session('cobros.referral');
@@ -212,6 +214,7 @@ class CobrosPublicRegistrationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Sin Acceso Todavía',
             'email' => 'sinacceso@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->post(route('cobros.register.portfolio'), ['portfolio_plan' => 'manual'])
@@ -251,6 +254,7 @@ class CobrosPublicRegistrationTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Cobrador Único',
             'email' => 'unico.ruta@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->post(route('cobros.register.routes.save'), ['name' => 'Ruta Norte'])

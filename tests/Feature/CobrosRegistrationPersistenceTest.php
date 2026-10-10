@@ -31,6 +31,7 @@ class CobrosRegistrationPersistenceTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Draft Owner',
             'email' => $email,
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->post(route('cobros.register.routes.save'), [
@@ -84,6 +85,7 @@ class CobrosRegistrationPersistenceTest extends TestCase
         $this->post(route('cobros.register.personal'), [
             'name' => 'Draft Owner Corregido',
             'email' => 'borrador@test.com',
+            'phone' => '8888-0000',
         ])->assertRedirect(route('cobros.register.step', ['paso' => 3]));
 
         $this->assertSame(1, CobrosRegistrationDraft::count());

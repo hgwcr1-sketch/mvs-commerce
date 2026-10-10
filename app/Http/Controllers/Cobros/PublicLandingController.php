@@ -25,7 +25,11 @@ class PublicLandingController extends Controller
     {
         self::captureReferral($request);
 
-        return view('cobros.public-landing');
+        // PRE-19B-5A: países disponibles desde configuración dinámica
+        // (config/cobros.php → landing.countries), nunca hardcodeados.
+        return view('cobros.public-landing', [
+            'countries' => config('cobros.landing.countries', []),
+        ]);
     }
 
     /**

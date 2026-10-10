@@ -42,6 +42,7 @@ class CobrosActivationContractService
         private CompanyProvisioner $provisioner,
         private CobrosModalityService $modalityService,
         private CollectorLicenseService $collectorLicenses,
+        private ReferralAttributionService $referralAttributions,
     ) {
     }
 
@@ -126,8 +127,36 @@ class CobrosActivationContractService
             // Aprovisionamiento: empresa + usuario + membresía + modalidad + ruta.
             $result = $this->provision($contract, $draft, $linkage);
 
+            // PRE-19B-2: al completar el registro (alta efectiva tras el
+            // pago) se persiste la relación de referido comercial con la
+            // atribución permanente. Un código inválido o auto-referido no
+            // revierte la activación: solo se omite la atribución.
+            $this->persistReferralAttribution($contract, $result);
+
             return $result;
         });
+    }
+
+    /** Atribución permanente del referido comercial (mejor esfuerzo). */
+    private function persistReferralAttribution(CobrosActivationContract $contract, array $result): void
+    {
+        $code = is_array($contract->referral) ? ($contract->referral['code'] ?? null) : null;
+        if (! is_string($code) || $code === '') {
+            return;
+        }
+
+        try {
+            $this->referralAttributions->attribute(
+                $result['user'],
+                $code,
+                $result['company'] ?? null,
+                is_array($contract->referral) && ! empty($contract->referral['captured_at'])
+                    ? \Carbon\Carbon::parse((string) $contract->referral['captured_at'])
+                    : null,
+            );
+        } catch (ValidationException) {
+            // Código inválido, inactivo o auto-referido: sin atribución.
+        }
     }
 
     /**

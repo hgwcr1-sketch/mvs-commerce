@@ -37,6 +37,7 @@ class PaymentMethodSelectionController extends Controller
         private CheckoutSessionService $checkoutSessions,
         private CobrosPaymentConfirmationService $paymentConfirmations,
         private PaymentProviderRegistry $providerRegistry,
+        private \App\Services\Cobros\ReferralCreditDiscountService $referralCredits,
     ) {}
 
     /**
@@ -90,10 +91,16 @@ class PaymentMethodSelectionController extends Controller
             ->where('cobros_billing_contract_id', $contract->id)
             ->exists();
 
+        // PRE-19B-4B: plan de saldo a favor (total original, bonificación
+        // aplicada, importe final neto y saldo remanente) calculado SOLO en
+        // servidor para mostrar antes de elegir método de pago.
+        $creditPlan = $this->referralCredits->plan($contract, now()->year, now()->month);
+
         return view('cobros.payment-methods', [
             'contract' => $contract,
             'company' => Company::findOrFail($companyId),
             'quote' => $quote,
+            'creditPlan' => $creditPlan,
             'stripeAvailable' => $stripeAvailable,
             'stripeTestReady' => $effectiveProviderKey === 'stripe' && $this->stripeTestReady(),
             'stripePublishableKey' => $stripePublishableKey,
@@ -116,6 +123,17 @@ class PaymentMethodSelectionController extends Controller
     public function reportSinpe(Request $request, CobrosBillingContract $contract): RedirectResponse
     {
         $this->authorizeContract($request, $contract);
+
+        // PRE-19B-4B: reservar saldo y validar el neto ANTES de pedir
+        // transferencia. Si el saldo cubre la mensualidad (neto ₡0), NO se
+        // solicita transferencia: la liquidación es interna (checkout).
+        $this->referralCredits->reserve($contract, now()->year, now()->month);
+        $net = $this->referralCredits->netAmountForPeriod($contract, now()->year, now()->month);
+        if (bccomp($net, '0', 4) <= 0) {
+            return redirect()
+                ->route('cobros.payment.methods', $contract)
+                ->withErrors(['sinpe' => 'La mensualidad está cubierta por saldo a favor: no se requiere transferencia SINPE.']);
+        }
 
         $this->paymentConfirmations->requestSinpe($contract, $request->user());
 
@@ -143,6 +161,25 @@ class PaymentMethodSelectionController extends Controller
                 ->withErrors(['checkout' => 'El proveedor de pago configurado para este país no permite Checkout con tarjeta en este momento.']);
         }
 
+        // PRE-19B-4B: reservar saldo a favor del período y resolver el neto
+        // SOLO en servidor. Neto ₡0 => liquidación interna idempotente, sin
+        // cargo externo. Neto > 0 => Checkout Stripe TEST por el neto exacto.
+        $this->referralCredits->reserve($contract, now()->year, now()->month);
+        $net = $this->referralCredits->netAmountForPeriod($contract, now()->year, now()->month);
+
+        if (bccomp($net, '0', 4) <= 0) {
+            $this->paymentConfirmations->liquidateCreditInternal(
+                $contract,
+                $request->user(),
+                now()->year,
+                now()->month,
+            );
+
+            return redirect()
+                ->route('cobros.payment.methods', $contract)
+                ->with('credit_liquidated', 'Mensualidad liquidada con saldo a favor: sin cargo externo.');
+        }
+
         $successUrl = route('cobros.payment.methods', $contract).'?checkout=exitoso';
         $cancelUrl = route('cobros.payment.methods', $contract).'?checkout=cancelado';
 
@@ -156,6 +193,7 @@ class PaymentMethodSelectionController extends Controller
                 periodYear: now()->year,
                 periodMonth: now()->month,
                 metadata: ['payer_user_id' => (string) $request->user()->id],
+                netAmount: $net,
             ));
         } catch (PaymentProviderUnavailableException $e) {
             return redirect()
