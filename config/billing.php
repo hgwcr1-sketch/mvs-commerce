@@ -56,4 +56,19 @@ return [
         // 'cobros' => ['CR' => 'stripe', 'CO' => 'stripe'],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Handlers de pagos confirmados por producto
+    |--------------------------------------------------------------------------
+    |
+    | Cada producto registra sus handlers para recibir eventos de pago
+    | confirmados (CONFIRMED) del motor genérico. CobrOS activa licencias
+    | y aprovisiona cuentas tras un pago Stripe verificado.
+    |
+    */
+
+    'confirmed_handlers' => [
+        App\Services\Cobros\CobrosPaymentConfirmedHandler::class,
+    ],
+
 ];

@@ -64,6 +64,10 @@ class CobrosPaymentConfirmationService
      * Núcleo de confirmación (común a internal/stripe/sinpe). Idempotente
      * por transaction_id: reintentos y reintentos de webhook no duplican
      * activación ni crean otra confirmación.
+     *
+     * La confirmación de pago se crea SIEMPRE (si pasa validaciones).
+     * La activación se intenta aparte: si falla, la confirmación queda
+     * CONFIRMADA y recuperable para reintento (no se revierte).
      */
     public function confirm(
         CobrosBillingContract $contract,
@@ -79,8 +83,8 @@ class CobrosPaymentConfirmationService
         $this->assertTransactionId($transactionId);
         $this->assertValidPeriod($periodYear, $periodMonth);
 
-        return DB::transaction(function () use ($contract, $actor, $transactionId, $amount, $periodYear, $periodMonth, $provider, $notes) {
-            // Idempotencia: misma transacción => MISMA confirmación, sin re-activar.
+        // 1) Crear/obtener confirmación de pago (transacción corta)
+        $confirmation = DB::transaction(function () use ($contract, $actor, $transactionId, $amount, $periodYear, $periodMonth, $provider, $notes) {
             $existing = CobrosPaymentConfirmation::query()
                 ->where('transaction_id', $transactionId)
                 ->lockForUpdate()
@@ -95,7 +99,7 @@ class CobrosPaymentConfirmationService
             $this->assertPeriodWithinTerm($contract, $periodYear, $periodMonth);
             $this->assertNoDuplicatePeriod($contract, $periodYear, $periodMonth);
 
-            $confirmation = CobrosPaymentConfirmation::create([
+            return CobrosPaymentConfirmation::create([
                 'transaction_id' => $transactionId,
                 'cobros_billing_contract_id' => $contract->id,
                 'company_id' => $contract->company_id,
@@ -109,12 +113,22 @@ class CobrosPaymentConfirmationService
                 'confirmed_at' => now(),
                 'notes' => $notes,
             ]);
-
-            // Activación idempotente: una sola vez por contrato.
-            $this->activateContract($contract, $actor, $periodYear, $periodMonth);
-
-            return $confirmation;
         });
+
+        // 2) Intentar activación (fuera de la transacción de confirmación)
+        //    Si falla, la confirmación NO se revierte; queda para reintento.
+        try {
+            $this->activateContract($contract, $actor, $periodYear, $periodMonth, $provider);
+        } catch (ValidationException $e) {
+            // Log y continuar: la confirmación queda CONFIRMADA y recuperable
+            \Illuminate\Support\Facades\Log::warning('Activación fallida tras pago confirmado; se reintentará', [
+                'transaction_id' => $transactionId,
+                'contract_id' => $contract->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $confirmation;
     }
 
     /** Renovación mensual: registra el período siguiente como pendiente. */
@@ -180,17 +194,25 @@ class CobrosPaymentConfirmationService
      *  - Empresarial: habilita cupo de empresa con límite = cupos contratados
      *    (UN pago mensual del prestamista cubre todos los cupos).
      */
-    private function activateContract(CobrosBillingContract $contract, User $actor, int $periodYear, int $periodMonth): void
+    private function activateContract(CobrosBillingContract $contract, User $actor, int $periodYear, int $periodMonth, string $provider = 'internal'): void
     {
         $company = Company::query()->findOrFail($contract->company_id);
 
-        if ($contract->billing_mode === CobrosBillingContract::MODE_INDIVIDUAL) {
-            $this->licenseService->updateCobrosContract($company, $actor, [
-                'license_mode' => 'individual',
-                'collector_limit' => null,
-                'admin_license_charged' => (bool) $contract->admin_included,
-            ]);
+        $config = [
+            'license_mode' => $contract->billing_mode === CobrosBillingContract::MODE_INDIVIDUAL ? 'individual' : 'company_cupo',
+            'collector_limit' => $contract->billing_mode === CobrosBillingContract::MODE_ENTERPRISE ? (int) $contract->seats_total : null,
+            'admin_license_charged' => (bool) $contract->admin_included,
+        ];
 
+        // Activación automática (webhook Stripe/SINPE): aplica configuración sin requerir platform admin.
+        // Activación manual (internal): usa updateCobrosContract que valida y requiere platform admin.
+        if ($provider === 'internal') {
+            $this->licenseService->updateCobrosContract($company, $actor, $config);
+        } else {
+            $this->licenseService->applyCobrosContractConfiguration($company, $config);
+        }
+
+        if ($contract->billing_mode === CobrosBillingContract::MODE_INDIVIDUAL) {
             $payer = $contract->payer;
             if ($payer === null) {
                 throw ValidationException::withMessages(['payer' => 'El contrato individual no tiene responsable de pago válido.']);
@@ -198,16 +220,6 @@ class CobrosPaymentConfirmationService
 
             $periodEnd = $this->periodEnd($periodYear, $periodMonth);
             $this->collectorLicenses->renew($payer, $company, $periodEnd);
-        } elseif ($contract->billing_mode === CobrosBillingContract::MODE_ENTERPRISE) {
-            $this->licenseService->updateCobrosContract($company, $actor, [
-                'license_mode' => 'company_cupo',
-                'collector_limit' => (int) $contract->seats_total,
-                'admin_license_charged' => (bool) $contract->admin_included,
-            ]);
-        } else {
-            throw ValidationException::withMessages([
-                'billing_mode' => 'La activación de contratos mixtos aún no está habilitada.',
-            ]);
         }
 
         if ($contract->status !== CobrosBillingContract::STATUS_ACTIVE) {

@@ -13,6 +13,7 @@ class CobrosRegistrationDraft extends Model
         'token_expires_at',
         'token_used_at',
         'last_saved_at',
+        'billing_contract_id',
     ];
 
     protected function casts(): array

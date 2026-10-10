@@ -259,4 +259,41 @@ class CompanyLicenseService
 
         return $module->only(['license_mode', 'collector_limit', 'admin_license_charged']);
     }
+
+    /**
+     * Aplica la configuración del contrato CobrOS desde activación automática (webhook).
+     * No requiere platform admin: usa los datos ya validados del contrato de facturación.
+     */
+    public function applyCobrosContractConfiguration(Company $company, array $config): void
+    {
+        DB::transaction(function () use ($company, $config) {
+            $module = $company->modules()->updateOrCreate(
+                ['module_key' => 'cobros'],
+                ['is_enabled' => true],
+            );
+
+            $module->update([
+                'license_mode' => $config['license_mode'],
+                'collector_limit' => $config['collector_limit'],
+                'admin_license_charged' => $config['admin_license_charged'],
+            ]);
+
+            $license = $this->ensure($company);
+            $license->events()->create([
+                'company_id' => $company->id,
+                'actor_id' => null,
+                'action' => 'cobros_contract_auto',
+                'from_status' => $license->status,
+                'to_status' => $license->status,
+                'snapshot' => [
+                    ...$license->only(['status', 'plan', 'user_limit', 'branch_limit']),
+                    'cobros_contract' => $module->only(['license_mode', 'collector_limit', 'admin_license_charged']),
+                ],
+                'changes' => [
+                    'cobros_contract' => ['from' => null, 'to' => $module->only(['license_mode', 'collector_limit', 'admin_license_charged'])],
+                ],
+                'notes' => "Contrato CobrOS activado automáticamente: modalidad {$config['license_mode']}.",
+            ]);
+        });
+    }
 }

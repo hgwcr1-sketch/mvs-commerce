@@ -4,6 +4,7 @@ namespace App\Services\Cobros;
 
 use App\Models\CobrosPaymentConfirmation;
 use App\Models\CobrosRegistrationDraft;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -56,12 +57,28 @@ class CobrosPostPaymentActivationService
         }
 
         // Prepara el contrato (valida borrador completo + invitación real).
-        $contract = $this->activation->prepare($draft);
+        try {
+            $contract = $this->activation->prepare($draft);
+        } catch (\Throwable $e) {
+            Log::warning('activateFromPayment: prepare failed', [
+                'draft_id' => $draft->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
 
         // Marca el contrato como pago confirmado (inmutable: nueva instancia).
         $confirmed = $contract->withPaymentConfirmed();
 
         // Ejecuta la activación (idempotente, transaccional).
-        return $this->activation->execute($confirmed);
+        try {
+            return $this->activation->execute($confirmed);
+        } catch (\Throwable $e) {
+            Log::warning('activateFromPayment: execute failed', [
+                'draft_id' => $draft->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 }
