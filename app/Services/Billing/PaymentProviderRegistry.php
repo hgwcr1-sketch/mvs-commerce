@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\BillingProviderSetting;
 use App\Services\Billing\Contracts\PaymentProviderInterface;
 use App\Services\Billing\Exceptions\PaymentProviderUnavailableException;
 use Illuminate\Support\Facades\App;
@@ -51,13 +52,46 @@ class PaymentProviderRegistry
     }
 
     /**
-     * Resuelve el proveedor por defecto para un producto+país. Si la
-     * configuración no lo define, usa el primer proveedor disponible; si
-     * ninguno está disponible lanza la excepción explícita.
+     * Resuelve el proveedor por defecto para un producto+país.
+     *
+     * 18E-1A: prioriza la elección explícita persistida por Platform Admin
+     * (billing_provider_settings). Si la elección existe pero está
+     * deshabilitada o el proveedor no está disponible (no configurado),
+     * se devuelve indisponible de forma segura SIN caer a otro proveedor.
+     * Si no hay elección persistida, se conserva el comportamiento previo:
+     * config(billing.product_providers) y, en su defecto, el primer
+     * proveedor disponible registrado.
      */
     public function forProduct(string $product, string $countryIso): PaymentProviderInterface
     {
-        $configured = config("billing.product_providers.{$product}.".strtoupper($countryIso));
+        $country = strtoupper($countryIso);
+
+        $setting = BillingProviderSetting::query()
+            ->forProductCountry($product, $country)
+            ->first();
+
+        if ($setting !== null) {
+            if (! $setting->is_active) {
+                throw PaymentProviderUnavailableException::forProvider(
+                    $product,
+                    "Elección explícita deshabilitada para {$country}; no se selecciona otro proveedor automáticamente."
+                );
+            }
+
+            // get() lanza si el proveedor no está registrado en la configuración.
+            $provider = $this->get($setting->provider);
+
+            if (! $provider->isAvailable()) {
+                throw PaymentProviderUnavailableException::forProvider(
+                    $setting->provider,
+                    "Proveedor elegido para {$product}/{$country} no está configurado; no se selecciona otro proveedor automáticamente."
+                );
+            }
+
+            return $provider;
+        }
+
+        $configured = config("billing.product_providers.{$product}.{$country}");
 
         if (is_string($configured) && $configured !== '') {
             return $this->get($configured);

@@ -184,15 +184,21 @@
                                         </span>
                                     </td>
                                     <td class="p-3 hidden lg:table-cell text-xs text-slate-500">
-                                        @php($collectorLicense = $collectorLicenses[$collector['id']] ?? null)
+                                        @php
+                                            $collectorLicense = $collectorLicenses[$collector['id']] ?? null
+                                        @endphp
                                         @if($collectorLicense)
-                                            @php($licenseState = $collectorLicense['state'])
-                                            @php($licenseBadge = [
+                                            @php
+                                                $licenseState = $collectorLicense['state']
+                                            @endphp
+                                            @php
+                                                $licenseBadge = [
                                                 'active' => ['bg-emerald-100 text-emerald-800', 'Activa'],
                                                 'suspended' => ['bg-red-100 text-red-800', 'Suspendida'],
                                                 'expired' => ['bg-amber-100 text-amber-800', 'Vencida'],
                                                 'pending' => ['bg-slate-200 text-slate-700', 'Programada'],
-                                            ][$licenseState] ?? ['bg-slate-200 text-slate-700', 'Sin licencia'])
+                                            ][$licenseState] ?? ['bg-slate-200 text-slate-700', 'Sin licencia']
+                                            @endphp
                                             <span class="rounded-full {{ $licenseBadge[0] }} px-2 py-1 text-xs font-bold">{{ $licenseBadge[1] }}</span>
                                             <span class="mt-1 block">
                                                 Inicia: {{ $collectorLicense['license']->starts_at?->format('d/m/Y') ?? '—' }}
@@ -312,5 +318,167 @@
         @endif
     </section>
     @endif
+
+    {{-- 18B-1: Pagos CobrOS — solicitudes SINPE pendientes (solo Platform Admin) --}}
+    <section id="pagos-sinpe" class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm scroll-mt-24">
+        <h2 class="font-bold">Pagos CobrOS — Pendientes SINPE</h2>
+        <p class="mt-2 text-sm text-slate-600">
+            Solicitudes de pago reportadas por el pagador, pendientes de verificación humana.
+            Enviar un comprobante (incluido WhatsApp) no verifica ni aprueba un pago por sí solo.
+        </p>
+
+        @if(session('success'))
+            <p class="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800" role="status">{{ session('success') }}</p>
+        @endif
+        @if($errors->any())
+            <div class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                @foreach($errors->all() as $sinpeError)
+                    <p>{{ $sinpeError }}</p>
+                @endforeach
+            </div>
+        @endif
+
+        @if($sinpePending->isEmpty())
+            <p class="mt-4 text-sm text-slate-500">No hay solicitudes SINPE pendientes para esta empresa.</p>
+        @else
+            <div class="mt-4 overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-slate-500">
+                            <th class="p-3">Fecha</th>
+                            <th class="p-3">Referencia</th>
+                            <th class="p-3">Pagador</th>
+                            <th class="p-3">Contrato</th>
+                            <th class="p-3">Importe</th>
+                            <th class="p-3">Moneda</th>
+                            <th class="p-3">Estado</th>
+                            <th class="p-3">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($sinpePending as $confirmation)
+                            <tr class="border-t">
+                                <td class="p-3">{{ optional($confirmation->created_at)->format('d/m/Y H:i') }}</td>
+                                <td class="p-3 font-mono">{{ $confirmation->transaction_id }}</td>
+                                <td class="p-3">
+                                    {{ $confirmation->contract?->payer?->name ?? '—' }}
+                                    @if($confirmation->contract?->payer?->email)
+                                        <br><span class="text-xs text-slate-500">{{ $confirmation->contract->payer->email }}</span>
+                                    @endif
+                                </td>
+                                <td class="p-3">#{{ $confirmation->cobros_billing_contract_id }}</td>
+                                <td class="p-3 text-right">{{ number_format((float) $confirmation->amount, 2) }}</td>
+                                <td class="p-3">{{ $confirmation->currency }}</td>
+                                <td class="p-3">
+                                    <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">Pendiente</span>
+                                </td>
+                                <td class="p-3">
+                                    <form method="POST" action="{{ route('platform.sinpe.approve', [$company, $confirmation]) }}" class="flex flex-col gap-2">
+                                        @csrf
+                                        <label class="flex items-start gap-2 text-xs text-slate-600">
+                                            <input type="checkbox" name="verified_transfer" value="1" required class="mt-0.5 h-4 w-4">
+                                            Verifiqué la transferencia en el banco
+                                        </label>
+                                        <button class="min-h-11 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white">Aprobar</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('platform.sinpe.reject', [$company, $confirmation]) }}" class="mt-2 flex flex-col gap-2">
+                                        @csrf
+                                        <input type="text" name="notes" required maxlength="500" placeholder="Motivo del rechazo"
+                                               class="min-h-11 w-full rounded-xl border border-slate-300 px-3 text-xs">
+                                        <button class="min-h-11 rounded-xl bg-slate-200 px-3 text-xs font-bold text-slate-700">Rechazar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-3 text-xs text-slate-400">La aprobación exige verificación externa de la transferencia en el banco; una captura o un mensaje de WhatsApp no bastan.</p>
+        @endif
+    </section>
+
+    {{-- 18C-1: Membresía CobrOS — estado para el administrador Maestro autorizado --}}
+    <section id="membresia-cobros" class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm scroll-mt-24">
+        <h2 class="font-bold">Membresía CobrOS</h2>
+
+        @if($membershipContract === null || $membershipState === null)
+            <p class="mt-4 text-sm text-slate-500">Esta empresa no tiene un contrato de membresía CobrOS.</p>
+        @else
+            @php
+                $membershipPill = match ($membershipState['status']) {
+                    'vigente' => 'bg-emerald-100 text-emerald-800',
+                    'proxima_a_vencer' => 'bg-amber-100 text-amber-800',
+                    'vencida' => 'bg-red-100 text-red-800',
+                    default => 'bg-slate-100 text-slate-700',
+                };
+                $membershipLabel = match ($membershipState['status']) {
+                    'vigente' => 'Vigente',
+                    'proxima_a_vencer' => 'Próxima a vencer',
+                    'vencida' => 'Vencida',
+                    default => 'Pendiente de pago',
+                };
+            @endphp
+
+            <dl class="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                    <dt class="text-slate-500">Estado</dt>
+                    <dd class="mt-1">
+                        <span class="rounded-full {{ $membershipPill }} px-3 py-1 text-xs font-bold">{{ $membershipLabel }}</span>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Vencimiento efectivo</dt>
+                    <dd class="mt-1 font-semibold">{{ $membershipState['expires_on'] ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Responsable del pago</dt>
+                    <dd class="mt-1 font-semibold">
+                        {{ $membershipContract->payer?->name ?? '—' }}
+                        @if($membershipContract->payer?->email)
+                            <br><span class="text-xs text-slate-500">{{ $membershipContract->payer->email }}</span>
+                        @endif
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Contrato</dt>
+                    <dd class="mt-1 font-semibold">
+                        #{{ $membershipContract->id }} · {{ $membershipContract->modality }} · {{ ucfirst($membershipContract->billing_mode) }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Vigencia contractual</dt>
+                    <dd class="mt-1 font-semibold">
+                        {{ optional($membershipContract->valid_from)->format('d/m/Y') }} – {{ optional($membershipContract->valid_until)->format('d/m/Y') }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Solicitud de pago pendiente</dt>
+                    <dd class="mt-1 font-semibold">{{ $membershipState['has_pending_request'] ? 'Sí' : 'No' }}</dd>
+                </div>
+            </dl>
+
+            <p class="mt-3 text-xs text-slate-400">
+                El estado considera la vigencia contractual y las vigencias de las licencias individuales
+                (modalidad {{ $membershipContract->billing_mode === 'individual' ? 'individual' : 'empresa con cupo' }}),
+                no únicamente la fecha del contrato.
+            </p>
+
+            {{-- 18D-1: avisos de renovación y vencimiento (solo lectura). --}}
+            @if(! empty($membershipNotices))
+                <div class="mt-4 space-y-3" role="status" data-testid="membresia-avisos">
+                    @foreach($membershipNotices as $notice)
+                        <div @class([
+                            'rounded-xl border px-3 py-2 text-sm',
+                            'border-amber-200 bg-amber-50 text-amber-900' => $notice['tone'] === 'warning',
+                            'border-red-200 bg-red-50 text-red-900' => $notice['tone'] === 'danger',
+                        ])>
+                            <p class="font-bold">{{ $notice['title'] }}</p>
+                            <p class="mt-1 text-xs">{{ $notice['detail'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        @endif
+    </section>
 </div>
 @endsection

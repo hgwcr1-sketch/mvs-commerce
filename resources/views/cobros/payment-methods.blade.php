@@ -135,6 +135,8 @@
                         Procesado por Stripe en modo TEST. Sus datos de tarjeta nunca se guardan en MVS CobrOS.
                     @elseif($stripeAvailable)
                         Stripe está configurado pero no en modo TEST: el pago con tarjeta permanece deshabilitado.
+                    @elseif(isset($effectiveProviderKey) && $effectiveProviderKey !== null)
+                        El proveedor de pago seleccionado para este país ({{ $effectiveProviderKey }}) no permite pago con tarjeta en línea.
                     @else
                         Stripe aún no está configurado para esta empresa.
                     @endif

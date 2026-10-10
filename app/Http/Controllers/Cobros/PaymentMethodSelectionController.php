@@ -11,6 +11,7 @@ use App\Services\Billing\Adapters\StripePaymentProvider;
 use App\Services\Billing\Checkout\CheckoutSessionRequest;
 use App\Services\Billing\Checkout\CheckoutSessionService;
 use App\Services\Billing\Exceptions\PaymentProviderUnavailableException;
+use App\Services\Billing\PaymentProviderRegistry;
 use App\Services\Cobros\CobrosBillingContractService;
 use App\Services\Cobros\CobrosPaymentConfirmationService;
 use App\Services\Cobros\CobrosPricingService;
@@ -35,6 +36,7 @@ class PaymentMethodSelectionController extends Controller
         private StripePaymentProvider $stripeProvider,
         private CheckoutSessionService $checkoutSessions,
         private CobrosPaymentConfirmationService $paymentConfirmations,
+        private PaymentProviderRegistry $providerRegistry,
     ) {}
 
     /**
@@ -47,8 +49,14 @@ class PaymentMethodSelectionController extends Controller
         // Obtener cotización del contrato (fuente de verdad para importe/moneda)
         $quote = $this->pricing->quoteForContract($contract);
 
-        // Verificar disponibilidad de Stripe
-        $stripeAvailable = $this->stripeProvider->isAvailable();
+        // 18E-2: proveedor EFECTIVO según elección explícita por producto+país
+        // real del contrato (country_iso persistido, nunca el país del
+        // navegador). Sin sustitución automática: si la elección es SINPE,
+        // otro adaptador o está deshabilitada, la tarjeta queda no disponible.
+        $effectiveProviderKey = $this->resolveEffectiveProviderKey($contract);
+
+        // Verificar disponibilidad de Stripe (solo si la elección efectiva es Stripe)
+        $stripeAvailable = $effectiveProviderKey === 'stripe' && $this->stripeProvider->isAvailable();
         $stripePublishableKey = $stripeAvailable
             ? ($this->stripeProvider->getPublishableKey() ?? '')
             : '';
@@ -87,8 +95,9 @@ class PaymentMethodSelectionController extends Controller
             'company' => Company::findOrFail($companyId),
             'quote' => $quote,
             'stripeAvailable' => $stripeAvailable,
-            'stripeTestReady' => $this->stripeTestReady(),
+            'stripeTestReady' => $effectiveProviderKey === 'stripe' && $this->stripeTestReady(),
             'stripePublishableKey' => $stripePublishableKey,
+            'effectiveProviderKey' => $effectiveProviderKey,
             'sinpeMethod' => $sinpeMethod,
             'bankTransferMethod' => $bankTransferMethod,
             'sinpeConfig' => $sinpeConfig,
@@ -124,6 +133,15 @@ class PaymentMethodSelectionController extends Controller
     public function checkout(Request $request, CobrosBillingContract $contract): RedirectResponse
     {
         $companyId = $this->authorizeContract($request, $contract);
+
+        // 18E-2: bloqueo del POST sin llamadas externas si la elección
+        // efectiva (registro por producto+país real del contrato) no es
+        // Stripe TEST. Nunca se sustituye el proveedor elegido por Stripe.
+        if ($this->resolveEffectiveProviderKey($contract) !== 'stripe' || ! $this->stripeTestReady()) {
+            return redirect()
+                ->route('cobros.payment.methods', $contract)
+                ->withErrors(['checkout' => 'El proveedor de pago configurado para este país no permite Checkout con tarjeta en este momento.']);
+        }
 
         $successUrl = route('cobros.payment.methods', $contract).'?checkout=exitoso';
         $cancelUrl = route('cobros.payment.methods', $contract).'?checkout=cancelado';
@@ -172,6 +190,24 @@ class PaymentMethodSelectionController extends Controller
         );
 
         return $companyId;
+    }
+
+    /**
+     * 18E-2 — Proveedor efectivo para Checkout: elección explícita por
+     * producto+país REAL del contrato (country_iso persistido en BD, nunca
+     * un valor enviado por el navegador). null = sin proveedor disponible
+     * (elección deshabilitada o adaptador no configurado); en ese caso NO
+     * se sustituye automáticamente por otro proveedor.
+     */
+    private function resolveEffectiveProviderKey(CobrosBillingContract $contract): ?string
+    {
+        try {
+            return $this->providerRegistry
+                ->forProduct('cobros', (string) $contract->country_iso)
+                ->key();
+        } catch (PaymentProviderUnavailableException) {
+            return null;
+        }
     }
 
     /**

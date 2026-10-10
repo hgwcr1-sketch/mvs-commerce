@@ -36,5 +36,84 @@
         @empty<p class="rounded-2xl bg-white p-6 text-slate-500">No hay empresas para mostrar.</p>@endforelse
     </section>
     {{ $companies->links() }}
+
+    {{-- 18E-1B: MVS Billing — proveedores de pago (solo Platform Admin). --}}
+    <section id="billing-proveedores" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="font-bold">MVS Billing — Proveedores de pago</h2>
+        <p class="mt-2 text-sm text-slate-600">
+            Elección explícita por producto y país. Si la elección está deshabilitada o el proveedor
+            no está disponible, el motor no selecciona otro automáticamente. Solo se muestra si las
+            credenciales están configuradas; sus valores nunca se exponen ni se guardan aquí.
+        </p>
+
+        @if(session('success'))
+            <p class="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800" role="status">{{ session('success') }}</p>
+        @endif
+        @if($errors->any())
+            <div class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                @foreach($errors->all() as $billingError)<p>{{ $billingError }}</p>@endforeach
+            </div>
+        @endif
+
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-left text-slate-500">
+                        <th class="p-3">Producto</th>
+                        <th class="p-3">País</th>
+                        <th class="p-3">Proveedor</th>
+                        <th class="p-3 hidden md:table-cell">Modo</th>
+                        <th class="p-3">Estado</th>
+                        <th class="p-3 hidden md:table-cell">Credenciales</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($billingProviderSettings as $setting)
+                        <tr class="border-t">
+                            <td class="p-3 font-mono">{{ $setting->product }}</td>
+                            <td class="p-3">{{ $setting->country_iso }}</td>
+                            <td class="p-3">{{ $setting->provider }}</td>
+                            <td class="p-3 hidden md:table-cell">{{ strtoupper($setting->mode) }}</td>
+                            <td class="p-3">
+                                <span @class([
+                                    'rounded-full px-2 py-1 text-xs font-bold',
+                                    'bg-emerald-100 text-emerald-800' => $setting->is_active,
+                                    'bg-slate-200 text-slate-600' => ! $setting->is_active,
+                                ])>{{ $setting->is_active ? 'Habilitado' : 'Deshabilitado' }}</span>
+                            </td>
+                            <td class="p-3 hidden text-xs md:table-cell">
+                                TEST: {{ ($billingCredentials[$setting->provider]['test'] ?? false) ? 'Configurado' : 'No configurado' }}
+                                · LIVE: {{ ($billingCredentials[$setting->provider]['live'] ?? false) ? 'Configurado' : 'No configurado' }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="p-3 text-slate-500">Sin elecciones explícitas; el motor usa la configuración de `config/billing.php`.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <form method="POST" action="{{ route('platform.billing-providers.update') }}" class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            @csrf
+            @method('PATCH')
+            <label class="text-sm font-semibold">Producto<input name="product" value="{{ old('product') }}" required maxlength="60" placeholder="cobros" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4"></label>
+            <label class="text-sm font-semibold">País (ISO)<input name="country_iso" value="{{ old('country_iso') }}" required maxlength="2" placeholder="CR" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4"></label>
+            <label class="text-sm font-semibold">Proveedor<select name="provider" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4">
+                @foreach($billingProviderKeys as $billingKey)
+                    <option value="{{ $billingKey }}" @selected(old('provider') === $billingKey)>
+                        {{ $billingKey }} (TEST: {{ $billingCredentials[$billingKey]['test'] ? 'Configurado' : 'No configurado' }} · LIVE: {{ $billingCredentials[$billingKey]['live'] ? 'Configurado' : 'No configurado' }})
+                    </option>
+                @endforeach
+            </select></label>
+            <label class="text-sm font-semibold">Modo<select name="mode" class="mt-2 min-h-11 w-full rounded-xl border border-slate-300 px-4">
+                <option value="test" @selected(old('mode', 'test') === 'test')>TEST</option>
+                <option value="live" @selected(old('mode') === 'live')>LIVE</option>
+            </select></label>
+            <div class="flex flex-wrap items-end gap-4">
+                <label class="flex min-h-11 items-center gap-2 text-sm font-semibold"><input type="checkbox" name="is_active" value="1" @checked(old('is_active'))>Habilitado</label>
+                <button class="min-h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white">Guardar</button>
+            </div>
+        </form>
+    </section>
 </div>
 @endsection

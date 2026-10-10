@@ -623,8 +623,18 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/empresas', [PlatformAdminController::class, 'storeCompany'])->name('companies.store');
     Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
     Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
+    // 18E-1B: elección explícita de proveedor de pago por producto+país
+    // (solo Platform Admin; upsert; nunca recibe ni muestra credenciales).
+    Route::patch('/billing-providers', [App\Http\Controllers\PlatformBillingProviderController::class, 'update'])
+        ->name('billing-providers.update');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
     Route::patch('/empresas/{company}/cobros-contrato', [PlatformAdminController::class, 'updateCobrosContract'])->name('cobros-contract.update');
+    // 18B-2: aprobación/rechazo manual SINPE (solo pendientes de ESTA empresa;
+    // exige verificación externa del operador; nunca automático ni por WhatsApp).
+    Route::post('/empresas/{company}/pagos/sinpe/{confirmation}/aprobar', [PlatformAdminController::class, 'approveSinpePayment'])
+        ->name('sinpe.approve');
+    Route::post('/empresas/{company}/pagos/sinpe/{confirmation}/rechazar', [PlatformAdminController::class, 'rejectSinpePayment'])
+        ->name('sinpe.reject');
     // Reapertura excepcional POR COBRADOR (auditable) de la cartera inicial.
     Route::post('/empresas/{company}/cobradores/{user}/cartera-inicial/reabrir', [App\Http\Controllers\Cobros\InitialPortfolioController::class, 'reopen'])
         ->name('initial-portfolio.reopen');

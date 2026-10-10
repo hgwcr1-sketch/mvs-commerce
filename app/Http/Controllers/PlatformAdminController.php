@@ -5,10 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanyLicense;
+use App\Models\CobrosBillingContract;
+use App\Models\CobrosCollectorLicense;
+use App\Models\CobrosPaymentConfirmation;
 use App\Models\LicensePlan;
 use App\Models\User;
 use App\Services\Cobros\CollectorLicenseService;
 use App\Services\Cobros\CollectorManagementService;
+use App\Services\Cobros\CobrosMembershipLifecycleService;
+use App\Services\Cobros\CobrosPaymentConfirmationService;
 use App\Services\CompanyLicenseService;
 use App\Services\CompanyProvisioner;
 use App\Services\Modules\ModuleRegistry;
@@ -76,6 +81,18 @@ class PlatformAdminController extends Controller
                 ->where('is_enabled', true)))
             ->orderBy('trade_name')->paginate(15)->withQueryString();
 
+        // 18E-1B: elecciones explícitas de proveedor de pago y presencia de
+        // credenciales por modo (solo "configurado/no configurado"; jamás
+        // valores) para la sección del Panel Maestro.
+        $billingProviderKeys = array_keys((array) config('billing.providers', []));
+        $billingCredentials = [];
+        foreach ($billingProviderKeys as $billingKey) {
+            $billingCredentials[$billingKey] = [
+                'test' => PlatformBillingProviderController::credentialsConfigured($billingKey, 'test'),
+                'live' => PlatformBillingProviderController::credentialsConfigured($billingKey, 'live'),
+            ];
+        }
+
         return view('platform.index', [
             'companies' => $companies,
             'totals' => [
@@ -86,6 +103,10 @@ class PlatformAdminController extends Controller
             ],
             'moduleCatalog' => ModuleRegistry::MODULES,
             'licensePlans' => LicensePlan::query()->orderBy('name')->get(),
+            'billingProviderSettings' => \App\Models\BillingProviderSetting::query()
+                ->orderBy('product')->orderBy('country_iso')->get(),
+            'billingProviderKeys' => $billingProviderKeys,
+            'billingCredentials' => $billingCredentials,
         ]);
     }
 
@@ -116,6 +137,35 @@ class PlatformAdminController extends Controller
             ];
         }
 
+        // 18B-1: solicitudes SINPE pendientes de ESTA empresa (aislamiento
+        // estricto por company_id vía scope sinpePending; sin consultas globales).
+        $sinpePending = CobrosPaymentConfirmation::query()
+            ->sinpePending($company->id)
+            ->with('contract.payer:id,name,email')
+            ->orderByDesc('created_at')
+            ->get();
+
+        // 18C-1: estado de membresía CobrOS del contrato abierto más reciente
+        // de ESTA empresa. evaluate() considera vigencia contractual Y
+        // vigencias de licencias individuales (no solo la fecha del contrato).
+        $membershipContract = CobrosBillingContract::query()
+            ->where('company_id', $company->id)
+            ->whereIn('status', CobrosBillingContract::OPEN_STATUSES)
+            ->orderByDesc('id')
+            ->first();
+        $membershipState = $membershipContract !== null
+            ? app(CobrosMembershipLifecycleService::class)->evaluate($membershipContract)
+            : null;
+
+        // 18D-1: avisos de renovación y vencimiento (solo lectura; no cambia
+        // pagos ni licencias). Distingue licencia inicial pendiente (sin
+        // primer pago confirmado ni licencia activada) de licencia vencida
+        // (ya operó y dejó de estar vigente).
+        $membershipLicense = ($membershipContract !== null && $membershipContract->payer !== null)
+            ? $licenseGate->licenseFor($membershipContract->payer, $company)
+            : null;
+        $membershipNotices = $this->membershipNotices($membershipContract, $membershipState, $membershipLicense);
+
         return view('platform.show', [
             'company' => $company,
             'moduleCatalog' => ModuleRegistry::MODULES,
@@ -126,7 +176,89 @@ class PlatformAdminController extends Controller
             'potentialLicenses' => $collectorService->getPotentialLicenses($company),
             'seatUsage' => $collectorService->seatUsage($company),
             'collectorLicenses' => $collectorLicenses,
+            'sinpePending' => $sinpePending,
+            'membershipContract' => $membershipContract,
+            'membershipState' => $membershipState,
+            'membershipNotices' => $membershipNotices,
         ]);
+    }
+
+    /**
+     * 18D-1 — Avisos de renovación y vencimiento de la membresía CobrOS.
+     *
+     * Solo lectura sobre el estado ya evaluado (18C-1) y la licencia
+     * individual existente. Distingue explícitamente:
+     *  - «Licencia inicial pendiente»: nunca hubo primer pago confirmado ni
+     *    licencia activada (no es una licencia vencida);
+     *  - «Renovación pendiente»: ya operó y el período actual no está
+     *    confirmado;
+     *  - «Aviso de renovación»: próxima a vencer (ventana de 7 días);
+     *  - «Aviso de vencimiento»: licencia/contrato que dejó de vigencia
+     *    después de haber estado activo.
+     *
+     * No modifica pagos, licencias ni el contrato.
+     *
+     * @return array<int, array{tone: string, title: string, detail: string}>
+     */
+    private function membershipNotices(
+        ?CobrosBillingContract $contract,
+        ?array $state,
+        ?CobrosCollectorLicense $license,
+    ): array {
+        if ($contract === null || $state === null) {
+            return [];
+        }
+
+        // Licencia ya activada: existe registro de licencia individual o al
+        // menos un pago confirmado legítimo para este contrato.
+        $activated = $license !== null || CobrosPaymentConfirmation::query()
+            ->where('cobros_billing_contract_id', $contract->id)
+            ->where('status', CobrosPaymentConfirmation::STATUS_CONFIRMED)
+            ->exists();
+
+        $expiresOn = $state['expires_on'] ?? null;
+
+        if ($state['status'] === CobrosMembershipLifecycleService::STATUS_VENCIDA) {
+            if (! $activated) {
+                return [[
+                    'tone' => 'warning',
+                    'title' => 'Licencia inicial pendiente',
+                    'detail' => 'El contrato venció sin un primer pago confirmado: nunca se activó una licencia. Esto no es una licencia vencida; renovar el contrato y confirmar el pago para activarla.',
+                ]];
+            }
+
+            return [[
+                'tone' => 'danger',
+                'title' => 'Aviso de vencimiento',
+                'detail' => 'La membresía CobrOS venció el '.$expiresOn.' y la licencia dejó de operar. Renovar con un pago confirmado para reactivarla.',
+            ]];
+        }
+
+        if ($state['status'] === CobrosMembershipLifecycleService::STATUS_PENDIENTE_DE_PAGO) {
+            if (! $activated) {
+                return [[
+                    'tone' => 'warning',
+                    'title' => 'Licencia inicial pendiente',
+                    'detail' => 'Aún no hay un primer pago confirmado para este contrato: la licencia se activa al aprobarlo. No es una licencia vencida.',
+                ]];
+            }
+
+            return [[
+                'tone' => 'warning',
+                'title' => 'Renovación pendiente de pago',
+                'detail' => 'El período vigente no está confirmado. Prepare la renovación para mantener la licencia en operación.',
+            ]];
+        }
+
+        if ($state['status'] === CobrosMembershipLifecycleService::STATUS_PROXIMA_A_VENCER && $expiresOn !== null) {
+            return [[
+                'tone' => 'warning',
+                'title' => 'Aviso de renovación',
+                'detail' => 'La membresía vence el '.$expiresOn.'. Prepare la renovación antes de la fecha para no interrumpir la operación.',
+            ]];
+        }
+
+        return [];
     }
 
     public function updateLicense(Request $request, Company $company, CompanyLicenseService $licenses): RedirectResponse
@@ -314,6 +446,56 @@ class PlatformAdminController extends Controller
         $licenses->resume($user, $company);
 
         return back()->with('success', "Licencia de {$user->name} reactivada.");
+    }
+
+    /**
+     * 18B-2 — Aprueba una solicitud SINPE tras verificación EXTERNA del operador.
+     *
+     * En servidor se exige la confirmación explícita (checkbox): una captura o
+     * un mensaje de WhatsApp nunca es verificación suficiente. Reutiliza
+     * approveSinpe (auditoría actor+timestamp y activación idempotente de la
+     * licencia; valida contrato/pagador/importe/moneda/período y pendiente).
+     */
+    public function approveSinpePayment(Request $request, Company $company, CobrosPaymentConfirmation $confirmation): RedirectResponse
+    {
+        abort_unless((int) $confirmation->company_id === (int) $company->id, 404);
+
+        $request->validate(
+            ['verified_transfer' => ['accepted']],
+            [
+                'verified_transfer.accepted' => 'Debe confirmar explícitamente que verificó la transferencia en su banco. Una captura o mensaje de WhatsApp no es verificación suficiente.',
+            ],
+            ['verified_transfer' => 'la verificación de la transferencia']
+        );
+
+        try {
+            app(CobrosPaymentConfirmationService::class)->approveSinpe($confirmation, $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+
+        return back()->with('success', "Solicitud SINPE {$confirmation->transaction_id} aprobada. Licencia activada sin duplicados.");
+    }
+
+    /**
+     * 18B-2 — Rechaza una solicitud SINPE con motivo obligatorio (auditable).
+     * Conserva el registro; nunca activa licencias.
+     */
+    public function rejectSinpePayment(Request $request, Company $company, CobrosPaymentConfirmation $confirmation): RedirectResponse
+    {
+        abort_unless((int) $confirmation->company_id === (int) $company->id, 404);
+
+        $data = $request->validate([
+            'notes' => ['required', 'string', 'max:500'],
+        ], ['notes.required' => 'El motivo del rechazo es obligatorio.']);
+
+        try {
+            app(CobrosPaymentConfirmationService::class)->rejectSinpe($confirmation, $request->user(), $data['notes']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        }
+
+        return back()->with('success', "Solicitud SINPE {$confirmation->transaction_id} rechazada. Registro conservado, sin activación.");
     }
 
     private function assertPlatformAdminAndIndividual(Request $request, Company $company, CollectorLicenseService $licenses): void
