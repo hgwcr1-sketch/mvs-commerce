@@ -88,6 +88,25 @@ class StripePaymentProvider implements PaymentProviderInterface
         return $this->getClient();
     }
 
+    /**
+     * Obtiene la clave pública (publishable key) para el frontend.
+     * Solo expone la clave pública, nunca la secreta.
+     */
+    public function getPublishableKey(): ?string
+    {
+        if ($this->mode === null) {
+            $this->isAvailable();
+        }
+
+        if ($this->mode === null) {
+            return null;
+        }
+
+        return $this->mode === 'test'
+            ? config('billing.stripe.publishable_key_test', env('STRIPE_TEST_PUBLISHABLE_KEY'))
+            : config('billing.stripe.publishable_key_live', env('STRIPE_LIVE_PUBLISHABLE_KEY'));
+    }
+
     public function createPayment(PaymentRequest $request): PaymentEvent
     {
         $client = $this->getClient();

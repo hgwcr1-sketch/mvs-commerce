@@ -8,7 +8,9 @@ use App\Models\Company;
 use App\Models\User;
 use App\Services\CompanyLicenseService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -158,6 +160,252 @@ class CobrosPaymentConfirmationService
         ]);
     }
 
+    /**
+     * 17B-5A — Registra una solicitud SINPE pendiente para el período vigente.
+     *
+     * Solo PENDIENTE: nunca confirma, nunca activa licencias (la aprobación
+     * posterior es un proceso aparte, verificado manualmente). El importe, la
+     * moneda y el estado salen del contrato y del servicio; el navegador no
+     * puede definirlos. Idempotente por contrato/período: repetir la solicitud
+     * devuelve la misma referencia y no duplica filas.
+     *
+     * La referencia única se persiste con restricción de unicidad en BD
+     * (transaction_id + contrato/período) y no depende solo de COB-{id}-{YYYYMM}.
+     */
+    public function requestSinpe(
+        CobrosBillingContract $contract,
+        User $payer,
+        ?string $notes = null,
+    ): CobrosPaymentConfirmation {
+        abort_unless(
+            $payer->is_active && (int) $contract->payer_user_id === (int) $payer->id,
+            403,
+            'Solo el pagador del contrato puede registrar comprobantes SINPE.'
+        );
+
+        $year = now()->year;
+        $month = now()->month;
+
+        return DB::transaction(function () use ($contract, $payer, $notes, $year, $month) {
+            // Idempotencia: una sola solicitud por contrato/período.
+            $existing = CobrosPaymentConfirmation::query()
+                ->where('cobros_billing_contract_id', $contract->id)
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            $this->assertContractOpen($contract);
+            $this->assertPeriodWithinTerm($contract, $year, $month);
+
+            // Referencia única persistida con reintento ante colisión de índice.
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                try {
+                    return CobrosPaymentConfirmation::create([
+                        'transaction_id' => sprintf(
+                            'SINPE-%d-%04d%02d-%s',
+                            $contract->id,
+                            $year,
+                            $month,
+                            strtoupper(Str::random(8))
+                        ),
+                        'cobros_billing_contract_id' => $contract->id,
+                        'company_id' => $contract->company_id,
+                        'period_year' => $year,
+                        'period_month' => $month,
+                        'amount' => $this->contracts->monthlyTotal($contract),
+                        'currency' => $contract->currency,
+                        'status' => CobrosPaymentConfirmation::STATUS_PENDING,
+                        'provider' => 'sinpe',
+                        'confirmed_by_user_id' => null,
+                        'confirmed_at' => null,
+                        'notes' => $notes,
+                    ]);
+                } catch (UniqueConstraintViolationException) {
+                    // Colisión de índice único: reintentar con otra referencia.
+                }
+            }
+
+            throw ValidationException::withMessages([
+                'reference' => 'No fue posible generar una referencia de pago única; intente nuevamente.',
+            ]);
+        });
+    }
+
+    /**
+     * 17B-5B — Aprobación manual SINPE tras verificación humana externa.
+     *
+     * Autorización explícita de Panel Maestro: requiere identidad de
+     * platform admin (is_platform_admin); NUNCA se infiere de permisos
+     * ordinarios CobrOS del tenant. Sin endpoint público: entrada de servicio
+     * interno para futura integración con el Panel Maestro existente.
+     *
+     * Solo solicitudes provider=sinpe en estado pending. Valida empresa,
+     * contrato, pagador, importe, moneda y período; registra actor y marca
+     * temporal. La activación reutiliza activateContract() (idempotente;
+     * no duplica licencias). Doble aprobación es idempotente.
+     */
+    public function approveSinpe(
+        CobrosPaymentConfirmation $confirmation,
+        User $approver,
+        ?string $notes = null,
+    ): CobrosPaymentConfirmation {
+        abort_unless(
+            $approver->isPlatformAdmin(),
+            403,
+            'La aprobación manual SINPE requiere autorización explícita de Panel Maestro.'
+        );
+
+        if ($confirmation->provider !== 'sinpe') {
+            $this->assertSinpePending($confirmation); // lanza el error de proveedor
+        }
+
+        if ($confirmation->status === CobrosPaymentConfirmation::STATUS_CONFIRMED) {
+            // Doble aprobación: idempotente, sin nueva marca ni reactivación.
+            return $confirmation;
+        }
+
+        $this->assertSinpePending($confirmation);
+
+        $approvedNow = false;
+        $confirmation = DB::transaction(function () use ($confirmation, $approver, $notes, &$approvedNow) {
+            $fresh = CobrosPaymentConfirmation::query()
+                ->lockForUpdate()
+                ->findOrFail($confirmation->getKey());
+
+            if ($fresh->status === CobrosPaymentConfirmation::STATUS_CONFIRMED) {
+                // Doble aprobación: idempotente, sin nueva marca ni reactivación.
+                return $fresh;
+            }
+
+            $this->assertSinpePending($fresh);
+            $contract = $this->assertConfirmationMatchesContract($fresh);
+            $this->assertContractOpen($contract);
+            $this->assertAmountMatches($contract, (string) $fresh->amount);
+            $this->assertPeriodWithinTerm($contract, $fresh->period_year, $fresh->period_month);
+
+            $fresh->update([
+                'status' => CobrosPaymentConfirmation::STATUS_CONFIRMED,
+                'confirmed_by_user_id' => $approver->id,
+                'confirmed_at' => now(),
+                'notes' => $this->mergeNote($fresh->notes, $notes ?? 'Aprobación manual SINPE tras verificación humana.'),
+            ]);
+
+            $approvedNow = true;
+
+            return $fresh;
+        });
+
+        if ($approvedNow) {
+            // Activación fuera de la transacción de decisión (patrón confirm()).
+            try {
+                $this->activateContract(
+                    $confirmation->contract,
+                    $approver,
+                    $confirmation->period_year,
+                    $confirmation->period_month,
+                    'sinpe'
+                );
+            } catch (ValidationException $e) {
+                \Illuminate\Support\Facades\Log::warning('Activación fallida tras aprobación manual SINPE; se reintentará', [
+                    'transaction_id' => $confirmation->transaction_id,
+                    'contract_id' => $confirmation->cobros_billing_contract_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $confirmation;
+    }
+
+    /**
+     * 17B-5B — Rechazo auditable de una solicitud SINPE pendiente.
+     *
+     * Nunca borra la solicitud ni activa licencias. Registra actor, marca
+     * temporal y motivo (notes). Misma autorización explícita de Panel Maestro
+     * que la aprobación; sin endpoint público.
+     */
+    public function rejectSinpe(
+        CobrosPaymentConfirmation $confirmation,
+        User $actor,
+        ?string $notes = null,
+    ): CobrosPaymentConfirmation {
+        abort_unless(
+            $actor->isPlatformAdmin(),
+            403,
+            'El rechazo manual SINPE requiere autorización explícita de Panel Maestro.'
+        );
+
+        $this->assertSinpePending($confirmation);
+
+        return DB::transaction(function () use ($confirmation, $actor, $notes) {
+            $fresh = CobrosPaymentConfirmation::query()
+                ->lockForUpdate()
+                ->findOrFail($confirmation->getKey());
+
+            $this->assertSinpePending($fresh);
+
+            $fresh->update([
+                'status' => CobrosPaymentConfirmation::STATUS_REJECTED,
+                'confirmed_by_user_id' => $actor->id,
+                'confirmed_at' => now(),
+                'notes' => $this->mergeNote($fresh->notes, $notes ?? 'Rechazo manual SINPE tras verificación humana.'),
+            ]);
+
+            return $fresh;
+        });
+    }
+
+    /**
+     * 17B-6A — Renovación mensual derivada de un pago confirmado legítimo:
+     * Stripe (webhook verificado) o SINPE aprobado por Panel Maestro. Nunca
+     * automática ni a petición del navegador.
+     *
+     * Idempotente por contrato/período: la única fila de confirmación por
+     * período (índice único) y activateContract() — renew() actualiza la
+     * licencia existente y applyCobrosContractConfiguration usa
+     * updateOrCreate — impiden duplicar licencias o cobrar dos veces tarifas
+     * consolidadas (prestamista-cobrador).
+     */
+    public function applyRenewal(CobrosPaymentConfirmation $confirmation): CobrosBillingContract
+    {
+        if ($confirmation->status !== CobrosPaymentConfirmation::STATUS_CONFIRMED) {
+            throw ValidationException::withMessages([
+                'status' => 'La renovación solo se aplica tras un pago confirmado legítimamente.',
+            ]);
+        }
+
+        if (! in_array($confirmation->provider, ['stripe', 'sinpe'], true)) {
+            throw ValidationException::withMessages([
+                'provider' => 'La renovación requiere un pago Stripe verificado o un SINPE aprobado por Panel Maestro.',
+            ]);
+        }
+
+        $contract = $confirmation->contract;
+
+        try {
+            $this->activateContract(
+                $contract,
+                $confirmation->confirmedBy ?? $contract->payer,
+                $confirmation->period_year,
+                $confirmation->period_month,
+                $confirmation->provider
+            );
+        } catch (ValidationException $e) {
+            \Illuminate\Support\Facades\Log::warning('Renovación fallida tras pago confirmado; se reintentará', [
+                'transaction_id' => $confirmation->transaction_id,
+                'contract_id' => $confirmation->cobros_billing_contract_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $contract->refresh();
+    }
+
     /** Vence una confirmación pendiente (sin borrar datos). */
     public function expire(CobrosPaymentConfirmation $confirmation): CobrosPaymentConfirmation
     {
@@ -280,6 +528,60 @@ class CobrosPaymentConfirmationService
                 'period' => 'Este período ya tiene un pago confirmado para este contrato.',
             ]);
         }
+    }
+
+    /** 17B-5B: solo solicitudes SINPE pendientes admiten aprobación/rechazo. */
+    private function assertSinpePending(CobrosPaymentConfirmation $confirmation): void
+    {
+        if ($confirmation->provider !== 'sinpe') {
+            throw ValidationException::withMessages([
+                'provider' => 'Solo se procesan solicitudes de pago SINPE.',
+            ]);
+        }
+
+        if ($confirmation->status !== CobrosPaymentConfirmation::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'status' => 'La solicitud SINPE no está pendiente de verificación.',
+            ]);
+        }
+    }
+
+    /** 17B-5B: coherencia empresa/contrato/pagador/moneda antes de decidir. */
+    private function assertConfirmationMatchesContract(CobrosPaymentConfirmation $confirmation): CobrosBillingContract
+    {
+        $contract = $confirmation->contract;
+
+        if ($contract === null) {
+            throw ValidationException::withMessages([
+                'contract' => 'La solicitud SINPE no tiene un contrato válido asociado.',
+            ]);
+        }
+
+        if ((int) $confirmation->company_id !== (int) $contract->company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'La empresa de la solicitud no coincide con la del contrato.',
+            ]);
+        }
+
+        if ($confirmation->currency !== $contract->currency) {
+            throw ValidationException::withMessages([
+                'currency' => 'La moneda de la solicitud no coincide con la del contrato.',
+            ]);
+        }
+
+        if ($contract->payer === null) {
+            throw ValidationException::withMessages([
+                'payer' => 'El contrato no tiene un pagador válido asociado.',
+            ]);
+        }
+
+        return $contract;
+    }
+
+    /** 17B-5B: acumula motivos sin exceder la columna notes (500). */
+    private function mergeNote(?string $existing, string $note): string
+    {
+        return mb_substr(trim(($existing ?? '').' '.$note), 0, 500);
     }
 
     private function assertTransactionId(string $transactionId): void

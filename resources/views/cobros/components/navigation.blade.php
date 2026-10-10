@@ -25,6 +25,30 @@
 
     $navigationUser = auth()->user();
 
+    // Mi membresía: SOLO para quien paga, identificado por el campo
+    // payer_user_id del contrato ABIERTO de la empresa activa (dato
+    // persistido de MVS Billing, nunca por rol). El cobrador cuya licencia
+    // paga el prestamista no aparece: su user_id no es payer_user_id.
+    $navigationMembershipContract = \App\Models\CobrosBillingContract::query()
+        ->where('company_id', $company->id)
+        ->whereIn('status', \App\Models\CobrosBillingContract::OPEN_STATUSES)
+        ->where('payer_user_id', $navigationUser->id)
+        ->orderByDesc('id')
+        ->first();
+
+    if ($navigationMembershipContract !== null) {
+        $navigationItems[] = [
+            'permission' => 'cobros.acceder',
+            'route' => 'cobros.payment.methods',
+            'url' => route('cobros.payment.methods', $navigationMembershipContract),
+            'label' => 'Mi membresía',
+            // Gestores (portal del dueño) van al panel "Más"; cobradores al
+            // mismo panel de su barra, sin duplicar en la barra inferior.
+            'slot' => $navigationUser->hasPermission('cobros.portal_dueno', $company) ? 'panel' : 'collector',
+            'icon' => 'M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 16.5 7.1 18.2l.9-5.5-4-3.9L9.5 8z',
+        ];
+    }
+
     // Cambiar ruta: solo visible cuando el cobrador tiene varias rutas disponibles.
     if ($navigationUser->hasPermission('cobros.cobrar', $company)
         && app(\App\Services\Cobros\CobrosRouteContext::class)->available($navigationUser)->count() > 1) {
@@ -83,7 +107,7 @@
 @endphp
 <nav class="{{ $panel ? 'cobros-panel-navigation' : 'cobros-navigation' }}" aria-label="{{ $panel ? 'Menú completo CobrOS' : 'Navegación CobrOS' }}">
     @foreach($navigationVisible as $item)
-        <a href="{{ route($item['route']) }}" class="cobros-nav-item" title="{{ $item['label'] }}"
+        <a href="{{ $item['url'] ?? route($item['route']) }}" class="cobros-nav-item" title="{{ $item['label'] }}"
            @if(request()->routeIs($item['route'])) aria-current="page" @endif>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ $item['icon'] }}" /></svg>
             <span>{{ $item['label'] }}</span>

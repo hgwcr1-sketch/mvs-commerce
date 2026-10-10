@@ -226,6 +226,25 @@ Route::prefix('cobros')->name('cobros.')->group(function () {
     });
 });
 
+// BLOQUE 17B-4B — selección de métodos de pago del contrato CobrOS.
+// Reutiliza la autenticación/autorización de CobrOS (empresa activa + permiso).
+// Sin 'company.licensed' ni 'company.module:cobros' a propósito: esta pantalla
+// es la puerta de pago/renovación y exigir licencia operable la volvería
+// inalcanzable justo cuando hay que pagar. Sin 'cobros.route': no es operativa.
+Route::middleware([Authenticate::class, 'cobros.active.company', EnsureActiveUser::class, 'cobros.entry', 'permission:cobros.acceder'])
+    ->prefix('cobros')->name('cobros.')
+    ->group(function () {
+        Route::get('/contratos/{contract}/metodos-pago', [App\Http\Controllers\Cobros\PaymentMethodSelectionController::class, 'show'])
+            ->name('payment.methods');
+        // BLOQUE 17B-4C — sesión Stripe Checkout (solo TEST, solo el pagador).
+        Route::post('/contratos/{contract}/checkout', [App\Http\Controllers\Cobros\PaymentMethodSelectionController::class, 'checkout'])
+            ->middleware('throttle:10,1')->name('payment.checkout');
+        // BLOQUE 17B-5A - solicitud SINPE pendiente (el pagador declara la transferencia;
+        // nunca confirma ni activa licencias; importe/estado los define el servicio).
+        Route::post('/contratos/{contract}/sinpe/comprobante', [App\Http\Controllers\Cobros\PaymentMethodSelectionController::class, 'reportSinpe'])
+            ->middleware('throttle:10,1')->name('payment.sinpe.report');
+    });
+
 // BLOQUE 13-2B — cambio seguro de empresa/prestamista sin cerrar sesión.
 // Sin 'active.company' a propósito: el selector debe poder abrirse cuando la
 // empresa de la sesión quedó obsoleta (membresía revocada o empresa inactiva).
