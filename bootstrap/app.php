@@ -23,12 +23,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->trustProxies(at: '*');
         $middleware->append(AddSecurityHeaders::class);
+        $middleware->web(append: [\App\Http\Middleware\Cobros\EnsureDemoSession::class]);
 
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,
             'cobros.active.company' => \App\Http\Middleware\Cobros\EnsureActiveCompany::class,
             'cobros.entry' => \App\Http\Middleware\Cobros\MarkEntry::class,
             'cobros.route' => \App\Http\Middleware\Cobros\EnsureActiveCobrosRoute::class,
+            'cobros.modality' => \App\Http\Middleware\Cobros\EnsureModalityAuthorization::class,
             'company.licensed' => EnsureCompanyLicense::class,
             'company.module' => EnsureCompanyModule::class,
 

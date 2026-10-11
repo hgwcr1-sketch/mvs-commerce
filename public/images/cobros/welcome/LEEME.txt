@@ -1,0 +1,17 @@
+MVS CobrOS — Recursos visuales de referencia (prototipos)
+
+01 referencia: diseño completo de tres pantallas. No usar como fondo de páginas ni sustituir por una imagen de toda la interfaz.
+02 hero: imagen de laptop para la bienvenida.
+03 ruta ilustrada: tarjeta Recorrido guiado.
+04 laptop: tarjeta Exploración libre.
+05–08: miniaturas temporales de videos; sustituirlas al grabar videos reales en MVS Powers Academy.
+
+IMPORTANTE:
+- Estas imágenes son generadas, no capturas auténticas del software. Pueden tener cifras, prestaciones o modalidades ilustrativas que NO reflejan precios ni funcionalidades disponibles. No presentar esos detalles como hechos.
+- Todos los botones, menús, títulos, banderas y textos de las páginas deben implementarse en HTML/Blade accesible (NO quemados como imagen).
+- Prohibido crear promesas comerciales a partir de textos ficticios dentro de los mockups.
+- Los métodos de pago y estados deben venir de datos reales del sistema, no de ilustraciones.
+- Mantener #D4AF37, evitar índigo. La sección de países debe obtener países habilitados de configuración persistida, no texto fijo.
+- Los videos no existen aún; no inventar enlaces o duraciones ni hacer parecer que son reproducibles.
+- No modificar DEMO / Academy desde worktree CobrOS.
+- Imágenes optimizadas WebP, aptas para uso en web; revisar su visualización en móvil y PC.

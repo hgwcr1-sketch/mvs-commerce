@@ -16,6 +16,9 @@
             <p class="text-xs font-bold uppercase tracking-widest text-primary">Cobranza profesional</p>
             <h1 class="mt-4 text-3xl font-black sm:text-5xl">Cobró con orden.<br> Crezca con control.</h1>
             <p class="mx-auto mt-5 max-w-2xl text-lg leading-7 text-slate-300">MVS CobrOS reúne cartera, rutas, cobros y reportes en una sola herramienta, pensada para prestamistas y equipos de cobranza.</p>
+            <img src="{{ asset('images/cobros/welcome/02_hero_bienvenida_laptop.webp') }}"
+                 alt="Laptop mostrando el panel de MVS CobrOS"
+                 class="mx-auto mt-8 w-full max-w-3xl rounded-2xl object-cover" loading="lazy" width="1200" height="630">
         </section>
 
         <section class="mx-auto max-w-5xl px-4 pb-6 sm:px-6" aria-label="Opciones principales">
@@ -34,7 +37,7 @@
                     <h2 class="mt-2 text-xl font-bold">Probar demo</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Recorra MVS CobrOS con datos de ejemplo, sin tocar información real.</p>
                     <div class="mt-auto pt-5">
-                        <button type="button" disabled aria-disabled="true" class="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-xl border border-black px-4 py-3 text-sm font-bold text-black">Próximamente</button>
+                        <a href="{{ route('cobros.demo.entry') }}" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-bold text-black transition hover:bg-primary-hover hover:text-white">Probar demo</a>
                     </div>
                 </article>
 

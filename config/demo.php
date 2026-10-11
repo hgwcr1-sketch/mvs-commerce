@@ -64,4 +64,8 @@ return [
 
     'assets_runtime' => env('DEMO_ASSETS_RUNTIME', storage_path('app/public/demo')),
 
+    'visitor_session_ttl_minutes' => (int) env('DEMO_VISITOR_TTL_MINUTES', 120),
+
+    'visitor_max_live_sessions' => (int) env('DEMO_VISITOR_MAX_LIVE', 50),
+
 ];

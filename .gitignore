@@ -32,3 +32,6 @@ Thumbs.db
 # Ignorar archivos temporales de Excel (bloqueos ~$)
 ~$*
 docs/~$*
+
+# Entorno DEMO CobrOS local (secretos locales, nunca al repositorio)
+.env.local
