@@ -13,6 +13,26 @@ use App\Models\Customer;
  */
 final class WhatsApp
 {
+    /** Manual reminder; strict phone validation is local to this new flow. */
+    public static function visitUrl(Company $company, Customer $customer, string $collectorName, string $amount, string $currency, bool $overdue = false): ?string
+    {
+        $raw = trim((string) ($customer->phone ?: $customer->mobile));
+        $phone = self::phone($company, $customer);
+        if (! preg_match('/^\+?[0-9 ()-]+$/D', $raw) || $phone === null
+            || ! preg_match('/^[1-9][0-9]{9,14}$/D', $phone)
+            || (str_starts_with($phone, '506') && strlen($phone) !== 11)
+            || bccomp($amount, '0', 4) <= 0) {
+            return null;
+        }
+        $quota = $overdue ? 'cuota vencida' : 'cuota';
+        $message = '¡Buenos días, '.$customer->name."! ☀️\n\n"
+            .'Le saludamos cordialmente de parte de '.$collectorName.".\n\n"
+            .'Queremos recordarle que para hoy tenemos programada una visita para realizar el cobro de su '.$quota.' por '.Money::symbol($currency).Money::format($amount).".\n\n"
+            .'Muchas gracias por su atención. ¡Que tenga un excelente día!';
+
+        return 'https://wa.me/'.$phone.'?text='.rawurlencode($message);
+    }
+
     /** Teléfono internacional utilizable del cliente o null. */
     public static function phone(Company $company, Customer $customer): ?string
     {

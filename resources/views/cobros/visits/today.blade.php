@@ -52,7 +52,7 @@
                 $open = $visit === null || $visit->status === 'pendiente';
                 $badge = $visit !== null ? ($human[$visit->status] ?? $visit->status) : 'Programada';
                 $done = $visit !== null && ! $open;
-                $whatsappUrl = \App\Support\Cobros\WhatsApp::url($company, $customer);
+                $whatsappUrl = $item['whatsapp_url'] ?? null;
             @endphp
             <li class="rounded-xl border border-slate-200 bg-white p-4" data-visit-card data-status="{{ $visit?->status ?? 'pendiente' }}">
                 <div class="flex flex-wrap items-start justify-between gap-2">

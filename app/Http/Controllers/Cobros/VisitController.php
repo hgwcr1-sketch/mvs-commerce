@@ -31,6 +31,11 @@ class VisitController extends Controller
         }
         $agenda = $agendaService->agenda($request->user(), $company, $tab);
         $items = $agenda['items'];
+        $reminders = app(\App\Services\Cobros\AgendaWhatsAppService::class);
+        foreach ($items as &$item) {
+            $item['whatsapp_url'] = $reminders->url($request->user(), $company, $item);
+        }
+        unset($item);
         $customerIds = collect($items)
             ->map(fn (array $item) => (int) $item['customer']->id)
             ->unique()->values()->all();

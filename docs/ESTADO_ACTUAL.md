@@ -2,6 +2,19 @@
 
 Documento corto de relevo entre agentes. Actualizar al terminar cada tarea importante.
 
+## WA-01 — WhatsApp Agenda/Hoy (2026-10-11)
+
+Avance respaldado con commit local sobre `11eab840` (WA-01 **no declarada
+terminada**: pendiente validación visual en navegador). `AgendaWhatsAppService` reutiliza Gate y
+CreditInstallmentService: cuota abierta más antigua menos abonos, solo exigible
+y evento de hoy. CxC vinculada o única cuenta abierta; ambigüedad oculta enlace.
+Crédito limitado al cobrador/ruta activa. Mensaje manual en WhatsApp existente;
+texto contextual para vencidas; sin enlace para futuras, cubiertas o teléfono
+inválido. Prueba focal añadida en CobrosCreditInstallmentPaymentTest (mensaje,
+importe, render, aislamiento, cuotas y teléfono). Sintaxis PHP y diff-check OK;
+PHPUnit del archivo completo: 31/31 pruebas, 421 aserciones, cero fallos.
+Sin cambios en BD operativa ni entornos externos.
+
 ## 16C-2B Fase 2 — Cierre técnico del bloque 16 (2026-10-09)
 
 Base verificada: `feature/cobros-v1`, HEAD `9ebfcf6f`, rastreados limpios al

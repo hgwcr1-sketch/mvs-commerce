@@ -36,6 +36,43 @@ class CobrosCreditInstallmentPaymentTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_agenda_whatsapp_reminder_uses_due_pending_and_rejects_paid_future_invalid_or_foreign(): void
+    {
+        [$company, $collector, $route, $owner, $credit, $account] = $this->disbursed();
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id, 'active_cobros_route_id' => $route->id]);
+        $today = today($company->timezone)->toDateString();
+        $customer = $credit->customer;
+        $first = $credit->installments()->orderBy('number')->firstOrFail();
+        $first->update(['due_date' => $today, 'applied_amount' => '81.2500', 'status' => 'partial']);
+        $visit = app(\App\Services\Cobros\VisitService::class)->schedule($collector, $company, $customer, ['scheduled_for' => $today, 'account_receivable_id' => $account->id]);
+        $item = ['date' => $today, 'customer' => $customer, 'visit' => $visit];
+        $service = app(\App\Services\Cobros\AgendaWhatsAppService::class);
+        $url = $service->url($collector, $company, $item);
+        $expected = '¡Buenos días, '.$customer->name."! ☀️\n\n"
+            .'Le saludamos cordialmente de parte de '.$collector->name.".\n\n"
+            .'Queremos recordarle que para hoy tenemos programada una visita para realizar el cobro de su cuota por ₡200.00.'."\n\n"
+            .'Muchas gracias por su atención. ¡Que tenga un excelente día!';
+        $this->assertSame('https://wa.me/50688888888?text='.rawurlencode($expected), $url);
+        $this->get(route('cobros.visits.today'))->assertOk()->assertSee($url);
+        $this->assertNull($service->url($owner, $company, $item));
+        $foreign = Company::create(['trade_name' => 'Ajena', 'is_active' => true]);
+        $this->assertNull($service->url($collector, $foreign, $item));
+        $this->assertNull($service->url($collector, $company, array_replace($item, ['date' => today($company->timezone)->addDay()->toDateString()])));
+        foreach (['', '123', 'abc88888888', '50688888888888888'] as $invalid) {
+            $customer->phone = $invalid;
+            $customer->mobile = null;
+            $this->assertNull($service->url($collector, $company, $item));
+        }
+        $customer->phone = '88888888';
+        $first->update(['due_date' => today($company->timezone)->subDay()->toDateString()]);
+        $this->assertStringContainsString('cuota vencida por ₡200.00', rawurldecode($service->url($collector, $company, $item)));
+        $first->update(['applied_amount' => $first->contractual_amount, 'status' => 'paid']);
+        // The next installment is future: an advance already covered today's quota.
+        $this->assertNull($service->url($collector, $company, $item));
+        $credit->installments()->update(['applied_amount' => '281.2500', 'status' => 'paid']);
+        $this->assertNull($service->url($collector, $company, $item));
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
