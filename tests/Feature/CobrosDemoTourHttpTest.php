@@ -188,7 +188,22 @@ class CobrosDemoTourHttpTest extends TestCase
         $this->assertDatabaseCount('billing_payment_records', 0);
         $this->assertDatabaseCount('cobros_payment_confirmations', 0);
         $this->assertDatabaseCount('cobros_registration_drafts', 0);
-        $this->assertDatabaseCount('users', 1); // solo el owner sintético de la empresa demo
+        // INTEGRACIÓN-05/DEMO-DATOS-01B.2A: el espacio del visitante siembra
+        // el escenario liviano (admin plataforma + prestamista + 2 cobradores,
+        // dominio aislado @demo-cobros.test) además del owner visitante.
+        // Verificación por identidad aislada, no por conteo global de users.
+        $this->assertSame(
+            4,
+            \App\Models\User::query()
+                ->where('email', 'like', '%@'.\App\Services\Cobros\CobrosDemoScenario::USER_DOMAIN)
+                ->count(),
+            'El escenario DEMO debe crear 4 usuarios sintéticos en su dominio aislado.'
+        );
+        $this->assertSame(
+            1,
+            \App\Models\User::query()->where('email', 'like', '%@demo-visitante.test')->count(),
+            'Solo debe existir el owner sintético del visitante.'
+        );
         Http::assertNothingSent();
     }
 }

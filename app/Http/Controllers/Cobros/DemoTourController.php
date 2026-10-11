@@ -159,9 +159,9 @@ class DemoTourController extends Controller
      */
     public function enter(Request $request): RedirectResponse
     {
-        // 21D-4C.2B-2: el ingreso operativo DEMO solo existe en local/testing.
-        // Fuera de esos entornos queda inaccesible incluso con URL directa.
-        abort_unless(app()->environment(['local', 'testing']), 404);
+        // 21D-4C.2B-2 / INTEGRACIÓN-05: el ingreso operativo DEMO exige
+        // habilitación explícita (config demo.enabled + entorno permitido).
+        abort_unless(\App\Services\Cobros\CobrosDemoAccess::enabled(), 404);
 
         $session = $this->currentSession($request);
         if ($session === null) {
@@ -187,7 +187,7 @@ class DemoTourController extends Controller
      */
     public function enterFree(Request $request): RedirectResponse
     {
-        abort_unless(app()->environment(['local', 'testing']), 404);
+        abort_unless(\App\Services\Cobros\CobrosDemoAccess::enabled(), 404);
 
         $session = $this->currentSession($request);
         if ($session === null) {
@@ -233,7 +233,7 @@ class DemoTourController extends Controller
             CobrosModalityCatalog::COBRADOR_INDEPENDIENTE,
             CobrosModalityCatalog::COBRADOR_VINCULADO,
         ], true)) {
-            $user = $this->demoCollector($company, $modality);
+            $user = $this->demoCollector($company, $modality, $session);
         } elseif ($modality === CobrosModalityCatalog::PRESTAMISTA) {
             app(\App\Services\Cobros\CobrosModalityService::class)->assign($company, $user, $modality);
         }
@@ -253,10 +253,33 @@ class DemoTourController extends Controller
      * permisos salen del Core vía CobrosModalityService (catálogo), jamás
      * del rol administrativo del owner.
      */
-    private function demoCollector(\App\Models\Company $company, string $modality): \App\Models\User
+    private function demoCollector(\App\Models\Company $company, string $modality, ?CobrosDemoSession $session = null): \App\Models\User
     {
+        // FIX DEMO-CARTERA-01: autenticar el cobrador SINTÉTICO del escenario
+        // (cobrador.independiente/vinculado.c{N}@demo-cobros.test), que es quien
+        // tiene las asignaciones de clientes y créditos en CobrosDemoScenario.
+        // El usuario genérico cobrador.demo.c{N}@demo-visitante.test no tiene
+        // asignaciones y por eso la cartera mostraba vacía.
+        $suffix = 'c'.$company->id;
+        $domain = \App\Services\Cobros\CobrosDemoScenario::USER_DOMAIN;
+        $localPart = $modality === CobrosModalityCatalog::COBRADOR_VINCULADO
+            ? "cobrador.vinculado.{$suffix}"
+            : "cobrador.independiente.{$suffix}";
+
+        $scenarioCollector = \App\Models\User::query()
+            ->where('email', $localPart.'@'.$domain)
+            ->whereHas('companies', fn ($q) => $q->where('companies.id', $company->id))
+            ->first();
+
+        if ($scenarioCollector !== null) {
+            app(\App\Services\Cobros\CobrosModalityService::class)->assign($company, $scenarioCollector, $modality);
+
+            return $scenarioCollector;
+        }
+
+        // Fallback: replicar la creación del escenario si no existe aún.
         $collector = \App\Models\User::query()->firstOrCreate(
-            ['email' => 'cobrador.demo.'.$company->id.'@demo-visitante.test'],
+            ['email' => $localPart.'@'.$domain],
             [
                 'name' => 'Cobrador DEMO',
                 'password' => \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(32)),

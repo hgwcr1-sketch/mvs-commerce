@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'cobros.entry' => \App\Http\Middleware\Cobros\MarkEntry::class,
             'cobros.route' => \App\Http\Middleware\Cobros\EnsureActiveCobrosRoute::class,
             'cobros.modality' => \App\Http\Middleware\Cobros\EnsureModalityAuthorization::class,
+            'cobros.demo' => \App\Http\Middleware\Cobros\EnsureDemoEnabled::class,
             'company.licensed' => EnsureCompanyLicense::class,
             'company.module' => EnsureCompanyModule::class,
 

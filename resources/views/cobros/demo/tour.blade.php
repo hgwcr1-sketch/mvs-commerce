@@ -200,10 +200,9 @@
 
                 <p class="mt-6 rounded-xl border border-black p-4 text-sm leading-6 text-slate-600">Hemos simulado la activación de su membresía CobrOS. En un registro real, este es el punto donde se habilitaría su licencia y acceso al sistema. Entre ahora a su entorno DEMO con datos de ejemplo.</p>
 
-                {{-- BLOQUE 21D-4C.2B-2: ingreso operativo solo en local/testing.
-                     Fuera de esos entornos el botón no se renderiza (y la ruta
-                     responde 404 incluso con URL directa). --}}
-                @if (app()->environment(['local', 'testing']) && \Illuminate\Support\Facades\Route::has('cobros.demo.tour.enter'))
+                {{-- INTEGRACIÓN-05: botón solo si el DEMO está habilitado
+                     (config + entorno permitido); la ruta responde 404 si no. --}}
+                @if (\App\Services\Cobros\CobrosDemoAccess::enabled() && \Illuminate\Support\Facades\Route::has('cobros.demo.tour.enter'))
                     <form method="POST" action="{{ route('cobros.demo.tour.enter') }}" class="mt-3">
                         @csrf
                         <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white transition hover:bg-primary-hover">Entrar al sistema DEMO</button>

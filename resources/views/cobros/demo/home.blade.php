@@ -61,9 +61,9 @@
             </div>
         </section>
 
-        {{-- BLOQUE 21D-4D-1: exploración libre — selector de modalidad SOLO en
-             local/testing (la ruta de ingreso no existe fuera de esos entornos). --}}
-        @if (($mode ?? null) === 'libre' && app()->environment(['local', 'testing']) && \Illuminate\Support\Facades\Route::has('cobros.demo.free.enter'))
+        {{-- INTEGRACIÓN-05: exploración libre solo si el DEMO está habilitado
+             (config + entorno permitido); la ruta responde 404 si no. --}}
+        @if (($mode ?? null) === 'libre' && \App\Services\Cobros\CobrosDemoAccess::enabled() && \Illuminate\Support\Facades\Route::has('cobros.demo.free.enter'))
             <section class="mx-auto max-w-5xl px-4 pb-6 sm:px-6" aria-label="Modalidad de exploración">
                 <div class="rounded-2xl border border-primary bg-white p-5 text-black sm:p-6">
                     <p class="text-xs font-bold uppercase tracking-widest text-primary">Exploración libre</p>

@@ -82,8 +82,8 @@ class CobrosDemoScenario
     /** La empresa existe, es DEMO y el entorno está autorizado. */
     public function assertRunnable(Company $company): void
     {
-        if (! app()->environment(['local', 'testing'])) {
-            throw new RuntimeException('CobrosDemoScenario solo está permitido en entornos local/testing.');
+        if (! CobrosDemoAccess::enabled()) {
+            throw new RuntimeException('CobrosDemoScenario requiere habilitación explícita del DEMO en un entorno permitido.');
         }
 
         if (! $this->demoCompany->isDemoCompany($company)

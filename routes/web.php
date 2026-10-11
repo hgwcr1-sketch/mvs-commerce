@@ -152,6 +152,11 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
+// BLOQUE INTEGRACIÓN-05 - habilitación EXPLÍCITA del DEMO (config/demo.php
+// 'enabled' => DEMO_ENABLED). Rutas registradas siempre, pero protegidas por
+// el middleware 'cobros.demo': 404 salvo local/staging con DEMO habilitado.
+// En producción queda deshabilitado sea cual sea la configuración.
+Route::middleware('cobros.demo')->group(function () {
 // BLOQUE 21D-4B - DEMO individual por visitante (público, anónimo; token en
 // sesión del visitante; autorización y vencimiento SIEMPRE en servidor).
 Route::get('/demo-cobros', [App\Http\Controllers\Cobros\DemoVisitorController::class, 'entry'])
@@ -188,24 +193,21 @@ Route::post('/demo-cobros/tour/pago', [App\Http\Controllers\Cobros\DemoTourContr
     ->middleware('throttle:10,1')
     ->name('cobros.demo.tour.pay');
 // BLOQUE 21D-4C.2B-2 - ingreso al entorno DEMO operativo tras la activacion simulada; reutiliza el Core de autenticacion multi-tenant existente.
-// Habilitado SOLO en local (testing lo registra el propio test en setUp para no duplicar nombre).
-// Fuera de local queda inaccesible incluso con URL directa: DemoTourController@enter tambien aborta 404
-// fuera de local/testing. Requiere sesion DEMO valida, no vencida, pago simulado y contexto resuelto en servidor.
-if (app()->environment('local')) {
-    Route::post('/demo-cobros/tour/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enter'])
-        ->middleware('throttle:60,1')
-        ->name('cobros.demo.tour.enter');
+// INTEGRACIÓN-05: antes condicionado a APP_ENV=local; ahora controlado por
+// config/demo.php (habilitación explícita + local/staging). DemoTourController
+// @enter/@enterFree tambien aborta 404 (defensa en profundidad). Requiere
+// sesion DEMO valida, no vencida, pago simulado y contexto resuelto en servidor.
+Route::post('/demo-cobros/tour/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enter'])
+    ->middleware('throttle:60,1')
+    ->name('cobros.demo.tour.enter');
 
 // BLOQUE 21D-4D-1 - exploracion libre: ingreso directo al entorno operativo
-// ficticio SIN recorrido guiado ni pago simulado. SOLO local (testing lo
-// registra el propio test en setUp). enterFree() aborta 404 fuera de
-// local/testing y exige modo «libre» + modalidad valida en servidor.
-if (app()->environment('local')) {
-    Route::post('/demo-cobros/libre/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enterFree'])
-        ->middleware('throttle:20,1')
-        ->name('cobros.demo.free.enter');
-}
-}
+// ficticio SIN recorrido guiado ni pago simulado. enterFree() aborta 404 si
+// el DEMO no esta habilitado y exige modo «libre» + modalidad valida en servidor.
+Route::post('/demo-cobros/libre/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enterFree'])
+    ->middleware('throttle:20,1')
+    ->name('cobros.demo.free.enter');
+});
 
 // BLOQUE 16A-2B f1 - registro público CobrOS: wizard en sesión, sin alta,
 // licencia ni acceso operativo hasta pago confirmado (fase posterior).

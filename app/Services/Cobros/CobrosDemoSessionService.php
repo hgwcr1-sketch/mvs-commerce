@@ -72,8 +72,8 @@ class CobrosDemoSessionService
      */
     public function start(): array
     {
-        if (! app()->environment(['local', 'testing'])) {
-            throw new RuntimeException('Las sesiones DEMO de visitante solo existen en local/testing.');
+        if (! CobrosDemoAccess::enabled()) {
+            throw new RuntimeException('Las sesiones DEMO de visitante requieren habilitación explícita en un entorno permitido.');
         }
 
         $live = CobrosDemoSession::query()->where('expires_at', '>', now())->count();

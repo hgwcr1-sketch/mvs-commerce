@@ -2,6 +2,15 @@
 
 return [
 
+    // INTEGRACIÓN-05: el DEMO solo opera si se habilita EXPLÍCITAMENTE
+    // (DEMO_ENABLED=true) y el entorno es permitido. En producción queda
+    // deshabilitado sea cual sea la configuración (bloqueo duro en
+    // CobrosDemoAccess). Si un staging ejecuta APP_ENV=production, el DEMO
+    // permanece apagado y exige autorización adicional aparte.
+    'enabled' => filter_var(env('DEMO_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    'allowed_environments' => ['local', 'staging', 'testing'],
+
     'company_name' => env('DEMO_COMPANY_NAME', 'MVS Commerce Demo'),
 
     'owner_name' => env('DEMO_OWNER_NAME', 'Administrador Demo'),

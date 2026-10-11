@@ -35,3 +35,16 @@ docs/~$*
 
 # Entorno DEMO CobrOS local (secretos locales, nunca al repositorio)
 .env.local
+
+# INTEGRACIÓN-05 — Academia/DEMO: materiales locales, temporales y respaldos.
+# Nunca se borran; solo se mantienen fuera de Git.
+academia_videos/
+academia_videos_*/
+academia_videos*.zip
+academia_videos*.tar*
+/storage/framework/*.cjs
+/storage/framework/test-debug.txt
+/storage/framework/fix3c-*.php
+/storage/framework/imgsize.php
+academia_videos*.bak*
+academia_videos*/.env*

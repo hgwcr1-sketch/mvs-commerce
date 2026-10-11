@@ -171,7 +171,11 @@ class CobrosDemoPaymentTourHttpTest extends TestCase
         $response->assertOk();
         $response->assertSee('Activación simulada');
         $response->assertSee('Simulado — sin cobro real');
-        $response->assertSee('fase posterior'); // sin acceso operativo todavía
+        // INTEGRACIÓN-05: el DEMO YA permite acceso operativo simulado
+        // (habilitación explícita), por lo que la pantalla de activación
+        // muestra el botón «Entrar al sistema DEMO», no el aviso de fase
+        // posterior. Sin pagos reales ni contratos nuevos.
+        $response->assertSee('Entrar al sistema DEMO');
 
         // Ningún servicio real invocado; ningún contrato nuevo.
         Http::assertNothingSent();
