@@ -13,7 +13,7 @@ class CobrosPublicDemoVideos19B5DTest extends TestCase
 
     public function test_demo_page_is_public_and_shows_both_options_with_preparation_state(): void
     {
-        $response = $this->get(route('cobros.demo'));
+        $response = $this->get(route('cobros.demo.preview'));
 
         $response->assertOk()
             ->assertViewIs('cobros.public-demo')
@@ -37,7 +37,7 @@ class CobrosPublicDemoVideos19B5DTest extends TestCase
 
     public function test_demo_page_includes_country_cta_component(): void
     {
-        $this->get(route('cobros.demo'))
+        $this->get(route('cobros.demo.preview'))
             ->assertOk()
             ->assertSee('¡Queremos llegar hasta vos!')
             ->assertSee('mailto:ventas@mvscommerce.com', false);
@@ -92,7 +92,7 @@ class CobrosPublicDemoVideos19B5DTest extends TestCase
     {
         $this->get(route('cobros.landing'))
             ->assertOk()
-            ->assertSee('href="'.route('cobros.demo').'"', false)
+            ->assertSee('href="'.route('cobros.demo.entry').'"', false)
             ->assertSee('href="'.route('cobros.videos').'"', false);
     }
 }

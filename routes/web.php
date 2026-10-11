@@ -152,12 +152,68 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
-// PRE-19B-5D - páginas públicas DEMO y Videos (anónimas; sin motor de
-// simulador aún: muestran «Simulador en preparación» / «Próximamente»).
-Route::get('/demo-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'demo'])
-    ->name('cobros.demo');
+// PRE-19B-5D - páginas públicas (anónimas). El "Simulador en preparación"
+// conserva URI/nombre propios; la entrada DEMO real es cobros.demo.entry.
+Route::get('/simulador-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'demo'])
+    ->name('cobros.demo.preview');
 Route::get('/videos-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'videos'])
     ->name('cobros.videos');
+// BLOQUE INTEGRACIÓN-05 - habilitación EXPLÍCITA del DEMO (config/demo.php
+// 'enabled' => DEMO_ENABLED). Rutas registradas siempre, pero protegidas por
+// el middleware 'cobros.demo': 404 salvo local/staging con DEMO habilitado.
+// En producción queda deshabilitado sea cual sea la configuración.
+Route::middleware('cobros.demo')->group(function () {
+// BLOQUE 21D-4B - DEMO individual por visitante (público, anónimo; token en
+// sesión del visitante; autorización y vencimiento SIEMPRE en servidor).
+Route::get('/demo-cobros', [App\Http\Controllers\Cobros\DemoVisitorController::class, 'entry'])
+    ->name('cobros.demo.entry');
+Route::get('/demo-cobros/inicio', [App\Http\Controllers\Cobros\DemoVisitorController::class, 'home'])
+    ->name('cobros.demo.home');
+Route::post('/demo-cobros/modo', [App\Http\Controllers\Cobros\DemoVisitorController::class, 'chooseMode'])
+    ->middleware('throttle:20,1')
+    ->name('cobros.demo.mode');
+
+// BLOQUE 21D-4C.1 - recorrido guiado del DEMO individual (pasos ficticios,
+// respuestas guardadas SOLO en la sesión del visitante; sin pago/activación).
+Route::get('/demo-cobros/tour', [App\Http\Controllers\Cobros\DemoTourController::class, 'show'])
+    ->name('cobros.demo.tour');
+Route::get('/demo-cobros/tour/{step}', [App\Http\Controllers\Cobros\DemoTourController::class, 'show'])
+    ->whereIn('step', ['bienvenida', 'datos', 'modalidad', 'resumen', 'cotizacion', 'activacion'])
+    ->name('cobros.demo.tour.step');
+Route::post('/demo-cobros/tour/{step}/guardar', [App\Http\Controllers\Cobros\DemoTourController::class, 'save'])
+    ->whereIn('step', ['bienvenida', 'datos', 'modalidad'])
+    ->middleware('throttle:30,1')
+    ->name('cobros.demo.tour.save');
+Route::post('/demo-cobros/tour/{step}/autofill', [App\Http\Controllers\Cobros\DemoTourController::class, 'autofill'])
+    ->whereIn('step', ['datos'])
+    ->middleware('throttle:30,1')
+    ->name('cobros.demo.tour.autofill');
+Route::get('/demo-cobros/tour/anterior', [App\Http\Controllers\Cobros\DemoTourController::class, 'back'])
+    ->name('cobros.demo.tour.back');
+Route::post('/demo-cobros/tour/reiniciar', [App\Http\Controllers\Cobros\DemoTourController::class, 'reset'])
+    ->middleware('throttle:30,1')
+    ->name('cobros.demo.tour.reset');
+// BLOQUE 21D-4C.2A - pago SIMULADO del recorrido guiado (sin dinero real,
+// sin Stripe/SINPE/webhooks/contratos/licencias; solo estado de la sesión).
+Route::post('/demo-cobros/tour/pago', [App\Http\Controllers\Cobros\DemoTourController::class, 'pay'])
+    ->middleware('throttle:10,1')
+    ->name('cobros.demo.tour.pay');
+// BLOQUE 21D-4C.2B-2 - ingreso al entorno DEMO operativo tras la activacion simulada; reutiliza el Core de autenticacion multi-tenant existente.
+// INTEGRACIÓN-05: antes condicionado a APP_ENV=local; ahora controlado por
+// config/demo.php (habilitación explícita + local/staging). DemoTourController
+// @enter/@enterFree tambien aborta 404 (defensa en profundidad). Requiere
+// sesion DEMO valida, no vencida, pago simulado y contexto resuelto en servidor.
+Route::post('/demo-cobros/tour/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enter'])
+    ->middleware('throttle:60,1')
+    ->name('cobros.demo.tour.enter');
+
+// BLOQUE 21D-4D-1 - exploracion libre: ingreso directo al entorno operativo
+// ficticio SIN recorrido guiado ni pago simulado. enterFree() aborta 404 si
+// el DEMO no esta habilitado y exige modo «libre» + modalidad valida en servidor.
+Route::post('/demo-cobros/libre/entrar', [App\Http\Controllers\Cobros\DemoTourController::class, 'enterFree'])
+    ->middleware('throttle:20,1')
+    ->name('cobros.demo.free.enter');
+});
 
 // BLOQUE 16A-2B f1 - registro público CobrOS: wizard en sesión, sin alta,
 // licencia ni acceso operativo hasta pago confirmado (fase posterior).
@@ -269,6 +325,13 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         Route::get('/rutas', [App\Http\Controllers\Cobros\RouteSelectorController::class, 'index'])->name('routes.select');
         Route::post('/rutas', [App\Http\Controllers\Cobros\RouteSelectorController::class, 'store'])->name('routes.store');
     });
+    // BLOQUE 21A-2 — Academia MVS CobrOS: capacitación por modalidad, solo lectura.
+    // Reutiliza la autenticación/autorización del grupo (empresa activa +
+    // cobros.acceder). Las claves internas de modalidad NO son URL de la Academia.
+    Route::get('/academia', [App\Http\Controllers\Cobros\AcademiaController::class, 'index'])
+        ->name('academia.index');
+    Route::get('/academia/{track}', [App\Http\Controllers\Cobros\AcademiaController::class, 'show'])
+        ->name('academia.show');
     // Campana CobrOS: click en una notificación → marca SOLO ese recipient del
     // usuario autenticado como leído (read_at Core) y redirige a su destino.
     Route::get('/notifications/{recipient}/open', [CobrosAlertController::class, 'open'])

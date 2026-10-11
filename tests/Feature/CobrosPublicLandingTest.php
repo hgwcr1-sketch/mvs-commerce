@@ -28,7 +28,7 @@ class CobrosPublicLandingTest extends TestCase
             ->assertSee('Iniciar sesión')
             ->assertSee('href="'.route('cobros.register', ['modality' => 'prestamista']).'"', false)
             ->assertSee('href="'.route('cobros.login').'"', false)
-            ->assertSee('href="'.route('cobros.demo').'"', false)
+            ->assertSee('href="'.route('cobros.demo.entry').'"', false)
             ->assertSee('href="'.route('cobros.videos').'"', false)
             ->assertDontSee('href="'.route('login').'"', false);
 

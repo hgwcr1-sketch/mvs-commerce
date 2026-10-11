@@ -26,7 +26,10 @@ class OwnerCollectorController extends Controller
     public function index(Request $request, CollectorManagementService $service): View
     {
         $company = Company::findOrFail((int) session('active_company_id'));
-        $contract = $service->getContract($company);
+        // 21D-FIX-2: sin contrato CobrOS (license_mode null) la vista debe
+        // renderizar en solo lectura; nunca un 500 por offset sobre null.
+        $contract = $service->getContract($company)
+            ?? ['license_mode' => null, 'collector_limit' => null, 'admin_license_charged' => false];
         $collectors = $service->listCollectors($company);
         $branches = Branch::where('company_id', $company->id)->orderBy('name')->get();
 

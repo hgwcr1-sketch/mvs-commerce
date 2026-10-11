@@ -5,8 +5,9 @@
             <span class="text-lg font-bold">MVS CobrOS</span>
         </a>
         {{-- PRE-19B-5C: el acceso a iniciar sesión vive solo en la bienvenida
-             principal; los pasos del registro lo ocultan (sin duplicados). --}}
-        @if ($showLogin ?? true)
+             principal; los pasos del registro lo ocultan (sin duplicados).
+             21D-FIX-1: las pantallas DEMO del visitante tampoco lo muestran. --}}
+        @if (($showLogin ?? true) && ! request()->routeIs('cobros.demo.*'))
             <a href="{{ route('cobros.login') }}" class="inline-flex min-h-11 items-center rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary-hover hover:text-white">Iniciar sesión</a>
         @endif
     </div>

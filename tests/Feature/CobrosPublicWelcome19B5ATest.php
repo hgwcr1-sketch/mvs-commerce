@@ -129,7 +129,7 @@ class CobrosPublicWelcome19B5ATest extends TestCase
         // PRE-19B-5D: DEMO y Videos tienen ruta propia; la bienvenida no
         // conserva CTA deshabilitados y los países siguen dinámicos.
         $this->assertSame(0, substr_count($content, 'aria-disabled="true"'), 'La bienvenida no debe quedar con CTA inactivos.');
-        $this->assertStringContainsString('href="'.route('cobros.demo').'"', $content);
+        $this->assertStringContainsString('href="'.route('cobros.demo.entry').'"', $content);
         $this->assertStringContainsString('href="'.route('cobros.videos').'"', $content);
         $this->assertStringContainsString('Costa Rica', $content);
         $this->assertStringContainsString('Colombia', $content);

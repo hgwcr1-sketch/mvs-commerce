@@ -64,7 +64,7 @@
                     <h2 class="mt-2 text-xl font-bold">Probar DEMO</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-600">Recorra MVS CobrOS con datos de ejemplo, sin tocar información real.</p>
                     <div class="mt-auto pt-5">
-                        <a href="{{ route('cobros.demo') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-bold text-black transition hover:bg-primary-hover hover:text-white">Probar DEMO</a>
+                        <a href="{{ route('cobros.demo.entry') }}" class="inline-flex min-h-14 w-full items-center justify-center rounded-xl bg-primary px-4 py-4 text-base font-bold text-black transition hover:bg-primary-hover hover:text-white">Probar DEMO</a>
                     </div>
                 </article>
 
