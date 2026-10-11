@@ -22,6 +22,8 @@ class CobrosCreditRenewalRequest extends Model
 
     public const STATUS_CONSENTED = 'consented';
 
+    public const STATUS_ACTIVATED = 'activated';
+
     protected $fillable = [
         'company_id',
         'credit_id',
@@ -49,6 +51,7 @@ class CobrosCreditRenewalRequest extends Model
         'signature_path',
         'terms_hash',
         'consent_snapshot',
+        'activated_credit_id',
     ];
 
     protected function casts(): array

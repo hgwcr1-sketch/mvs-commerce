@@ -20,6 +20,9 @@ class CobrosCredit extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_DISBURSED = 'disbursed';
 
+    /** Cerrado por renovación consolidada (REN-03D): sin cobro doble. */
+    public const STATUS_CLOSED_RENEWAL = 'closed_renewal';
+
     public const INTEREST_NONE = 'none';
     public const INTEREST_FIXED = 'fixed';
     public const INTEREST_PERCENT = 'percent';
