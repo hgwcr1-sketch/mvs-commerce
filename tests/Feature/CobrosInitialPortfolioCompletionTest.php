@@ -86,8 +86,10 @@ class CobrosInitialPortfolioCompletionTest extends TestCase
             ->assertDontSee('Cliente Migrado Nuevo');
         $this->assertSame(1, CobrosAssignment::count());
 
-        // 4) CxC / saldo / datos migrados permanecen iguales.
-        $this->assertSame(0, AccountReceivable::count());
+        // 4) CxC operativa creada al cargar (UNA por saldo > 0): finalizar no
+        // duplica ni altera el saldo declarado migrado.
+        $this->assertSame(1, AccountReceivable::count());
+        $this->assertSame('1500.1234', (string) AccountReceivable::sole()->balance_due);
         $fresh = CobrosInitialPortfolioRecord::sole();
         $this->assertSame('1500.1234', (string) $fresh->balance);
         $this->assertSame('100.5000', (string) $fresh->installment);

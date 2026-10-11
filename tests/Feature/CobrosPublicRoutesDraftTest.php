@@ -137,7 +137,7 @@ class CobrosPublicRoutesDraftTest extends TestCase
         $this->reachRoutesStep();
 
         $step3 = $this->get(route('cobros.register.step', ['paso' => 3]));
-        $step3->assertOk()->assertSee('plantillas de clientes y créditos');
+        $step3->assertOk()->assertSee('Machotes vacíos')->assertSee('Descargar machote de clientes');
 
         foreach ($templateUrls as $url) {
             $step3->assertDontSee($url, false);
