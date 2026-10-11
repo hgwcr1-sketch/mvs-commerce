@@ -355,6 +355,13 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.acceder')->name('collector.renewal.create');
     Route::post('/collector/portfolio/{customer}/renovar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'store'])
         ->middleware('permission:cobros.acceder')->name('collector.renewal.store');
+    // REN-03D1: aprobación/rechazo (solo autorizados) y consentimiento firmado.
+    Route::post('/collector/portfolio/{customer}/renovar/{renewal}/aprobar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'approve'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.approve');
+    Route::post('/collector/portfolio/{customer}/renovar/{renewal}/rechazar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'reject'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.reject');
+    Route::post('/collector/portfolio/{customer}/renovar/{renewal}/consentimiento', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'consent'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.consent');
     // 2) MIS CLIENTES: con y sin crédito activo (expediente histórico legítimo).
     Route::get('/collector/mis-clientes', [CollectorPortfolioController::class, 'mine'])
         ->middleware('permission:cobros.cobrar')->name('collector.my-customers');

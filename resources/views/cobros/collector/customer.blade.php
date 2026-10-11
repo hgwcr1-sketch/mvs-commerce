@@ -16,6 +16,79 @@
         <div role="status" class="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
             ✅ Renovación aprobada. Pendiente de consentimiento y firma del cliente para la activación (fase posterior). No se ha creado crédito nuevo todavía.
         </div>
+    @elseif(session('renewal_status') === 'rejected')
+        <div role="status" class="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+            ✖ Renovación rechazada. No se ha creado crédito nuevo ni desembolsado dinero.
+        </div>
+    @elseif(session('renewal_status') === 'consented')
+        <div role="status" class="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
+            ✍ Consentimiento firmado por el cliente. La activación de la renovación se hará en una fase posterior. No se ha creado crédito nuevo todavía.
+        </div>
+    @endif
+
+    @if(isset($activeRenewal) && $activeRenewal !== null)
+        <div class="rounded-xl border border-slate-200 bg-white p-4" data-testid="renewal-panel">
+            <h2 class="text-base font-bold text-slate-900">Renovación de crédito</h2>
+            <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-700">
+                <dt class="font-semibold">Deuda anterior</dt><dd class="text-right">{{ number_format((float) $activeRenewal->previous_pending, 2) }}</dd>
+                <dt class="font-semibold">Capital nuevo</dt><dd class="text-right">{{ number_format((float) $activeRenewal->new_capital, 2) }}</dd>
+                <dt class="font-semibold">Interés nuevo</dt><dd class="text-right">{{ number_format((float) $activeRenewal->new_interest, 2) }}</dd>
+                <dt class="font-semibold">Total consolidado</dt><dd class="text-right font-bold">{{ number_format((float) $activeRenewal->consolidated_total, 2) }}</dd>
+                <dt class="font-semibold">Desembolso</dt><dd class="text-right">{{ number_format((float) $activeRenewal->disbursement, 2) }}</dd>
+                <dt class="font-semibold">Estado</dt>
+                <dd class="text-right font-semibold">
+                    @if($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_PENDING) Pendiente de aprobación
+                    @elseif($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_APPROVED) Aprobada — falta firma
+                    @endif
+                </dd>
+            </dl>
+
+            @php
+                $renewalRouteCustomer = $customer;
+                $renewalRouteId = $activeRenewal->id;
+            @endphp
+
+            @if($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_PENDING)
+                <form method="POST" action="{{ route('cobros.collector.renewal.approve', [$renewalRouteCustomer, $renewalRouteId]) }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="flex min-h-[44px] w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-base font-bold text-white hover:bg-primary-hover">Aprobar renovación</button>
+                </form>
+                <form method="POST" action="{{ route('cobros.collector.renewal.reject', [$renewalRouteCustomer, $renewalRouteId]) }}" class="mt-2">
+                    @csrf
+                    <button type="submit" class="flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-red-300 bg-white px-4 py-3 text-base font-bold text-red-700 hover:bg-red-50">Rechazar renovación</button>
+                </form>
+            @elseif($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_APPROVED)
+                <form method="POST" action="{{ route('cobros.collector.renewal.consent', [$renewalRouteCustomer, $renewalRouteId]) }}" class="mt-3" id="renewal-consent-form">
+                    @csrf
+                    <label for="renewal-signature-canvas" class="text-sm font-semibold text-slate-800">Firma del cliente (nueva)</label>
+                    <p class="mt-1 text-xs text-slate-600">{{ \App\Services\Cobros\CreditRenewalConsentService::CONSENT_TEXT }}</p>
+                    <canvas id="renewal-signature-canvas" width="640" height="180" class="mt-2 w-full rounded-xl border-2 border-slate-300 bg-white touch-none" aria-label="Área de firma del cliente"></canvas>
+                    <input type="hidden" name="signature" id="renewal-signature-input" value="">
+                    <input type="hidden" name="terms_hash" value="{{ $activeRenewal->terms_hash ?? '' }}">
+                    <div class="mt-3 flex gap-2">
+                        <button type="button" id="renewal-clear-signature" class="min-h-[44px] flex-1 rounded-xl border-2 border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Limpiar firma</button>
+                        <button type="submit" class="min-h-[44px] flex-1 rounded-xl bg-primary px-4 py-2 text-base font-bold text-white hover:bg-primary-hover">Confirmar firma</button>
+                    </div>
+                </form>
+                <script>
+                (function () {
+                    var canvas = document.getElementById('renewal-signature-canvas');
+                    var input = document.getElementById('renewal-signature-input');
+                    var form = document.getElementById('renewal-consent-form');
+                    var ctx = canvas.getContext('2d');
+                    var drawing = false, hasInk = false;
+                    function pos(e) { var r = canvas.getBoundingClientRect(); var t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; }
+                    function start(e) { drawing = true; hasInk = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
+                    function move(e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5; ctx.stroke(); e.preventDefault(); }
+                    function end() { drawing = false; if (hasInk) input.value = canvas.toDataURL('image/png'); }
+                    canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+                    canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false }); canvas.addEventListener('touchend', end);
+                    document.getElementById('renewal-clear-signature').addEventListener('click', function () { ctx.clearRect(0, 0, canvas.width, canvas.height); input.value = ''; hasInk = false; });
+                    form.addEventListener('submit', function (e) { if (!input.value) { e.preventDefault(); alert('El cliente debe firmar para confirmar.'); } });
+                })();
+                </script>
+            @endif
+        </div>
     @endif
 
 

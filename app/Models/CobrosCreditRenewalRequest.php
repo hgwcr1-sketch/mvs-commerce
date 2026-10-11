@@ -18,6 +18,10 @@ class CobrosCreditRenewalRequest extends Model
 
     public const STATUS_APPROVED = 'approved';
 
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_CONSENTED = 'consented';
+
     protected $fillable = [
         'company_id',
         'credit_id',
@@ -38,14 +42,24 @@ class CobrosCreditRenewalRequest extends Model
         'requested_by',
         'approved_by',
         'approved_at',
+        'rejected_by',
+        'rejected_at',
+        'reject_reason',
+        'consented_at',
+        'signature_path',
+        'terms_hash',
+        'consent_snapshot',
     ];
 
     protected function casts(): array
     {
         return [
             'schedule_snapshot' => 'array',
+            'consent_snapshot' => 'array',
             'first_due_date' => 'date',
             'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
+            'consented_at' => 'datetime',
         ];
     }
 

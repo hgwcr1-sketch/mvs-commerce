@@ -9,6 +9,7 @@ use App\Models\CobrosCreditRenewalRequest;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Services\Cobros\CreditInstallmentService;
+use App\Services\Cobros\CreditRenewalConsentService;
 use App\Services\Cobros\CreditRenewalQuoteService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -124,6 +125,50 @@ class CreditRenewalController extends Controller
             ->with('renewal_id', $renewal->id);
     }
 
+    /** REN-03D1: aprobación persistente de una renovación pendiente. */
+    public function approve(Request $request, Customer $customer, int $renewal, CreditInstallmentService $installments, CreditRenewalConsentService $consent): RedirectResponse
+    {
+        $row = $this->authorizedRenewal($request, $customer, $renewal, $installments, resolve: true);
+        $consent->approve($row, $request->user());
+
+        return redirect()
+            ->route('cobros.collector.portfolio.show', $customer)
+            ->with('renewal_status', 'approved')
+            ->with('renewal_id', $row->id);
+    }
+
+    /** REN-03D1: rechazo persistente de una renovación pendiente. */
+    public function reject(Request $request, Customer $customer, int $renewal, CreditInstallmentService $installments, CreditRenewalConsentService $consent): RedirectResponse
+    {
+        $row = $this->authorizedRenewal($request, $customer, $renewal, $installments, resolve: true);
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+        $consent->reject($row, $request->user(), $data['reason'] ?? null);
+
+        return redirect()
+            ->route('cobros.collector.portfolio.show', $customer)
+            ->with('renewal_status', 'rejected')
+            ->with('renewal_id', $row->id);
+    }
+
+    /**
+     * REN-03D1: consentimiento firmado del cliente. Exige aprobación previa
+     * y firma NUEVA vinculada por hash a los términos exactos de la renovación.
+     */
+    public function consent(Request $request, Customer $customer, int $renewal, CreditInstallmentService $installments, CreditRenewalConsentService $consent): RedirectResponse
+    {
+        $row = $this->authorizedRenewal($request, $customer, $renewal, $installments);
+        $data = $request->validate([
+            'signature' => ['required', 'string'],
+            'terms_hash' => ['nullable', 'string', 'size:64'],
+        ]);
+        $consent->consent($row, $request->user(), $data['signature'], $data['terms_hash'] ?? null);
+
+        return redirect()
+            ->route('cobros.collector.portfolio.show', $customer)
+            ->with('renewal_status', 'consented')
+            ->with('renewal_id', $row->id);
+    }
+
     private function disbursedCreditForCustomer(Company $company, Customer $customer, CreditInstallmentService $installments): CobrosCredit
     {
         $credit = CobrosCredit::query()
@@ -138,6 +183,43 @@ class CreditRenewalController extends Controller
         }
 
         return $credit;
+    }
+
+    /**
+     * Localiza la renovación dentro del tenant y del crédito del cliente y
+     * valida autorización server-side. Para resolver (aprobar/rechazar) exige
+     * modo 'direct'; para consentimiento basta con acceso a esa cartera.
+     */
+    private function authorizedRenewal(
+        Request $request,
+        Customer $customer,
+        int $renewalId,
+        CreditInstallmentService $installments,
+        bool $resolve = false,
+    ): CobrosCreditRenewalRequest {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $credit = $this->disbursedCreditForCustomer($company, $customer, $installments);
+        $mode = $this->approvalMode($request->user(), $company, $credit);
+
+        if ($resolve && $mode !== 'direct') {
+            abort(403, 'Solo el prestamista o un usuario autorizado puede resolver esta renovación.');
+        }
+
+        $renewal = CobrosCreditRenewalRequest::query()
+            ->where('company_id', $company->id)
+            ->where('credit_id', $credit->id)
+            ->whereKey($renewalId)
+            ->first();
+        if ($renewal === null) {
+            abort(404, 'Renovación no encontrada.');
+        }
+
+        // Firma: solo el cobrador asignado o el prestamista de esa cartera.
+        if (! $resolve && (int) $renewal->collector_user_id !== (int) $request->user()->id && $mode !== 'direct') {
+            abort(403, 'No tiene permiso para registrar el consentimiento de esta renovación.');
+        }
+
+        return $renewal;
     }
 
     /**
