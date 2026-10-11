@@ -405,14 +405,14 @@ class CustomerController extends Controller
                 session('active_branch_id'),
                 $action,
                 $customer,
-                $before !== null ? [
-                    'credit_limit' => $before['credit_limit'],
-                    'credit_days' => $before['credit_days'],
-                ] : null,
-                [
-                    'credit_limit' => $after['credit_limit'],
-                    'credit_days' => $after['credit_days'],
-                ],
+                    $before !== null ? [
+                        'credit_limit' => $before['credit_limit'] ?? null,
+                        'credit_days' => $before['credit_days'] ?? null,
+                    ] : null,
+                    [
+                        'credit_limit' => $after['credit_limit'] ?? null,
+                        'credit_days' => $after['credit_days'] ?? null,
+                    ],
                 ['context' => $context],
                 $request->user(),
             );
