@@ -53,6 +53,12 @@ class VisitController extends Controller
             'branches' => $request->user()->branches()->where('branches.company_id', $company->id)->get(),
             // Fase 3A: entrada al Gate desde un evento autorizado del propio cobrador.
             'chargeableAccounts' => $gate->chargeableAccountIds($request->user(), $company, $customerIds),
+            // REN-03C1: clientes con crédito desembolsado (elegibles para renovar).
+            'renewalEligible' => \App\Models\CobrosCredit::query()
+                ->where('company_id', $company->id)
+                ->whereIn('customer_id', $customerIds)
+                ->where('status', \App\Models\CobrosCredit::STATUS_DISBURSED)
+                ->pluck('customer_id')->unique()->flip()->all(),
         ]);
     }
 

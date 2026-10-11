@@ -348,6 +348,13 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio');
     Route::get('/collector/portfolio/{customer}', [CollectorPortfolioController::class, 'show'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.show');
+    // REN-03C1: solicitud/autorización de renovación de crédito (sin crear crédito).
+    // cobros.acceder: tanto el cobrador como el prestamista; la autorización
+    // fina (asignación, política y cobros.renovar) vive en el servidor.
+    Route::get('/collector/portfolio/{customer}/renovar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'create'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.create');
+    Route::post('/collector/portfolio/{customer}/renovar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'store'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.store');
     // 2) MIS CLIENTES: con y sin crédito activo (expediente histórico legítimo).
     Route::get('/collector/mis-clientes', [CollectorPortfolioController::class, 'mine'])
         ->middleware('permission:cobros.cobrar')->name('collector.my-customers');

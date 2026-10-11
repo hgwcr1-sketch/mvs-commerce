@@ -8,6 +8,16 @@
         ← Volver a mi cartera
     </a>
 
+    @if(session('renewal_status') === 'pending')
+        <div role="status" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            ⏳ Renovación registrada. <strong>Pendiente de aprobación</strong> del prestamista. No se ha creado crédito nuevo ni desembolsado dinero.
+        </div>
+    @elseif(session('renewal_status') === 'approved')
+        <div role="status" class="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
+            ✅ Renovación aprobada. Pendiente de consentimiento y firma del cliente para la activación (fase posterior). No se ha creado crédito nuevo todavía.
+        </div>
+    @endif
+
 
     {{-- Centro de trabajo del cobrador: identidad, contacto y cobro en una pantalla. --}}
     <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
@@ -65,6 +75,10 @@
         @if(isset($chargeableAccounts[$customer->id]))
             <a href="{{ route('cobros.collector.payments.create', $chargeableAccounts[$customer->id]) }}"
                class="mt-3 flex min-h-[56px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-4 text-xl font-bold text-slate-950 hover:bg-primary-hover">💰 COBRAR</a>
+        @endif
+        @if($credits->contains(fn ($c) => $c->status === \App\Models\CobrosCredit::STATUS_DISBURSED))
+            <a href="{{ route('cobros.collector.renewal.create', $customer) }}"
+               class="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border-2 border-primary bg-white px-4 py-3 text-base font-bold text-slate-900 hover:bg-primary/10">🔄 RENOVAR CRÉDITO</a>
         @endif
     </div>
 

@@ -228,6 +228,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'cobros.cobrar', 'label' => 'Registrar cobro en CobrOS', 'module' => 'CobrOS'],
             ['name' => 'cobros.asignar', 'label' => 'Asignar cartera en CobrOS', 'module' => 'CobrOS'],
             ['name' => 'cobros.anular', 'label' => 'Anular cobros en CobrOS', 'module' => 'CobrOS'],
+            ['name' => 'cobros.renovar', 'label' => 'Aprobar renovación de crédito en CobrOS', 'module' => 'CobrOS'],
             ['name' => 'notificaciones.cobros', 'label' => 'Recibir alertas de CobrOS', 'module' => 'Notificaciones'],
         ];
 

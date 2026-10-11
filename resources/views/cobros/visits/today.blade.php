@@ -165,6 +165,10 @@
                     @endif
                     <a href="{{ route('cobros.collector.portfolio.show', $customer) }}"
                        class="flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">VER CLIENTE</a>
+                    @if(isset($renewalEligible[$customer->id]))
+                        <a href="{{ route('cobros.collector.renewal.create', $customer) }}"
+                           class="flex min-h-[48px] items-center justify-center rounded-xl border-2 border-primary bg-white px-3 text-sm font-bold text-slate-900 hover:bg-primary/10">RENOVAR CRÉDITO</a>
+                    @endif
                     {{-- 3A: entrada al Gate desde el evento, solo si el Gate lo permite. --}}
                     @if(isset($chargeableAccounts[$customer->id]) && (!$visit || !$visit->account_receivable_id || (int) $visit->account_receivable_id === $chargeableAccounts[$customer->id]))
                         <a href="{{ $visit ? route('cobros.collector.payments.create', ['account' => $chargeableAccounts[$customer->id], 'visit' => $visit->id]) : route('cobros.collector.payments.create', $chargeableAccounts[$customer->id]) }}"
