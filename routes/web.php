@@ -263,7 +263,7 @@ Route::middleware([Authenticate::class, EnsureActiveUser::class])->group(functio
 // Entrada a otro producto: autenticación, licencia global, módulo contratado y permiso propio de CobrOS.
 // Sin 'active.branch' a propósito: el portal del dueño opera a nivel de empresa completa.
 // Usa 'cobros.active.company' (no redirige a onboarding de Commerce).
-Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class, 'cobros.entry', 'cobros.route'])->prefix('cobros')->name('cobros.')->group(function () {
+Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licensed', 'company.module:cobros', 'permission:cobros.acceder', EnsureActiveUser::class, 'cobros.entry', 'cobros.route', 'cobros.modality'])->prefix('cobros')->name('cobros.')->group(function () {
     // Selector de ruta del cobrador: exige UNA ruta activa/licenciada en sesión.
     Route::middleware('permission:cobros.cobrar')->group(function () {
         Route::get('/rutas', [App\Http\Controllers\Cobros\RouteSelectorController::class, 'index'])->name('routes.select');
