@@ -30,6 +30,9 @@ class StripePaymentProvider implements PaymentProviderInterface
     private ?StripeClient $client = null;
     private ?string $mode = null;
 
+    /** 19D-2I: transporte IPv4 único para el SDK Stripe (errno 6 intermitente). */
+    private static bool $ipv4TransportConfigured = false;
+
     public function key(): string
     {
         return 'stripe';
@@ -56,11 +59,32 @@ class StripePaymentProvider implements PaymentProviderInterface
         }
 
         try {
+            $this->configureIpv4Transport();
             $this->client = new StripeClient($secretKey);
             return true;
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * 19D-2I — Fuerza resolución IPv4 SOLO en el transporte HTTP del SDK
+     * Stripe (extensión oficial: CurlClient::defaultOptions vía
+     * ApiRequestor::setHttpClient). No toca el transporte global de Laravel
+     * ni TLS: CURLOPT_IPRESOLVE se añade a las opciones por defecto y
+     * constructCurlOptions conserva CAINFO, timeouts y verificación SSL.
+     */
+    private function configureIpv4Transport(): void
+    {
+        if (self::$ipv4TransportConfigured) {
+            return;
+        }
+
+        \Stripe\ApiRequestor::setHttpClient(new \Stripe\HttpClient\CurlClient([
+            \CURLOPT_IPRESOLVE => \CURL_IPRESOLVE_V4,
+        ]));
+
+        self::$ipv4TransportConfigured = true;
     }
 
     private function getClient(): StripeClient
@@ -118,7 +142,6 @@ class StripePaymentProvider implements PaymentProviderInterface
         $params = [
             'amount' => $amountMinor,
             'currency' => strtolower($request->currency),
-            'payment_method_types' => ['card'],
             'metadata' => array_merge([
                 'product' => $request->product,
                 'company_id' => $request->companyId,

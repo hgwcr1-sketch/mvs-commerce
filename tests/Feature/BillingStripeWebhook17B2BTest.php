@@ -187,6 +187,22 @@ class BillingStripeWebhook17B2BTest extends TestCase
     // Firma válida / inválida
     // ------------------------------------------------------------------
 
+    /**
+     * 19D-2J — la ruta webhook debe estar exenta de CSRF (PreventRequestForgery).
+     *
+     * El withoutMiddleware antiguo referenciaba VerifyCsrfToken (clase
+     * inexistente en Laravel 12) y el 419 era del middleware real
+     * PreventRequestForgery. Verifica el registro del except en bootstrap.
+     */
+    public function test_webhook_ruta_exenta_de_csrf(): void
+    {
+        $reflection = new \ReflectionClass(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $property = $reflection->getProperty('neverVerify');
+        $property->setAccessible(true);
+
+        $this->assertContains('billing/webhook/stripe', $property->getValue());
+    }
+
     public function test_webhook_valid_signature_processes_event(): void
     {
         $payload = $this->basePaymentIntentSucceeded();
@@ -195,6 +211,8 @@ class BillingStripeWebhook17B2BTest extends TestCase
         $response = $this->postJson('/billing/webhook/stripe', $payload, [
             'Stripe-Signature' => $signature,
         ]);
+
+        $this->assertNotSame(419, $response->getStatusCode());
 
         $response->assertStatus(200)
             ->assertJson(['received' => true, 'processed' => true]);
@@ -571,5 +589,204 @@ class BillingStripeWebhook17B2BTest extends TestCase
         ]);
 
         $response->assertStatus(429);
+    }
+
+    // ------------------------------------------------------------------
+    // 19D-2L — checkout.session.completed (respaldo de identificación)
+    // ------------------------------------------------------------------
+
+    private function baseCheckoutSessionCompleted(array $overrides = []): array
+    {
+        return array_merge([
+            'id' => 'evt_test_cs_' . uniqid(),
+            'object' => 'event',
+            'api_version' => '2024-04-10',
+            'created' => time(),
+            'data' => [
+                'object' => array_merge([
+                    'id' => 'cs_test_' . uniqid(),
+                    'object' => 'checkout.session',
+                    'amount_subtotal' => 1000000,
+                    'amount_total' => 1000000,
+                    'currency' => 'crc',
+                    'currency_conversion' => null,
+                    'customer_details' => null,
+                    'custom_text' => [],
+                    'expires_at' => time() + 1800,
+                    'livemode' => false,
+                    'metadata' => [
+                        'product' => 'cobros',
+                        'company_id' => '1',
+                        'contract_reference' => 'CTR-001',
+                        'period_year' => '2026',
+                        'period_month' => '10',
+                    ],
+                    'mode' => 'payment',
+                    'payment_intent' => 'pi_test_cs_' . uniqid(),
+                    'payment_method_types' => ['card'],
+                    'payment_status' => 'paid',
+                    'status' => 'complete',
+                ], $overrides['data']['object'] ?? []),
+            ],
+            'livemode' => false,
+            'pending_webhooks' => 1,
+            'request' => ['id' => null, 'idempotency_key' => null],
+            'type' => 'checkout.session.completed',
+        ], $overrides);
+    }
+
+    public function test_webhook_checkout_session_paid_processes_event(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted();
+        $signature = $this->signPayload($payload);
+
+        $response = $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $signature,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['received' => true, 'processed' => true]);
+
+        $this->assertDatabaseHas('billing_payment_records', [
+            'provider' => 'stripe',
+            'external_id' => $payload['data']['object']['payment_intent'],
+            'status' => 'confirmed',
+        ]);
+    }
+
+    public function test_webhook_checkout_session_not_paid_rejected(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted([
+            'data' => ['object' => ['payment_status' => 'unpaid', 'status' => 'open']],
+        ]);
+        $signature = $this->signPayload($payload);
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $signature,
+        ])->assertStatus(400)
+            ->assertJson(['error' => 'Evento no mapeable']);
+
+        $this->assertSame(0, BillingPaymentRecord::query()->count());
+    }
+
+    public function test_webhook_checkout_session_without_payment_intent_rejected(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted([
+            'data' => ['object' => ['payment_intent' => null]],
+        ]);
+        $signature = $this->signPayload($payload);
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $signature,
+        ])->assertStatus(400)
+            ->assertJson(['error' => 'Evento no mapeable']);
+    }
+
+    public function test_webhook_checkout_session_invalid_signature_rejected(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted();
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => 't=1,v1=firma_invalida',
+        ])->assertStatus(400)
+            ->assertJson(['error' => 'Firma inválida']);
+
+        $this->assertSame(0, BillingPaymentRecord::query()->count());
+    }
+
+    public function test_webhook_checkout_session_replay_duplicate(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted();
+        $signature = $this->signPayload($payload);
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $signature,
+        ])->assertStatus(200);
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $signature,
+        ])->assertStatus(200)
+            ->assertJson(['received' => true, 'duplicate' => true]);
+
+        $this->assertSame(1, BillingPaymentRecord::query()->count());
+    }
+
+    /**
+     * Idempotencia cruzada: payment_intent.succeeded y
+     * checkout.session.completed del mismo PaymentIntent => UN registro.
+     */
+    public function test_webhook_cross_event_pi_and_session_single_record(): void
+    {
+        $piId = 'pi_test_cross_' . uniqid();
+
+        $piPayload = $this->basePaymentIntentSucceeded([
+            'data' => ['object' => array_merge($this->basePaymentIntentSucceeded()['data']['object'], ['id' => $piId])],
+        ]);
+        $this->postJson('/billing/webhook/stripe', $piPayload, [
+            'Stripe-Signature' => $this->signPayload($piPayload),
+        ])->assertStatus(200);
+
+        $sessionPayload = $this->baseCheckoutSessionCompleted([
+            'data' => ['object' => array_merge($this->baseCheckoutSessionCompleted()['data']['object'], ['payment_intent' => $piId])],
+        ]);
+        $resp = $this->postJson('/billing/webhook/stripe', $sessionPayload, [
+            'Stripe-Signature' => $this->signPayload($sessionPayload),
+        ]);
+        $this->assertSame(200, $resp->getStatusCode(), $resp->getContent());
+
+        $this->assertSame(1, BillingPaymentRecord::query()
+            ->where('external_id', $piId)
+            ->count());
+        $this->assertSame(1, BillingPaymentRecord::query()->count());
+    }
+
+    /**
+     * Evento cruzado inverso: sesión primero, PI después — también UN registro.
+     */
+    public function test_webhook_cross_event_session_then_pi_single_record(): void
+    {
+        $piId = 'pi_test_cross2_' . uniqid();
+
+        $sessionPayload = $this->baseCheckoutSessionCompleted([
+            'data' => ['object' => array_merge($this->baseCheckoutSessionCompleted()['data']['object'], ['payment_intent' => $piId])],
+        ]);
+        $this->postJson('/billing/webhook/stripe', $sessionPayload, [
+            'Stripe-Signature' => $this->signPayload($sessionPayload),
+        ])->assertStatus(200);
+
+        $piPayload = $this->basePaymentIntentSucceeded([
+            'data' => ['object' => array_merge($this->basePaymentIntentSucceeded()['data']['object'], ['id' => $piId])],
+        ]);
+        $this->postJson('/billing/webhook/stripe', $piPayload, [
+            'Stripe-Signature' => $this->signPayload($piPayload),
+        ])->assertStatus(200);
+
+        $this->assertSame(1, BillingPaymentRecord::query()->count());
+    }
+
+    /**
+     * Contrato ajeno/inexistente: el webhook registra el pago pero el handler
+     * CobrOS no activa nada (sin confirmaciones ni licencias).
+     */
+    public function test_webhook_checkout_session_foreign_contract_no_activation(): void
+    {
+        $payload = $this->baseCheckoutSessionCompleted([
+            'data' => ['object' => array_merge($this->baseCheckoutSessionCompleted()['data']['object'], [
+                'metadata' => [
+                    'product' => 'cobros',
+                    'company_id' => '999999',
+                    'contract_reference' => '999999',
+                    'period_year' => '2026',
+                    'period_month' => '10',
+                ],
+            ])],
+        ]);
+
+        $this->postJson('/billing/webhook/stripe', $payload, [
+            'Stripe-Signature' => $this->signPayload($payload),
+        ])->assertStatus(200);
+
+        $this->assertSame(0, \App\Models\CobrosPaymentConfirmation::query()->count());
+        $this->assertSame(0, \App\Models\CobrosCollectorLicense::query()->count());
     }
 }

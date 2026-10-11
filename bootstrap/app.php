@@ -24,6 +24,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
         $middleware->append(AddSecurityHeaders::class);
 
+        // 19D-2J: webhook Stripe exento de CSRF (la ruta no existe como
+        // "api/*"; la protección real es la verificación de firma). La clase
+        // VerifyCsrfToken de Laravel 11 no existe en 12, por eso el
+        // withoutMiddleware de la ruta no surtía efecto y devolvía 419.
+        $middleware->validateCsrfTokens(except: [
+            'billing/webhook/stripe',
+        ]);
+
         $middleware->alias([
             'active.company' => EnsureActiveCompany::class,
             'cobros.active.company' => \App\Http\Middleware\Cobros\EnsureActiveCompany::class,

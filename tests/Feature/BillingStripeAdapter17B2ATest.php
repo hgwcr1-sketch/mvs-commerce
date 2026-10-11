@@ -15,6 +15,9 @@ use Tests\TestCase;
  * BLOQUE 17B-2A — pruebas focales del adaptador Stripe real.
  *
  * Usan mocks de Stripe\StripeClient; ninguna llamada real a la API.
+ * IMPORTANTE: usa Mockery overload de Stripe\PaymentIntent; ejecutar esta
+ * clase en un proceso aislado (php artisan test --filter=BillingStripeAdapter17B2ATest)
+ * porque el overload contamina el SDK real para el resto del proceso.
  */
 class BillingStripeAdapter17B2ATest extends TestCase
 {
@@ -57,6 +60,28 @@ class BillingStripeAdapter17B2ATest extends TestCase
     public function test_is_available_true_when_configured(): void
     {
         $this->assertTrue($this->provider->isAvailable());
+    }
+
+    /**
+     * 19D-2I — transporte Stripe con CURLOPT_IPRESOLVE IPv4 (errno 6 DNS).
+     *
+     * Verifica que, al inicializar el adaptador, el SDK Stripe queda con un
+     * CurlClient cuyas opciones por defecto fuerzan IPv4, sin tocar TLS ni
+     * el transporte global de Laravel.
+     */
+    public function test_transporte_stripe_fuerza_ipresolve_v4(): void
+    {
+        $this->assertTrue($this->provider->isAvailable());
+
+        $httpClient = \Stripe\ApiRequestor::httpClient();
+
+        $this->assertInstanceOf(\Stripe\HttpClient\CurlClient::class, $httpClient);
+
+        $defaultOptions = $httpClient->getDefaultOptions();
+
+        $this->assertIsArray($defaultOptions);
+        $this->assertArrayHasKey(\CURLOPT_IPRESOLVE, $defaultOptions);
+        $this->assertSame(\CURL_IPRESOLVE_V4, $defaultOptions[\CURLOPT_IPRESOLVE]);
     }
 
     public function test_is_available_false_without_mode(): void

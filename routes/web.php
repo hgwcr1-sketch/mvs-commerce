@@ -209,10 +209,10 @@ Route::post('/registro-cobros/archivos/{kind}/reemplazar', App\Http\Controllers\
 Route::post('/registro-cobros/archivos/{kind}/eliminar', App\Http\Controllers\Cobros\PublicRegistrationController::class.'@deleteUpload')
     ->middleware('throttle:10,1')->name('cobros.register.uploads.delete');
 
-// BLOQUE 17B-2B — Webhook de Stripe para MVS Billing (público, sin CSRF, con firma).
+// BLOQUE 17B-2B — Webhook de Stripe para MVS Billing (público; CSRF excluido
+// en bootstrap/app.php via validateCsrfTokens; firma verificada en controlador).
 Route::post('/billing/webhook/stripe', App\Http\Controllers\Billing\StripeWebhookController::class.'@handle')
     ->middleware('throttle:60,1')
-    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class])
     ->name('billing.webhook.stripe');
 
 // CobrOS authentication uses the existing web guard with product-specific entry/exit.

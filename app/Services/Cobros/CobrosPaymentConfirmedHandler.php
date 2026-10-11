@@ -2,11 +2,13 @@
 
 namespace App\Services\Cobros;
 
+use App\Models\BillingPaymentRecord;
 use App\Models\CobrosBillingContract;
 use App\Models\CobrosPaymentConfirmation;
 use App\Models\CobrosRegistrationDraft;
 use App\Models\User;
 use App\Services\Billing\Contracts\PaymentConfirmedHandlerInterface;
+use App\Services\Billing\Contracts\PaymentEventTypes;
 use App\Services\Billing\DTOs\PaymentEvent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -68,11 +70,13 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
             return;
         }
 
-        // Buscar el borrador de registro correspondiente
+        // 19D-2N: el borrador SOLO es necesario para provisionar la cuenta del
+        // cobrador vinculado (activateFromPayment). La confirmación y la
+        // activación del contrato + licencia individual NO requieren borrador:
+        // se resuelven en CobrosPaymentConfirmationService::confirm (que
+        // ejecuta activateContract). Contratos creados por administración
+        // (prestamista/P22) se activan correctamente sin borrador de registro.
         $draft = $this->findDraftForContract($contract);
-        if ($draft === null) {
-            return;
-        }
 
         // Obtener o crear confirmación de pago CobrOS (idempotente por transaction_id)
         // Usamos el payer del contrato como actor (responsable de pago)
@@ -94,18 +98,53 @@ class CobrosPaymentConfirmedHandler implements PaymentConfirmedHandlerInterface
             return;
         }
 
-        // Activar el borrador desde la confirmación de pago
-        try {
-            $this->activationService->activateFromPayment($confirmation, $draft);
-        } catch (ValidationException) {
-            // Si falla la activación, la confirmación de pago queda CONFIRMADA
-            // y el estado es recuperable para reintento interno.
-            // No lanzamos excepción para no romper el webhook Stripe.
+        // Provisionamiento del borrador de registro (solo flujos con borrador).
+        if ($draft !== null) {
+            try {
+                $this->activationService->activateFromPayment($confirmation, $draft);
+            } catch (ValidationException) {
+                // Si falla la activación, la confirmación de pago queda CONFIRMADA
+                // y el estado es recuperable para reintento interno.
+                // No lanzamos excepción para no romper el webhook Stripe.
+            }
         }
 
         // PRE-19B-3: emisión idempotente de bonificaciones del programa
         // (referido comercial / crecimiento) tras el primer pago confirmado.
         $this->referralBonuses->onConfirmedPayment($confirmation);
+    }
+
+    /**
+     * 19D-2N — Recuperación idempotente y autorizada de un pago CONFIRMED
+     * de Billing cuya activación CobrOS no se completó (p.ej. handler sin
+     * borrador en el momento del webhook). Reconstruye el evento desde el
+     * registro persistido y reutiliza handle(); confirm() es idempotente
+     * por transaction_id y activateContract es idempotente, por lo que un
+     * reintento no duplica confirmaciones, licencias ni cupos.
+     */
+    public function recoverFromBillingRecord(BillingPaymentRecord $record): void
+    {
+        if ($record->provider !== 'stripe' || $record->status !== BillingPaymentRecord::STATUS_CONFIRMED) {
+            return;
+        }
+
+        if ($record->product === null || ! $this->supports($record->product)) {
+            return;
+        }
+
+        $this->handle(new PaymentEvent(
+            type: PaymentEventTypes::CONFIRMED,
+            provider: $record->provider,
+            externalId: $record->external_id,
+            product: $record->product,
+            companyId: (string) ($record->company_id ?? ''),
+            contractReference: (string) ($record->contract_reference ?? ''),
+            currency: $record->currency,
+            amount: $record->amount,
+            periodYear: $record->period_year !== null ? (int) $record->period_year : null,
+            periodMonth: $record->period_month !== null ? (int) $record->period_month : null,
+            rawPayload: is_array($record->raw_payload) ? $record->raw_payload : [],
+        ));
     }
 
     /** Busca el borrador de registro asociado al contrato. */

@@ -74,6 +74,9 @@ class StripeWebhookController extends Controller
             'payment_intent.canceled',
             'charge.refunded',
             'refund.created',
+            // 19D-2L: respaldo de identificación cuando el PaymentIntent no
+            // lleva metadata (sesiones antiguas); solo payment_status=paid.
+            'checkout.session.completed',
         ];
 
         if (! in_array($stripeEvent->type, $supportedTypes, true)) {
@@ -145,6 +148,38 @@ class StripeWebhookController extends Controller
         $externalId = $data->id;
         if (in_array($stripeEvent->type, ['charge.refunded', 'refund.created'], true)) {
             $externalId = $data->payment_intent ?? $data->id;
+        }
+
+        // 19D-2L: checkout.session.completed — respaldo de identificación.
+        // El externalId es el PaymentIntent de la sesión para compartir
+        // idempotencia con payment_intent.succeeded (un solo registro y una
+        // sola activación por pago). Solo sesiones con payment_status=paid.
+        if ($stripeEvent->type === 'checkout.session.completed') {
+            if (($data->payment_status ?? '') !== 'paid') {
+                return null;
+            }
+
+            $pi = $data->payment_intent ?? null;
+            if (is_object($pi)) {
+                $pi = $pi->id ?? null;
+            }
+            if (! is_string($pi) || $pi === '') {
+                return null;
+            }
+
+            return new PaymentEvent(
+                type: PaymentEventTypes::CONFIRMED,
+                provider: $provider,
+                externalId: $pi,
+                product: $metadata['product'] ?? '',
+                companyId: $metadata['company_id'] ?? '',
+                contractReference: $metadata['contract_reference'] ?? '',
+                currency: strtoupper($data->currency ?? ''),
+                amount: $this->fromMinorUnits($data->amount_total ?? 0, strtoupper($data->currency ?? '')),
+                periodYear: isset($metadata['period_year']) && $metadata['period_year'] !== '' ? (int) $metadata['period_year'] : null,
+                periodMonth: isset($metadata['period_month']) && $metadata['period_month'] !== '' ? (int) $metadata['period_month'] : null,
+                rawPayload: $stripeEvent->jsonSerialize()
+            );
         }
 
         // Validar que tenemos metadata mínima

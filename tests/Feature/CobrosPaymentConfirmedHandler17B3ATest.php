@@ -580,4 +580,170 @@ class CobrosPaymentConfirmedHandler17B3ATest extends TestCase
         // Aislamiento total
         $this->assertFalse(User::where('email', 'cobrador.a@isolate.test')->first()->companies()->where('company_id', $companyB->id)->exists());
     }
+
+    // ------------------------------------------------------------------
+    // 19D-2N — activación SIN borrador (contratos de administración P22)
+    // ------------------------------------------------------------------
+
+    public function test_confirmed_payment_without_draft_activates_contract_and_license(): void
+    {
+        [$company, $payer] = $this->lender('presta@nodraft.test');
+        $admin = $this->platformAdmin();
+
+        $contract = $this->createContractAndConfirmation($company, $payer, $admin);
+        $this->assertSame('draft', $contract->status);
+        $this->assertSame(0, \App\Models\CobrosPaymentConfirmation::count());
+
+        $event = $this->confirmedPaymentEvent(
+            'pi_test_nodraft_123',
+            (string) $company->id,
+            (string) $contract->id,
+        );
+
+        $this->handler->handle($event);
+
+        $contract->refresh();
+        $this->assertSame('active', $contract->status);
+        $this->assertSame(1, \App\Models\CobrosPaymentConfirmation::count());
+        $this->assertSame(1, \App\Models\CobrosPaymentConfirmation::query()
+            ->where('transaction_id', 'pi_test_nodraft_123')
+            ->where('status', 'confirmed')
+            ->count());
+        $this->assertSame(1, \App\Models\CobrosCollectorLicense::query()
+            ->where('company_id', $company->id)
+            ->where('user_id', $payer->id)
+            ->count());
+    }
+
+    public function test_recover_from_billing_record_is_idempotent(): void
+    {
+        [$company, $payer] = $this->lender('presta@recover.test');
+        $admin = $this->platformAdmin();
+
+        $contract = $this->createContractAndConfirmation($company, $payer, $admin);
+
+        // Registro CONFIRMED en Billing sin activación CobrOS (caso 19D-2M)
+        $record = \App\Models\BillingPaymentRecord::create([
+            'provider' => 'stripe',
+            'external_id' => 'pi_test_recover_123',
+            'product' => 'cobros',
+            'company_id' => $company->id,
+            'contract_reference' => (string) $contract->id,
+            'currency' => 'CRC',
+            'amount' => '10000.0000',
+            'period_year' => 2026,
+            'period_month' => 10,
+            'status' => 'confirmed',
+            'raw_payload' => null,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->handler->recoverFromBillingRecord($record);
+        $contract->refresh();
+        $this->assertSame('active', $contract->status);
+        $confirmations1 = \App\Models\CobrosPaymentConfirmation::count();
+        $licenses1 = \App\Models\CobrosCollectorLicense::query()->where('company_id', $company->id)->count();
+
+        // Reintento: cero duplicados
+        $this->handler->recoverFromBillingRecord($record);
+        $this->handler->recoverFromBillingRecord($record);
+
+        $this->assertSame($confirmations1, \App\Models\CobrosPaymentConfirmation::count());
+        $this->assertSame($licenses1, \App\Models\CobrosCollectorLicense::query()->where('company_id', $company->id)->count());
+        $this->assertSame(1, $confirmations1);
+        $this->assertSame(1, $licenses1);
+    }
+
+    public function test_recover_from_billing_record_respects_company_isolation(): void
+    {
+        [$companyA, $payerA] = $this->lender('presta.rec.a@iso.test');
+        [$companyB, $payerB] = $this->lender('presta.rec.b@iso.test');
+        $admin = $this->platformAdmin();
+
+        $contractA = $this->createContractAndConfirmation($companyA, $payerA, $admin);
+        $contractB = $this->createContractAndConfirmation($companyB, $payerB, $admin);
+
+        // Registro de empresa A con referencia de contrato de empresa B: no activa B
+        $recordForeign = \App\Models\BillingPaymentRecord::create([
+            'provider' => 'stripe',
+            'external_id' => 'pi_test_rec_foreign_123',
+            'product' => 'cobros',
+            'company_id' => $companyA->id,
+            'contract_reference' => (string) $contractB->id,
+            'currency' => 'CRC',
+            'amount' => '10000.0000',
+            'period_year' => 2026,
+            'period_month' => 10,
+            'status' => 'confirmed',
+            'raw_payload' => null,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->handler->recoverFromBillingRecord($recordForeign);
+
+        $this->assertSame('draft', $contractB->refresh()->status);
+        $this->assertSame(0, \App\Models\CobrosPaymentConfirmation::query()
+            ->where('cobros_billing_contract_id', $contractB->id)
+            ->count());
+
+        // Registro legítimo de empresa B: activa solo B
+        $recordB = \App\Models\BillingPaymentRecord::create([
+            'provider' => 'stripe',
+            'external_id' => 'pi_test_rec_b_123',
+            'product' => 'cobros',
+            'company_id' => $companyB->id,
+            'contract_reference' => (string) $contractB->id,
+            'currency' => 'CRC',
+            'amount' => '10000.0000',
+            'period_year' => 2026,
+            'period_month' => 10,
+            'status' => 'confirmed',
+            'raw_payload' => null,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->handler->recoverFromBillingRecord($recordB);
+
+        $this->assertSame('active', $contractB->refresh()->status);
+        $this->assertSame('draft', $contractA->refresh()->status);
+    }
+
+    public function test_recover_ignores_non_confirmed_or_foreign_product_records(): void
+    {
+        $pending = \App\Models\BillingPaymentRecord::create([
+            'provider' => 'stripe',
+            'external_id' => 'pi_test_rec_pending_123',
+            'product' => 'cobros',
+            'company_id' => 1,
+            'contract_reference' => '1',
+            'currency' => 'CRC',
+            'amount' => '10000.0000',
+            'period_year' => 2026,
+            'period_month' => 10,
+            'status' => 'pending',
+            'raw_payload' => null,
+            'confirmed_at' => null,
+        ]);
+
+        $this->handler->recoverFromBillingRecord($pending);
+        $this->assertSame(0, \App\Models\CobrosPaymentConfirmation::count());
+
+        $otherProduct = \App\Models\BillingPaymentRecord::create([
+            'provider' => 'stripe',
+            'external_id' => 'pi_test_rec_other_123',
+            'product' => 'academy',
+            'company_id' => 1,
+            'contract_reference' => '1',
+            'currency' => 'CRC',
+            'amount' => '10000.0000',
+            'period_year' => 2026,
+            'period_month' => 10,
+            'status' => 'confirmed',
+            'raw_payload' => null,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->handler->recoverFromBillingRecord($otherProduct);
+        $this->assertSame(0, \App\Models\CobrosPaymentConfirmation::count());
+    }
 }

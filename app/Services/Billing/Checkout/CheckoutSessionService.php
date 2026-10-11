@@ -30,6 +30,17 @@ class CheckoutSessionService
     public const MODE_PAYMENT = 'payment';
     public const MODE_SUBSCRIPTION = 'subscription';
 
+    /**
+     * Huella de versión del payload enviado a Stripe. Al cambiar la forma del
+     * request (p. ej. al eliminar payment_method_types o añadir
+     * payment_intent_data) debe rotarse, para que una clave antigua no se
+     * reutilice con parámetros distintos.
+     */
+    private const PAYLOAD_FINGERPRINT = 'v3-payment-intent-metadata';
+
+    /** Ventana determinista de idempotencia/expires_at (30 minutos). */
+    private const IDEMPOTENCY_WINDOW_SECONDS = 1800;
+
     private const ALLOWED_SUCCESS_DOMAINS = [
         'localhost',
         '127.0.0.1',
@@ -89,14 +100,18 @@ class CheckoutSessionService
             $chargedAmount = $request->netAmount;
         }
 
-        // 4) Construir idempotency key
+        // 4) Construir idempotency key. Ventana temporal determinista: dentro
+        //    de la misma ventana, un reintento idéntico reutiliza la clave y
+        //    los parámetros (Stripe devuelve la sesión existente). Una ventana
+        //    nueva o un payload distinto rota la identidad de intento.
+        $window = intdiv(time(), self::IDEMPOTENCY_WINDOW_SECONDS);
         $idempotencyKey = $request->idempotencyKey !== ''
             ? $request->idempotencyKey
-            : $this->buildIdempotencyKey($request, $quote, $chargedAmount);
+            : $this->buildIdempotencyKey($request, $quote, $chargedAmount, $window);
 
         // 5) Crear sesión Checkout en Stripe
         $client = $this->stripeProvider->getClientForCheckout();
-        $session = $this->createStripeSession($client, $request, $contract, $quote, $idempotencyKey, $chargedAmount);
+        $session = $this->createStripeSession($client, $request, $contract, $quote, $idempotencyKey, $chargedAmount, $window);
 
         // 6) Respuesta con datos mínimos para redirección
         return new CheckoutSessionResponse(
@@ -149,23 +164,29 @@ class CheckoutSessionService
         \App\Data\Cobros\CobrosPriceQuote $quote,
         string $idempotencyKey,
         string $chargedAmount,
+        int $window,
     ): \Stripe\Checkout\Session {
+        // Metadata compartida: sesión, line_item y PaymentIntent (19D-2L).
+        // Stripe NO copia la metadata de la sesión al PaymentIntent; sin
+        // payment_intent_data[metadata] el webhook no puede identificar el
+        // contrato en payment_intent.succeeded.
+        $sharedMetadata = array_merge([
+            'product' => $request->product,
+            'company_id' => $request->companyId,
+            'contract_reference' => $request->contractReference,
+            'period_year' => (string) ($request->periodYear ?? ''),
+            'period_month' => (string) ($request->periodMonth ?? ''),
+        ], $request->metadata);
+
         $params = [
             'mode' => self::MODE_PAYMENT, // Futuro: subscription
-            'payment_method_types' => ['card'],
             'line_items' => [[
                 'price_data' => [
                     'currency' => strtolower($quote->currency),
                     'product_data' => [
                         'name' => $this->buildProductName($quote),
                         'description' => $this->buildProductDescription($quote, $contract),
-                        'metadata' => array_merge([
-                            'product' => $request->product,
-                            'company_id' => $request->companyId,
-                            'contract_reference' => $request->contractReference,
-                            'period_year' => (string) ($request->periodYear ?? ''),
-                            'period_month' => (string) ($request->periodMonth ?? ''),
-                        ], $request->metadata),
+                        'metadata' => $sharedMetadata,
                     ],
                     'unit_amount' => $this->toMinorUnits($chargedAmount, $quote->currency),
                 ],
@@ -173,15 +194,16 @@ class CheckoutSessionService
             ]],
             'success_url' => $request->successUrl,
             'cancel_url' => $request->cancelUrl,
-            'metadata' => array_merge([
-                'product' => $request->product,
-                'company_id' => $request->companyId,
-                'contract_reference' => $request->contractReference,
-                'period_year' => (string) ($request->periodYear ?? ''),
-                'period_month' => (string) ($request->periodMonth ?? ''),
+            'metadata' => array_merge($sharedMetadata, [
                 'billing_mode' => $contract->billing_mode,
-            ], $request->metadata),
-            'expires_at' => time() + 1800, // 30 minutos
+            ]),
+            'payment_intent_data' => [
+                'metadata' => $sharedMetadata,
+            ],
+            // Determinista dentro de la ventana de idempotencia: un reintento
+            // idéntico envía exactamente los mismos parámetros y Stripe
+            // devuelve la sesión original en lugar de rechazar la clave.
+            'expires_at' => ($window + 2) * self::IDEMPOTENCY_WINDOW_SECONDS,
         ];
 
         try {
@@ -279,9 +301,10 @@ class CheckoutSessionService
         }
     }
 
-    private function buildIdempotencyKey(CheckoutSessionRequest $request, \App\Data\Cobros\CobrosPriceQuote $quote, string $chargedAmount): string
+    private function buildIdempotencyKey(CheckoutSessionRequest $request, \App\Data\Cobros\CobrosPriceQuote $quote, string $chargedAmount, int $window): string
     {
         $data = implode('|', [
+            self::PAYLOAD_FINGERPRINT,
             $request->product,
             $request->companyId,
             $request->contractReference,
@@ -289,6 +312,7 @@ class CheckoutSessionService
             $chargedAmount,
             $request->periodYear ?? '',
             $request->periodMonth ?? '',
+            (string) $window,
         ]);
 
         return 'mvs-checkout-' . hash('sha256', $data);

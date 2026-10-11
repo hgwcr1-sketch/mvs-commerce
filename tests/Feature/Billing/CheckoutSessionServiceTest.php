@@ -380,11 +380,30 @@ class CheckoutSessionServiceTest extends TestCase
         $expectedMinorUnits = (int) round((float) $quote->monthlyTotal * 100);
         $this->assertSame($expectedMinorUnits, $capturedParams['line_items'][0]['price_data']['unit_amount']);
 
+        // 3) payment_method_types NO debe enviarse (Stripe usa métodos dinámicos por defecto)
+        $this->assertArrayNotHasKey('payment_method_types', $capturedParams);
+
         // 3) Moneda en minúsculas
         $this->assertSame(strtolower($quote->currency), $capturedParams['line_items'][0]['price_data']['currency']);
 
         // 4) Referencia de contrato en metadatos
         $this->assertSame((string) $contract->id, $capturedParams['metadata']['contract_reference']);
+
+        // 4b) 19D-2L: metadata también en payment_intent_data para que el
+        //     PaymentIntent identifique contrato/empresa en el webhook.
+        $this->assertArrayHasKey('payment_intent_data', $capturedParams);
+        $this->assertSame(
+            $capturedParams['metadata']['contract_reference'],
+            $capturedParams['payment_intent_data']['metadata']['contract_reference'],
+        );
+        $this->assertSame(
+            $capturedParams['metadata']['company_id'],
+            $capturedParams['payment_intent_data']['metadata']['company_id'],
+        );
+        $this->assertSame(
+            'cobros',
+            $capturedParams['payment_intent_data']['metadata']['product'],
+        );
 
         // 5) Producto
         $this->assertSame('cobros', $capturedParams['metadata']['product']);
@@ -402,6 +421,73 @@ class CheckoutSessionServiceTest extends TestCase
         $this->assertSame($mockSession->url, $response->url);
         $this->assertSame($quote->currency, $response->currency);
         $this->assertSame($quote->monthlyTotal, $response->amount);
+    }
+
+    /**
+     * 19D-2F — idempotencia determinista del servicio real.
+     *
+     * Un reintento idéntico (mismo neto, misma ventana) reutiliza la clave y
+     * envía exactamente los mismos parámetros (incluido expires_at), de modo
+     * que Stripe devuelve la sesión existente. Un importe neto materialmente
+     * distinto rota la identidad de intento: nueva clave, sin duplicar pagos.
+     */
+    public function test_reintento_identico_reutiliza_clave_y_neto_distinto_rota_identidad(): void
+    {
+        [$company, $payer] = $this->lender('presta@reintento.test');
+        $admin = $this->platformAdmin();
+        $contract = $this->createContract($company, $payer, $admin);
+
+        $captures = [];
+        $mockSession = $this->makeMockSession();
+        $mockClient = $this->makeMockStripeClientMulti($mockSession, $captures);
+
+        $stripeProvider = new \App\Services\Billing\Adapters\StripePaymentProvider();
+        $stripeProvider->isAvailable();
+        $reflection = new \ReflectionClass($stripeProvider);
+        $property = $reflection->getProperty('client');
+        $property->setAccessible(true);
+        $property->setValue($stripeProvider, $mockClient);
+
+        $service = new \App\Services\Billing\Checkout\CheckoutSessionService(
+            $stripeProvider,
+            $this->billingContracts,
+            $this->pricing,
+        );
+
+        $requestA = new \App\Services\Billing\Checkout\CheckoutSessionRequest(
+            product: 'cobros',
+            companyId: (string) $company->id,
+            contractReference: (string) $contract->id,
+            successUrl: 'https://localhost/success',
+            cancelUrl: 'https://localhost/cancel',
+        );
+
+        // 1) Reintento idéntico: misma clave y mismos parámetros.
+        $responseA = $service->createForContract($requestA);
+        $responseB = $service->createForContract($requestA);
+
+        $this->assertSame($responseA->idempotencyKey, $responseB->idempotencyKey);
+        $this->assertSame($captures[0]['key'], $captures[1]['key']);
+        $this->assertSame($captures[0]['params']['expires_at'], $captures[1]['params']['expires_at']);
+        $this->assertSame($captures[0]['params']['line_items'], $captures[1]['params']['line_items']);
+        $this->assertArrayNotHasKey('payment_method_types', $captures[0]['params']);
+        $this->assertArrayNotHasKey('payment_method_types', $captures[1]['params']);
+
+        // 2) Neto materialmente distinto: nueva identidad de intento.
+        $requestC = new \App\Services\Billing\Checkout\CheckoutSessionRequest(
+            product: 'cobros',
+            companyId: (string) $company->id,
+            contractReference: (string) $contract->id,
+            successUrl: 'https://localhost/success',
+            cancelUrl: 'https://localhost/cancel',
+            netAmount: '5000.0000',
+        );
+
+        $responseC = $service->createForContract($requestC);
+
+        $this->assertNotSame($responseA->idempotencyKey, $responseC->idempotencyKey);
+        $this->assertNotSame($captures[0]['key'], $captures[2]['key']);
+        $this->assertStringStartsWith('mvs-checkout-', $responseC->idempotencyKey);
     }
 
     /**
@@ -437,6 +523,52 @@ class CheckoutSessionServiceTest extends TestCase
             ->willReturnCallback(function ($params, $options) use (&$capturedParams, &$capturedIdempotencyKey, $mockSession) {
                 $capturedParams = $params;
                 $capturedIdempotencyKey = $options['idempotency_key'] ?? '';
+                return $mockSession;
+            });
+
+        $mockCheckoutFactory = new class($mockSessionService) extends \Stripe\Service\Checkout\CheckoutServiceFactory {
+            private $sessionService;
+            public function __construct($sessionService) { $this->sessionService = $sessionService; }
+            public function __get($name) {
+                if ($name === 'sessions') return $this->sessionService;
+                return parent::__get($name);
+            }
+        };
+        $mockCheckoutFactory->sessions = $mockSessionService;
+
+        $mockClient = new class($mockCheckoutFactory) extends \Stripe\StripeClient {
+            private $checkoutFactory;
+            public function __construct($checkoutFactory) { $this->checkoutFactory = $checkoutFactory; }
+            public function __get($name) {
+                if ($name === 'checkout') return $this->checkoutFactory;
+                return parent::__get($name);
+            }
+        };
+        $mockClient->checkout = $mockCheckoutFactory;
+
+        return $mockClient;
+    }
+
+    /**
+     * StripeClient mockeado que captura params/clave de varias llamadas sucesivas.
+     *
+     * @param array<int, array{0: array, 1: array}> $captures [params, keys] por llamada
+     */
+    private function makeMockStripeClientMulti(
+        \Stripe\Checkout\Session $mockSession,
+        array &$captures,
+    ): \Stripe\StripeClient {
+        $call = 0;
+        $mockSessionService = $this->createMock(\Stripe\Service\Checkout\SessionService::class);
+        $mockSessionService
+            ->method('create')
+            ->willReturnCallback(function ($params, $options) use (&$call, &$captures, $mockSession) {
+                $captures[$call] = [
+                    'params' => $params,
+                    'key' => $options['idempotency_key'] ?? '',
+                ];
+                $call++;
+
                 return $mockSession;
             });
 
