@@ -186,7 +186,7 @@ class CobrosCreditRenewalQuoteTest extends TestCase
         }
 
         try {
-            $service->quote($collector, $company, $account, '1000', 4, 'monthly', now()->subDay()->toDateString());
+            $service->quote($collector, $company, $account, '1000', 4, 'monthly', today($company->timezone)->subDay()->toDateString());
             $this->fail('Debió rechazar primera cuota en el pasado.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             $this->assertNotEmpty($e->errors());
