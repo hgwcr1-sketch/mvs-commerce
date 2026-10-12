@@ -52,7 +52,7 @@ return new class extends Migration
         $duplicates = DB::table('cobros_credit_expedientes')
             ->whereNotNull('customer_id')
             ->select('company_id', 'customer_id', DB::raw('MIN(id) as keep_id'), DB::raw('COUNT(*) as total'))
-            ->groupBy('company_id', 'customer_id')->having('total', '>', '1')->get();
+            ->groupBy('company_id', 'customer_id')->havingRaw('COUNT(*) > 1')->get();
         foreach ($duplicates as $group) {
             $extraIds = DB::table('cobros_credit_expedientes')
                 ->where('company_id', $group->company_id)
