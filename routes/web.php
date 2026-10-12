@@ -152,6 +152,16 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
+// MOBILE-03B - landing PWA interna (/cobros/inicio): start_url del manifest.
+// Anónima y DENTRO de scope /cobros; reutiliza el body de la landing pública.
+Route::get('/cobros/inicio', function (\Illuminate\Http\Request $request) {
+    App\Http\Controllers\Cobros\PublicLandingController::captureReferral($request);
+
+    return view('cobros.pwa-inicio', [
+        'countries' => config('cobros.landing.countries', []),
+    ]);
+})->name('cobros.pwa.inicio');
+
 // WEB-01C - raíz global: los visitantes ven la landing; los autenticados van a su portal.
 // Sin middleware auth a propósito: debe responder 200 a anónimos. Autenticados con acceso
 // CobrOS se dirigigen a su portal; el resto conserva el dashboard de Commerce.

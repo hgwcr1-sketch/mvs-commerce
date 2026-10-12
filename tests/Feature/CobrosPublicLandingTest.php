@@ -126,4 +126,24 @@ class CobrosPublicLandingTest extends TestCase
             ->assertSee('MVS CobrOS')
             ->assertDontSee('MVS Commerce');
     }
+
+    public function test_pwa_inicio_is_public_within_cobros_scope_and_shares_landing_body(): void
+    {
+        $response = $this->get('/cobros/inicio');
+
+        $response->assertOk()
+            ->assertViewIs('cobros.pwa-inicio')
+            ->assertSee('manifest-cobros.json', false)
+            ->assertSee('Bienvenidos a')
+            ->assertSee('Cobranza profesional')
+            ->assertSee(route('cobros.login'), false);
+        $this->assertGuest();
+    }
+
+    public function test_public_root_landing_stays_independent_from_pwa_inicio(): void
+    {
+        $this->get('/')->assertOk()->assertViewIs('cobros.public-landing');
+        $this->get(self::LANDING)->assertOk()->assertViewIs('cobros.public-landing');
+        $this->get('/cobros/inicio')->assertOk()->assertViewIs('cobros.pwa-inicio');
+    }
 }

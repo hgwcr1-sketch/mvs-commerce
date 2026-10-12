@@ -3,7 +3,7 @@
     "name": "MVS CobrOS",
     "short_name": "CobrOS",
     "lang": "es",
-    "start_url": "/cobros",
+    "start_url": "/cobros/inicio",
     "scope": "/cobros",
     "display": "standalone",
     "background_color": "#ffffff",

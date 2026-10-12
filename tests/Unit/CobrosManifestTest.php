@@ -14,7 +14,7 @@ class CobrosManifestTest extends TestCase
         $this->assertSame('MVS CobrOS', $manifest['name']);
         $this->assertSame('CobrOS', $manifest['short_name']);
         $this->assertSame('/cobros', $manifest['id']);
-        $this->assertSame('/cobros', $manifest['start_url']);
+        $this->assertSame('/cobros/inicio', $manifest['start_url']);
         $this->assertSame('/cobros', $manifest['scope']);
         $this->assertSame('standalone', $manifest['display']);
         $this->assertSame('#D4AF37', $manifest['theme_color']);
