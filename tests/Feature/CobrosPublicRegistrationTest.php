@@ -207,7 +207,7 @@ class CobrosPublicRegistrationTest extends TestCase
 
     public function test_registration_is_isolated_from_commerce_and_creates_no_access(): void
     {
-        $this->get('/')->assertStatus(302);
+        $this->get('/')->assertOk()->assertViewIs('cobros.public-landing');
         $this->get('/dashboard')->assertStatus(302);
 
         $this->completeFirstStep();

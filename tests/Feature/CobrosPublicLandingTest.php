@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class CobrosPublicLandingTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const LANDING = '/bienvenida-cobros';
 
     public function test_landing_is_publicly_accessible_for_anonymous_visitors(): void
@@ -79,12 +82,35 @@ class CobrosPublicLandingTest extends TestCase
 
     public function test_landing_does_not_disturb_commerce_or_authentication_routes(): void
     {
+        // WEB-01: la raíz / ahora sirve la landing para anónimos.
         $root = $this->get('/');
-        $root->assertStatus(302);
-        $this->assertStringContainsString('/login', (string) $root->headers->get('Location'));
+        $root->assertOk()->assertViewIs('cobros.public-landing');
+        $this->assertGuest();
         $this->get('/dashboard')->assertStatus(302);
         $this->get(self::LANDING)->assertOk();
         $this->assertGuest();
+    }
+
+    public function test_authenticated_users_are_redirected_from_root_to_their_panel(): void
+    {
+        $user = \App\Models\User::factory()->create(['is_active' => true]);
+        $company = \App\Models\Company::create([
+            'trade_name' => 'Raiz '.uniqid(),
+            'currency' => 'CRC',
+            'timezone' => 'America/Costa_Rica',
+            'is_active' => true,
+        ]);
+        $role = \App\Models\Role::create(['company_id' => $company->id, 'name' => 'Rol raiz', 'is_active' => true]);
+        $permission = \App\Models\Permission::firstOrCreate(
+            ['name' => 'cobros.acceder'],
+            ['label' => 'cobros.acceder', 'module' => 'CobrOS', 'is_active' => true]
+        );
+        $role->permissions()->attach($permission->id);
+        $user->companies()->attach($company->id, ['role_id' => $role->id]);
+
+        $this->actingAs($user)->withSession(['active_company_id' => $company->id])
+            ->get('/')
+            ->assertRedirect(route('cobros.index'));
     }
 
     public function test_landing_is_mobile_first_with_cobros_brand_identity(): void

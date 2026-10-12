@@ -152,6 +152,25 @@ Route::post('/logout', [LoginController::class, 'destroy'])
 Route::get('/bienvenida-cobros', App\Http\Controllers\Cobros\PublicLandingController::class)
     ->name('cobros.landing');
 
+// WEB-01C - raíz global: los visitantes ven la landing; los autenticados van a su portal.
+// Sin middleware auth a propósito: debe responder 200 a anónimos. Autenticados con acceso
+// CobrOS se dirigigen a su portal; el resto conserva el dashboard de Commerce.
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    $user = $request->user();
+
+    if ($user === null) {
+        return app(App\Http\Controllers\Cobros\PublicLandingController::class)($request);
+    }
+
+    $company = App\Models\Company::find($request->session()->get('active_company_id'));
+
+    if ($company !== null && $user->hasPermission('cobros.acceder', $company)) {
+        return redirect()->route('cobros.index');
+    }
+
+    return redirect()->route('dashboard');
+});
+
 // PRE-19B-5D - páginas públicas (anónimas). El "Simulador en preparación"
 // conserva URI/nombre propios; la entrada DEMO real es cobros.demo.entry.
 Route::get('/simulador-cobros', [App\Http\Controllers\Cobros\PublicShowcaseController::class, 'demo'])
@@ -746,8 +765,6 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     | Dashboard
     |--------------------------------------------------------------------------
     */
-
-    Route::redirect('/', '/dashboard');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
