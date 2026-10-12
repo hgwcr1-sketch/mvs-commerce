@@ -93,7 +93,7 @@ class CobrosCollectorProvisioningTest extends TestCase
 
         // 3) El dueño cierra sesión en el equipo y el cobrador entra con su
         //    contraseña temporal (mismo guard web compartido por ambos portales).
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
 
         $login = $this->post(route('cobros.login.store'), ['email' => $email, 'password' => $plain]);
         $this->assertSame($collector->id, auth()->id(), 'Tras el login debe quedar autenticado el cobrador.');
@@ -126,7 +126,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         $this->assertSame([], $collector->branches()->get()->pluck('id')->all());
 
         $plain = session('collector_plain_password');
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
 
         $this->post(route('cobros.login.store'), ['email' => $email, 'password' => $plain])
             ->assertRedirect(route('cobros.password.force'));
@@ -214,7 +214,7 @@ class CobrosCollectorProvisioningTest extends TestCase
         $this->assertTrue($existing->must_change_password);
         $this->assertSame('Cobrador CobrOS', $existing->roleInCompany($company)->name);
 
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
         $this->post(route('cobros.login.store'), ['email' => $email, 'password' => $plain])
             ->assertRedirect(route('cobros.password.force'));
     }

@@ -49,18 +49,18 @@ class CobrosEndToEnd6ATest extends TestCase
         $this->post(route('cobros.login.store'), [
             'email' => $owner->email, 'password' => 'Secure123',
         ])->assertRedirect(route('cobros.index'));
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
 
         $this->post(route('cobros.login.store'), [
             'email' => $supervisor->email, 'password' => 'Secure123',
         ])->assertRedirect(route('cobros.index'));
 
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
 
         $this->post(route('cobros.login.store'), [
             'email' => $collector->email, 'password' => 'Secure123',
         ])->assertRedirect(route('cobros.index'));
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'));
 
         // 2) El dueño asigna la cartera; el cobrador aún no la ve.
         $this->actingAs($owner)->withSession(['active_company_id' => $company->id])

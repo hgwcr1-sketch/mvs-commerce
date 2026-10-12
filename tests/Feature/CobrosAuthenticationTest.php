@@ -163,7 +163,7 @@ class CobrosAuthenticationTest extends TestCase
         $session = session()->getId();
         $this->withCookie(config('session.cookie'), $session);
         $token = session()->token();
-        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.login'))
+        $this->post(route('cobros.logout'))->assertRedirect(route('cobros.pwa.inicio'))
             ->assertSessionMissing('sentinel')->assertSessionMissing('active_company_id');
         $this->assertGuest();
         $this->assertNotSame($session, session()->getId());
@@ -201,7 +201,7 @@ class CobrosAuthenticationTest extends TestCase
         $this->post(route('cobros.login.store'), [...$credentials, '_token' => session()->token()])->assertRedirect(route('cobros.index'));
         $this->post(route('cobros.logout'))->assertStatus(419);
         $this->assertAuthenticatedAs($user);
-        $this->post(route('cobros.logout'), ['_token' => session()->token()])->assertRedirect(route('cobros.login'));
+        $this->post(route('cobros.logout'), ['_token' => session()->token()])->assertRedirect(route('cobros.pwa.inicio'));
         $this->assertGuest();
     }
 

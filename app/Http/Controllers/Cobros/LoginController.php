@@ -80,6 +80,9 @@ class LoginController extends SharedLoginController
 
     protected function loggedOut()
     {
-        return redirect()->route('cobros.login');
+        // LOGOUT-01: tras salir siempre se vuelve a la portada profesional
+        // pública (/cobros/inicio), nunca directamente al login. Vale para las
+        // 5 modalidades y la PWA, que comparten esta ruta de cierre de sesión.
+        return redirect()->route('cobros.pwa.inicio');
     }
 }
