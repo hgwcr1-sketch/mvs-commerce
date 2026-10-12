@@ -105,7 +105,6 @@ class CollectorPortfolioController extends Controller
             // REN-03D1: renovación activa del último crédito desembolsado (aprobación/firma).
             'activeRenewal' => \App\Models\CobrosCreditRenewalRequest::query()
                 ->where('company_id', $company->id)
-                ->whereIn('status', [\App\Models\CobrosCreditRenewalRequest::STATUS_PENDING, \App\Models\CobrosCreditRenewalRequest::STATUS_APPROVED])
                 ->whereHas('credit', fn ($q) => $q->where('customer_id', $customer->id))
                 ->latest('id')
                 ->first(),

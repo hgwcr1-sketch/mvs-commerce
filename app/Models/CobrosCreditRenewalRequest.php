@@ -66,6 +66,25 @@ class CobrosCreditRenewalRequest extends Model
         ];
     }
 
+    public function readyForActivation(): bool
+    {
+        if ($this->status !== self::STATUS_CONSENTED || ! $this->approved_by || ! $this->approved_at
+            || ! $this->consented_at || ! $this->signature_path || ! $this->terms_hash || ! $this->consent_snapshot) {
+            return false;
+        }
+        $consent = app(\App\Services\Cobros\CreditRenewalConsentService::class);
+        $disk = \Illuminate\Support\Facades\Storage::disk('local');
+        if (! hash_equals($this->terms_hash, $consent->hashSnapshot($consent->consentSnapshot($this)))
+            || ! hash_equals($this->terms_hash, $consent->hashSnapshot($this->consent_snapshot))
+            || ! str_starts_with($this->signature_path, 'cobros/renewal-consent/'.$this->id.'/')
+            || str_contains($this->signature_path, '..') || ! $disk->exists($this->signature_path)) {
+            return false;
+        }
+        $image = @getimagesizefromstring($disk->get($this->signature_path));
+
+        return $image !== false && $image[2] === IMAGETYPE_PNG;
+    }
+
     public function credit()
     {
         return $this->belongsTo(CobrosCredit::class, 'credit_id');

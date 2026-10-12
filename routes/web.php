@@ -360,6 +360,8 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.acceder')->name('collector.renewal.approve');
     Route::post('/collector/portfolio/{customer}/renovar/{renewal}/rechazar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'reject'])
         ->middleware('permission:cobros.acceder')->name('collector.renewal.reject');
+    Route::post('/collector/portfolio/{customer}/renovar/{renewal}/activar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'activate'])
+        ->middleware('permission:cobros.acceder')->name('collector.renewal.activate');
     Route::post('/collector/portfolio/{customer}/renovar/{renewal}/consentimiento', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'consent'])
         ->middleware('permission:cobros.acceder')->name('collector.renewal.consent');
     // 2) MIS CLIENTES: con y sin crédito activo (expediente histórico legítimo).

@@ -25,6 +25,24 @@ use Illuminate\View\View;
  */
 class CreditRenewalController extends Controller
 {
+    public function activate(Request $request, Customer $customer, int $renewal, \App\Services\Cobros\CreditRenewalActivationService $activation): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $customer, $renewal, $company, $activation) {
+            $row = CobrosCreditRenewalRequest::query()->where('company_id', $company->id)
+                ->whereHas('credit', fn ($q) => $q->where('company_id', $company->id)->where('customer_id', $customer->id))
+                ->whereKey($renewal)->lockForUpdate()->firstOrFail();
+            $this->approvalMode($request->user(), $company, $row->credit);
+            app(\App\Services\Cobros\CollectorPortfolioService::class)->customerPortfolio($request->user(), $company, $customer);
+            if ($row->status !== CobrosCreditRenewalRequest::STATUS_ACTIVATED && ! $row->readyForActivation()) {
+                throw ValidationException::withMessages(['renewal' => 'Se requiere aprobación válida y consentimiento firmado íntegro.']);
+            }
+            $activation->activate($row, $request->user());
+        });
+
+        return redirect()->route('cobros.collector.portfolio.show', $customer)->with('renewal_status', 'activated');
+    }
+
     public function create(
         Request $request,
         Customer $customer,

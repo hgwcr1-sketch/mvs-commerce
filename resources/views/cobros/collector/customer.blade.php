@@ -22,13 +22,32 @@
         </div>
     @elseif(session('renewal_status') === 'consented')
         <div role="status" class="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
-            ✍ Consentimiento firmado por el cliente. La activación de la renovación se hará en una fase posterior. No se ha creado crédito nuevo todavía.
+            ✍ Consentimiento firmado por el cliente. Puede activar la renovación cuando esté listo.
         </div>
     @endif
 
     @if(isset($activeRenewal) && $activeRenewal !== null)
         <div class="rounded-xl border border-slate-200 bg-white p-4" data-testid="renewal-panel">
             <h2 class="text-base font-bold text-slate-900">Renovación de crédito</h2>
+            @if($activeRenewal->readyForActivation())
+                <form method="POST" action="{{ route('cobros.collector.renewal.activate', [$customer, $activeRenewal->id]) }}" onsubmit="if (!confirm('¿Activar la renovación firmada y crear el crédito consolidado?')) return false; this.querySelector('button').disabled = true;" class="mt-3">
+                    @csrf
+                    <button class="min-h-[44px] w-full rounded-xl bg-primary px-4 py-3 font-bold text-slate-950 hover:bg-primary-hover" type="submit">Activar renovación</button>
+                </form>
+            @elseif($activeRenewal->status === 'activated')
+                @php
+                    $activatedCredit = \App\Models\CobrosCredit::forCompany($company->id)->where('customer_id', $customer->id)->find($activeRenewal->activated_credit_id);
+                @endphp
+                @if($activatedCredit)
+                    <p role="status" class="mt-3 font-semibold text-green-800">Renovación activada — crédito {{ $activatedCredit->publicReference() }}</p>
+                    <h3 class="mt-3 font-semibold">Calendario del nuevo crédito</h3>
+                    <ul class="mt-2 space-y-2">
+                        @foreach($activatedCredit->installments()->orderBy('number')->get() as $installment)
+                            <li class="flex flex-wrap justify-between gap-2"><span>Cuota {{ $installment->number }} · {{ $installment->due_date->format('d/m/Y') }}</span><span>{{ \App\Support\Cobros\Money::human((string) $installment->contractual_amount, $company->currency) }}</span></li>
+                        @endforeach
+                    </ul>
+                @endif
+            @endif
             <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-700">
                 <dt class="font-semibold">Deuda anterior</dt><dd class="text-right">{{ number_format((float) $activeRenewal->previous_pending, 2) }}</dd>
                 <dt class="font-semibold">Capital nuevo</dt><dd class="text-right">{{ number_format((float) $activeRenewal->new_capital, 2) }}</dd>
@@ -39,6 +58,9 @@
                 <dd class="text-right font-semibold">
                     @if($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_PENDING) Pendiente de aprobación
                     @elseif($activeRenewal->status === \App\Models\CobrosCreditRenewalRequest::STATUS_APPROVED) Aprobada — falta firma
+                    @elseif($activeRenewal->status === 'consented') Consentimiento firmado
+                    @elseif($activeRenewal->status === 'rejected') Rechazada
+                    @elseif($activeRenewal->status === 'activated') Activada
                     @endif
                 </dd>
             </dl>

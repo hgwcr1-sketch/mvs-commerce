@@ -35,6 +35,34 @@ class CobrosCreditRenewalActivationTest extends TestCase
 
     private User $owner;
 
+    public function test_http_activation_signed_flow_access_isolation_and_idempotency(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        [$company, $collector, $route, , $previous, $account] = $this->disbursed();
+        $renewal = $this->consentedRenewal($company, $collector, $previous, $account, '50000');
+        $customer = $previous->customer;
+        $url = route('cobros.collector.renewal.activate', [$customer, $renewal->id]);
+        $this->actingAs($collector)->withSession(['active_company_id' => $company->id, 'active_cobros_route_id' => $route->id]);
+        $this->get(route('cobros.collector.portfolio.show', $customer))->assertOk()->assertSee('Activar renovación');
+        $renewal->update(['status' => 'approved']);
+        $this->post($url, ['status' => 'consented'])->assertSessionHasErrors('renewal');
+        $renewal->update(['status' => 'consented']);
+        $path = $renewal->signature_path;
+        $renewal->update(['signature_path' => 'missing.png']);
+        $this->post($url)->assertSessionHasErrors('renewal');
+        $renewal->update(['signature_path' => $path]);
+        $other = $this->member($company, ['cobros.acceder', 'cobros.cobrar']);
+        $this->actingAs($other)->post($url)->assertForbidden();
+        $wrongCustomer = \App\Models\Customer::create(['company_id' => $company->id, 'name' => 'Ajeno', 'is_active' => true]);
+        $this->actingAs($collector)->post(route('cobros.collector.renewal.activate', [$wrongCustomer, $renewal->id]))->assertNotFound();
+        $before = CobrosCredit::count();
+        $this->post($url)->assertRedirect(route('cobros.collector.portfolio.show', $customer))->assertSessionHas('renewal_status', 'activated');
+        $this->assertSame($before + 1, CobrosCredit::count());
+        $this->post($url)->assertRedirect();
+        $this->assertSame($before + 1, CobrosCredit::count());
+        $this->get(route('cobros.collector.portfolio.show', $customer))->assertOk()->assertSee('Calendario del nuevo crédito')->assertDontSee('Activar renovación');
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
