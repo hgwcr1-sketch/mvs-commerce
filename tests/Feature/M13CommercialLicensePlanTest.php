@@ -71,6 +71,7 @@ class M13CommercialLicensePlanTest extends TestCase
             'trade_name' => 'MYM referencia',
             'owner' => ['name' => 'Propietaria MYM', 'email' => 'propietaria@mym.test'],
             'plan' => 'Personalizado', 'branch_limit' => 3, 'user_limit' => 10,
+            'commerce_price_usd' => '10.00',
             'status' => 'trial', 'modules' => ['sales'],
         ])->assertRedirect();
 

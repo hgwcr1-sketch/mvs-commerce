@@ -18,9 +18,11 @@ use Illuminate\Notifications\Notifiable;
     'password',
     'is_active',
     'is_platform_admin',
+    'must_change_password',
     'tenant_invited_at',
     'tenant_activated_at',
     'last_login_at',
+    'collector_late_fee_pct',
 ])]
 
 #[Hidden([
@@ -39,6 +41,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
             'is_platform_admin' => 'boolean',
+            'must_change_password' => 'boolean',
             'tenant_invited_at' => 'datetime',
             'tenant_activated_at' => 'datetime',
             'password' => 'hashed',
@@ -52,6 +55,13 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Branch::class)
             ->withTimestamps();
+    }
+
+    public function cobrosRoutes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(CobrosRoute::class, 'cobros_route_user')
+            ->using(CobrosRouteUser::class)->withPivot(['id', 'company_id', 'active'])->withTimestamps()
+            ->withPivotValue('company_id', (int) session('active_company_id', 0));
     }
 
     public function isActive(): bool

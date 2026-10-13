@@ -23,9 +23,28 @@ use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\CashSessionHistoryController;
+use App\Http\Controllers\Cobros\CobrosAlertController;
+use App\Http\Controllers\Cobros\CobrosAuditController;
+use App\Http\Controllers\Cobros\CobrosDashboardController;
+use App\Http\Controllers\Cobros\CollectorPaymentController;
+use App\Http\Controllers\Cobros\CollectorCreditController;
+use App\Http\Controllers\Cobros\CollectorCreditDeliveryController;
+use App\Http\Controllers\Cobros\DailyClosingController;
+use App\Http\Controllers\Cobros\CollectorPortfolioController;
+use App\Http\Controllers\Cobros\ForceChangePasswordController;
+use App\Http\Controllers\Cobros\CreditRequestController;
+use App\Http\Controllers\Cobros\InitialPortfolioController;
+use App\Http\Controllers\Cobros\OwnerAssignmentController;
+// Inventario
+use App\Http\Controllers\Cobros\OwnerCollectorController;
+use App\Http\Controllers\Cobros\OwnerCustomerController;
+use App\Http\Controllers\Cobros\OwnerDashboardController;
+use App\Http\Controllers\Cobros\VisitController;
 use App\Http\Controllers\CompanyCashSettingController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyLicenseController;
+use App\Http\Controllers\CompanySwitchController;
+// Compras
 use App\Http\Controllers\ControlCenterController;
 use App\Http\Controllers\CreditNoteCodeController;
 use App\Http\Controllers\CustomerAddressController;
@@ -44,7 +63,6 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\KardexController;
-// Ventas
 use App\Http\Controllers\LabelCenterController;
 use App\Http\Controllers\LayawayController;
 use App\Http\Controllers\LoyaltyAdjustmentController;
@@ -54,11 +72,13 @@ use App\Http\Controllers\LoyaltyMovementController;
 use App\Http\Controllers\LoyaltyMultiplierController;
 use App\Http\Controllers\LoyaltyOpportunityController;
 use App\Http\Controllers\LoyaltyPortalAccessController;
+// MVS Print
 use App\Http\Controllers\LoyaltyPortalManagementController;
 use App\Http\Controllers\LoyaltyPortalPasskeyController;
 use App\Http\Controllers\LoyaltyPortalSessionController;
 use App\Http\Controllers\LoyaltyPromotionController;
 use App\Http\Controllers\LoyaltyRegistrationIncentiveController;
+// Administración
 use App\Http\Controllers\LoyaltyRewardController;
 use App\Http\Controllers\LoyaltyRewardRedemptionController;
 use App\Http\Controllers\LoyaltyRuleCenterController;
@@ -208,6 +228,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/ubicaciones/provincias/{country}', [CustomerController::class, 'provinces'])->name('ubicaciones.provincias');
     Route::get('/ubicaciones/cantones/{province}', [CustomerController::class, 'cantons'])->name('ubicaciones.cantones');
     Route::get('/ubicaciones/distritos/{canton}', [CustomerController::class, 'districts'])->name('ubicaciones.distritos');
+    Route::get('/geo/divisiones', [App\Http\Controllers\GeoDivisionController::class, 'index'])->name('geo.divisiones');
 });
 
 /*
@@ -266,7 +287,29 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
     Route::post('/empresas', [PlatformAdminController::class, 'storeCompany'])->name('companies.store');
     Route::get('/empresas/{company}', [PlatformAdminController::class, 'show'])->name('companies.show');
     Route::post('/planes', [PlatformAdminController::class, 'storePlan'])->name('plans.store');
+    // 18E-1B: elección explícita de proveedor de pago por producto+país
+    // (solo Platform Admin; upsert; nunca recibe ni muestra credenciales).
+    Route::patch('/billing-providers', [App\Http\Controllers\PlatformBillingProviderController::class, 'update'])
+        ->name('billing-providers.update');
     Route::patch('/empresas/{company}/modulos', [PlatformAdminController::class, 'updateModules'])->name('modules.update');
+    Route::patch('/empresas/{company}/cobros-contrato', [PlatformAdminController::class, 'updateCobrosContract'])->name('cobros-contract.update');
+    // 18B-2: aprobación/rechazo manual SINPE (solo pendientes de ESTA empresa;
+    // exige verificación externa del operador; nunca automático ni por WhatsApp).
+    Route::post('/empresas/{company}/pagos/sinpe/{confirmation}/aprobar', [PlatformAdminController::class, 'approveSinpePayment'])
+        ->name('sinpe.approve');
+    Route::post('/empresas/{company}/pagos/sinpe/{confirmation}/rechazar', [PlatformAdminController::class, 'rejectSinpePayment'])
+        ->name('sinpe.reject');
+    // Reapertura excepcional POR COBRADOR (auditable) de la cartera inicial.
+    Route::post('/empresas/{company}/cobradores/{user}/cartera-inicial/reabrir', [App\Http\Controllers\Cobros\InitialPortfolioController::class, 'reopen'])
+        ->name('initial-portfolio.reopen');
+    Route::post('/empresas/{company}/cobradores', [PlatformAdminController::class, 'storeCollector'])->name('collectors.store');
+    Route::patch('/empresas/{company}/cobradores/{user}/toggle', [PlatformAdminController::class, 'toggleCollector'])->name('collectors.toggle');
+    Route::put('/empresas/{company}/cobradores/{user}/branches', [PlatformAdminController::class, 'updateCollectorBranches'])->name('collectors.branches');
+    Route::post('/empresas/{company}/cobradores/{user}/regenerate-access', [PlatformAdminController::class, 'regenerateCollectorAccess'])->name('collectors.regenerate');
+    // Licencias individuales: renovar, suspender y reactivar por cobrador.
+    Route::post('/empresas/{company}/cobradores/{user}/licencia/renovar', [PlatformAdminController::class, 'renewCollectorLicense'])->name('collectors.license.renew');
+    Route::patch('/empresas/{company}/cobradores/{user}/licencia/suspender', [PlatformAdminController::class, 'suspendCollectorLicense'])->name('collectors.license.suspend');
+    Route::patch('/empresas/{company}/cobradores/{user}/licencia/reactivar', [PlatformAdminController::class, 'resumeCollectorLicense'])->name('collectors.license.resume');
     Route::patch('/empresas/{company}/licencia', [PlatformAdminController::class, 'updateLicense'])->name('licenses.update');
     Route::patch('/empresas/{company}/backups', [PlatformAdminController::class, 'updateBackups'])->name('backups.update');
     Route::post('/empresas/{company}/backups/run', [PlatformAdminController::class, 'runBackupNow'])->name('backups.run');
@@ -364,8 +407,6 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     | Dashboard
     |--------------------------------------------------------------------------
     */
-
-    Route::redirect('/', '/dashboard');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');

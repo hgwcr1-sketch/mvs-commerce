@@ -10,12 +10,13 @@ class ModuleRegistry
         'purchases' => ['label' => 'Compras y proveedores', 'prefixes' => ['compras.', 'proveedores.', 'cuentas_pagar.']],
         'customers' => ['label' => 'Clientes y CxC', 'prefixes' => ['clientes.', 'cuentas_cobrar.']],
         'cash' => ['label' => 'Caja', 'prefixes' => ['caja.']],
-        'loyalty' => ['label' => 'Fidelización', 'prefixes' => ['fidelidad.']],
+        'loyalty' => ['label' => 'FidelizaciÃ³n', 'prefixes' => ['fidelidad.']],
         'reports' => ['label' => 'Centro de Datos y reportes', 'prefixes' => ['reportes.']],
         'agenda' => ['label' => 'Agenda', 'prefixes' => ['agenda.']],
-        'administration' => ['label' => 'Administración', 'prefixes' => ['dashboard.', 'usuarios.', 'roles.', 'empresa.', 'configuracion.', 'formas_pago.']],
+        'administration' => ['label' => 'AdministraciÃ³n', 'prefixes' => ['dashboard.', 'usuarios.', 'roles.', 'empresa.', 'configuracion.', 'formas_pago.']],
         'notifications' => ['label' => 'Notificaciones y Alertas', 'prefixes' => ['notificaciones.']],
         'routeos' => ['label' => 'RouteOS', 'prefixes' => ['routeos.']],
+        'cobros' => ['label' => 'MVS CobrOS', 'prefixes' => ['cobros.']],
     ];
 
     public function forPermission(string $permission): ?string
