@@ -408,6 +408,8 @@ Route::middleware(['auth', 'active.company', 'company.licensed'])->group(functio
     |--------------------------------------------------------------------------
     */
 
+    Route::redirect('/', '/dashboard');
+
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
