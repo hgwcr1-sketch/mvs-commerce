@@ -237,7 +237,7 @@
                                     </td>
                                     <td class="order-6 col-span-2 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 lg:table-cell lg:w-36 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Descuento</span>
-                                        <template x-if="canDiscount && !layawayMode">
+                                        <template x-if="canDiscount">
                                             <div class="flex items-center justify-end gap-1">
                                                 <select x-model="item._discountType"
                                                         class="h-11 w-14 rounded border border-amber-300 bg-amber-50 px-1 text-xs font-bold text-amber-900 lg:h-auto lg:py-1">
@@ -253,16 +253,16 @@
                                                        placeholder="0">
                                             </div>
                                         </template>
-                                        <span x-show="layawayMode" class="text-slate-400">—</span>
+                                        <span x-show="!canDiscount" class="text-slate-400">—</span>
 
                                     </td>
                                     <td class="order-5 flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-right lg:table-cell lg:w-24 lg:bg-transparent lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Impuesto</span>
-                                        <span x-text="money(layawayMode ? apartadoLineTax(item) : lineTax(item, index))"></span>
+                                        <span x-text="money(layawayMode ? apartadoLineTax(item, index) : lineTax(item, index))"></span>
                                     </td>
                                     <td class="order-3 flex items-start justify-between gap-2 text-right lg:table-cell lg:w-28 lg:px-0 lg:py-0 lg:whitespace-nowrap">
                                         <span class="text-xs font-semibold uppercase text-slate-500 lg:hidden">Total</span>
-                                        <strong class="text-base font-bold lg:text-sm" x-text="money(layawayMode ? apartadoLineTotal(item) : lineTotal(item, index))"></strong>
+                                        <strong class="text-base font-bold lg:text-sm" x-text="money(layawayMode ? apartadoLineTotal(item, index) : lineTotal(item, index))"></strong>
                                     </td>
                                     <td class="order-7 flex items-center justify-end lg:table-cell lg:w-20 lg:px-0 lg:py-0 lg:whitespace-nowrap lg:text-right"><button type="button" @click="remove(item)" class="min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40 lg:min-h-0 lg:px-2 lg:py-1 lg:text-xs lg:font-normal">Eliminar</button></td>
                                 </tr>
@@ -415,8 +415,27 @@
                 </div>
                 <div x-show="layawayMode" class="space-y-2 text-sm">
                     <div class="flex justify-between"><span class="text-slate-300">Subtotal apartado</span><strong x-text="money(apartadoSubtotal)"></strong></div>
+                    <template x-if="canDiscount">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="shrink-0 text-slate-300">Dto. general</span>
+                            <div class="flex items-center gap-1">
+                                <select x-model="_generalDiscountType"
+                                        class="w-14 rounded-lg border border-amber-400/50 bg-slate-800 px-1 py-1 text-xs font-bold text-amber-400">
+                                    <option value="fixed">₡</option>
+                                    <option value="percentage">%</option>
+                                </select>
+                                <input x-model="_generalDiscountInput"
+                                       type="number"
+                                       min="0"
+                                       :step="_generalDiscountType === 'fixed' ? 1 : 0.0001"
+                                       inputmode="decimal"
+                                       class="w-24 rounded-lg border border-amber-400/50 bg-slate-800 px-2 py-1 text-right text-sm font-bold text-amber-400 placeholder-amber-400/50"
+                                       placeholder="0">
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="canDiscount" class="flex justify-between"><span class="text-slate-300">Descuento</span><strong class="text-amber-400" x-text="money(totalDiscount)"></strong></div>
                     <div class="flex justify-between"><span class="text-slate-300">Impuesto</span><strong x-text="money(apartadoTaxTotal)"></strong></div>
-                    <p class="text-xs text-primary">Apartado conserva precios del POS; descuentos no se aplican porque el módulo actual no guarda descuentos de apartado.</p>
                     <div>
                         <label for="layaway-initial" class="mb-1 block text-xs font-semibold uppercase text-slate-300">Prima (monto inicial)</label>
                         <input id="layaway-initial"
@@ -501,6 +520,9 @@
                     <p x-show="!customerId" class="text-xs font-semibold text-primary">Seleccione un cliente para crear el apartado.</p>
                     <p x-show="numberValue(layaway.initial_amount) > apartadoGrandTotal" class="text-xs font-semibold text-red-300">La prima no puede superar el total del apartado.</p>
                     <p x-show="layawayMode && numberValue(layaway.initial_amount) > 0 && layawayPaymentsTotal !== decimal4(numberValue(layaway.initial_amount))" class="text-xs font-semibold text-red-300">La suma de los pagos debe ser exactamente igual a la prima.</p>
+                    <p x-show="layawayMode && layawayReferenceMissing" class="text-xs font-semibold text-red-300">La referencia es obligatoria para la forma de pago seleccionada.</p>
+                    <p x-show="layawayMode && layawayCashSessionMissing" class="text-xs font-semibold text-red-300">Abra una sesión de caja para registrar la prima en una forma de pago que afecta efectivo.</p>
+                    <p x-show="layawayMode && hasInvalidAdjustments" class="text-xs font-semibold text-red-300">Revise los descuentos y precios: deben ser positivos y no superar el importe de la línea.</p>
                 </div>
                 <div class="my-3 border-t border-slate-700"></div>
                 <div x-show="!layawayMode" class="flex items-end justify-between"><span class="text-base">Total</span><strong class="text-2xl text-amber-400" x-text="money(grandTotal)"></strong></div>
@@ -1403,16 +1425,17 @@ document.addEventListener('alpine:init', () => {
         get canCheckout() { return !this.quoteMode && !this.layawayMode && this.cart.length > 0 && (!this.cashSessionRequired || !!this.cashSessionId) && !this.suspended.customerInvalid && !this.hasInvalidAdjustments && this.grandTotal > 0 && !this.cart.some(item => item.unavailable || this.exceedsStock(item)) && this.availablePaymentMethods.length > 0; },
         get selectedPaymentMethod() { return this.paymentMethods.find(method => method.id === Number(this.checkout.draft.methodId)); },
         get layawayPaymentMethods() { return this.paymentMethods.filter(method => method.type !== 'credit' && method.type !== 'loyalty_points'); },
-        apartadoLineTax(item) { return this.decimal4(this.lineAppliedPrice(item) * this.numberValue(item.quantity) * (this.numberValue(item.tax_rate) / 100)); },
-        apartadoLineTotal(item) { return this.decimal4((this.lineAppliedPrice(item) * this.numberValue(item.quantity)) + this.apartadoLineTax(item)); },
-        get apartadoGrandTotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + this.apartadoLineTotal(item), 0)); },
-        get apartadoSubtotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + (this.lineAppliedPrice(item) * this.numberValue(item.quantity)), 0)); },
-        get apartadoTaxTotal() { return this.decimal4(this.cart.reduce((sum, item) => sum + this.apartadoLineTax(item), 0)); },
+        apartadoLineTax(item, index) { return this.lineTax(item, index); },
+        apartadoLineTotal(item, index) { return this.lineTotal(item, index); },
+        get apartadoGrandTotal() { return this.decimal4(this.cart.reduce((sum, item, index) => sum + this.lineTotal(item, index), 0)); },
+        get apartadoSubtotal() { return this.decimal4(this.cart.reduce((sum, item, index) => sum + this.lineSubtotal(item, index), 0)); },
+        get apartadoTaxTotal() { return this.decimal4(this.cart.reduce((sum, item, index) => sum + this.lineTax(item, index), 0)); },
         get apartadoBalance() { return Math.max(0, this.decimal4(this.apartadoGrandTotal - this.numberValue(this.layaway.initial_amount))); },
         get canSubmitLayaway() {
             return this.layawayMode && this.canCreateLayaway && !this.creatingLayaway && this.cart.length > 0
                 && !!this.customerId && !this.suspended.customerInvalid
                 && !this.cart.some(item => item.unavailable || this.exceedsStock(item))
+                && !this.hasInvalidAdjustments
                 && this.apartadoGrandTotal > 0
                 && this.numberValue(this.layaway.initial_amount) > 0
                 && this.numberValue(this.layaway.initial_amount) <= this.apartadoGrandTotal
@@ -1439,6 +1462,8 @@ document.addEventListener('alpine:init', () => {
         get selectedLayawayMethod() { return this.layaway.payments.length === 1 ? this.layawayMethodById(this.layaway.payments[0].method) : null; },
         get layawayReceived() { return this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' ? this.numberValue(this.layaway.received_amount) : this.numberValue(this.layaway.initial_amount); },
         get layawayReceivedError() { return !!this.selectedLayawayMethod?.allows_change && this.layaway.received_amount !== '' && this.numberValue(this.layaway.received_amount) < this.numberValue(this.layaway.initial_amount); },
+        get layawayReferenceMissing() { return this.layaway.payments.some(row => { const method = this.layawayMethodById(row.method); return !!method && method.requires_reference && !(row.reference || '').trim(); }); },
+        get layawayCashSessionMissing() { return this.layaway.payments.some(row => { const method = this.layawayMethodById(row.method); return !!method && !!method.affects_cash && !this.cashSessionId; }); },
         get layawayChange() { return this.selectedLayawayMethod?.allows_change ? Math.max(0, this.layawayReceived - this.numberValue(this.layaway.initial_amount)) : 0; },
         get usdSession() { return this.usdSessions.find(session => String(session.id) === String(this.cashSessionId)); },
         get usdCashEnabled() { return this.selectedPaymentMethod?.type === 'cash' && this.usdSession?.enabled === true; },
@@ -2155,9 +2180,17 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({
                         customer_id: this.customerId,
                         expires_at: this.layaway.expires_at || null,
+                        ...(this.canDiscount && this.numberValue(this._generalDiscountInput) > 0 ? {
+                            discount_total: this.numberValue(this._generalDiscountInput),
+                            discount_total_type: this._generalDiscountType,
+                        } : {}),
                         items: this.cart.map(item => ({
                             product_id: item.id,
                             quantity: item.quantity,
+                            ...(this.canDiscount && this.numberValue(item._discount) > 0 ? {
+                                discount: this.numberValue(item._discount),
+                                discount_type: item._discountType,
+                            } : {}),
                             ...(this.canOverridePrice && this.numberValue(item._unitPrice) > 0 ? { unit_price: this.numberValue(item._unitPrice) } : {}),
                         })),
                         initial_amount: this.numberValue(this.layaway.initial_amount),

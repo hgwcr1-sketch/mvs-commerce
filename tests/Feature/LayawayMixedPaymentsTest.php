@@ -223,6 +223,38 @@ class LayawayMixedPaymentsTest extends TestCase
         $this->assertSame('1500.0000', $a->fresh()->balance_due);
     }
 
+    public function test_legacy_single_payment_requires_reference_for_card_and_sinpe(): void
+    {
+        $this->storeLayaway([
+            ['payment_method_id' => $this->cash->id, 'amount' => '200', 'reference' => null, 'notes' => null],
+        ], '200');
+        $a = Layaway::firstOrFail();
+        $this->assertSame('1800.0000', $a->balance_due);
+
+        // Abono legacy (payment_method_id + amount) con tarjeta sin referencia → rechazado.
+        $this->actingAs($this->u)->withSession($this->ctx())->post(route('apartados.payments.store', $a), [
+            'amount' => 300,
+            'payment_method_id' => $this->card->id,
+        ])->assertSessionHasErrors('reference');
+        $this->assertSame('1800.0000', $a->fresh()->balance_due);
+
+        // Creación legacy con SINPE sin referencia → rechazado.
+        $this->actingAs($this->u)->withSession($this->ctx())->post(route('apartados.store'), [
+            'customer_id' => $this->customer->id,
+            'items' => [['product_id' => $this->p->id, 'quantity' => 1]],
+            'initial_amount' => 100,
+            'payment_method_id' => $this->sinpe->id,
+        ])->assertSessionHasErrors('reference');
+
+        // Con referencia → aceptado y saldo reduce exactamente.
+        $this->actingAs($this->u)->withSession($this->ctx())->post(route('apartados.payments.store', $a), [
+            'amount' => 300,
+            'payment_method_id' => $this->card->id,
+            'reference' => 'LEGACY-OK',
+        ])->assertRedirect();
+        $this->assertSame('1500.0000', $a->fresh()->balance_due);
+    }
+
     public function test_cash_breakdown_reflects_each_method_part(): void
     {
         $this->storeLayaway([

@@ -17,9 +17,10 @@
     </div>
 
     <x-card>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <div>Estado<br><strong>{{$labels[$layaway->status]}}</strong></div>
             <div>Total<br><strong>₡{{number_format((float)$layaway->total,0,',','.')}}</strong></div>
+            <div>Descuento<br><strong>₡{{number_format((float)$layaway->discount_total,0,',','.')}}</strong></div>
             <div>Abonado<br><strong>₡{{number_format((float)$layaway->paid_total,0,',','.')}}</strong></div>
             <div>Saldo<br><strong>₡{{number_format((float)$layaway->balance_due,0,',','.')}}</strong></div>
             <div>Vencimiento<br><strong>{{$layaway->expires_at->format('d/m/Y')}}</strong></div>
@@ -29,12 +30,13 @@
     <x-card>
         <h2 class="mb-3 font-semibold">Productos reservados</h2>
         <div class="overflow-x-auto">
-            <table class="w-full min-w-[600px] text-sm">
+            <table class="w-full min-w-[700px] text-sm">
                 <thead>
                     <tr>
                         <th class="p-2 text-left">Producto</th>
                         <th class="p-2 text-right">Cantidad</th>
                         <th class="p-2 text-right">Precio</th>
+                        <th class="p-2 text-right">Descuento</th>
                         <th class="p-2 text-right">Total</th>
                     </tr>
                 </thead>
@@ -44,6 +46,7 @@
                             <td class="p-2">{{$i->description}}<br>@include('partials.product-variant', ['product' => $i->product])</td>
                             <td class="p-2 text-right">{{number_format((float)$i->quantity,$i->product?->unit?->allows_decimals?4:0,',','.')}}</td>
                             <td class="p-2 text-right">₡{{number_format((float)$i->unit_price,0,',','.')}}</td>
+                            <td class="p-2 text-right @if((float)$i->discount_total<=0) text-slate-400 @endif">₡{{number_format((float)$i->discount_total,0,',','.')}}</td>
                             <td class="p-2 text-right">₡{{number_format((float)$i->total,0,',','.')}}</td>
                         </tr>
                     @endforeach
@@ -54,7 +57,9 @@
 
     @can('apartados.abonar')
         @if($layaway->status==='active'&&!$layaway->expires_at->isBefore(today()))
-            <x-card x-data="mvsMixedPayments(@js($sheet['methods'] ?? []))">
+            {{-- El x-data debe vivir en una etiqueta plana: Blade no compila directivas (@js) dentro de atributos de componentes (x-card). --}}
+            <x-card>
+                <div x-data="mvsMixedPayments(@js($sheet['methods'] ?? []))">
                 <h2 class="mb-3 font-semibold">Registrar abono</h2>
                 <p class="mb-3 text-sm text-slate-500">Puede dividir el abono entre varios medios de pago. La suma debe ser exacta y no superar el saldo.</p>
                 <form method="POST" action="{{route('apartados.payments.store',$layaway)}}" class="space-y-3">
@@ -81,8 +86,9 @@
                                     <input required type="number" min="0.01" step="0.01" max="{{$layaway->balance_due}}" x-model="row.amount" :name="`payments[${i}][amount]`" class="w-full rounded-lg border border-primary/70 px-3 py-2 text-right font-semibold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
                                 </div>
                                 <div>
-                                    <label class="block text-sm">Referencia</label>
-                                    <input x-model="row.reference" :name="`payments[${i}][reference]`" class="w-full rounded-lg border border-primary/70 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                                    <label class="block text-sm">Referencia <span x-show="referenceRequired(row)" class="font-bold text-red-600">*</span></label>
+                                    <input x-model="row.reference" :required="referenceRequired(row)" :name="`payments[${i}][reference]`" class="w-full rounded-lg border border-primary/70 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
+                                    <p x-show="referenceRequired(row)" class="mt-1 text-xs font-semibold text-red-600">La forma de pago seleccionada exige referencia (obligatoria).</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm">Notas</label>
@@ -109,6 +115,7 @@
                     <button class="min-h-[44px] rounded-lg bg-primary px-4 py-2 font-semibold text-slate-950 hover:bg-primary-hover">Registrar abono</button>
                     <p x-show="printMessage" x-cloak x-text="printMessage" class="mt-2 text-sm text-slate-600"></p>
                 </form>
+                </div>
             </x-card>
         @endif
     @endcan
@@ -193,6 +200,10 @@
                 return this.methods.find(method => Number(method.id) === Number(this.singleRow.method)) || null;
             },
             get allowsChange() { return !!this.selectedMethod?.allows_change && this.rows.length === 1; },
+            referenceRequired(row) {
+                const method = this.methods.find(m => Number(m.id) === Number(row.method));
+                return !!(method && method.requires_reference);
+            },
             get rowAmount() { return parseFloat(this.singleRow?.amount) || 0; },
             get received() { return this.allowsChange && this.receivedAmount !== '' ? Number(this.receivedAmount) || 0 : 0; },
             get receivedError() { return this.allowsChange && this.receivedAmount !== '' && Number(this.receivedAmount) < this.rowAmount; },

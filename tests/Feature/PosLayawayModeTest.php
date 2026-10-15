@@ -228,6 +228,7 @@ class PosLayawayModeTest extends TestCase
         $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), array_merge($base, [
             'payment_method_id' => $sinpe->id,
             'cash_session_id' => null,
+            'reference' => 'SINPE-OK',
         ]))->assertCreated();
 
         $this->assertDatabaseCount('layaways', 1);
@@ -289,14 +290,15 @@ class PosLayawayModeTest extends TestCase
         $this->assertSame(5, (int) DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
     }
 
-    public function test_pos_layaway_rejects_discount_payload_because_existing_layaway_cannot_preserve_it(): void
+    public function test_pos_layaway_preserves_discount_payload_when_user_has_permission(): void
     {
         [$company, $branch, $user, $cash, $session] = $this->context('Empresa', ['pos.acceder', 'ventas.crear', 'apartados.ver', 'apartados.crear', 'pos.aplicar_descuento']);
         $product = $this->product($company);
         $this->stock($branch, $product, 5);
         $customer = $this->customer($company);
 
-        $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
+        // 1000 - 100 (línea) = 900; - 50 (general) = 850; sin impuesto.
+        $response = $this->actingAs($user)->withSession($this->activeSession($company, $branch))->postJson(route('pos.apartados.store'), [
             'customer_id' => $customer->id,
             'items' => [['product_id' => $product->id, 'quantity' => 1, 'discount' => 100, 'discount_type' => 'fixed']],
             'discount_total' => 50,
@@ -305,10 +307,15 @@ class PosLayawayModeTest extends TestCase
             'payment_method_id' => $cash->id,
             'cash_session_id' => $session->id,
             'client_token' => '33333333-3333-4333-8333-333333333333',
-        ])->assertUnprocessable()->assertJsonValidationErrors(['items.0.discount', 'discount_total']);
+        ])->assertCreated()
+            ->assertJsonPath('total', '850.0000')
+            ->assertJsonPath('balance_due', '750.0000');
 
-        $this->assertDatabaseCount('layaways', 0);
-        $this->assertSame(5, (int) DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
+        $layaway = Layaway::with('items')->findOrFail($response->json('layaway_id'));
+        $this->assertSame('150.0000', (string) $layaway->discount_total);
+        $this->assertSame('150.0000', (string) $layaway->items->first()->discount_total);
+        $this->assertSame('850.0000', (string) $layaway->items->first()->subtotal);
+        $this->assertSame(4, (int) DB::table('branch_product')->where('branch_id', $branch->id)->where('product_id', $product->id)->value('stock'));
     }
 
     public function test_pos_layaway_rejects_zero_and_insufficient_stock_and_rolls_back(): void
@@ -502,6 +509,7 @@ class PosLayawayModeTest extends TestCase
             'initial_amount' => 100,
             'payment_method_id' => $sinpe->id,
             'cash_session_id' => null,
+            'reference' => 'SINPE-RCV',
         ])->assertCreated();
 
         $layaway = Layaway::findOrFail($response->json('layaway_id'));

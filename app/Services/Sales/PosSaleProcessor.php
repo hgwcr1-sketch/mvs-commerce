@@ -1003,41 +1003,7 @@ class PosSaleProcessor
         float $base,
         string $context,
     ): float {
-        if ($value < 0) {
-            throw ValidationException::withMessages([
-                'discount' => "El descuento para {$context} no puede ser negativo.",
-            ]);
-        }
-
-        if (! in_array(
-            $type,
-            ['fixed', 'percentage'],
-            true,
-        )) {
-            throw ValidationException::withMessages([
-                'discount' => "El tipo de descuento para {$context} no es válido.",
-            ]);
-        }
-
-        if ($type === 'percentage') {
-            if ($value > 100) {
-                throw ValidationException::withMessages([
-                    'discount' => "El descuento porcentual para {$context} no puede superar 100%.",
-                ]);
-            }
-
-            return $this->decimal4(
-                $base * ($value / 100),
-            );
-        }
-
-        if ($value > $base) {
-            throw ValidationException::withMessages([
-                'discount' => "El descuento fijo para {$context} supera el importe disponible.",
-            ]);
-        }
-
-        return $this->decimal4($value);
+        return DiscountRules::resolveAmount($value, $type, $base, $context);
     }
 
     private function allocateGeneralDiscount(
@@ -1045,73 +1011,11 @@ class PosSaleProcessor
         float $generalDiscount,
         float $baseAfterLineDiscounts,
     ): array {
-        if ($generalDiscount <= 0) {
-            return array_fill(
-                0,
-                count($resolvedLines),
-                0.0,
-            );
-        }
-
-        $allocations = [];
-        $allocated = 0.0;
-        $lastPositiveIndex = null;
-
-        foreach ($resolvedLines as $index => $line) {
-            if ($line['lineBase'] > 0) {
-                $lastPositiveIndex = $index;
-            }
-
-            $share = $baseAfterLineDiscounts > 0
-                ? $this->decimal4(
-                    $generalDiscount
-                    * (
-                        $line['lineBase']
-                        / $baseAfterLineDiscounts
-                    ),
-                )
-                : 0.0;
-
-            $share = min(
-                $share,
-                $line['lineBase'],
-            );
-
-            $allocations[$index] = $share;
-
-            $allocated = $this->decimal4(
-                $allocated + $share,
-            );
-        }
-
-        $remainder = $this->decimal4(
-            $generalDiscount - $allocated,
+        return DiscountRules::allocateGeneral(
+            $resolvedLines,
+            $generalDiscount,
+            $baseAfterLineDiscounts,
         );
-
-        if (
-            $lastPositiveIndex !== null
-            && abs($remainder) > 0.0000001
-        ) {
-            $adjusted = $this->decimal4(
-                $allocations[$lastPositiveIndex]
-                + $remainder,
-            );
-
-            if (
-                $adjusted < 0
-                || $adjusted
-                    > $resolvedLines[$lastPositiveIndex]['lineBase']
-            ) {
-                throw ValidationException::withMessages([
-                    'discount_total' => 'No fue posible distribuir el descuento general de forma consistente.',
-                ]);
-            }
-
-            $allocations[$lastPositiveIndex] =
-                $adjusted;
-        }
-
-        return $allocations;
     }
 
     private function validateQuantity(

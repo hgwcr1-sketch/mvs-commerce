@@ -67,7 +67,9 @@
         </div>
     </div>
 </x-card>
-<x-card x-data="mvsMixedPayments()">
+{{-- El x-data vive en una etiqueta plana: Blade no compila directivas (@js) dentro de atributos de componentes (x-card). --}}
+<x-card>
+    <div x-data="mvsMixedPayments(@js($methods->map(fn ($m) => ['id' => $m->id, 'requires_reference' => (bool) $m->requires_reference])->values()))">
     <h2 class="mb-3 font-semibold">Abono inicial</h2>
     <p class="mb-3 text-sm text-slate-500">Puede dividir el abono entre varios medios de pago. La suma debe ser exacta.</p>
     <input type="hidden" name="initial_amount" :value="total">
@@ -92,8 +94,9 @@
                     <input required type="number" min="0.01" step="0.01" x-model="row.amount" :name="`payments[${i}][amount]`" class="w-full rounded border-slate-300">
                 </div>
                 <div>
-                    <label class="block text-sm">Referencia</label>
-                    <input x-model="row.reference" :name="`payments[${i}][reference]`" class="w-full rounded border-slate-300">
+                    <label class="block text-sm">Referencia <span x-show="referenceRequired(row)" class="font-bold text-red-600">*</span></label>
+                    <input x-model="row.reference" :required="referenceRequired(row)" :name="`payments[${i}][reference]`" class="w-full rounded border-slate-300">
+                    <p x-show="referenceRequired(row)" class="mt-1 text-xs font-semibold text-red-600">La forma de pago seleccionada exige referencia (obligatoria).</p>
                 </div>
                 <div>
                     <label class="block text-sm">Notas</label>
@@ -109,14 +112,20 @@
         <button type="button" @click="rows.push({method:'',amount:'',reference:'',notes:''})" class="min-h-11 rounded border border-slate-300 px-4 py-2">+ Agregar medio</button>
         <p class="text-sm font-semibold">Total del abono: ₡<span x-text="total"></span></p>
     </div>
+    </div>
 </x-card>
 @if($errors->any())<p class="rounded bg-red-50 p-3 text-red-700">{{$errors->first()}}</p>@endif<button class="rounded-lg bg-amber-500 px-5 py-3 font-semibold text-white">Crear apartado</button></form>
 <script>
-function mvsMixedPayments() {
+function mvsMixedPayments(methods = []) {
     return {
         rows: [{method:'',amount:'',reference:'',notes:''}],
+        methods,
         get total() {
             return this.rows.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0).toFixed(2);
+        },
+        referenceRequired(row) {
+            const method = this.methods.find(m => Number(m.id) === Number(row.method));
+            return !!(method && method.requires_reference);
         }
     };
 }

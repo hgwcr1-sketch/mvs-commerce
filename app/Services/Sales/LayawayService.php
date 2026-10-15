@@ -53,9 +53,12 @@ class LayawayService
                 $company = Company::findOrFail($companyId);
                 $customer = Customer::forCompany($companyId)->where('is_active', true)->findOrFail($data['customer_id']);
 
+                $canDiscount = $user->hasPermission('pos.aplicar_descuento', $company);
                 $canOverridePrice = $user->hasPermission('pos.cambiar_precio', $company);
                 $total = 0;
                 $lines = [];
+                $lineDiscountTotal = 0.0;
+                $baseAfterLineDiscounts = 0.0;
 
                 foreach ($data['items'] as $line) {
                     $product = Product::query()
@@ -101,14 +104,60 @@ class LayawayService
                         }
                     }
 
-                    $sub = round($unit * $qty, 4);
                     $profile = $this->resolveLineProfile($product);
                     $taxRate = (float) ($profile?->rate ?? $product->tax_rate ?? 0);
-                    $tax = round($sub * ($taxRate / 100), 4);
-                    $lineTotal = round($sub + $tax, 4);
-                    $total += $lineTotal;
-                    $lines[] = compact('product', 'qty', 'unit', 'sub', 'tax', 'taxRate', 'profile', 'lineTotal', 'stock');
+                    $gross = DiscountRules::decimal4($unit * $qty);
+                    $discountValue = (float) ($line['discount'] ?? 0);
+                    $discountType = (string) ($line['discount_type'] ?? 'fixed');
+
+                    if ($discountValue > 0 && ! $canDiscount) {
+                        throw ValidationException::withMessages(['discount' => 'No tiene permiso para aplicar descuentos en el POS.']);
+                    }
+
+                    $lineDiscount = DiscountRules::resolveAmount($discountValue, $discountType, $gross, "el producto {$product->name}");
+                    $lineBase = DiscountRules::decimal4($gross - $lineDiscount);
+
+                    $baseAfterLineDiscounts = DiscountRules::decimal4($baseAfterLineDiscounts + $lineBase);
+                    $lineDiscountTotal = DiscountRules::decimal4($lineDiscountTotal + $lineDiscount);
+
+                    $lines[] = compact('product', 'qty', 'unit', 'gross', 'lineDiscount', 'lineBase', 'taxRate', 'profile', 'stock');
                 }
+
+                if ($baseAfterLineDiscounts <= 0) {
+                    throw ValidationException::withMessages(['items' => 'El apartado debe conservar un importe positivo después de los descuentos por línea.']);
+                }
+
+                $generalDiscountInput = (float) ($data['discount_total'] ?? 0);
+                if ($generalDiscountInput > 0 && ! $canDiscount) {
+                    throw ValidationException::withMessages(['discount' => 'No tiene permiso para aplicar descuentos en el POS.']);
+                }
+
+                $generalDiscount = DiscountRules::resolveAmount(
+                    $generalDiscountInput,
+                    (string) ($data['discount_total_type'] ?? 'fixed'),
+                    $baseAfterLineDiscounts,
+                    'el apartado',
+                );
+
+                if ($generalDiscount >= $baseAfterLineDiscounts && $generalDiscount > 0) {
+                    throw ValidationException::withMessages(['discount_total' => 'El descuento general debe dejar un importe positivo en el apartado.']);
+                }
+
+                $generalAllocations = DiscountRules::allocateGeneral($lines, $generalDiscount, $baseAfterLineDiscounts);
+
+                foreach ($lines as $index => &$lineItem) {
+                    $allocated = $generalAllocations[$index] ?? 0.0;
+                    $lineItem['discountTotal'] = DiscountRules::decimal4($lineItem['lineDiscount'] + $allocated);
+                    $sub = DiscountRules::decimal4($lineItem['lineBase'] - $allocated);
+                    $tax = DiscountRules::decimal4($sub * ($lineItem['taxRate'] / 100));
+                    $lineItem['sub'] = $sub;
+                    $lineItem['tax'] = $tax;
+                    $lineItem['lineTotal'] = DiscountRules::decimal4($sub + $tax);
+                    $total = DiscountRules::decimal4($total + $lineItem['lineTotal']);
+                }
+                unset($lineItem);
+
+                $discountTotal = DiscountRules::decimal4($lineDiscountTotal + $generalDiscount);
 
                 $layaway = Layaway::create([
                     'company_id' => $companyId,
@@ -121,6 +170,7 @@ class LayawayService
                     'status' => Layaway::STATUS_ACTIVE,
                     'currency_code' => $company->currency ?? 'CRC',
                     'total' => $total,
+                    'discount_total' => $discountTotal,
                     'paid_total' => 0,
                     'balance_due' => $total,
                     'expires_at' => $data['expires_at'] ?? today()->addDays((int) ($company->layaway_validity_days ?? 30)),
@@ -136,6 +186,7 @@ class LayawayService
                         'description' => $line['product']->name,
                         'quantity' => $line['qty'],
                         'unit_price' => $line['unit'],
+                        'discount_total' => $line['discountTotal'],
                         'tax_rate' => $line['taxRate'],
                         'tax_code' => $line['profile']?->tax_code,
                         'tax_rate_code' => $line['profile']?->tax_rate_code,
@@ -252,8 +303,8 @@ class LayawayService
             if (in_array($method->type, [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS], true)) {
                 throw ValidationException::withMessages([$isMixedRequest ? "payments.{$index}.payment_method_id" : 'payment_method_id' => 'La forma de pago no es válida para apartados.']);
             }
-            if ($isMixedRequest && $method->requires_reference && trim((string) ($payment['reference'] ?? '')) === '') {
-                throw ValidationException::withMessages(["payments.{$index}.reference" => "La referencia es obligatoria para {$method->name}."]);
+            if ($method->requires_reference && trim((string) ($payment['reference'] ?? '')) === '') {
+                throw ValidationException::withMessages([$isMixedRequest ? "payments.{$index}.reference" : 'reference' => "La referencia es obligatoria para {$method->name}."]);
             }
             $totalApplied = bcadd($totalApplied, $amount, 4);
         }
@@ -443,9 +494,9 @@ class LayawayService
                 throw ValidationException::withMessages(['layaway' => 'El apartado debe estar pagado antes de entregarse.']);
             }
 
-            $sale = Sale::create(['company_id' => $locked->company_id, 'branch_id' => $locked->branch_id, 'user_id' => $user->id, 'customer_id' => $locked->customer_id, 'sale_number' => CompanySequence::nextPosNumber($locked->company_id), 'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET, 'sale_condition' => Sale::CONDITION_CASH, 'status' => Sale::STATUS_COMPLETED, 'currency_code' => $locked->currency_code, 'exchange_rate' => 1, 'subtotal' => $locked->items->sum('subtotal'), 'tax_total' => $locked->items->sum('tax_total'), 'discount_total' => 0, 'rounding_total' => 0, 'total' => $locked->total, 'paid_total' => $locked->total, 'balance_due' => 0, 'notes' => 'Entrega del apartado '.$locked->number, 'completed_at' => now()]);
+            $sale = Sale::create(['company_id' => $locked->company_id, 'branch_id' => $locked->branch_id, 'user_id' => $user->id, 'customer_id' => $locked->customer_id, 'sale_number' => CompanySequence::nextPosNumber($locked->company_id), 'document_type' => Sale::DOCUMENT_ELECTRONIC_TICKET, 'sale_condition' => Sale::CONDITION_CASH, 'status' => Sale::STATUS_COMPLETED, 'currency_code' => $locked->currency_code, 'exchange_rate' => 1, 'subtotal' => $locked->items->sum('subtotal'), 'tax_total' => $locked->items->sum('tax_total'), 'discount_total' => $locked->items->sum('discount_total'), 'rounding_total' => 0, 'total' => $locked->total, 'paid_total' => $locked->total, 'balance_due' => 0, 'notes' => 'Entrega del apartado '.$locked->number, 'completed_at' => now()]);
             foreach ($locked->items as $item) {
-                $saleItem = SaleItem::create(['sale_id' => $sale->id, 'product_id' => $item->product_id, 'product_code' => $item->product->internal_code, 'barcode' => $item->product->barcode, 'description' => $item->description, 'unit_code' => $item->product?->unit?->abbreviation, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'gross_total' => $item->subtotal, 'discount_total' => 0, 'subtotal' => $item->subtotal, 'tax_rate' => $item->tax_rate, 'tax_code' => $item->tax_code, 'tax_rate_code' => $item->tax_rate_code, 'tax_treatment' => $item->tax_treatment, 'fiscal_source' => $item->fiscal_source, 'fiscal_source_version' => $item->fiscal_source_version, 'fiscal_snapshot' => $item->fiscal_snapshot, 'tax_total' => $item->tax_total, 'total' => $item->total, 'unit_cost' => $item->product->cost]);
+                $saleItem = SaleItem::create(['sale_id' => $sale->id, 'product_id' => $item->product_id, 'product_code' => $item->product->internal_code, 'barcode' => $item->product->barcode, 'description' => $item->description, 'unit_code' => $item->product?->unit?->abbreviation, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'gross_total' => DiscountRules::decimal4(((float) $item->unit_price) * ((float) $item->quantity)), 'discount_total' => $item->discount_total, 'subtotal' => $item->subtotal, 'tax_rate' => $item->tax_rate, 'tax_code' => $item->tax_code, 'tax_rate_code' => $item->tax_rate_code, 'tax_treatment' => $item->tax_treatment, 'fiscal_source' => $item->fiscal_source, 'fiscal_source_version' => $item->fiscal_source_version, 'fiscal_snapshot' => $item->fiscal_snapshot, 'tax_total' => $item->tax_total, 'total' => $item->total, 'unit_cost' => $item->product->cost]);
                 foreach ($item->taxes as $tax) {
                     SaleItemTax::create(['sale_item_id' => $saleItem->id, 'tax_code' => $tax->tax_code, 'tax_rate_code' => $tax->tax_rate_code, 'description' => $tax->description, 'treatment' => $tax->treatment, 'rate' => $tax->rate, 'factor_iva' => $tax->factor_iva, 'base_amount' => $tax->base_amount, 'tax_amount' => $tax->tax_amount, 'specific_tax_data' => $tax->specific_tax_data, 'exemption_snapshot' => $tax->exemption_snapshot, 'source' => $tax->source, 'source_version' => $tax->source_version, 'sequence' => $tax->sequence]);
                 }
@@ -503,7 +554,15 @@ class LayawayService
                 'unit_price' => isset($item['unit_price']) && $item['unit_price'] !== null && $item['unit_price'] !== ''
                     ? number_format((float) $item['unit_price'], 4, '.', '')
                     : null,
+                'discount' => isset($item['discount']) && $item['discount'] !== null && $item['discount'] !== ''
+                    ? number_format((float) $item['discount'], 4, '.', '')
+                    : null,
+                'discount_type' => (string) ($item['discount_type'] ?? 'fixed'),
             ], $data['items'] ?? []),
+            'discount_total' => isset($data['discount_total']) && $data['discount_total'] !== null && $data['discount_total'] !== ''
+                ? number_format((float) $data['discount_total'], 4, '.', '')
+                : '0.0000',
+            'discount_total_type' => (string) ($data['discount_total_type'] ?? 'fixed'),
         ], JSON_THROW_ON_ERROR));
     }
 

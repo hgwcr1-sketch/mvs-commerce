@@ -707,6 +707,10 @@ class PosController extends Controller
 
     public function storeLayaway(Request $request, LayawayService $service): JsonResponse
     {
+        $company = Company::query()->find((int) session('active_company_id'));
+        $canDiscount = $company !== null
+            && $request->user()?->hasPermission('pos.aplicar_descuento', $company);
+
         $data = $request->validate([
             'customer_id' => ['required', 'integer'],
             'expires_at' => ['nullable', 'date', 'after_or_equal:today'],
@@ -715,10 +719,18 @@ class PosController extends Controller
             'items.*.product_id' => ['nullable', 'integer'],
             'items.*.quantity' => ['nullable', 'numeric', 'gt:0'],
             'items.*.unit_price' => ['nullable', 'numeric', 'gt:0'],
-            'items.*.discount' => ['prohibited'],
-            'items.*.discount_type' => ['prohibited'],
-            'discount_total' => ['prohibited'],
-            'discount_total_type' => ['prohibited'],
+            'items.*.discount' => $canDiscount
+                ? ['nullable', 'numeric', 'min:0', 'regex:/^\d+(?:\.\d{1,4})?$/']
+                : ['prohibited'],
+            'items.*.discount_type' => $canDiscount
+                ? ['nullable', 'in:fixed,percentage']
+                : ['prohibited'],
+            'discount_total' => $canDiscount
+                ? ['nullable', 'numeric', 'min:0', 'regex:/^\d+(?:\.\d{1,4})?$/']
+                : ['prohibited'],
+            'discount_total_type' => $canDiscount
+                ? ['nullable', 'in:fixed,percentage']
+                : ['prohibited'],
             'initial_amount' => ['required', 'numeric', 'gt:0'],
             'payment_method_id' => ['nullable', 'required_without:payments', 'integer'],
             'payments' => ['nullable', 'array', 'min:1'],

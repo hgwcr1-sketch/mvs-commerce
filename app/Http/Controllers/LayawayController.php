@@ -48,7 +48,7 @@ class LayawayController extends Controller
         $a = $this->scoped($apartado)->load(['customer', 'items.product.unit', 'items.product.style', 'items.product.size', 'items.product.color', 'payments.paymentMethod', 'payments.user', 'sale']);
         $companyId = $a->company_id;
         $methods = PaymentMethod::forCompany($companyId)->active()->whereNotIn('type', ['credit', 'loyalty_points'])->ordered()->get();
-        $sheet = ['layawayId' => $a->id, 'methods' => $methods->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'allows_change' => (bool) $m->allows_change])->values(), 'layawayTicketUrl' => route('mvs.print.ticket.layaway', ['layaway' => '__LAYAWAY__'], false), 'paymentTicketUrl' => route('mvs.print.ticket.layaway.payment', ['layaway' => '__LAYAWAY__', 'payment' => '__PAYMENT__'], false), 'initialPrint' => null, 'configUrl' => route('mvs.print.config', [], false)];
+        $sheet = ['layawayId' => $a->id, 'methods' => $methods->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'allows_change' => (bool) $m->allows_change, 'requires_reference' => (bool) $m->requires_reference])->values(), 'layawayTicketUrl' => route('mvs.print.ticket.layaway', ['layaway' => '__LAYAWAY__'], false), 'paymentTicketUrl' => route('mvs.print.ticket.layaway.payment', ['layaway' => '__LAYAWAY__', 'payment' => '__PAYMENT__'], false), 'initialPrint' => null, 'configUrl' => route('mvs.print.config', [], false)];
         $print = session()->pull('mvs_layaway_print');
         if ($print) {
             $isPayment = $print['type'] === 'payment';
