@@ -865,7 +865,10 @@ class PosController extends Controller
         $companyId = (int) session('active_company_id');
         $company = Company::query()->findOrFail($companyId);
         $sale = $receipts->authorizedSale($sale, $request->user(), $companyId, (int) session('active_branch_id'));
-        $format = $receipts->format($sale, $request->query('format', 'letter'));
+        // Descarga PDF: siempre Carta, independiente del formato de terminal
+        // (paper_width/receipt_format). El botón puede llegar con ?format heredado
+        // de la vista (58/80mm); aquí se normaliza a 'letter' para el PDF.
+        $format = 'letter';
         $pdf = $receipts->pdf($sale, $company, $format);
 
         return $pdf->download("comprobante-{$sale->sale_number}.pdf");

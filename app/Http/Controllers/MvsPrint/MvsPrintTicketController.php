@@ -8,6 +8,7 @@ use App\Models\LayawayPayment;
 use App\Models\Sale;
 use App\Services\MvsPrint\EscPosLayawayTicket;
 use App\Services\MvsPrint\EscPosSaleTicket;
+use App\Services\MvsPrint\EscPosTestTicket;
 use App\Services\MvsPrint\MvsPrintTerminalResolver;
 use App\Services\Sales\SaleReceiptService;
 use Illuminate\Http\JsonResponse;
@@ -82,12 +83,37 @@ class MvsPrintTicketController extends Controller
             $drawerCommand,
         );
 
+        // Diseño moderno aprobado: se reutiliza pos/receipt.blade.php como fuente
+        // visual única. embed=true oculta botones/window.print; pdfMode=false
+        // conserva el logo vía asset() HTTP (visible desde el cliente QZ). Los QR
+        // fiscal y de fidelidad ya viajan como SVG data-URI embebido.
+        $format = $paperWidth === '58' ? '58mm' : '80mm';
+        $receiptHtml = view('pos.receipt', [
+            'sale' => $sale,
+            'company' => $sale->company,
+            'format' => $format,
+            'autoPrint' => false,
+            'pdfMode' => false,
+            'embed' => true,
+            'receiptData' => $receiptData,
+            'loyalty' => $receipts->loyaltySummary($sale),
+        ])->render();
+
         return response()->json([
             'success' => true,
             'sale_id' => $sale->id,
             'sale_number' => $sale->sale_number,
             'printer' => $terminal?->printer_name,
+            // ESC/POS legacy: se conserva como transporte de reserva/compatibilidad.
             'payload' => $payload,
+            // Diseño moderno único para impresión silenciosa vía QZ
+            // (type: 'pixel', format: 'html' — QZ 2.2 rasteriza; la térmica no recibe HTML).
+            'html' => $receiptHtml,
+            'format' => $format,
+            'paper_width' => $paperWidth,
+            'open_drawer' => $openDrawer,
+            'auto_cut' => $autoCut,
+            'drawer_command' => $drawerCommand ?? EscPosTestTicket::defaultDrawerCommand(),
             'qz' => [
                 'signature_url' => route('mvs.print.signature'),
                 'certificate_url' => route('mvs.print.certificate'),

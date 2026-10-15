@@ -180,6 +180,67 @@ class MvsPrintAutoPrintTest extends TestCase
         $this->assertNotEmpty($response->json('payload.lines'));
     }
 
+    public function test_ticket_exposes_modern_receipt_html_for_silent_print(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp html');
+        $user = $this->posUser($company, $branch);
+        MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'printer_name' => 'EPSON TM-T20',
+            'paper_width' => '80',
+            'auto_print' => true,
+            'auto_cut' => true,
+            'open_drawer' => true,
+        ]);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', $sale))
+            ->assertOk();
+
+        // Fuente visual única: el diseño moderno de pos/receipt.blade.php.
+        $html = (string) $response->json('html');
+        $this->assertNotSame('', $html);
+        $this->assertStringContainsString('format-80mm', $html);
+        $this->assertStringContainsString('Gracias por su compra', $html);
+        // Modo silencioso: sin auto-impresión del navegador ni botones de acción.
+        $this->assertStringNotContainsString('window.print', $html);
+        $this->assertStringNotContainsString('Nueva venta', $html);
+        $this->assertStringNotContainsString('Descargar PDF', $html);
+        // Datos para cajón y corte que qz.js emite como ESC/POS alrededor del HTML.
+        $this->assertSame('80mm', $response->json('format'));
+        $this->assertSame('80', $response->json('paper_width'));
+        $this->assertTrue($response->json('open_drawer'));
+        $this->assertTrue($response->json('auto_cut'));
+        $this->assertIsArray($response->json('drawer_command'));
+    }
+
+    public function test_ticket_modern_html_respects_58mm_format(): void
+    {
+        [$company, $branch] = $this->companyContext('Emp html 58');
+        $user = $this->posUser($company, $branch);
+        MvsPrintTerminal::factory()->create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'printer_name' => 'POS-58',
+            'paper_width' => '58',
+            'auto_print' => true,
+            'auto_cut' => true,
+        ]);
+        $sale = $this->completedSale($company, $branch, $user);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_company_id' => $company->id, 'active_branch_id' => $branch->id])
+            ->getJson(route('mvs.print.ticket', $sale))
+            ->assertOk();
+
+        $this->assertSame('58mm', $response->json('format'));
+        $this->assertStringContainsString('format-58mm', (string) $response->json('html'));
+        $this->assertStringNotContainsString('window.print', (string) $response->json('html'));
+    }
+
     public function test_ticket_404_for_sale_from_other_company(): void
     {
         [$companyA, $branchA] = $this->companyContext('Emp ticket A');

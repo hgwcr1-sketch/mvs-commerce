@@ -240,10 +240,21 @@ window.MvsPrint = {
         this._printBusy = true;
         try {
             const ticketData = await this.fetchTicket(ticketUrl, id, options);
-            if (!ticketData?.success || !ticketData.payload) throw new Error('No se pudo obtener el ticket.');
+            if (!ticketData?.success || (!ticketData.payload && !ticketData.html)) throw new Error('No se pudo obtener el ticket.');
             await this.ensureConnection(ticketData.qz);
             const printer = ticketData.printer || (!options.reprint && options.printerName);
-            await this.sendPayload(printer, options.reprint ? { ...ticketData.payload, open_drawer: false } : ticketData.payload);
+            // Diseño moderno único: la impresión inmediata (checkout) y la
+            // reimpresión usan el MISMO recibo HTML y los MISMOS datos (fuente
+            // única entregada por el backend en 'html'). La única diferencia es
+            // el cajón: nunca se abre en reimpresión. Si el backend no entregó
+            // 'html' (compatibilidad/QZ sin diseño moderno), se conserva el
+            // transporte ESC/POS legacy como fallback intacto.
+            if (ticketData.html) {
+                const htmlTicket = { ...ticketData, open_drawer: options.reprint ? false : ticketData.open_drawer };
+                await this.sendHtmlReceipt(printer, htmlTicket);
+            } else {
+                await this.sendPayload(printer, options.reprint ? { ...ticketData.payload, open_drawer: false } : ticketData.payload);
+            }
             return { success: true, printer };
         } catch (error) {
             return { success: false, error: error.message || 'Error al imprimir' };
@@ -540,6 +551,142 @@ window.MvsPrint = {
             await this.deadline(() => pending, 'Imprimir', this.printTimeoutMs, () => this.invalidateConnection());
         } catch (error) {
             if (error.message.includes('tiempo de espera')) throw new Error('No fue posible confirmar la impresión. Revise la impresora y la cola antes de reintentar o usar impresión del navegador.');
+            throw error;
+        }
+    },
+
+    /**
+     * Imprime el recibo con el diseño moderno único (HTML) vía QZ Tray.
+     *
+     * CONTRATO QZ TRAY 2.2 (qz-tray.js, qz.print): data.type válido es
+     * [pixel | raw]; type:'html' NO existe y el trabajo se pierde (papel en
+     * blanco, sin contenido). El HTML correcto viaja como
+     * { type: 'pixel', format: 'html', flavor: 'plain' } y QZ lo rasteriza en
+     * el propio equipo antes de enviarlo: la impresora térmica nunca recibe
+     * HTML, solo el bitmap resultante (rasterize: true + density 203). El
+     * ancho 58/80 mm lo gobierna el CSS del recibo (.format-58mm/.format-80mm)
+     * y el tamaño de papel del driver.
+     *
+     * SEGURIDAD DE ORDEN: la apertura de cajón y el corte NO se emiten en esta
+     * vía por ahora. QZ Tray resuelve qz.print() cuando acepta/encola el trabajo,
+     * no cuando la impresora lo completó físicamente; con el recibo HTML
+     * rasterizado no se puede garantizar el orden cajón → recibo → corte entre
+     * trabajos separados. Quedan tras HTML_DRAWER_CUT_ENABLED para habilitarlos
+     * solo después de validación física 58/80 mm (ver docs/DECISIONES.md).
+     * Requiere QZ Tray con soporte de impresión HTML.
+     */
+    async sendHtmlReceipt(printer, ticket) {
+        if (!printer) throw new Error('No hay impresora configurada.');
+        if (!ticket?.html) throw new Error('No se recibió el diseño del recibo.');
+        if (this._pendingPrint) throw new Error('No fue posible confirmar la impresión. Cierre MVS Print y revise la cola antes de reintentar.');
+        const width = String(ticket.paper_width ?? '80') === '58' ? 58 : 80;
+
+        // Cajón: deshabilitado por orden no garantizable entre trabajos QZ.
+        // Requiere validación física antes de activar (HTML_DRAWER_CUT_ENABLED).
+        if (window.HTML_DRAWER_CUT_ENABLED && ticket.open_drawer && ticket.drawer_command) {
+            await this.sendRawCommand(printer, ticket.drawer_command, 'Abrir cajón');
+        }
+
+        // Altura: se mide el HTML renderizado para elegir una página continua
+        // sin recortar información ni emitir papel en blanco de más. Si la
+        // medición falla se usa una altura generosa de resguardo.
+        const height = await this.measureHtmlHeight(ticket.html, width);
+
+        // Recibo moderno: QZ renderiza el HTML y respeta el ancho del papel.
+        // CONTRATO qz-tray 2.2.6 (ver node_modules/qz-tray/qz-tray.js):
+        //  - `units` es una opción de NIVEL SUPERIOR (`options.units`, default
+        //    'in') y aplica a paper size, margins y density; `size` solo admite
+        //    width/height/custom. Dejarlo dentro de `size` lo ignoraba, así que
+        //    QZ leía 58 x <altura> como PULGADAS (58in ≈ 147cm) y rasterizaba
+        //    una página gigante que la térmica recibía en blanco.
+        //  - `density` se interpreta según `units`: con 'mm' es DPMM, por lo
+        //    que 203 serían 5156 dpi. 8 dots/mm ≈ 203 dpi (térmica estándar).
+        //  - `interpolation` solo admite [bicubic | bilinear | nearest-neighbor].
+        //  - `scaleContent:true` obliga a QZ a reescalar el raster al ancho
+        //    imprimible del papel (58/80 mm). Con `false` el contenido se
+        //    imprimía a su tamaño natural y quedaba recortado o con letras
+        //    gigantes en la POS-58-Series (Caja San Ramón, paper_width=58).
+        //  - `colorType:'grayscale'` evita el difuminado de 'color' en una
+        //    térmica monocroma; el QR fiscal se mantiene nítido.
+        const htmlConfig = window.qz.configs.create(printer, {
+            copies: 1,
+            units: 'mm',
+            size: { width, height },
+            rasterize: true,
+            density: 8,
+            colorType: 'grayscale',
+            interpolation: 'bilinear',
+            margins: { top: 0, right: 0, bottom: 0, left: 0 },
+            scaleContent: true,
+            orientation: 'portrait',
+        });
+        const pending = Promise.resolve().then(() => window.qz.print(htmlConfig, [{ type: 'pixel', format: 'html', flavor: 'plain', data: ticket.html }]));
+        this._pendingPrint = pending;
+        pending.then(() => { if (this._pendingPrint === pending) this._pendingPrint = null; }, () => { if (this._pendingPrint === pending) this._pendingPrint = null; });
+        try {
+            await this.deadline(() => pending, 'Imprimir', this.printTimeoutMs, () => this.invalidateConnection());
+        } catch (error) {
+            if (error.message.includes('tiempo de espera')) throw new Error('No fue posible confirmar la impresión. Revise la impresora y la cola antes de reintentar o usar impresión del navegador.');
+            throw error;
+        }
+
+        // Corte al final (GS V B 0): deshabilitado por orden no garantizable
+        // entre el recibo HTML rasterizado y el trabajo raw de corte en QZ.
+        if (window.HTML_DRAWER_CUT_ENABLED && ticket.auto_cut) {
+            await this.sendRawCommand(printer, [0x1D, 0x56, 0x42, 0x00], 'Cortar');
+        }
+    },
+
+    /**
+     * Mide la altura real (mm) de un recibo HTML al ancho de papel indicado,
+     * renderizándolo en un iframe oculto del ancho exacto del papel. Devuelve
+     * una altura de resguardo si el DOM no permite medir (SSR, entorno sin DOM).
+     */
+    async measureHtmlHeight(html, widthMm) {
+        const fallback = 200;
+        if (typeof document === 'undefined' || !html) return fallback;
+        try {
+            const px = (widthMm / 25.4) * 96; // CSS px del ancho del papel
+            const frame = document.createElement('iframe');
+            frame.setAttribute('aria-hidden', 'true');
+            frame.style.cssText = 'position:fixed;left:-10000px;top:0;border:0;visibility:hidden;';
+            frame.style.width = px + 'px';
+            frame.style.height = '10px';
+            document.body.appendChild(frame);
+            const doc = frame.contentDocument || (frame.contentWindow && frame.contentWindow.document);
+            if (!doc) throw new Error('sin documento de iframe');
+            doc.open();
+            doc.write(html);
+            doc.close();
+            const body = doc.body;
+            // Espera un frame para que el layout se estabilice antes de medir.
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const measuredPx = Math.max(body ? body.scrollHeight : 0, doc.documentElement ? doc.documentElement.scrollHeight : 0);
+            document.body.removeChild(frame);
+            if (!measuredPx) return fallback;
+            const mm = (measuredPx * 25.4) / 96;
+            // Cola mínima para que el corte no caiga sobre el último contenido.
+            return Math.min(400, Math.max(40, Math.ceil(mm + 8)));
+        } catch {
+            return fallback;
+        }
+    },
+
+    /**
+     * Envía un comando ESC/POS crudo (bytes) como trabajo independiente.
+     * Se usa para cajón y corte alrededor del recibo HTML moderno.
+     */
+    async sendRawCommand(printer, bytes, label = 'Comando') {
+        if (!printer) throw new Error('No hay impresora configurada.');
+        if (!Array.isArray(bytes) || bytes.length === 0) return;
+        const data = [{ type: 'raw', format: 'command', flavor: 'base64', data: this.toBase64(bytes) }];
+        const pending = Promise.resolve().then(() => window.qz.print(window.qz.configs.create(printer, { copies: 1 }), data));
+        this._pendingPrint = pending;
+        pending.then(() => { if (this._pendingPrint === pending) this._pendingPrint = null; }, () => { if (this._pendingPrint === pending) this._pendingPrint = null; });
+        try {
+            await this.deadline(() => pending, label, this.printTimeoutMs, () => this.invalidateConnection());
+        } catch (error) {
+            if (error.message.includes('tiempo de espera')) throw new Error('No fue posible confirmar la impresión. Revise la impresora y la cola antes de reintentar.');
             throw error;
         }
     },

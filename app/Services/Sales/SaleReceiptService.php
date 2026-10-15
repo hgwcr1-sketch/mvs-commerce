@@ -63,8 +63,27 @@ class SaleReceiptService
 
         if ($format === 'letter') {
             $view = $receiptData->fiscal !== null ? 'pos.fiscal-invoice' : 'pos.receipt';
-            $pdf = Pdf::loadView($view, $viewData);
+
+            // Presentación SOLO del PDF Carta: el CSS base usa min-height:270mm
+            // + padding que, sumado a los márgenes de DomPDF, provoca una segunda
+            // página vacía y desbordes. Se neutraliza y se ajusta el ancho al
+            // papel Carta (215.9mm) con márgenes seguros: width:195mm y padding
+            // 8/10mm dejan el contenido completo (tablas, fidelización, QR, legal)
+            // en UNA sola página, centrado y sin recortes. No altera datos ni
+            // documentos fiscales. Validado con HTML real de venta con fidelización.
+            $html = view($view, $viewData)->render();
+            $letterCss = '<style>'
+                .'@page{margin:0}'
+                .'html,body{margin:0;padding:0;background:#fff}'
+                ."body{font-family:'DejaVu Sans',Arial,sans-serif}"
+                .'.receipt{margin:0 auto;padding:0;box-shadow:none;max-width:none}'
+                .'.format-letter{width:195mm;min-height:0;padding:8mm 10mm;margin:0 auto}'
+                .'</style>';
+            $html = str_replace('</head>', $letterCss.'</head>', $html);
+
+            $pdf = Pdf::loadHTML($html);
             $pdf->setPaper('letter');
+            $pdf->getDomPDF()->getOptions()->set('defaultFont', 'DejaVu Sans');
 
             return $pdf;
         }
@@ -74,6 +93,19 @@ class SaleReceiptService
         $html = view('pos.receipt', $viewData)->render();
         $widthPt = $format === '58mm' ? 164.41 : 226.77;
         $tailPt = 28.35; // ~10mm papel + 6mm CSS = ~16mm cola total
+
+        // Presentación SOLO del PDF térmico (no altera la vista en pantalla ni los
+        // documentos fiscales): el padding de .receipt se sumaba al ancho 58/80mm
+        // del papel y provocaba desbordamiento horizontal y cortes de línea. Se
+        // neutraliza margen/padding del contenedor y se fija DejaVu Sans (glifo ₡)
+        // como fuente por defecto del render para garantizar el símbolo del colón.
+        $thermalCss = '<style>'
+            .'@page{margin:0}'
+            .'html,body{margin:0;padding:0;background:#fff}'
+            .'body{font-family:\'DejaVu Sans\',Arial,sans-serif}'
+            .'.receipt{margin:0 auto;padding:0;box-shadow:none;width:100%;max-width:100%}'
+            .'</style>';
+        $html = str_replace('</head>', $thermalCss.'</head>', $html);
 
         $items = $sale->items->count();
         $payments = $sale->payments->count();
@@ -92,6 +124,7 @@ class SaleReceiptService
         for ($attempt = 0; $attempt < 4; $attempt++) {
             $pdf = Pdf::loadHTML($html);
             $pdf->setPaper([0, 0, $widthPt, $paperHeightPt]);
+            $pdf->getDomPDF()->getOptions()->set('defaultFont', 'DejaVu Sans');
             @$pdf->getDomPDF()->render();
             if ($pdf->getDomPDF()->getCanvas()->get_page_count() <= 1) {
                 return $pdf;
