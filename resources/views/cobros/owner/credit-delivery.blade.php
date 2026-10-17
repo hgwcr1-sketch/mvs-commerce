@@ -140,6 +140,8 @@
                 aria-label="Área de firma del cliente"></canvas>
             <p id="signature-error" class="mt-2 hidden text-sm font-semibold text-red-600" role="alert">El cliente debe firmar para confirmar la entrega.</p>
             <input type="hidden" name="signature" id="signature-input" value="">
+            <button type="button" id="open-signature-fullscreen" class="mb-2 min-h-[44px] rounded-xl border-2 border-primary px-4 py-2 text-sm font-bold sm:hidden">Firmar en pantalla completa</button>
+            <div id="signature-fullscreen" class="fixed inset-0 z-[100] hidden h-[100dvh] max-h-[100dvh] overscroll-none bg-slate-950/95 p-3 sm:p-6" role="dialog" aria-modal="true"><div class="flex h-full min-h-0 flex-col gap-3"><p class="shrink-0 text-center text-sm font-semibold text-white">Gire el teléfono horizontalmente para firmar con más comodidad.</p><div id="signature-fullscreen-host" class="flex min-h-0 flex-1 items-center justify-center pb-[calc(4rem+env(safe-area-inset-bottom))]"></div><div class="fixed inset-x-3 bottom-0 z-[101] flex shrink-0 gap-2 bg-slate-950/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:inset-x-6"><button type="button" id="fullscreen-clear-signature" class="min-h-[48px] flex-1 rounded-xl border border-white/40 px-3 font-bold text-white">Limpiar firma</button><button type="button" id="fullscreen-cancel-signature" class="min-h-[48px] flex-1 rounded-xl border border-white/40 px-3 font-bold text-white">Cancelar</button><button type="button" id="fullscreen-confirm-signature" class="min-h-[48px] flex-1 rounded-xl bg-primary px-3 font-bold text-slate-950">Confirmar firma</button></div></div></div>
         </section>
 
         {{-- Botones: apilados en móvil (confirmar ancho completo) y en fila
@@ -167,6 +169,23 @@
     var drawing = false;
     var ink = false; // false = lienzo vacío => no se puede confirmar
     var last = null;
+    var fullscreen = document.getElementById('signature-fullscreen');
+    var originalParent = canvas.parentNode;
+    var originalNext = canvas.nextSibling;
+    var inputBeforeFullscreen = '';
+    var fullscreenHost = document.getElementById('signature-fullscreen-host');
+    var fullscreenBar = fullscreen.querySelector('[id="fullscreen-confirm-signature"]').parentNode;
+    document.body.appendChild(fullscreen);
+    fullscreen.style.position = 'fixed'; fullscreen.style.inset = '0'; fullscreen.style.zIndex = '2147483000'; fullscreen.style.width = '100vw'; fullscreen.style.height = '100dvh'; fullscreen.style.maxHeight = '100dvh'; fullscreen.style.overflow = 'hidden'; fullscreen.style.padding = '12px'; fullscreen.style.boxSizing = 'border-box';
+    fullscreenBar.style.position = 'absolute'; fullscreenBar.style.left = '12px'; fullscreenBar.style.right = '12px'; fullscreenBar.style.bottom = 'env(safe-area-inset-bottom, 0px)'; fullscreenBar.style.zIndex = '2'; fullscreenBar.style.display = 'flex'; fullscreenBar.style.visibility = 'visible';
+    fullscreenBar.querySelectorAll('button').forEach(function (button) { button.style.minWidth = '0'; button.style.flex = '1 1 0%'; button.style.whiteSpace = 'normal'; button.style.overflow = 'hidden'; button.style.fontSize = '12px'; button.style.paddingLeft = '4px'; button.style.paddingRight = '4px'; });
+    fullscreenBar.querySelector('#fullscreen-clear-signature').style.cssText += 'background-color:#e5e7eb;color:#111827;border:1px solid #9ca3af;opacity:1;';
+    fullscreenBar.querySelector('#fullscreen-cancel-signature').style.cssText += 'background-color:#374151;color:#ffffff;border:1px solid #6b7280;opacity:1;';
+    fullscreenBar.querySelector('#fullscreen-confirm-signature').style.cssText += 'background-color:#D4AF37;color:#111827;border:1px solid #B1922D;opacity:1;';
+    fullscreenHost.style.width = '100%'; fullscreenHost.style.height = 'auto'; fullscreenHost.style.paddingBottom = '0';
+    fullscreen.firstElementChild.style.width = 'min(100%, 900px)'; fullscreen.firstElementChild.style.height = 'auto'; fullscreen.firstElementChild.style.margin = 'auto'; fullscreen.firstElementChild.style.padding = '16px'; fullscreen.firstElementChild.style.borderRadius = '16px'; fullscreen.firstElementChild.style.background = '#020617';
+    function openFullscreen() { inputBeforeFullscreen = input.value; document.body.classList.add('overflow-hidden'); document.documentElement.style.overflow = 'hidden'; fullscreen.classList.remove('hidden'); fullscreen.style.display = 'flex'; fullscreen.style.alignItems = 'center'; fullscreen.style.justifyContent = 'center'; fullscreenHost.appendChild(canvas); canvas.className = 'block rounded-xl border-2 border-primary bg-white touch-none'; canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.aspectRatio = '2 / 1'; canvas.style.maxHeight = '60vh'; canvas.style.touchAction = 'none'; resize(); }
+    function closeFullscreen(save) { if (!save) { input.value = inputBeforeFullscreen; } fullscreen.classList.add('hidden'); fullscreen.style.display = 'none'; document.body.classList.remove('overflow-hidden'); document.documentElement.style.overflow = ''; originalParent.insertBefore(canvas, originalNext); canvas.className = 'mt-2 block h-[220px] min-h-[200px] w-full rounded-xl border-2 border-slate-300 bg-white touch-none'; resize(); }
 
     function resize() {
         var ratio = window.devicePixelRatio || 1;
@@ -193,21 +212,26 @@
 
     canvas.addEventListener('pointerdown', function (event) {
         event.preventDefault();
-        canvas.setPointerCapture(event.pointerId);
+        if (canvas.setPointerCapture) { canvas.setPointerCapture(event.pointerId); }
         drawing = true;
-        last = point(event);
+        last = Object.assign(point(event), { pointerId: event.pointerId });
         ink = true;
         error.classList.add('hidden');
     });
+    canvas.addEventListener('click', openFullscreen);
+    document.getElementById('open-signature-fullscreen').addEventListener('click', openFullscreen);
+    document.getElementById('fullscreen-clear-signature').addEventListener('click', function () { ctx.clearRect(0, 0, canvas.width, canvas.height); input.value = ''; ink = false; });
+    document.getElementById('fullscreen-cancel-signature').addEventListener('click', function () { closeFullscreen(false); });
+    document.getElementById('fullscreen-confirm-signature').addEventListener('click', function () { if (ink) { input.value = canvas.toDataURL('image/png'); closeFullscreen(true); } });
 
     canvas.addEventListener('pointermove', function (event) {
-        if (!drawing) { return; }
+        if (!drawing || event.pointerId !== (last && last.pointerId)) { return; }
         var current = point(event);
         ctx.beginPath();
         ctx.moveTo(last.x, last.y);
         ctx.lineTo(current.x, current.y);
         ctx.stroke();
-        last = current;
+        last = Object.assign(current, { pointerId: event.pointerId });
     });
 
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (name) {
