@@ -39,6 +39,40 @@
                     $activatedCredit = \App\Models\CobrosCredit::forCompany($company->id)->where('customer_id', $customer->id)->find($activeRenewal->activated_credit_id);
                 @endphp
                 @if($activatedCredit)
+                    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Comprobante firmado de renovación">
+                        <a href="{{ route('cobros.collector.creditos.comprobante', $activatedCredit->id) }}" target="_blank" rel="noopener" class="flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-3 text-center text-sm font-bold text-slate-950 hover:bg-primary-hover">VER COMPROBANTE</a>
+                        <a href="{{ route('cobros.collector.creditos.comprobante_pdf', ['credit' => $activatedCredit->id, 'descargar' => 1]) }}" class="flex min-h-[44px] items-center justify-center rounded-xl border border-primary bg-white px-3 text-center text-sm font-bold text-primary hover:bg-amber-50">DESCARGAR PDF</a>
+                        @if($whatsappUrl)
+                            <button type="button" data-share-renewal-pdf data-pdf-url="{{ route('cobros.collector.creditos.comprobante_pdf', $activatedCredit->id) }}" data-whatsapp-url="{{ $whatsappUrl }}" class="flex min-h-[44px] items-center justify-center rounded-xl border border-primary bg-white px-3 text-center text-sm font-bold text-slate-900 hover:bg-primary/10">ENVIAR POR WHATSAPP</button>
+                        @endif
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">Descargue el PDF firmado y adjúntelo manualmente en WhatsApp; no se comparte ningún enlace interno.</p>
+                    <script>
+                        (function () {
+                            var button = document.querySelector('[data-share-renewal-pdf]');
+                            if (!button) return;
+                            var fallback = button.dataset.whatsappUrl;
+                            button.addEventListener('click', async function () {
+                                if (!navigator.share || !navigator.canShare || !window.fetch) {
+                                    window.open(fallback, '_blank', 'noopener');
+                                    return;
+                                }
+                                button.disabled = true;
+                                try {
+                                    var response = await fetch(button.dataset.pdfUrl, { credentials: 'same-origin', headers: { Accept: 'application/pdf' } });
+                                    var type = (response.headers.get('content-type') || '').toLowerCase();
+                                    if (!response.ok || !type.includes('application/pdf')) throw new Error('PDF no disponible');
+                                    var file = new File([await response.blob()], 'comprobante-renovacion.pdf', { type: 'application/pdf' });
+                                    if (!navigator.canShare({ files: [file] })) throw new Error('Archivos no compatibles');
+                                    await navigator.share({ files: [file], title: 'Comprobante de renovación' });
+                                } catch (error) {
+                                    if (error && error.name !== 'AbortError') window.open(fallback, '_blank', 'noopener');
+                                } finally {
+                                    button.disabled = false;
+                                }
+                            });
+                        })();
+                    </script>
                     <p role="status" class="mt-3 font-semibold text-green-800">Renovación activada — crédito {{ $activatedCredit->publicReference() }}</p>
                     <h3 class="mt-3 font-semibold">Calendario del nuevo crédito</h3>
                     <ul class="mt-2 space-y-2">
@@ -86,6 +120,8 @@
                     <p class="mt-1 text-xs text-slate-600">{{ \App\Services\Cobros\CreditRenewalConsentService::CONSENT_TEXT }}</p>
                     <canvas id="renewal-signature-canvas" width="640" height="180" class="mt-2 w-full rounded-xl border-2 border-slate-300 bg-white touch-none" aria-label="Área de firma del cliente"></canvas>
                     <input type="hidden" name="signature" id="renewal-signature-input" value="">
+                    <button type="button" id="renewal-open-fullscreen" class="min-h-[44px] rounded-xl border-2 border-primary px-4 py-2 text-sm font-bold sm:hidden">Firmar en pantalla completa</button>
+                    <div id="renewal-signature-fullscreen" class="fixed inset-0 z-[100] hidden h-[100dvh] max-h-[100dvh] overscroll-none bg-slate-950/95 p-3 sm:p-6" role="dialog" aria-modal="true"><div class="flex h-full min-h-0 flex-col gap-3"><p class="shrink-0 text-center text-sm font-semibold text-white">Gire el teléfono horizontalmente para firmar con más comodidad.</p><div id="renewal-signature-host" class="flex min-h-0 flex-1 items-center justify-center pb-[calc(4rem+env(safe-area-inset-bottom))]"></div><div class="fixed inset-x-3 bottom-0 z-[101] flex shrink-0 gap-2 bg-slate-950/95 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:inset-x-6"><button type="button" id="renewal-fullscreen-clear" class="min-h-[48px] flex-1 rounded-xl border border-white/40 px-3 font-bold text-white">Limpiar firma</button><button type="button" id="renewal-fullscreen-cancel" class="min-h-[48px] flex-1 rounded-xl border border-white/40 px-3 font-bold text-white">Cancelar</button><button type="button" id="renewal-fullscreen-confirm" class="min-h-[48px] flex-1 rounded-xl bg-primary px-3 font-bold text-slate-950">Confirmar firma</button></div></div></div>
                     <input type="hidden" name="terms_hash" value="{{ $activeRenewal->terms_hash ?? '' }}">
                     <div class="mt-3 flex gap-2">
                         <button type="button" id="renewal-clear-signature" class="min-h-[44px] flex-1 rounded-xl border-2 border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Limpiar firma</button>
@@ -99,12 +135,51 @@
                     var form = document.getElementById('renewal-consent-form');
                     var ctx = canvas.getContext('2d');
                     var drawing = false, hasInk = false;
-                    function pos(e) { var r = canvas.getBoundingClientRect(); var t = e.touches ? e.touches[0] : e; return { x: t.clientX - r.left, y: t.clientY - r.top }; }
-                    function start(e) { drawing = true; hasInk = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
-                    function move(e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5; ctx.stroke(); e.preventDefault(); }
+                    var overlay = document.getElementById('renewal-signature-fullscreen'), parent = canvas.parentNode, next = canvas.nextSibling, inputBeforeFullscreen = '';
+                    var fullscreenHost = document.getElementById('renewal-signature-host');
+                    var fullscreenBar = overlay.querySelector('[id="renewal-fullscreen-confirm"]').parentNode;
+                    document.body.appendChild(overlay);
+                    overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.zIndex = '2147483000'; overlay.style.width = '100vw'; overlay.style.height = '100dvh'; overlay.style.maxHeight = '100dvh'; overlay.style.overflow = 'hidden'; overlay.style.padding = '12px'; overlay.style.boxSizing = 'border-box';
+                    fullscreenBar.style.position = 'absolute'; fullscreenBar.style.left = '12px'; fullscreenBar.style.right = '12px'; fullscreenBar.style.bottom = 'env(safe-area-inset-bottom, 0px)'; fullscreenBar.style.zIndex = '2'; fullscreenBar.style.display = 'flex'; fullscreenBar.style.visibility = 'visible';
+                    fullscreenBar.querySelectorAll('button').forEach(function (button) { button.style.minWidth = '0'; button.style.flex = '1 1 0%'; button.style.whiteSpace = 'normal'; button.style.overflow = 'hidden'; button.style.fontSize = '12px'; button.style.paddingLeft = '4px'; button.style.paddingRight = '4px'; });
+                    fullscreenBar.querySelector('#renewal-fullscreen-clear').style.cssText += 'background-color:#e5e7eb;color:#111827;border:1px solid #9ca3af;opacity:1;';
+                    fullscreenBar.querySelector('#renewal-fullscreen-cancel').style.cssText += 'background-color:#374151;color:#ffffff;border:1px solid #6b7280;opacity:1;';
+                    fullscreenBar.querySelector('#renewal-fullscreen-confirm').style.cssText += 'background-color:#D4AF37;color:#111827;border:1px solid #B1922D;opacity:1;';
+                    fullscreenHost.style.width = '100%'; fullscreenHost.style.height = 'auto'; fullscreenHost.style.paddingBottom = '0';
+                    overlay.firstElementChild.style.width = 'min(100%, 900px)'; overlay.firstElementChild.style.height = 'auto'; overlay.firstElementChild.style.margin = 'auto'; overlay.firstElementChild.style.padding = '16px'; overlay.firstElementChild.style.borderRadius = '16px'; overlay.firstElementChild.style.background = '#020617';
+                    function openFullscreen() { inputBeforeFullscreen = input.value; document.body.classList.add('overflow-hidden'); document.documentElement.style.overflow = 'hidden'; overlay.classList.remove('hidden'); overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; fullscreenHost.appendChild(canvas); canvas.className = 'block rounded-xl border-2 border-primary bg-white touch-none'; canvas.style.width = '100%'; canvas.style.height = 'auto'; canvas.style.aspectRatio = '2 / 1'; canvas.style.maxHeight = '60vh'; canvas.style.touchAction = 'none'; resize(); }
+                    function closeFullscreen(save) { if (!save) input.value = inputBeforeFullscreen; overlay.classList.add('hidden'); overlay.style.display = 'none'; document.body.classList.remove('overflow-hidden'); document.documentElement.style.overflow = ''; parent.insertBefore(canvas, next); canvas.className = 'mt-2 w-full rounded-xl border-2 border-slate-300 bg-white touch-none'; resize(); }
+
+                    function resize() {
+                        var ratio = window.devicePixelRatio || 1;
+                        var rect = canvas.getBoundingClientRect();
+                        var snapshot = hasInk ? canvas.toDataURL('image/png') : null;
+                        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+                        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+                        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                        ctx.lineWidth = 2.5;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        ctx.strokeStyle = '#0f172a';
+                        if (snapshot) {
+                            var img = new Image();
+                            img.onload = function () { ctx.drawImage(img, 0, 0, rect.width, rect.height); };
+                            img.src = snapshot;
+                        }
+                    }
+                    function pos(e) { var r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+                    function start(e) { e.preventDefault(); if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); drawing = true; hasInk = true; var p = pos(e); p.pointerId = e.pointerId; ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+                    function move(e) { if (!drawing || !e.isPrimary) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2.5; ctx.stroke(); }
                     function end() { drawing = false; if (hasInk) input.value = canvas.toDataURL('image/png'); }
-                    canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
-                    canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false }); canvas.addEventListener('touchend', end);
+                    resize();
+                    window.addEventListener('resize', resize);
+                    canvas.style.touchAction = 'none';
+                    canvas.addEventListener('pointerdown', start); canvas.addEventListener('pointermove', move); canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end); canvas.addEventListener('pointerleave', function (e) { if (!e.buttons) end(); });
+                    canvas.addEventListener('click', openFullscreen);
+                    document.getElementById('renewal-open-fullscreen').addEventListener('click', openFullscreen);
+                    document.getElementById('renewal-fullscreen-clear').addEventListener('click', function () { ctx.clearRect(0, 0, canvas.width, canvas.height); input.value = ''; hasInk = false; });
+                    document.getElementById('renewal-fullscreen-cancel').addEventListener('click', function () { closeFullscreen(false); });
+                    document.getElementById('renewal-fullscreen-confirm').addEventListener('click', function () { if (hasInk) { input.value = canvas.toDataURL('image/png'); closeFullscreen(true); } });
                     document.getElementById('renewal-clear-signature').addEventListener('click', function () { ctx.clearRect(0, 0, canvas.width, canvas.height); input.value = ''; hasInk = false; });
                     form.addEventListener('submit', function (e) { if (!input.value) { e.preventDefault(); alert('El cliente debe firmar para confirmar.'); } });
                 })();
