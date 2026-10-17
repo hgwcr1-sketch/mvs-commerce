@@ -17,9 +17,9 @@ class CobrosQuickNavService
         return [
             'cobros.visits.today' => ['permission' => 'cobros.cobrar', 'label' => 'Agenda hoy'],
             'cobros.collector.index' => ['permission' => 'cobros.cobrar', 'label' => 'Mi cartera'],
-            'cobros.collector.my-customers' => ['permission' => 'cobros.cobrar', 'label' => 'Mis clientes'],
-            'cobros.collector.payments.history' => ['permission' => 'cobros.cobrar', 'label' => 'Mis recibos'],
             'cobros.collector.credit-requests.index' => ['permission' => 'cobros.cobrar', 'label' => 'Mis solicitudes'],
+            'cobros.collector.payments.history' => ['permission' => 'cobros.cobrar', 'label' => 'Mis recibos'],
+            'cobros.collector.my-customers' => ['permission' => 'cobros.cobrar', 'label' => 'Mis clientes'],
             'cobros.collector.credits.index' => ['permission' => 'cobros.cobrar', 'label' => 'Mis préstamos'],
             'cobros.closing.show' => ['permission' => 'cobros.cobrar', 'label' => 'Cierre del día'],
             'cobros.routes.select' => ['permission' => 'cobros.cobrar', 'label' => 'Cambiar ruta'],
