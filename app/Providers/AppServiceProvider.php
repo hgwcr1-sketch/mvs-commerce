@@ -11,6 +11,8 @@ use App\Contracts\Fiscal\FiscalTaxpayerLookupInterface;
 use App\Services\Fiscal\Hacienda\HaciendaClient;
 use App\Services\Fiscal\Hacienda\HaciendaTaxpayerLookupService;
 use App\Services\Fiscal\Hacienda\HaciendaTaxpayerNormalizer;
+use App\Contracts\Cobros\MaestroReferralCredentialProvider;
+use App\Services\Cobros\MaestroJwsCredentialProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(MaestroReferralCredentialProvider::class, MaestroJwsCredentialProvider::class);
         // MF03 (portado de mvs-fiscal): consulta de contribuyentes de Hacienda.
         $this->app->bind(HaciendaClient::class, fn () => HaciendaClient::fromConfig());
         $this->app->bind(HaciendaTaxpayerNormalizer::class, fn () => new HaciendaTaxpayerNormalizer());

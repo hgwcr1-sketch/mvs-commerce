@@ -20,6 +20,9 @@ class CobrosReferralAttribution extends Model
         'referrer_user_id',
         'code',
         'captured_at',
+        'maestro_referral_attribution_id',
+        'maestro_referred_client_id',
+        'maestro_installation_id',
     ];
 
     protected function casts(): array

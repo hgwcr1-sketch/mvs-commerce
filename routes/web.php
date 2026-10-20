@@ -363,6 +363,8 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->name('academia.show');
     // Campana CobrOS: click en una notificación → marca SOLO ese recipient del
     // usuario autenticado como leído (read_at Core) y redirige a su destino.
+    Route::get('/referidos', [App\Http\Controllers\Cobros\ReferralController::class, 'index'])
+        ->name('referrals.index');
     Route::get('/notifications/{recipient}/open', [CobrosAlertController::class, 'open'])
         ->name('notifications.open');
     Route::get('/supervisor', [CobrosDashboardController::class, 'supervisor'])
