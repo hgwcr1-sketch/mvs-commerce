@@ -114,6 +114,7 @@
             fn (array $x) => ! in_array($x['route'], $navigationQuickRoutes, true)
         ));
     }
+    $navigationItems[] = ['permission' => 'cobros.acceder', 'route' => 'cobros.referrals.index', 'label' => 'Mis referidos', 'slot' => 'collector', 'icon' => 'M12 20.5S4 16 4 9.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 16 12 20.5 12 20.5Z'];
     $navigationVisible = $panel ? $navigationPanelItems : $navigationBarItems;
 @endphp
 <nav class="{{ $panel ? 'cobros-panel-navigation' : 'cobros-navigation' }}" aria-label="{{ $panel ? 'Menú completo CobrOS' : 'Navegación CobrOS' }}">
