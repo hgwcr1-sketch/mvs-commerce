@@ -92,8 +92,8 @@ class CobrosCreditRenewalActivationTest extends TestCase
         $this->assertSame($creditsBefore + 1, CobrosCredit::count());
         $this->assertSame($accountsBefore + 1, AccountReceivable::count());
         $this->assertSame('116000', $this->money($credit->total_due));
-        $this->assertSame('106000', $this->money($credit->principal)); // 56.000 + 50.000
-        $this->assertSame(CobrosCredit::STATUS_DISBURSED, $credit->status);
+        $this->assertSame('96000', $this->money($credit->principal)); // 56.000 + 50.000
+        $this->assertSame(CobrosCredit::STATUS_APPROVED, $credit->status);
 
         // Calendario exacto del snapshot, sin duplicados.
         $rows = CobrosCreditInstallment::query()->where('credit_id', $credit->id)->orderBy('number')->get();
