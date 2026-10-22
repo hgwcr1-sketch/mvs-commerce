@@ -45,6 +45,7 @@ final class CreditRenewalQuoteService
         int $installmentCount,
         string $frequency,
         string $firstDueDate,
+        string $modality = 'difference',
     ): array {
         if (! AccountReceivable::query()->forCompany($company->id)->whereKey($account->id)->exists()) {
             abort(404, 'Cuenta por cobrar no encontrada en esta empresa.');
@@ -62,12 +63,27 @@ final class CreditRenewalQuoteService
             throw ValidationException::withMessages(['account' => 'El crédito no tiene deuda pendiente que consolidar.']);
         }
 
+        if (!in_array($modality, ['full', 'difference', 'no_disbursement', 'partial_payment'], true)) {
+            throw ValidationException::withMessages(['modality' => 'Modalidad de renovación no válida.']);
+        }
+        if ($modality === 'partial_payment' && bccomp($pendingTotal, '0', 4) <= 0) {
+            throw ValidationException::withMessages(['account' => 'El saldo actualizado no permite renovar.']);
+        }
+        if ($modality === 'no_disbursement') {
+            $newCapital = '0.0000';
+        } elseif ($modality === 'full') {
+            if (bccomp($newCapital, $pendingTotal, 4) < 0) {
+                throw ValidationException::withMessages(['new_capital' => 'El monto total debe cubrir la deuda pendiente.']);
+            }
+            $newCapital = bcsub($newCapital, $pendingTotal, 4);
+        }
+
         try {
             $newCapital = $this->schedule->money($newCapital);
         } catch (\InvalidArgumentException) {
             throw ValidationException::withMessages(['new_capital' => 'Monto no válido.']);
         }
-        if (bccomp($newCapital, '0', 4) <= 0) {
+        if (bccomp($newCapital, '0', 4) <= 0 && !in_array($modality, ['full', 'no_disbursement'], true)) {
             throw ValidationException::withMessages(['new_capital' => 'El capital nuevo debe ser mayor que cero.']);
         }
         if ($installmentCount < 1) {
@@ -106,6 +122,10 @@ final class CreditRenewalQuoteService
                 'interest' => $previousInterest,
                 'total' => $pendingTotal,
             ],
+            'previous_pending_principal' => $previousPrincipal,
+            'previous_pending_interest' => $previousInterest,
+            'previous_pending_late_fee' => $this->installments->pendingLateFee($company, $account),
+            'modality' => $modality,
             'new_money' => [
                 'principal' => $newCapital,
                 'interest' => $newInterest,
