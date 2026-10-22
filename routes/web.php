@@ -384,6 +384,8 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
     // fina (asignación, política y cobros.renovar) vive en el servidor.
     Route::get('/collector/portfolio/{customer}/renovar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'create'])
         ->middleware('permission:cobros.acceder')->name('collector.renewal.create');
+    Route::post('/collector/portfolio/{customer}/renovar/abono', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'payPartial'])
+        ->middleware(['permission:cobros.acceder', 'throttle:30,1'])->name('collector.renewal.partial-pay');
     Route::post('/collector/portfolio/{customer}/renovar', [\App\Http\Controllers\Cobros\CreditRenewalController::class, 'store'])
         ->middleware('permission:cobros.acceder')->name('collector.renewal.store');
     // REN-03D1: aprobación/rechazo (solo autorizados) y consentimiento firmado.

@@ -123,6 +123,36 @@ class CobrosCreditRenewalQuoteTest extends TestCase
             ->verify($company, $credit, 'RECIBO-INEXISTENTE');
     }
 
+    public function test_renewal_partial_payment_replay_creates_one_receipt_and_reduces_balance_once(): void
+    {
+        $ctx = $this->disbursed();
+        [$company, $collector, $route, , , $account] = $ctx;
+        $method = PaymentMethod::query()->where('company_id', $company->id)->where('code', 'cash')->firstOrFail();
+        $token = (string) Str::uuid();
+        $payload = [
+            'amount' => '400.0000',
+            'payment_method_id' => $method->id,
+            'client_token' => $token,
+            'confirm' => '1',
+        ];
+        $first = $this->actingAs($collector)->withSession([
+            'active_company_id' => $company->id,
+            'active_cobros_route_id' => $route->id,
+        ])->post(route('cobros.collector.renewal.partial-pay', $account->customer_id), $payload);
+        $first->assertRedirect();
+
+        $second = $this->actingAs($collector)->withSession([
+            'active_company_id' => $company->id,
+            'active_cobros_route_id' => $route->id,
+        ])->post(route('cobros.collector.renewal.partial-pay', $account->customer_id), $payload);
+        $second->assertRedirect();
+
+        $this->assertDatabaseCount('cobros_receipts', 1);
+        $this->assertDatabaseCount('accounts_receivable_payments', 1);
+        $this->assertSame('725.0000', (string) $account->fresh()->balance_due);
+        $this->assertSame($first->getSession()->get('partial_payment_success'), $second->getSession()->get('partial_payment_success'));
+    }
+
     public function test_partial_payments_split_and_round_exactly(): void
     {
         $ctx = $this->disbursed(); // total 1.125 en 4 cuotas

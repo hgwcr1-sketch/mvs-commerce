@@ -9,6 +9,10 @@ use App\Models\CobrosCollectorAuthorityPolicy;
 use App\Models\CobrosCreditRenewalRequest;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Models\PaymentMethod;
+use App\Services\Cobros\CobrosPaymentGate;
+use App\Services\Cobros\SecurePaymentService;
+use Illuminate\Support\Str;
 use App\Services\Cobros\CreditInstallmentService;
 use App\Services\Cobros\CreditRenewalConsentService;
 use App\Services\Cobros\CreditRenewalQuoteService;
@@ -87,7 +91,93 @@ class CreditRenewalController extends Controller
             'mode' => $mode,
             'quote' => $quote,
             'modality' => $modality,
+            'partialPaymentToken' => (string) Str::uuid(),
+            'partialPaymentMethods' => PaymentMethod::query()->forCompany($company->id)->active()
+                ->whereNotIn('type', [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS])
+                ->orderBy('sort_order')->get(),
+            'partialPaymentPreview' => null,
         ]);
+    }
+
+    /**
+     * Cobro integrado en renovación: previsualización sin escritura, luego
+     * confirmación explícita con SecurePaymentService y recibo automático.
+     */
+    public function payPartial(
+        Request $request,
+        Customer $customer,
+        CreditInstallmentService $installments,
+        CobrosPaymentGate $gate,
+        SecurePaymentService $payments,
+    ): View|RedirectResponse {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $credit = $this->disbursedCreditForCustomer($company, $customer, $installments);
+        $mode = $this->approvalMode($request->user(), $company, $credit);
+        $account = $credit->account()->firstOrFail();
+
+        $data = $request->validate([
+            'amount' => ['required', 'string', 'regex:/^\d{1,12}(\.\d{1,4})?$/'],
+            'payment_method_id' => ['required', 'integer'],
+            'reference' => ['nullable', 'string', 'max:150'],
+            'client_token' => ['required', 'uuid'],
+            'confirm' => ['nullable', 'in:1'],
+        ]);
+        // La autorización para renovar no sustituye el permiso para cobrar.
+        if ($request->input('confirm') !== '1') {
+            $gate->assertCanStart($request->user(), $company, $account->load(['customer', 'branch', 'sale']));
+        }
+        $method = PaymentMethod::query()->forCompany($company->id)->active()
+            ->whereNotIn('type', [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS])
+            ->findOrFail((int) $data['payment_method_id']);
+        if ($method->requires_reference && trim((string) ($data['reference'] ?? '')) === '') {
+            throw ValidationException::withMessages(['reference' => 'Este medio de pago exige referencia.']);
+        }
+        $amount = bcadd($data['amount'], '0', 4);
+        if (bccomp($amount, '0', 4) <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Indique un abono mayor que cero.']);
+        }
+        // Un recibo aplicado solamente a mora no puede soportar la renovación.
+        // La aplicación definitiva sigue bajo las reglas del motor de cobros.
+        if ($request->input('confirm') !== '1') {
+            $installments->assertChargeable($company, $account, $amount);
+            $mora = $installments->pendingLateFee($company, $account);
+            if (bccomp($amount, $mora, 4) <= 0) {
+                throw ValidationException::withMessages(['amount' => 'Este abono cubriría únicamente mora. Ingrese un monto que también abone al préstamo.']);
+            }
+            return view('cobros.collector.renewal-create', [
+                'company' => $company,
+                'customer' => $customer,
+                'credit' => $credit,
+                'mode' => $mode,
+                'quote' => null,
+                'modality' => 'partial_payment',
+                'partialPaymentToken' => $data['client_token'],
+                'partialPaymentMethods' => PaymentMethod::query()->forCompany($company->id)->active()
+                    ->whereNotIn('type', [PaymentMethod::TYPE_CREDIT, PaymentMethod::TYPE_LOYALTY_POINTS])
+                    ->orderBy('sort_order')->get(),
+                'partialPaymentPreview' => [
+                    'amount' => $amount,
+                    'mora' => $mora,
+                    'method' => $method,
+                    'reference' => $data['reference'] ?? null,
+                ],
+            ]);
+        }
+        $result = $payments->register($request->user(), $company, $account, [
+            'amount' => $amount,
+            'payment_method_id' => $method->id,
+            'reference' => $data['reference'] ?? null,
+            'client_token' => $data['client_token'],
+            'notes' => 'Abono previo a renovación de crédito',
+        ]);
+        $receipt = $result['receipt'];
+        app(VerifiedRenewalPartialPayment::class)->verify($company, $credit, (string) $receipt->receipt_number);
+
+        return redirect()->route('cobros.collector.renewal.create', [
+            'customer' => $customer,
+            'modality' => 'partial_payment',
+            'receipt_number' => $receipt->receipt_number,
+        ])->with('partial_payment_success', 'Abono registrado. Recibo generado automáticamente: '.$receipt->receipt_number);
     }
 
     public function store(
