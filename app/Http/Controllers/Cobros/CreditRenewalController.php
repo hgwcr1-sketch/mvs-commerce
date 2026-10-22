@@ -54,7 +54,17 @@ class CreditRenewalController extends Controller
         $mode = $this->approvalMode($request->user(), $company, $credit);
 
         $quote = null;
+        $modality = (string) $request->query('modality', 'difference');
+        if (! in_array($modality, ['full', 'difference', 'no_disbursement', 'partial_payment'], true)) {
+            throw ValidationException::withMessages(['modality' => 'Modalidad de renovación no válida.']);
+        }
+        if ($modality === 'partial_payment') {
+            throw ValidationException::withMessages(['modality' => 'El abono parcial requiere registrar y confirmar primero el pago real. Este formulario todavía no realiza esa operación.']);
+        }
         $newCapital = trim((string) $request->query('new_capital', ''));
+        if ($modality === 'no_disbursement') {
+            $newCapital = '0';
+        }
         if ($newCapital !== '') {
             $quote = $quoteService->quote(
                 $request->user(),
@@ -64,6 +74,7 @@ class CreditRenewalController extends Controller
                 max(1, (int) $request->query('installments', $credit->installment_count)),
                 (string) $credit->frequency,
                 today($company->timezone ?: config('app.timezone'))->addWeek()->toDateString(),
+                $modality,
             );
         }
 
@@ -73,6 +84,7 @@ class CreditRenewalController extends Controller
             'credit' => $credit,
             'mode' => $mode,
             'quote' => $quote,
+            'modality' => $modality,
         ]);
     }
 
@@ -98,10 +110,17 @@ class CreditRenewalController extends Controller
         }
 
         $data = $request->validate([
+            'modality' => ['sometimes', 'in:full,difference,no_disbursement,partial_payment'],
             'new_capital' => ['required', 'string'],
             'installment_count' => ['required', 'integer', 'min:1', 'max:120'],
             'first_due_date' => ['required', 'date'],
         ]);
+
+        $data['modality'] = $data['modality'] ?? 'difference';
+
+        if ($data['modality'] === 'partial_payment') {
+            throw ValidationException::withMessages(['modality' => 'El abono parcial requiere registrar y confirmar primero el pago real. Este formulario todavía no realiza esa operación.']);
+        }
 
         $account = $credit->account()->firstOrFail();
         $quote = $quoteService->quote(
@@ -112,6 +131,7 @@ class CreditRenewalController extends Controller
             (int) $data['installment_count'],
             (string) $credit->frequency,
             $data['first_due_date'],
+            $data['modality'],
         );
 
         $approved = $mode === 'direct';
