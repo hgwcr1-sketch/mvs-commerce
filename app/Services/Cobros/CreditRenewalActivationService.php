@@ -21,6 +21,17 @@ class CreditRenewalActivationService
             if(!$locked->terms_hash||!hash_equals((string)$locked->terms_hash,$hash))throw ValidationException::withMessages(['terms_hash'=>'Los términos firmados no coinciden.']);
             $previous=CobrosCredit::forCompany($company->id)->whereKey($locked->credit_id)->lockForUpdate()->first();
             if(!$previous||$previous->status!==CobrosCredit::STATUS_DISBURSED)throw ValidationException::withMessages(['renewal'=>'El crédito anterior no está disponible.']);
+            if ((string) $locked->modality === 'partial_payment') {
+                $receipt = \App\Models\CobrosReceipt::query()->forCompany((int) $company->id)
+                    ->whereKey($locked->partial_payment_receipt_id)->whereNull('annulled_at')
+                    ->where('account_receivable_id', $previous->account_receivable_id)
+                    ->where('customer_id', $previous->customer_id)->first();
+                if (! $receipt || ! $receipt->payment_id || ! \App\Models\CobrosCreditInstallmentApplication::query()
+                    ->where('company_id', $company->id)->where('credit_id', $previous->id)
+                    ->where('cobros_receipt_id', $receipt->id)->exists()) {
+                    throw ValidationException::withMessages(['renewal' => 'El abono parcial fue anulado o no está confirmado.']);
+                }
+            }
             $pending=$this->installments->totalPending($previous);
             if(bccomp($pending,(string)$locked->previous_pending,4)!==0)throw ValidationException::withMessages(['pending'=>'El saldo pendiente cambió desde la firma.']);
             $settlement=$this->settlements->prepare($company,$locked);

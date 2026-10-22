@@ -176,7 +176,11 @@ class CreditRenewalConsentService
     /** Términos EXACTOS de la renovación (congelados al solicitar). */
     public function consentSnapshot(CobrosCreditRenewalRequest $renewal): array
     {
+        $partial = (string) ($renewal->modality ?? '') === 'partial_payment'
+            ? ['modalidad_abono' => 'partial_payment', 'recibo_abono_id' => (int) $renewal->partial_payment_receipt_id]
+            : [];
         return $this->canonicalize([
+            ...$partial,
             'renewal_id' => $renewal->id,
             'credit_id' => $renewal->credit_id,
             'company_id' => $renewal->company_id,

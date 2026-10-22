@@ -31,14 +31,21 @@
                 <option value="difference" @selected($modality === 'difference')>Por diferencia — deuda pendiente + dinero nuevo</option>
                 <option value="full" @selected($modality === 'full')>Completa — monto total a renovar</option>
                 <option value="no_disbursement" @selected($modality === 'no_disbursement')>Sin desembolso — no entregar dinero nuevo</option>
-                <option value="partial_payment" disabled>Con abono parcial — pendiente de registrar pago real</option>
+                <option value="partial_payment" @selected($modality === 'partial_payment')>Con abono parcial — pago confirmado con recibo</option>
             </select>
         </label>
         <div id="renewal-example" class="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" aria-live="polite"></div>
+        <div id="renewal-receipt-box" class="mt-3" @if($modality !== 'partial_payment') hidden @endif>
+            <label class="block text-sm font-semibold text-slate-700">Número de recibo del abono ya confirmado
+                <input type="text" name="receipt_number" maxlength="100" value="{{ request('receipt_number') }}" placeholder="Recibo emitido tras cobrar" class="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 py-2 text-base text-slate-900">
+            </label>
+            <p class="mt-2 text-xs text-amber-800">Primero registre y confirme el pago desde Cobros. Regrese aquí e indique el número del recibo emitido. El abono no se registrará de nuevo; se utilizará el saldo ya actualizado.</p>
+            @error('receipt_number')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
+        </div>
         @error('modality')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
         <label class="mt-3 block text-sm font-semibold text-slate-700" id="renewal-capital-label">Monto de renovación (₡)
-            <input type="text" name="new_capital" inputmode="decimal" value="{{ $modality === 'no_disbursement' ? '0' : request('new_capital') }}"
-                   placeholder="Ej: 50000" {{ $modality === 'no_disbursement' ? 'readonly' : 'required' }}
+            <input type="text" name="new_capital" inputmode="decimal" value="{{ in_array($modality, ['no_disbursement', 'partial_payment'], true) ? '0' : request('new_capital') }}"
+                   placeholder="Ej: 50000" {{ in_array($modality, ['no_disbursement', 'partial_payment'], true) ? 'readonly' : 'required' }}
                    class="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 py-2 text-base text-slate-900">
         </label>
         <label class="mt-3 block text-sm font-semibold text-slate-700">Cuotas del nuevo calendario
@@ -54,7 +61,9 @@
         const label = document.getElementById('renewal-capital-label');
         if (!mode || !capital || !label) return;
         const update = () => {
-            const withoutCash = mode.value === 'no_disbursement';
+            const withoutCash = mode.value === 'no_disbursement' || mode.value === 'partial_payment';
+            const receiptBox = document.getElementById('renewal-receipt-box');
+            if (receiptBox) { receiptBox.hidden = mode.value !== 'partial_payment'; const receiptInput = receiptBox.querySelector('input[name="receipt_number"]'); if (receiptInput) receiptInput.required = mode.value === 'partial_payment'; }
             if (withoutCash) capital.value = '0';
             capital.readOnly = withoutCash;
             capital.required = !withoutCash;
@@ -67,7 +76,7 @@
             difference: 'Ejemplo: deuda pendiente ₡340.000 + dinero nuevo ₡75.000 = ₡415.000 antes de nuevos intereses y cargos.',
             full: 'Ejemplo: deuda pendiente ₡340.000; monto total acordado ₡500.000; desembolso ilustrativo ₡160.000, antes de nuevos intereses y cargos.',
             no_disbursement: 'Ejemplo: deuda pendiente ₡340.000; se renueva sin entregar dinero adicional (₡0), antes de nuevos intereses y cargos.',
-            partial_payment: 'El abono parcial está deshabilitado hasta confirmar el ingreso real del pago.'
+            partial_payment: 'Ejemplo: deuda de ₡340.000, abono ya cobrado y confirmado de ₡100.000, saldo para renovar de ₡240.000 (si todo el abono se aplicó al crédito). Sin nuevo desembolso. Se requiere el número de recibo.'
         };
         if (example) {
             const refreshExample = () => { example.textContent = examples[mode.value] || ''; };
@@ -83,7 +92,7 @@
         <section aria-labelledby="quote-title" class="rounded-xl border border-slate-200 bg-white p-4">
             <h2 id="quote-title" class="text-lg font-semibold text-slate-900">Cotización de renovación</h2>
 
-            <p class="mt-2 text-sm text-slate-600">Modalidad: <strong>{{ ['full' => 'Completa', 'difference' => 'Por diferencia', 'no_disbursement' => 'Sin desembolso'][$modality] ?? $modality }}</strong></p>
+            <p class="mt-2 text-sm text-slate-600">Modalidad: <strong>{{ ['full' => 'Completa', 'difference' => 'Por diferencia', 'no_disbursement' => 'Sin desembolso', 'partial_payment' => 'Con abono parcial'][$modality] ?? $modality }}</strong></p>
             <dl class="mt-3 space-y-1 text-sm">
                 <div class="flex justify-between"><dt class="text-slate-600">Deuda anterior (pendiente)</dt><dd class="font-semibold">{{ number_format((float) $quote['previous']['total'], 2) }}</dd></div>
                 <div class="flex justify-between pl-4 text-slate-500"><dt>&bull; Capital anterior</dt><dd>{{ number_format((float) $quote['previous']['principal'], 2) }}</dd></div>
@@ -108,7 +117,8 @@
             <form method="POST" action="{{ route('cobros.collector.renewal.store', $customer) }}" class="mt-4">
                 @csrf
                 <input type="hidden" name="modality" value="{{ $modality }}">
-                <input type="hidden" name="new_capital" value="{{ $modality === 'no_disbursement' ? '0' : request('new_capital') }}">
+                @if($modality === 'partial_payment')<input type="hidden" name="receipt_number" value="{{ request('receipt_number') }}">@endif
+                <input type="hidden" name="new_capital" value="{{ in_array($modality, ['no_disbursement', 'partial_payment'], true) ? '0' : request('new_capital') }}">
                 <input type="hidden" name="installment_count" value="{{ request('installments', $credit->installment_count) }}">
                 <input type="hidden" name="first_due_date" value="{{ today($company->timezone ?: config('app.timezone'))->addWeek()->toDateString() }}">
                 <p class="mb-3 text-xs text-slate-500">Al enviar, la solicitud se registra con estos números. La activación exige el consentimiento y la firma electrónica del cliente en una fase posterior. No se crea crédito nuevo ni se desembolsa dinero en este paso.</p>

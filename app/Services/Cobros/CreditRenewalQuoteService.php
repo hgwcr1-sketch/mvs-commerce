@@ -83,7 +83,7 @@ final class CreditRenewalQuoteService
         } catch (\InvalidArgumentException) {
             throw ValidationException::withMessages(['new_capital' => 'Monto no válido.']);
         }
-        if (bccomp($newCapital, '0', 4) <= 0 && !in_array($modality, ['full', 'no_disbursement'], true)) {
+        if (bccomp($newCapital, '0', 4) <= 0 && !in_array($modality, ['full', 'no_disbursement', 'partial_payment'], true)) {
             throw ValidationException::withMessages(['new_capital' => 'El capital nuevo debe ser mayor que cero.']);
         }
         if ($installmentCount < 1) {

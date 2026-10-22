@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cobros;
 
 use App\Http\Controllers\Controller;
 use App\Models\CobrosCredit;
+use App\Models\CobrosReceipt;
 use App\Models\CobrosCollectorAuthorityPolicy;
 use App\Models\CobrosCreditRenewalRequest;
 use App\Models\Company;
@@ -11,6 +12,7 @@ use App\Models\Customer;
 use App\Services\Cobros\CreditInstallmentService;
 use App\Services\Cobros\CreditRenewalConsentService;
 use App\Services\Cobros\CreditRenewalQuoteService;
+use App\Services\Cobros\VerifiedRenewalPartialPayment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -59,10 +61,10 @@ class CreditRenewalController extends Controller
             throw ValidationException::withMessages(['modality' => 'Modalidad de renovación no válida.']);
         }
         if ($modality === 'partial_payment') {
-            throw ValidationException::withMessages(['modality' => 'El abono parcial requiere registrar y confirmar primero el pago real. Este formulario todavía no realiza esa operación.']);
+            app(VerifiedRenewalPartialPayment::class)->verify($company, $credit, (string) $request->query('receipt_number', ''));
         }
         $newCapital = trim((string) $request->query('new_capital', ''));
-        if ($modality === 'no_disbursement') {
+        if (in_array($modality, ['no_disbursement', 'partial_payment'], true)) {
             $newCapital = '0';
         }
         if ($newCapital !== '') {
@@ -111,6 +113,7 @@ class CreditRenewalController extends Controller
 
         $data = $request->validate([
             'modality' => ['sometimes', 'in:full,difference,no_disbursement,partial_payment'],
+            'receipt_number' => ['required_if:modality,partial_payment', 'nullable', 'string', 'max:100'],
             'new_capital' => ['required', 'string'],
             'installment_count' => ['required', 'integer', 'min:1', 'max:120'],
             'first_due_date' => ['required', 'date'],
@@ -118,8 +121,10 @@ class CreditRenewalController extends Controller
 
         $data['modality'] = $data['modality'] ?? 'difference';
 
+        $partialReceipt = null;
         if ($data['modality'] === 'partial_payment') {
-            throw ValidationException::withMessages(['modality' => 'El abono parcial requiere registrar y confirmar primero el pago real. Este formulario todavía no realiza esa operación.']);
+            $partialReceipt = app(VerifiedRenewalPartialPayment::class)->verify($company, $credit, (string) ($data['receipt_number'] ?? ''));
+            $data['new_capital'] = '0';
         }
 
         $account = $credit->account()->firstOrFail();
@@ -138,6 +143,8 @@ class CreditRenewalController extends Controller
         $renewal = CobrosCreditRenewalRequest::create([
             'company_id' => $company->id,
             'credit_id' => $credit->id,
+            'modality' => $data['modality'],
+            'partial_payment_receipt_id' => $partialReceipt?->id,
             'account_receivable_id' => $account->id,
             'collector_user_id' => $credit->collector_user_id,
             'new_capital' => $quote['new_money']['principal'],

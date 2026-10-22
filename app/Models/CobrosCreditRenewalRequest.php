@@ -31,6 +31,7 @@ class CobrosCreditRenewalRequest extends Model
         'collector_user_id',
         'new_capital',
         'modality',
+        'partial_payment_receipt_id',
         'previous_pending',
         'previous_pending_principal',
         'previous_pending_interest',

@@ -96,6 +96,33 @@ class CobrosCreditRenewalQuoteTest extends TestCase
         $this->assertSame('5000.0000', $quote['disbursement']);
     }
 
+    public function test_partial_renewal_uses_confirmed_payment_balance_and_no_new_disbursement(): void
+    {
+        $ctx = $this->disbursed();
+        [$company, $collector, , , $credit, $account] = $ctx;
+        $this->pay($ctx, '400.0000');
+        $receipt = CobrosReceipt::query()->latest('id')->firstOrFail();
+        $verified = app(\App\Services\Cobros\VerifiedRenewalPartialPayment::class)
+            ->verify($company, $credit, (string) $receipt->receipt_number);
+        $this->assertSame($receipt->id, $verified->id);
+        $quote = app(CreditRenewalQuoteService::class)->quote(
+            $collector, $company, $account, '0', 4, 'monthly', now()->addWeek()->toDateString(), 'partial_payment'
+        );
+        $this->assertSame('725.0000', $quote['previous']['total']);
+        $this->assertSame('0.0000', $quote['disbursement']);
+        $this->assertSame('725.0000', $quote['consolidated_total']);
+        $this->assertSame(1, CobrosReceipt::count(), 'La renovación no registra nuevamente el pago.');
+    }
+
+    public function test_partial_renewal_rejects_unconfirmed_receipt(): void
+    {
+        $ctx = $this->disbursed();
+        [$company, , , , $credit] = $ctx;
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(\App\Services\Cobros\VerifiedRenewalPartialPayment::class)
+            ->verify($company, $credit, 'RECIBO-INEXISTENTE');
+    }
+
     public function test_partial_payments_split_and_round_exactly(): void
     {
         $ctx = $this->disbursed(); // total 1.125 en 4 cuotas
