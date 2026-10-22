@@ -213,6 +213,8 @@ Route::post('/demo-cobros/tour/{step}/guardar', [App\Http\Controllers\Cobros\Dem
     ->whereIn('step', ['bienvenida', 'datos', 'modalidad'])
     ->middleware('throttle:30,1')
     ->name('cobros.demo.tour.save');
+Route::post('/demo-cobros/tour/invitacion', [App\Http\Controllers\Cobros\DemoTourController::class, 'invitation'])
+    ->name('cobros.demo.tour.invitation');
 Route::post('/demo-cobros/tour/{step}/autofill', [App\Http\Controllers\Cobros\DemoTourController::class, 'autofill'])
     ->whereIn('step', ['datos'])
     ->middleware('throttle:30,1')
@@ -400,6 +402,8 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
     // 2) MIS CLIENTES: con y sin crédito activo (expediente histórico legítimo).
     Route::get('/collector/mis-clientes', [CollectorPortfolioController::class, 'mine'])
         ->middleware('permission:cobros.cobrar')->name('collector.my-customers');
+    Route::get('/collector/mis-clientes/sugerencias', [CollectorPortfolioController::class, 'customerSuggestions'])
+        ->middleware('permission:cobros.cobrar')->name('collector.my-customers.suggestions');
     Route::post('/collector/portfolio/{customer}/location', [CollectorPortfolioController::class, 'storeLocation'])
         ->middleware('permission:cobros.cobrar')->name('collector.portfolio.location');
     // Teléfono (cliente o contacto indicado) desde el recibo: mismo tenant + cartera.
@@ -587,6 +591,10 @@ Route::middleware([Authenticate::class, 'cobros.active.company', 'company.licens
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.show');
     Route::post('/owner/collectors', [OwnerCollectorController::class, 'store'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.store');
+    Route::post('/owner/collectors/invitations', [OwnerCollectorController::class, 'invite'])
+        ->middleware(['permission:cobros.portal_dueno', 'throttle:10,1'])->name('owner.collectors.invitations.store');
+    Route::post('/owner/collectors/invitations/{invitation}/revoke', [OwnerCollectorController::class, 'revokeInvitation'])
+        ->middleware(['permission:cobros.portal_dueno', 'throttle:10,1'])->whereNumber('invitation')->name('owner.collectors.invitations.revoke');
     Route::patch('/owner/collectors/{user}/toggle', [OwnerCollectorController::class, 'toggle'])
         ->middleware('permission:cobros.portal_dueno')->name('owner.collectors.toggle');
     Route::put('/owner/collectors/{user}/branches', [OwnerCollectorController::class, 'updateBranches'])

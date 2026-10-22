@@ -17,6 +17,7 @@ use App\Services\Cobros\PortfolioAssignmentService;
 use App\Support\Cobros\WhatsApp;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -225,6 +226,14 @@ class CollectorPortfolioController extends Controller
             'riskLevels' => $riskLevels,
             'search' => $data['search'] ?? '',
         ]);
+    }
+
+    public function customerSuggestions(Request $request, CollectorPortfolioService $service): JsonResponse
+    {
+        $data = $request->validate(['q' => ['required', 'string', 'min:2', 'max:60']]);
+        $company = Company::findOrFail((int) session('active_company_id'));
+
+        return response()->json(['customers' => $service->customerSuggestions($request->user(), $company, $data['q'])]);
     }
 
     public function createCustomer(Request $request): View

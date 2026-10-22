@@ -42,7 +42,32 @@ class OwnerCollectorController extends Controller
             'canCreate' => $service->canCreateCollector($company),
             'remainingSlots' => $service->getRemainingSlots($company),
             'isReadOnly' => $service->isOwnerReadOnly($company),
+            'invitations' => app(\App\Services\Cobros\LaborInvitationService::class)->recentForCompany($company),
+            'pendingInvitations' => app(\App\Services\Cobros\LaborInvitationService::class)->pendingCount($company),
         ]);
+    }
+
+    public function invite(Request $request, \App\Services\Cobros\LaborInvitationService $invitations): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $lender = $request->user();
+        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:150'], 'recipient_email' => ['required', 'email:rfc', 'max:254'], 'phone' => ['nullable', 'string', 'max:30']]);
+        $contract = app(\App\Services\Cobros\CollectorManagementService::class)->getContract($company);
+        if (! $contract || ($contract['license_mode'] ?? null) !== 'company_cupo') return back()->withErrors(['invitation' => 'La empresa no tiene contrato por cupo para invitar cobradores.'])->withInput();
+        $limit = $contract['collector_limit'];
+        if ($limit !== null && app(\App\Services\Cobros\CollectorManagementService::class)->seatUsage($company) + $invitations->pendingCount($company) >= $limit) return back()->withErrors(['invitation' => 'Cupo de cobradores alcanzado (incluye invitaciones pendientes).'])->withInput();
+        $issued = $invitations->issue($company, $lender, $data['recipient_email']);
+        $link = route('cobros.login', ['invitacion' => $issued['plain']]);
+        $number = ! empty($data['phone']) ? app(\App\Services\PhoneNumberService::class)->forWhatsApp($company->default_phone_country_code, (string) $data['phone']) : null;
+        $message = 'Hola '.trim($data['name']).', te comparto tu invitación a MVS CobrOS de '.$company->trade_name.'. Ingresa desde este enlace para completar tu acceso: '.$link;
+        return redirect()->route('cobros.owner.collectors')->with(['invitation_created' => true, 'invitation_name' => trim($data['name']), 'invitation_email' => $issued['invitation']->recipient_email, 'invitation_link' => $link, 'invitation_expires' => $issued['invitation']->expires_at->toDateTimeString(), 'invitation_whatsapp' => ($number ? 'https://wa.me/'.$number : 'https://wa.me/').'?text='.rawurlencode($message)]);
+    }
+
+    public function revokeInvitation(Request $request, int $invitation, \App\Services\Cobros\LaborInvitationService $invitations): RedirectResponse
+    {
+        $company = Company::findOrFail((int) session('active_company_id'));
+        $invitations->revoke($company, $request->user(), $invitation);
+        return redirect()->route('cobros.owner.collectors')->with('success', 'Invitación revocada.');
     }
 
     /**

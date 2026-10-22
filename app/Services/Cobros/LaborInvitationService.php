@@ -12,6 +12,15 @@ use Illuminate\Validation\ValidationException;
 
 class LaborInvitationService
 {
+    public function pendingCount(Company $company): int
+    {
+        return $this->pending(CobrosLaborInvitation::query()->where('company_id', $company->id))->count();
+    }
+
+    public function recentForCompany(Company $company): \Illuminate\Support\Collection
+    {
+        return CobrosLaborInvitation::query()->where('company_id', $company->id)->latest('id')->limit(20)->get();
+    }
     /** The plaintext is returned once, never persisted. */
     public function issue(Company $company, User $lender, string $recipientEmail, int $ttlMinutes = 1440): array
     {

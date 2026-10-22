@@ -23,6 +23,12 @@ use Illuminate\Validation\ValidationException;
  */
 class CollectorPortfolioService
 {
+    public function customerSuggestions(User $collector, Company $company, string $search): Collection
+    {
+        return $this->assignedCustomersQuery($collector, $company, trim($search), false)
+            ->limit(10)->get(['customers.id', 'customers.name', 'customers.phone', 'customers.email']);
+    }
+
     public function portfolio(User $collector, Company $company, ?string $search = null): array
     {
         // 1) Mi cartera = SOLO deuda activa: quien canceló todo (saldo real 0)

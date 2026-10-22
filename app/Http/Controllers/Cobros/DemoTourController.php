@@ -57,7 +57,7 @@ class DemoTourController extends Controller
         }
 
         $current = $step ?? ($session->tour_step ?? 'bienvenida');
-        if (! in_array($current, [...self::STEPS, 'resumen', 'cotizacion', 'activacion'], true)) {
+        if (! in_array($current, [...self::STEPS, 'invitacion', 'resumen', 'cotizacion', 'activacion', 'referidos'], true)) {
             return redirect()->route('cobros.demo.tour');
         }
 
@@ -72,10 +72,12 @@ class DemoTourController extends Controller
             'countries' => self::COUNTRIES,
             'quote' => null,
             'payment' => $session->demo_payment,
+            'educationStep' => $current === 'activacion' ? $request->query('educacion') : null,
+            'educationSteps' => ['panel', 'clientes', 'solicitud', 'aprobacion', 'cobro', 'cierre', 'referidos', 'academia'],
         ];
 
         // Cotización DEMO: tarifas VIGENTES vía CobrosPricingService (sin cobrar).
-        if (in_array($current, ['cotizacion', 'activacion'], true)) {
+        if (in_array($current, ['cotizacion', 'activacion', 'referidos'], true)) {
             $answers = $session->tour_answers ?? [];
             $country = $answers['country_iso'] ?? null;
             $modality = $answers['modality'] ?? null;
@@ -93,6 +95,17 @@ class DemoTourController extends Controller
         }
 
         return view('cobros.demo.tour', $viewData);
+    }
+
+    public function invitation(Request $request): RedirectResponse
+    {
+        $session = $this->currentSession($request);
+        if ($session === null || $request->session()->get(DemoVisitorController::SESSION_MODE_KEY) !== 'guiado') return redirect()->route('cobros.demo.home');
+        abort_unless(($session->tour_answers['modality'] ?? null) === CobrosModalityCatalog::COBRADOR_VINCULADO, 404);
+        $answers = $session->tour_answers ?? [];
+        $answers['simulated_invitation'] = ['status' => 'accepted', 'lender' => 'Prestamista DEMO', 'collector' => $answers['personal']['name'] ?? 'Cobrador DEMO', 'channel' => 'WhatsApp simulado', 'route' => 'DEMO Ruta Sur'];
+        $session->update(['tour_step' => 'resumen', 'tour_answers' => $answers]);
+        return redirect()->route('cobros.demo.tour.step', ['step' => 'resumen']);
     }
 
     /**
@@ -353,6 +366,7 @@ class DemoTourController extends Controller
 
         $index = array_search($step, self::STEPS, true);
         $next = self::STEPS[$index + 1] ?? 'resumen';
+        if ($step === 'modalidad' && ($answers['modality'] ?? null) === CobrosModalityCatalog::COBRADOR_VINCULADO) $next = 'invitacion';
 
         // Se persiste el paso DESTINO: al reingresar continúa donde quedó.
         $session->update([
