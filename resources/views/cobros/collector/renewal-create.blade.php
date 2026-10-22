@@ -34,7 +34,7 @@
                 <option value="partial_payment" disabled>Con abono parcial — pendiente de registrar pago real</option>
             </select>
         </label>
-        <p class="mt-2 text-xs text-amber-800">El abono parcial no está habilitado desde esta pantalla hasta integrar y confirmar el pago efectivo. No se descontará dinero que no haya ingresado.</p>
+        <div id="renewal-example" class="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700" aria-live="polite"></div>
         @error('modality')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
         <label class="mt-3 block text-sm font-semibold text-slate-700" id="renewal-capital-label">Monto de renovación (₡)
             <input type="text" name="new_capital" inputmode="decimal" value="{{ $modality === 'no_disbursement' ? '0' : request('new_capital') }}"
@@ -62,6 +62,18 @@
                 ? 'Monto total a renovar (incluye deuda anterior) (₡)'
                 : (withoutCash ? 'Dinero nuevo a entregar: ₡0' : 'Dinero nuevo a entregar (₡)');
         };
+        const example = document.getElementById('renewal-example');
+        const examples = {
+            difference: 'Ejemplo: deuda pendiente ₡340.000 + dinero nuevo ₡75.000 = ₡415.000 antes de nuevos intereses y cargos.',
+            full: 'Ejemplo: deuda pendiente ₡340.000; monto total acordado ₡500.000; desembolso ilustrativo ₡160.000, antes de nuevos intereses y cargos.',
+            no_disbursement: 'Ejemplo: deuda pendiente ₡340.000; se renueva sin entregar dinero adicional (₡0), antes de nuevos intereses y cargos.',
+            partial_payment: 'El abono parcial está deshabilitado hasta confirmar el ingreso real del pago.'
+        };
+        if (example) {
+            const refreshExample = () => { example.textContent = examples[mode.value] || ''; };
+            mode.addEventListener('change', refreshExample);
+            refreshExample();
+        }
         mode.addEventListener('change', update);
         update();
     })();
