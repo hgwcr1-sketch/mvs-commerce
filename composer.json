@@ -11,10 +11,18 @@
         "chillerlan/php-qrcode": "^6.0",
         "laravel/framework": "^13.8",
         "laravel/tinker": "^3.0",
+        "mvs/maestro-client": "dev-main",
         "phpoffice/phpspreadsheet": "^5.9",
         "picqer/php-barcode-generator": "2.4",
         "stripe/stripe-php": "*"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/maestro-client",
+            "options": { "symlink": false }
+        }
+    ],
     "require-dev": {
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.5",

@@ -10,11 +10,11 @@ class CompanyLicense extends Model
 
     public const OPERABLE = ['trial', 'active', 'grace'];
 
-    protected $fillable = ['company_id', 'license_plan_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'notes', 'created_by', 'updated_by'];
+    protected $fillable = ['company_id', 'license_plan_id', 'status', 'plan', 'starts_at', 'expires_at', 'next_renewal_at', 'grace_until', 'user_limit', 'branch_limit', 'notes', 'created_by', 'updated_by', 'maestro_license_id', 'maestro_license_version', 'maestro_license_modality', 'maestro_license_limits', 'maestro_license_synced_at'];
 
     protected function casts(): array
     {
-        return ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'next_renewal_at' => 'datetime', 'grace_until' => 'datetime', 'user_limit' => 'integer', 'branch_limit' => 'integer'];
+        return ['starts_at' => 'datetime', 'expires_at' => 'datetime', 'next_renewal_at' => 'datetime', 'grace_until' => 'datetime', 'user_limit' => 'integer', 'branch_limit' => 'integer', 'maestro_license_limits' => 'array', 'maestro_license_synced_at' => 'datetime'];
     }
 
     public function company()

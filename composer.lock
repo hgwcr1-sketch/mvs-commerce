@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e8cbe1b5dedfd53501346e00464a373e",
+    "content-hash": "2a9307e0f170888323b9b0967316f7d3",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -2860,6 +2860,34 @@
                 }
             ],
             "time": "2026-01-02T08:56:05+00:00"
+        },
+        {
+            "name": "mvs/maestro-client",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/maestro-client",
+                "reference": "d2396563cf790980946ca6fb31aa953ca292a3d6"
+            },
+            "require": {
+                "illuminate/http": "^13.0",
+                "illuminate/support": "^13.0",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Mvs\\MaestroClient\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Cliente PHP reutilizable para consumir MVS Maestro.",
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
         },
         {
             "name": "nesbot/carbon",
@@ -9632,7 +9660,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "mvs/maestro-client": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
