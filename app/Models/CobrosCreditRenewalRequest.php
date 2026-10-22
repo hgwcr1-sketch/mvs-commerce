@@ -30,7 +30,11 @@ class CobrosCreditRenewalRequest extends Model
         'account_receivable_id',
         'collector_user_id',
         'new_capital',
+        'modality',
         'previous_pending',
+        'previous_pending_principal',
+        'previous_pending_interest',
+        'previous_pending_late_fee',
         'previous_principal',
         'previous_interest',
         'new_interest',
@@ -51,6 +55,7 @@ class CobrosCreditRenewalRequest extends Model
         'signature_path',
         'terms_hash',
         'consent_snapshot',
+        'contract_components',
         'activated_credit_id',
     ];
 
@@ -59,6 +64,7 @@ class CobrosCreditRenewalRequest extends Model
         return [
             'schedule_snapshot' => 'array',
             'consent_snapshot' => 'array',
+            'contract_components' => 'array',
             'first_due_date' => 'date',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',

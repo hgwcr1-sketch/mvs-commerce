@@ -148,6 +148,11 @@ class CobrosCredit extends Model
         return $this->hasMany(CobrosCreditInstallment::class, 'credit_id')->orderBy('number');
     }
 
+    public function installmentComponents(): HasMany
+    {
+        return $this->hasMany(CobrosCreditInstallmentComponent::class, 'credit_id');
+    }
+
     public function acceptance(): HasOne
     {
         return $this->hasOne(CobrosCreditAcceptance::class, 'credit_id');
