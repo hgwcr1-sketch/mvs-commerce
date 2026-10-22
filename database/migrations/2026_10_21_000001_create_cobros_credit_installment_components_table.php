@@ -1,0 +1,5 @@
+<?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void { Schema::create('cobros_credit_installment_components', function (Blueprint $table): void { $table->id(); $table->foreignId('credit_id')->constrained('cobros_credits')->cascadeOnDelete(); $table->foreignId('installment_id')->constrained('cobros_credit_installments')->cascadeOnDelete(); $table->string('kind', 32); $table->decimal('original_amount', 19, 4); $table->decimal('applied_amount', 19, 4)->default(0); $table->foreignId('source_credit_id')->nullable()->constrained('cobros_credits')->nullOnDelete(); $table->unsignedBigInteger('source_renewal_id')->nullable()->index(); $table->timestamps(); $table->index(['credit_id','installment_id','kind']); $table->unique(['installment_id','kind']); }); } public function down(): void { Schema::dropIfExists('cobros_credit_installment_components'); } };
