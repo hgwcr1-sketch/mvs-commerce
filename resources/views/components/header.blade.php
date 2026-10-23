@@ -21,7 +21,8 @@
         ->get();
 
     // La consulta administrativa no utiliza el selector operativo.
-    $canConsolidate = auth()->user()->hasPermission('dashboard.admin', $headerCompany);
+    $canConsolidate = $headerCompany !== null
+        && auth()->user()->hasPermission('dashboard.admin', $headerCompany);
     $pendingReceptionCount = \Illuminate\Support\Facades\Schema::hasTable('purchase_verifications') && session('active_branch_id')
         ? \App\Models\PurchaseVerification::query()
             ->where('company_id', session('active_company_id'))
