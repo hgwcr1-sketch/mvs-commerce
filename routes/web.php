@@ -778,6 +778,7 @@ Route::prefix('panel-maestro')->name('platform.')->middleware(['auth', 'platform
 
 Route::middleware(['auth', 'active.company'])->group(function () {
     Route::get('/licencia', [CompanyLicenseController::class, 'show'])->name('license.status');
+    Route::post('/licencia/renovar', [CompanyLicenseController::class, 'renew'])->name('license.renew');
 });
 
 Route::middleware(['auth', 'active.company', 'company.licensed'])->group(function () {
