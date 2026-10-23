@@ -104,7 +104,7 @@ class CollectorPortfolioService
             ->orderByDesc('scheduled_for')->orderByDesc('id')->limit(10)->get();
         $nextDue = null;
         foreach ($credits as $cr) {
-            $inst = \App\Models\CobrosCreditInstallment::query()->where('cobros_credit_id', $cr->id)
+            $inst = \App\Models\CobrosCreditInstallment::query()->where('credit_id', $cr->id)
                 ->where('status', '!=', 'paid')->orderBy('due_date')->first();
             if ($inst) {
                 $cr->setAttribute('next_due_date', $inst->due_date);

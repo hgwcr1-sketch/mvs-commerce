@@ -5,6 +5,10 @@ namespace Tests\Feature;
 use App\Models\AccountReceivable;
 use App\Models\Branch;
 use App\Models\CobrosAssignment;
+use App\Models\CobrosCredit;
+use App\Models\CobrosCreditInstallment;
+use App\Models\CobrosCreditRequest;
+use App\Models\CobrosRoute;
 use App\Models\CobrosReceipt;
 use App\Models\CobrosVisit;
 use App\Models\Company;
@@ -72,6 +76,60 @@ class CobrosFichaTest extends TestCase
 
         // Sin IDs internos ni estados técnicos.
         $this->assertStringNotContainsString('CxC #', $html);
+    }
+
+    public function test_ficha_with_credit_schedule_resolves_next_due_without_unknown_column(): void
+    {
+        [$c, $b, $u] = $this->context();
+        [$customer] = $this->customerWithAccount($c, $b, $u, '1500.0000');
+        $route = CobrosRoute::create(['company_id' => $c->id, 'name' => 'Ruta ficha '.uniqid(), 'active' => true]);
+        $request = CobrosCreditRequest::create([
+            'company_id' => $c->id,
+            'cobros_route_id' => $route->id,
+            'collector_user_id' => $u->id,
+            'customer_id' => $customer->id,
+            'applicant_type' => 'existente',
+            'status' => CobrosCreditRequest::STATUS_APPROVED,
+            'identification_type' => 'cedula',
+            'identification' => 'FICHA-'.uniqid(),
+            'name' => $customer->name,
+            'amount_requested' => '1200.0000',
+        ]);
+        $credit = CobrosCredit::create([
+            'company_id' => $c->id,
+            'credit_request_id' => $request->id,
+            'cobros_route_id' => $route->id,
+            'customer_id' => $customer->id,
+            'collector_user_id' => $u->id,
+            'principal' => '1200.0000',
+            'interest_type' => CobrosCredit::INTEREST_NONE,
+            'interest_value' => '0.0000',
+            'total_due' => '1200.0000',
+            'installment_count' => 1,
+            'frequency' => CobrosCredit::FREQUENCY_MONTHLY,
+            'disbursement_date' => today(),
+            'first_due_date' => today()->addMonth(),
+            'late_fee_type' => CobrosCredit::LATE_FEE_NONE,
+            'late_fee_value' => '0.0000',
+            'late_fee_grace_days' => 0,
+            'status' => CobrosCredit::STATUS_DISBURSED,
+            'terms_snapshot' => ['principal' => '1200.0000', 'total_due' => '1200.0000'],
+            'approved_at' => now(),
+            'disbursed_at' => now(),
+        ]);
+        CobrosCreditInstallment::create([
+            'credit_id' => $credit->id,
+            'number' => 1,
+            'due_date' => today()->addMonth(),
+            'contractual_amount' => '1200.0000',
+            'applied_amount' => '0.0000',
+            'status' => CobrosCreditInstallment::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($u)->withSession(['active_company_id' => $c->id])
+            ->get(route('cobros.collector.portfolio.show', $customer))
+            ->assertOk()
+            ->assertViewHas('credits', fn ($credits) => $credits->first()->next_due_date?->isSameDay(today()->addMonth()));
     }
 
     public function test_ficha_without_identification_or_phone_enables_whatsapp_after_saving(): void
