@@ -144,12 +144,6 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
         'credit' => '02',
     ];
 
-    private const ADJUSTMENT_MEDIO_PAGO_MAP = [
-        'cash' => '01',
-        'card' => '02',
-        'bank_transfer' => '04',
-        'sinpe' => '06',
-    ];
 
     /**
      * Documentos modificadores (NC03/ND02) contra endpoints oficiales
@@ -355,7 +349,7 @@ class FacturaencrProvider implements FiscalProviderInterface, FiscalTaxpayerLook
         $mapped = [];
 
         foreach ($payments as $payment) {
-            $code = self::ADJUSTMENT_MEDIO_PAGO_MAP[$payment->paymentMethod?->code ?? ''] ?? null;
+            $code = FacturaencrInvoiceMapper::medioPagoCodeFor($payment->paymentMethod);
 
             if ($code === null) {
                 throw new FacturaencrValidationException(['medioPago' => 'Método de pago de la venta original no mapeable a FacturaEnCR.']);

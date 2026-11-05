@@ -10,7 +10,6 @@ use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Services\Fiscal\FiscalTaxService;
-use App\Support\IdentificationRules;
 use Throwable;
 
 class FacturaencrInvoiceMapper
@@ -27,10 +26,14 @@ class FacturaencrInvoiceMapper
         'sinpe' => '06',
     ];
 
+    /** Alias internos de código de empresa hacia una clave canónica de MEDIO_PAGO_MAP. */
+    private const MEDIO_PAGO_ALIASES = [
+        'dep' => 'bank_transfer', // DEPOSITO (depósito bancario) → 04
+    ];
+
     public function __construct(
         private readonly FiscalTaxService $fiscalTaxService = new FiscalTaxService(),
         private readonly ?string $environment = null,
-        private readonly FacturaencrDiscountMapper $discountMapper = new FacturaencrDiscountMapper(),
     ) {
     }
 
@@ -58,12 +61,6 @@ class FacturaencrInvoiceMapper
             'receptor' => $this->mapReceptor($customer),
             'detalle' => $this->mapDetalle($saleItems, $documentType),
         ];
-
-        // Preflight del contrato del descuento ANTES del POST.
-        $discountErrors = $this->discountMapper->contractErrors($payload['detalle']);
-        if ($discountErrors !== []) {
-            throw new FacturaencrValidationException($discountErrors);
-        }
 
         $medioPago = $this->mapMedioPago($sale, $salePayment);
         if ($medioPago !== []) {
@@ -143,12 +140,6 @@ class FacturaencrInvoiceMapper
 
         if (empty($company->identification_number)) {
             $errors['emisor'] = 'El emisor no tiene identificación fiscal (companies.identification_number vacío)';
-        } elseif (! isset($errors['emisor'])
-            && ($this->environment ?? config('facturaencr.environment', 'sandbox')) !== 'sandbox'
-            && filled($company->identification_type)
-            && ! IdentificationRules::isValidForFiscal($company->identification_type, $company->identification_number)) {
-            $errors['emisor'] = 'La identificación del emisor no cumple el formato fiscal: '
-                . IdentificationRules::message($company->identification_type, $company->identification_number);
         }
 
         if (empty($company->legal_name)) {
@@ -161,11 +152,6 @@ class FacturaencrInvoiceMapper
 
         if (empty($customer->identification)) {
             $errors['receptor_identificacion'] = 'El receptor no tiene número de identificación (customers.identification vacío)';
-        } elseif (! isset($errors['receptor_tipo_identificacion'])
-            && ! IdentificationRules::isValidForFiscal($customer->identification_type, $customer->identification)) {
-            $errors['receptor_identificacion'] = 'La identificación del receptor no cumple el formato fiscal ('
-                . IdentificationRules::label($customer->identification_type) . '): '
-                . IdentificationRules::message($customer->identification_type, $customer->identification);
         }
 
         if (empty($sale->sale_condition)) {
@@ -189,7 +175,7 @@ class FacturaencrInvoiceMapper
 
         $paymentMethod = $salePayment?->paymentMethod;
         if ($paymentMethod) {
-            if (!isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])) {
+            if (self::medioPagoCodeFor($paymentMethod) === null) {
                 $errors['medio_pago'] = 'Medio de pago no soportado por Facturaencr: ' . $paymentMethod->code;
             }
         }
@@ -287,7 +273,7 @@ class FacturaencrInvoiceMapper
             return config('facturaencr.sandbox_emisor', 'EMISORPRUEBA');
         }
 
-        return IdentificationRules::forProvider($company->identification_type, (string) $company->identification_number);
+        return (string) $company->identification_number;
     }
 
     private function mapMedioPago(Sale $sale, ?SalePayment $salePayment): array
@@ -302,18 +288,35 @@ class FacturaencrInvoiceMapper
             return [];
         }
 
-        if (!isset(self::MEDIO_PAGO_MAP[$paymentMethod->code])) {
-            return [];
+        $code = self::medioPagoCodeFor($paymentMethod);
+
+        return $code === null ? [] : [$code];
+    }
+
+    /**
+     * Código Hacienda del medio de pago. Primero por code (aliases del sistema),
+     * luego por type: un método creado por la empresa con otro code pero type
+     * bank_transfer/sinpe/card/cash se mapea igual que el canónico.
+     * type=other o credit no tiene equivalente y devuelve null.
+     */
+    public static function medioPagoCodeFor(?\App\Models\PaymentMethod $paymentMethod): ?string
+    {
+        if ($paymentMethod === null) {
+            return null;
         }
 
-        return [self::MEDIO_PAGO_MAP[$paymentMethod->code]];
+        $key = self::MEDIO_PAGO_ALIASES[$paymentMethod->code] ?? $paymentMethod->code;
+
+        return self::MEDIO_PAGO_MAP[$key]
+            ?? self::MEDIO_PAGO_MAP[(string) $paymentMethod->type]
+            ?? null;
     }
 
     private function mapReceptor(Customer $customer): array
     {
         $receptor = [
             'tipoIdentificacion' => $customer->identification_type,
-            'numeroIdentificacion' => IdentificationRules::forProvider($customer->identification_type, $customer->identification),
+            'numeroIdentificacion' => $customer->identification,
             'nombre' => $customer->name,
         ];
 
@@ -340,9 +343,9 @@ class FacturaencrInvoiceMapper
                 'precioUnitario' => (float) $item->unit_price,
             ];
 
-            $discounts = $this->discountMapper->map($item->discount_total);
-            if ($discounts !== []) {
-                $line['descuento'] = $discounts;
+            $discount = $this->money($item->discount_total);
+            if (bccomp($discount, '0', 4) > 0) {
+                $line['descuento'] = (float) $discount;
             }
 
             $line['impuesto'] = $this->taxesFor($item, $documentType);

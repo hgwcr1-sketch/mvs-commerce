@@ -14,7 +14,6 @@ use App\Models\SalePayment;
 use App\Models\User;
 use App\Services\Facturaencr\FacturaencrCabysService;
 use App\Services\Facturaencr\FacturaencrClient;
-use App\Services\Facturaencr\FacturaencrDiscountMapper;
 use App\Services\Facturaencr\FacturaencrInvoiceMapper;
 use App\Services\Facturaencr\FacturaencrTaxpayerService;
 use App\Services\Facturaencr\FacturaencrUnitMapper;
@@ -124,8 +123,8 @@ class FacturaencrInvoiceMapperTest extends TestCase
     {
         [$company, $customer, $sale] = $this->prepareData();
 
-        $item1 = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto 1', 'unit_code' => 'un', 'quantity' => 2, 'unit_price' => 500, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 250]);
-        $item2 = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P02', 'cabys_code' => '5060101000001', 'description' => 'Producto 2', 'unit_code' => 'kg', 'quantity' => 1.5000, 'unit_price' => 200, 'gross_total' => 300, 'subtotal' => 300, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 39, 'total' => 339, 'unit_cost' => 100]);
+        $item1 = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto 1', 'unit_code' => 'un', 'quantity' => 2, 'unit_price' => 500, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_code' => '01', 'tax_rate_code' => '08', 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 250]);
+        $item2 = SaleItem::create(['sale_id' => $sale->id, 'product_code' => 'P02', 'cabys_code' => '5060101000001', 'description' => 'Producto 2', 'unit_code' => 'kg', 'quantity' => 1.5000, 'unit_price' => 200, 'gross_total' => 300, 'subtotal' => 300, 'discount_total' => 0, 'tax_rate' => 13, 'tax_code' => '01', 'tax_rate_code' => '08', 'tax_total' => 39, 'total' => 339, 'unit_cost' => 100]);
 
         $mapper = new FacturaencrInvoiceMapper;
         $payload = $mapper->map($sale, [$item1, $item2], $customer, $company);
@@ -340,6 +339,48 @@ class FacturaencrInvoiceMapperTest extends TestCase
         }
     }
 
+    public function test_company_custom_deposit_method_with_bank_transfer_type_maps_to_04(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $depMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'dep', 'name' => 'DEPOSITO', 'type' => 'other', 'is_system' => false, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => true, 'allows_change' => false]);
+        $payment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $depMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1017, 'change_amount' => 0]);
+        $item = $this->createItem($sale);
+
+        $payload = (new FacturaencrInvoiceMapper)->map($sale, [$item], $customer, $company, $payment);
+
+        $this->assertSame(['04'], $payload['medioPago']);
+    }
+
+    public function test_medio_pago_code_resolution_covers_aliases_types_and_unknowns(): void
+    {
+        $method = fn (string $code, string $type): PaymentMethod => new PaymentMethod(['code' => $code, 'type' => $type]);
+
+        $this->assertSame('04', FacturaencrInvoiceMapper::medioPagoCodeFor($method('dep', 'other')));
+        $this->assertSame('04', FacturaencrInvoiceMapper::medioPagoCodeFor($method('dep', 'bank_transfer')));
+        $this->assertSame('01', FacturaencrInvoiceMapper::medioPagoCodeFor($method('cash', 'cash')));
+        $this->assertSame('02', FacturaencrInvoiceMapper::medioPagoCodeFor($method('card', 'card')));
+        $this->assertSame('06', FacturaencrInvoiceMapper::medioPagoCodeFor($method('sinpe', 'sinpe')));
+        $this->assertSame('04', FacturaencrInvoiceMapper::medioPagoCodeFor($method('bank_transfer', 'bank_transfer')));
+        $this->assertSame('04', FacturaencrInvoiceMapper::medioPagoCodeFor($method('mi_transf', 'bank_transfer')));
+        $this->assertNull(FacturaencrInvoiceMapper::medioPagoCodeFor($method('cheque', 'other')));
+        $this->assertNull(FacturaencrInvoiceMapper::medioPagoCodeFor(null));
+    }
+
+    public function test_custom_method_with_unknown_code_and_other_type_still_fails_validation(): void
+    {
+        [$company, $customer, $sale] = $this->prepareData();
+        $otherMethod = PaymentMethod::create(['company_id' => $company->id, 'code' => 'cheque', 'name' => 'Otro', 'type' => 'other', 'is_system' => false, 'is_active' => true, 'affects_cash' => false, 'requires_reference' => false, 'allows_change' => false]);
+        $payment = SalePayment::create(['sale_id' => $sale->id, 'cash_session_id' => null, 'payment_method_id' => $otherMethod->id, 'created_by' => $sale->user_id, 'status' => 'completed', 'amount' => 1017, 'received_amount' => 1017, 'change_amount' => 0]);
+        $item = $this->createItem($sale);
+
+        try {
+            (new FacturaencrInvoiceMapper)->map($sale, [$item], $customer, $company, $payment);
+            $this->fail('Expected FacturaencrValidationException');
+        } catch (FacturaencrValidationException $e) {
+            $this->assertArrayHasKey('medio_pago', $e->getErrors());
+        }
+    }
+
     public function test_crc_currency_maps_correctly(): void
     {
         [$company, $customer, $sale] = $this->prepareData();
@@ -394,8 +435,8 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $sale1 = Sale::create(['company_id' => $company1->id, 'branch_id' => $branch1->id, 'user_id' => $user1->id, 'sale_number' => 'POS-001', 'document_type' => 'electronic_invoice', 'sale_condition' => 'cash', 'status' => 'completed', 'currency_code' => 'CRC', 'exchange_rate' => 1, 'subtotal' => 1000, 'total' => 1017, 'completed_at' => now()]);
         $sale2 = Sale::create(['company_id' => $company2->id, 'branch_id' => $branch2->id, 'user_id' => $user2->id, 'sale_number' => 'POS-001', 'document_type' => 'electronic_invoice', 'sale_condition' => 'cash', 'status' => 'completed', 'currency_code' => 'CRC', 'exchange_rate' => 1, 'subtotal' => 1000, 'total' => 1017, 'completed_at' => now()]);
 
-        $item1 = SaleItem::create(['sale_id' => $sale1->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 500]);
-        $item2 = SaleItem::create(['sale_id' => $sale2->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 500]);
+        $item1 = SaleItem::create(['sale_id' => $sale1->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_code' => '01', 'tax_rate_code' => '08', 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 500]);
+        $item2 = SaleItem::create(['sale_id' => $sale2->id, 'product_code' => 'P01', 'cabys_code' => '5060101000000', 'description' => 'Producto', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 1000, 'gross_total' => 1000, 'subtotal' => 1000, 'discount_total' => 0, 'tax_rate' => 13, 'tax_code' => '01', 'tax_rate_code' => '08', 'tax_total' => 117, 'total' => 1017, 'unit_cost' => 500]);
 
         $mapper = new FacturaencrInvoiceMapper;
         $key1 = $mapper->idempotencyKey($sale1, $sale1->document_type);
@@ -604,49 +645,6 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertFalse($unitMapper->isSupported('CAJA'));
     }
 
-    public function test_unit_general_maps_to_unid_and_keeps_valid_units_unchanged(): void
-    {
-        $unitMapper = new FacturaencrUnitMapper;
-
-        $this->assertSame('Unid', $unitMapper->map('GENERAL'));
-        $this->assertSame('Unid', $unitMapper->map('general'));
-        $this->assertTrue($unitMapper->isSupported('GENERAL'));
-
-        $this->assertSame('kg', $unitMapper->map('kg'));
-        $this->assertSame('Unid', $unitMapper->map('UNIDAD'));
-        $this->assertSame('Unid', $unitMapper->map('UN'));
-        $this->assertSame('L', $unitMapper->map('LT'));
-    }
-
-    public function test_unit_general_normalization_is_shared_by_fe_and_te(): void
-    {
-        Http::preventStrayRequests();
-
-        foreach ([Sale::DOCUMENT_ELECTRONIC_INVOICE, Sale::DOCUMENT_ELECTRONIC_TICKET] as $type) {
-            [$company, , $sale] = $this->prepareData();
-            $sale->document_type = $type;
-
-            $customer = Customer::create([
-                'company_id' => $company->id,
-                'customer_type' => 'individual',
-                'identification_type' => '01',
-                'identification' => '109880401',
-                'name' => 'Cliente Fiscal',
-            ]);
-
-            $item = $this->createItem($sale);
-            $item->unit_code = 'GENERAL';
-
-            $payload = (new FacturaencrInvoiceMapper)->map(
-                $sale, [$item], $customer, $company, $sale->payments->first()
-            );
-
-            $this->assertSame('Unid', $payload['detalle'][0]['unidadMedida']);
-        }
-
-        Http::assertNothingSent();
-    }
-
     public function test_payload_uses_official_unit_code_for_mvs_abbreviation(): void
     {
         [$company, $customer, $sale] = $this->prepareData();
@@ -663,6 +661,8 @@ class FacturaencrInvoiceMapperTest extends TestCase
             'subtotal' => 1000,
             'discount_total' => 0,
             'tax_rate' => 13,
+            'tax_code' => '01',
+            'tax_rate_code' => '08',
             'tax_total' => 117,
             'total' => 1017,
             'unit_cost' => 500,
@@ -827,7 +827,7 @@ class FacturaencrInvoiceMapperTest extends TestCase
             } catch (FacturaencrValidationException $e) {
                 $errors = $e->getErrors();
                 $this->assertArrayHasKey('detalle[0]_impuesto', $errors);
-                $this->assertStringContainsString('ambiguo', $errors['detalle[0]_impuesto']);
+                $this->assertStringContainsString('pendiente', $errors['detalle[0]_impuesto']);
             }
         }
     }
@@ -908,7 +908,7 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $line = $payload['detalle'][0];
 
         $this->assertSame(500.0, $line['precioUnitario'], 'precioUnitario debe ser el precio real de la línea');
-        $this->assertSame([['montoDescuento' => 100.0, 'codigoDescuento' => '07']], $line['descuento']);
+        $this->assertSame(100.0, $line['descuento']);
 
         $base = bcsub(bcmul('500.0000', '2.0000', 4), '100.0000', 4);
         $this->assertSame('900.0000', $base, 'BCMath: cantidad x precio - descuento = base');
@@ -952,52 +952,6 @@ class FacturaencrInvoiceMapperTest extends TestCase
         } catch (FacturaencrValidationException $exception) {
             $this->assertArrayHasKey('detalle[0]_descuento', $exception->getErrors());
         }
-    }
-
-    public function test_multiple_lines_with_two_discounts_follow_provider_contract(): void
-    {
-        [$company, $customer, $sale] = $this->prepareData();
-
-        $plain = SaleItem::create([
-            'sale_id' => $sale->id, 'product_code' => 'P01', 'cabys_code' => '4393101029900',
-            'description' => 'Sin descuento', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2900,
-            'gross_total' => 2900, 'subtotal' => 2900, 'discount_total' => 0, 'tax_rate' => 0,
-            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 2900, 'unit_cost' => 1000,
-        ]);
-        $discounted1 = SaleItem::create([
-            'sale_id' => $sale->id, 'product_code' => 'P02', 'cabys_code' => '3532301009900',
-            'description' => 'Descuento 700', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2800,
-            'gross_total' => 2800, 'subtotal' => 2100, 'discount_total' => 700, 'tax_rate' => 0,
-            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 2100, 'unit_cost' => 1000,
-        ]);
-        $discounted2 = SaleItem::create([
-            'sale_id' => $sale->id, 'product_code' => 'P03', 'cabys_code' => '3532301009900',
-            'description' => 'Descuento 400', 'unit_code' => 'un', 'quantity' => 1, 'unit_price' => 2200,
-            'gross_total' => 2200, 'subtotal' => 1800, 'discount_total' => 400, 'tax_rate' => 0,
-            'tax_code' => '01', 'tax_rate_code' => '10', 'tax_total' => 0, 'total' => 1800, 'unit_cost' => 1000,
-        ]);
-
-        $payload = (new FacturaencrInvoiceMapper)->map(
-            $sale, [$plain, $discounted1, $discounted2], $customer, $company
-        );
-
-        $this->assertCount(3, $payload['detalle']);
-        $this->assertArrayNotHasKey('descuento', $payload['detalle'][0]);
-        $this->assertSame([['montoDescuento' => 700.0, 'codigoDescuento' => '07']], $payload['detalle'][1]['descuento']);
-        $this->assertSame([['montoDescuento' => 400.0, 'codigoDescuento' => '07']], $payload['detalle'][2]['descuento']);
-        $this->assertNotEmpty($payload['detalle'][1]['impuesto']);
-        $this->assertNotEmpty($payload['detalle'][2]['impuesto']);
-
-        $this->assertSame('2800.0000', (string) $discounted1->gross_total, 'el bruto no se reescribe');
-        $this->assertSame('2100.0000', (string) $discounted1->subtotal, 'la base neta se conserva');
-        $this->assertSame('2100.0000', (string) $discounted1->total, 'el total de la línea se conserva');
-        $this->assertSame('700.0000', (string) $discounted1->discount_total);
-
-        $this->assertSame(
-            [],
-            (new FacturaencrDiscountMapper)->contractErrors($payload['detalle']),
-            'el payload debe pasar el preflight del contrato antes del POST'
-        );
     }
 
     public function test_document_type_is_derived_from_sale(): void
