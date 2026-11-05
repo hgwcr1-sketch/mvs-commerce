@@ -2,6 +2,8 @@
 
 return [
 
+    'required_with' => 'El campo :attribute es obligatorio cuando :values está presente.',
+
     'confirmed' => 'La confirmación de :attribute no coincide.',
     
     'password' => [
@@ -16,6 +18,7 @@ return [
         'password' => 'contraseña',
         'password_confirmation' => 'confirmación de contraseña',
         'email' => 'correo electrónico',
+        'taxpayer_activities.*.code' => 'código de actividad económica',
     ],
 
 ];
