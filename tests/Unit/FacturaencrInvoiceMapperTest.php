@@ -119,6 +119,33 @@ class FacturaencrInvoiceMapperTest extends TestCase
         $this->assertSame('Juan Pérez', $receptor['nombre']);
     }
 
+    public function test_receptor_identification_is_normalized_only_for_numeric_provider_types(): void
+    {
+        [$company, , $sale] = $this->prepareData();
+        $item = $this->createItem($sale);
+        $mapper = new FacturaencrInvoiceMapper;
+
+        foreach ([
+            ['01', '3-101-041591', '3101041591'],
+            ['01', ' 3101041591 ', '3101041591'],
+            ['01', '3101041591', '3101041591'],
+            ['05', 'ABC-123', 'ABC-123'],
+        ] as [$type, $identification, $expected]) {
+            $customer = Customer::create([
+                'company_id' => $company->id,
+                'customer_type' => 'individual',
+                'identification_type' => $type,
+                'identification' => $identification,
+                'name' => 'Receptor de prueba',
+            ]);
+
+            $payload = $mapper->map($sale, [$item], $customer, $company);
+
+            $this->assertSame($type, $payload['receptor']['tipoIdentificacion']);
+            $this->assertSame($expected, $payload['receptor']['numeroIdentificacion']);
+        }
+    }
+
     public function test_multiple_lines(): void
     {
         [$company, $customer, $sale] = $this->prepareData();

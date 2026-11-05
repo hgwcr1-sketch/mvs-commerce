@@ -10,6 +10,7 @@ use App\Models\SaleItemTax;
 use App\Models\SalePayment;
 use App\Exceptions\Facturaencr\FacturaencrValidationException;
 use App\Services\Fiscal\FiscalTaxService;
+use App\Support\IdentificationRules;
 use Throwable;
 
 class FacturaencrInvoiceMapper
@@ -316,7 +317,10 @@ class FacturaencrInvoiceMapper
     {
         $receptor = [
             'tipoIdentificacion' => $customer->identification_type,
-            'numeroIdentificacion' => $customer->identification,
+            'numeroIdentificacion' => IdentificationRules::forProvider(
+                $customer->identification_type,
+                $customer->identification,
+            ),
             'nombre' => $customer->name,
         ];
 
